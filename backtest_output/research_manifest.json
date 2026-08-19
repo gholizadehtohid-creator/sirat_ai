@@ -1,0 +1,126 @@
+{
+  "manifest_version": 1,
+  "created_at": "2026-08-19T10:03:08.008571",
+  "repository": {
+    "head": "c4988247f101a5e31d121374d8371872e6121850",
+    "head_short": "c498824",
+    "tag": "v2.0-archive-8-gc498824",
+    "archive_tag_commit": "b145fc4a26f3de61747e3322679639d756f6df28",
+    "status_porcelain": "",
+    "clean": true,
+    "tracked_files": 246
+  },
+  "protected_components": {
+    "alpha_core_path": "backtesting/alpha_core.py",
+    "alpha_core_sha256": "90024d86d7a5c268445f05487f691b70284be907b1417a448a45f119bc617099",
+    "alpha_core_frozen_check": true
+  },
+  "data": {
+    "market_db": "sirat_market.db",
+    "market_db_bytes": 424599552,
+    "dataset_fingerprint": "90e30213b30e6e73",
+    "fixture_panel": "sirat/fixtures/data/alpha_core_panel.csv.gz",
+    "fixture_panel_sha256": "f8e3b3e68828397425da677b552a49f063a59661d38c35af611e1a5ee3a73208",
+    "factor_panel": "backtest_output/factor_panel.csv",
+    "factor_panel_present": true
+  },
+  "universe": {
+    "snapshot_id": "u20260819-668658bb",
+    "taken_at": "2026-08-19T00:04:56.296021",
+    "instruments": 1394,
+    "content_hash": "668658bb3e3cc48fbf9b93d73c8c0fadaf274a625242c233c0dc0a8c035e4a96",
+    "restorable": true
+  },
+  "ledger": {
+    "entries": 11,
+    "intact": true,
+    "head": "354ec88217f5e7a45c07276bffd073c2f0aa5556d9b49d4c4769464022593c8b"
+  },
+  "configuration": {
+    "config_hash": "a0f8a89da1201b9ea2ddfbd0065bd78959d9ffc065d0688f1af7e81517f21831",
+    "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+    "round_trip_pct": 1.04,
+    "risk_free_rate": 0.23,
+    "trading_days_per_year": 240,
+    "out_of_sample_start": "2026-01-01",
+    "walk_forward_train_months": 9,
+    "walk_forward_validate_months": 3,
+    "walk_forward_step_months": 3,
+    "benchmark": "TEDPIX (شاخص کل), backtest_config.BENCHMARK_TEDPIX",
+    "clean_window": [
+      "2014-09-21",
+      "2024-09-01"
+    ],
+    "clean_window_note": "E13/E14/E15's window. Post-2024-09 is EXCLUDED because research_factors.py fitted on it -- it is contaminated for factor selection, not a holdout."
+  },
+  "environment": {
+    "python": "3.14.7",
+    "platform": "Windows-11-10.0.22631-SP0",
+    "numpy": "2.5.1",
+    "pandas": "3.0.5"
+  },
+  "seeds": {
+    "research_alpha_ic": 20260818,
+    "experiment15_bootstrap": 20260818,
+    "phase2_edge_audit": 20260819,
+    "phase4_null_tests": 20260819,
+    "phase3_monte_carlo": 20260819
+  },
+  "regression_anchors": {
+    "alpha_core_frozen": {
+      "measured": "90024d86d7a5c268",
+      "expected": "90024d86d7a5c268",
+      "passed": true
+    },
+    "ic@h1": {
+      "measured": 0.10492,
+      "expected": 0.10492,
+      "passed": true
+    },
+    "ic@h5": {
+      "measured": 0.05101,
+      "expected": 0.05101,
+      "passed": true
+    },
+    "ic@h10": {
+      "measured": 0.03003,
+      "expected": 0.03003,
+      "passed": true
+    },
+    "ic@h20": {
+      "measured": 0.01456,
+      "expected": 0.01456,
+      "passed": true
+    },
+    "queue_ratio": {
+      "measured": 3.02828,
+      "expected": 3.03,
+      "passed": true
+    },
+    "h1_excess": {
+      "measured": 0.54957,
+      "expected": 0.5496,
+      "passed": true
+    },
+    "cost_failure_direction": {
+      "measured": 0.54957,
+      "expected": "excess < round trip (1.04%)",
+      "passed": true
+    },
+    "requested_h20": {
+      "measured": 3.17348,
+      "expected": 3.17,
+      "passed": true
+    },
+    "realised_h20": {
+      "measured": 0.59298,
+      "expected": 0.59,
+      "passed": true
+    },
+    "tail_percentile": {
+      "measured": 3.33,
+      "expected": "<= 10.0th percentile",
+      "passed": true
+    }
+  }
+}

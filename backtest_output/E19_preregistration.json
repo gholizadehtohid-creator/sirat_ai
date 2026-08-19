@@ -1,0 +1,111 @@
+{
+  "experiment_id": "E19-alpha-core-tradable-edge",
+
+  "hypothesis": "Alpha Core (50% momentum rank + 50% Bollinger %B rank) contains predictive information that survives realistic trading: it orders future returns at the horizon it is actually traded at, that ordering beats structurally-matched null models, and the resulting book clears its own transaction costs under T+1 execution with price-limit queues.",
+
+  "strategy_version": "alpha_core_v1 (frozen, sha256 90024d86d7a5c268)",
+
+  "researcher": "lead quantitative research",
+
+  "notes": "FINAL ADJUDICATION of the Alpha Core family. Registered BEFORE any Phase 2-10 number is computed, against a state frozen and verified in backtest_output/research_manifest.json. The declared traded horizon is h=20 sessions, because that is the rebalance interval the production system used; h=1/5/10 are measured for the decay curve and CANNOT pass gate 3. Reporting the horizon with the best IC would be a multiple comparison presented as a finding, which is the specific error this platform exists to prevent. Prior evidence (E13/E14/E15) suggests this will FAIL. That expectation is recorded here so that a pass would be the surprising outcome requiring scrutiny, not the assumed one.",
+
+  "expected_failure": [
+    "G3: mean IC at h=20 below 0.02, or ICIR below 0.30 -- E13 measured 0.01456 and 0.113 on clean data",
+    "G6: the strategy does not beat exposure- and turnover-matched random ranking -- E11 measured the 3.3rd percentile",
+    "G7: the per-period edge does not clear the 1.04% round trip -- E13 measured 0.55% against 1.04% at h=1",
+    "G9: realized exposure falls far short of target -- E3 measured 29.22% against 54.79%",
+    "the predictive information is concentrated in names that are limit-locked and therefore unbuyable at t+1 -- E14 measured a 3.03x queue exposure ratio"
+  ],
+
+  "acceptance_criteria": {
+    "overall": "ALL eleven mandatory gates must PASS. A single failed mandatory gate prevents any 'ready' conclusion, and no gate may be waived, re-weighted or re-thresholded after a number exists.",
+    "outcome_A": "all gates pass -> proceed to controlled paper trading",
+    "outcome_B": "any mandatory gate fails on a measured number -> no robust edge",
+    "outcome_C": "a gate cannot be evaluated because the evidence does not exist -> inconclusive, and the missing evidence is named"
+  },
+
+  "preregistration": {
+    "seed": 20260819,
+
+    "parameters": {
+      "declared_traded_horizon_sessions": 20,
+      "decay_horizons_reported_only": [1, 5, 10, 20],
+      "basket": 10,
+      "clean_window": ["2014-09-21", "2024-09-01"],
+      "clean_window_justification": "research_factors.py fitted Alpha Core's two factors on 2024-09-01..2026-06-30 (17,695 observations over 23 dates). That block is contaminated for factor selection and is NOT a holdout. E5 stopped an experiment over exactly this.",
+      "in_sample": ["2014-09-21", "2021-09-01"],
+      "validation": ["2021-09-01", "2023-03-01"],
+      "holdout": ["2023-03-01", "2024-09-01"],
+      "split_justification": "Sequential, by date, fixed here before any number exists. Roughly 70/15/15 of the clean window. The holdout is spendable ONCE and is recorded in windows_touched.",
+      "round_trip_pct": 1.04,
+      "risk_free_rate": 0.23,
+      "sessions_per_year": 240,
+      "benchmark": "cross-sectional mean of the eligible universe on each decision date",
+      "universe_snapshot": "u20260819-668658bb",
+      "null_models": [
+        "random ranking, identical eligibility",
+        "sector-matched random selection",
+        "liquidity-matched random selection (ADV quintile)",
+        "volatility-matched random selection",
+        "turnover-matched random selection",
+        "equal-weight universe (market)"
+      ],
+      "null_arms": 30
+    },
+
+    "validation_gates": {
+      "G1_data_integrity": "PIT integrity proven: no forward column used as a feature, no forward return exceeding what the price band permits over its horizon, every row inside the declared window, and a restorable universe snapshot cited",
+      "G2_reproducibility": "the result regenerates exactly from (git commit, code hash, config hash, dataset fingerprint, universe snapshot, seed)",
+      "G3_predictive_edge": "mean cross-sectional IC at h=20 >= 0.02 AND ICIR >= 0.30 AND >= 55% of decision dates positive",
+      "G4_out_of_sample": "IC on the untouched holdout > 0 AND degradation from in-sample <= 0.50 of the in-sample level",
+      "G5_walk_forward": ">= 60% of sequential out-of-fold blocks have positive IC at h=20",
+      "G6_null_tests": "the strategy reaches >= the 95th percentile of EVERY structurally-matched null distribution, not merely the unconstrained one",
+      "G7_execution_realism": "net per-period excess after turnover x round trip, with unbuyable slots left in cash and not refilled, is > 0",
+      "G8_cost_robustness": "G7 still holds at round_trip x 1.25 and with 0.10% slippage charged on each leg",
+      "G9_exposure": "realized exposure is within 10 percentage points of target, OR the entire gap is decomposed and attributed",
+      "G10_drawdown_risk": "maximum drawdown <= 35% and the strategy is not dependent on a single regime",
+      "G11_research_integrity": "no undisclosed post-hoc selection: the horizon, split, thresholds and null models are exactly those recorded here"
+    },
+
+    "expected_metrics": {
+      "mean_ic_h20": 0.02,
+      "icir_h20": 0.30,
+      "pct_positive_ic_h20": 55.0,
+      "net_per_period_pct": 0.0,
+      "control_percentile": 95.0,
+      "max_drawdown_pct": 35.0
+    },
+
+    "rejection_thresholds": {
+      "min_ic": 0.02,
+      "min_icir": 0.30,
+      "min_pct_positive_ic": 55.0,
+      "min_decay_retention": 0.50,
+      "max_missing_pct": 5.0,
+      "min_names_per_date": 50,
+      "max_stale_pct": 30.0,
+      "max_queue_ratio": 1.50,
+      "min_fill_rate_pct": 90.0,
+      "max_participation_pct": 10.0,
+      "slippage_pct": 0.10,
+      "min_liquid_share": 0.70,
+      "min_positive_fold_share": 0.60,
+      "max_oos_degradation": 0.50,
+      "min_control_percentile": 95.0,
+      "min_paper_sessions": 60,
+      "cost_stress_multiplier": 1.25,
+      "max_drawdown_pct": 35.0,
+      "max_exposure_gap_pp": 10.0
+    }
+  },
+
+  "config": {
+    "round_trip_pct": 1.04,
+    "risk_free_rate": 0.23,
+    "basket": 10,
+    "declared_horizon": 20,
+    "manifest": "backtest_output/research_manifest.json"
+  },
+
+  "universe_snapshot": "u20260819-668658bb"
+}
