@@ -7,10 +7,10 @@ breaks every link after it and `ledger.verify()` names the first entry that fail
 
 | | |
 |---|---|
-| entries | 12 |
+| entries | 13 |
 | chain intact | **True** |
-| head | `6a761c7ee07fc6087a540b3b7018a8786b0ba8784e68a0eaec0a418496847a34` |
-| exported | 2026-08-19T10:39:27 |
+| head | `fcc4684bb2c5d394fe2e9d64024b8462eba24ceb47c702ef07a99141dc73b551` |
+| exported | 2026-08-19T11:25:57 |
 
 ---
 
@@ -30,6 +30,7 @@ breaks every link after it and `ledger.verify()` names the first entry that fail
 | 10 | `E14-queue-artifact` | **REJECT** | 3 | no | phase 1 (replayed 2026-08-19) |
 | 11 | `E15-execution-aware-rescue` | **REJECT** | 2 | no | phase 1 (replayed 2026-08-19) |
 | 12 | `E19-alpha-core-tradable-edge` | **REJECT** | 2 | yes | lead quantitative research |
+| 13 | `E20-alpha-core-capacity` | **REJECT** | 2 | yes | lead quantitative research |
 
 ---
 
@@ -363,6 +364,34 @@ breaks every link after it and `ledger.verify()` names the first entry that fail
 | entry hash | `6a761c7ee07fc6087a540b3b` |
 
 **Rationale.** Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, random_baseline, factor_decay. The declared test -- Alpha Core at h=20, all regimes, against every structurally-matched null -- produces mean IC 0.01456 (t=1.23) against a required 0.02, a NEGATIVE holdout IC of -0.02449, 5 of 10 positive walk-forward folds, and a net edge of -0.38% per period that stays negative under every cost perturbation including a favourable one. 7 of 11 preregistered gates fail. This was recorded as an expected failure condition before the experiment ran.
+
+| Stage | Status | Checks |
+|---|---|---|
+| 1 DATA INTEGRITY | **PASS** | all 4 passed |
+| 2 ECONOMIC SIGNAL VALIDATION | **FAIL** | failed: factor_decay, ic, random_baseline, rank_correlation |
+
+---
+
+## 13. `E20-alpha-core-capacity`
+
+> Alpha Core's predictive information survives restriction to securities that can genuinely absorb the strategy at measured market capacity. Stated as three separable claims: (L1) the score carries statistically credible information somewhere in the cross-section; (L2) that information is still present after the universe is restricted to names whose average traded value can absorb a position at a preregistered participation cap; (L3) whatever remains at L2 survives T+1 execution, queues, partial fills, turnover and a 1.04% round trip.
+
+| Field | Value |
+|---|---|
+| date | 2026-08-19T11:25:43 |
+| author | lead quantitative research |
+| strategy version | alpha_core_v1 (frozen, sha256 90024d86d7a5c268) -- UNMODIFIED |
+| code hash | `d725813862b0bb77fdfd7e5a` |
+| git commit | `4ee4a691a1208168353ef7ee` |
+| config hash | `fc8cc9a53637340ffcf180cd` |
+| dataset fingerprint | `90e30213b30e6e73` |
+| universe snapshot | `u20260819-668658bb` |
+| preregistration hash | `1f9d15b09459975593e525db` |
+| reproducible | True |
+| **verdict** | **REJECT** |
+| entry hash | `fcc4684bb2c5d394fe2e9d64` |
+
+**Rationale.** Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, random_baseline, factor_decay. E20 decomposed E19's failure into three layers. Information EXISTS: IC 0.05101 at h=5 (t=4.18) over the full cross-section, and IC 0.17066 (t=7.14) in the names that capacity EXCLUDES. It does not survive the capacity restriction: at T2 (participation <= 5%, the platform's own cap) IC at the declared h=20 is -0.01293 (t -0.985), and the capacity curve is negative at EVERY level from 50% down to 0.25%. Of a frictionless +3.1735% gross alpha, 1.4003pp is lost to the liquidity restriction and 1.8024pp to execution before cost takes the remainder to -0.992%. The strategy also fails to beat the preregistered liquidity-matched null (90.0th percentile against a required 95th). Classification: B_INFORMATION_ONLY_IN_UNTRADABLE_SECURITIES.
 
 | Stage | Status | Checks |
 |---|---|---|

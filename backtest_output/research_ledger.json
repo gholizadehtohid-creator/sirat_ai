@@ -1354,13 +1354,508 @@
           }
         ]
       }
+    },
+    {
+      "seq": 13,
+      "experiment_id": "E20-alpha-core-capacity",
+      "appended_at": "2026-08-19T11:25:43.490068",
+      "prev_hash": "6a761c7ee07fc6087a540b3b7018a8786b0ba8784e68a0eaec0a418496847a34",
+      "entry_hash": "fcc4684bb2c5d394fe2e9d64024b8462eba24ceb47c702ef07a99141dc73b551",
+      "entry": {
+        "acceptance_criteria": {
+          "L1_information": "mean IC over the full eligible cross-section at the declared horizon is distinguishable from zero: |t| >= 2.0",
+          "L2_tradability": "at capacity level T2 (the platform's own MAX_ADV_PARTICIPATION_PCT = 5%), mean IC >= 0.02 AND ICIR >= 0.30 AND the t-statistic >= 2.0",
+          "L3_monetization": "at T2, net excess per period after execution, turnover and the 1.04% round trip is > 0, AND required turnover <= 4.45/year (measured market capacity), AND the strategy reaches the 95th percentile of the liquidity-matched null",
+          "overall": "Case D (genuine tradable edge) requires L1 AND L2 AND L3. Any other combination classifies rather than passes, and NO combination authorises capital, because the holdout is already spent."
+        },
+        "author": "lead quantitative research",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "alpha_core_v1 (frozen, sha256 90024d86d7a5c268) -- UNMODIFIED"
+        },
+        "config_hash": "fc8cc9a53637340ffcf180cd7daf6736d6e574506d03878291de6381f1c31b3d",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T11:25:43.480845",
+        "expected_failure": [
+          "L2: IC collapses toward zero or turns negative once the universe is restricted to names with sufficient ADV -- E19 measured within-date IC of +0.212 in the most illiquid quintile against -0.030 in the most liquid",
+          "L3: whatever survives L2 fails to clear the 1.04% round trip at the turnover its horizon demands",
+          "capacity: the turnover required by any horizon with positive net economics exceeds the 4.45/year the market was measured to support",
+          "the whole result is an artifact of names that are limit-locked at t+1 and therefore unbuyable -- E14 measured a 3.03x queue exposure ratio"
+        ],
+        "experiment_id": "E20-alpha-core-capacity",
+        "final_verdict": {
+          "decided_by": "lead quantitative research",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, random_baseline, factor_decay. E20 decomposed E19's failure into three layers. Information EXISTS: IC 0.05101 at h=5 (t=4.18) over the full cross-section, and IC 0.17066 (t=7.14) in the names that capacity EXCLUDES. It does not survive the capacity restriction: at T2 (participation <= 5%, the platform's own cap) IC at the declared h=20 is -0.01293 (t -0.985), and the capacity curve is negative at EVERY level from 50% down to 0.25%. Of a frictionless +3.1735% gross alpha, 1.4003pp is lost to the liquidity restriction and 1.8024pp to execution before cost takes the remainder to -0.992%. The strategy also fails to beat the preregistered liquidity-matched null (90.0th percentile against a required 95th). Classification: B_INFORMATION_ONLY_IN_UNTRADABLE_SECURITIES.",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "4ee4a691a1208168353ef7ee55f1f8dcd370dd9e",
+        "git_dirty": false,
+        "hypothesis": "Alpha Core's predictive information survives restriction to securities that can genuinely absorb the strategy at measured market capacity. Stated as three separable claims: (L1) the score carries statistically credible information somewhere in the cross-section; (L2) that information is still present after the universe is restricted to names whose average traded value can absorb a position at a preregistered participation cap; (L3) whatever remains at L2 survives T+1 execution, queues, partial fills, turnover and a 1.04% round trip.",
+        "preregistration_hash": "1f9d15b09459975593e525db2e86122a2487df6cbd964a1a60a2cce8c9f03878",
+        "registered_at": "2026-08-19T11:13:27.127016",
+        "reproducible": true,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "decomposition": {
+                "execution_loss_pp": -1.8024,
+                "exposure_effect_note": "not separable on a panel: the benchmark is the cross-sectional mean of the SAME eligible universe, so market direction is differenced out by construction",
+                "final_net_pct": -0.992,
+                "liquidity_effect_pp": -1.4003,
+                "selection_effect_note": "selection and signal are the same operation here -- the score IS the selection rule, so they cannot be separated without changing Alpha Core, which is forbidden",
+                "signal_information_full_pct": 3.1735,
+                "steps": [
+                  {
+                    "excess_pct": 3.1735,
+                    "step": "1. gross alpha, full universe, frictionless"
+                  },
+                  {
+                    "excess_pct": 1.7732,
+                    "step": "2. after restricting to tradable names (T2)"
+                  },
+                  {
+                    "excess_pct": -0.0292,
+                    "step": "3. after T+1 execution and unfilled slots"
+                  },
+                  {
+                    "excess_pct": -0.992,
+                    "step": "4. after turnover x round trip"
+                  },
+                  {
+                    "excess_pct": -1.1772,
+                    "step": "5. after 0.10%/leg slippage"
+                  }
+                ],
+                "transaction_cost_pp": -0.9629,
+                "turnover_per_year": 11.11
+              },
+              "layers": [
+                {
+                  "evidence": "E20_capacity_audit.json / phase3_information",
+                  "layer": "L1 INFORMATION",
+                  "passed": false,
+                  "question": "is there predictive information anywhere?",
+                  "result": "IC 0.01456 at the declared h=20, t 1.232; but IC 0.05101 at h=5, t 4.182",
+                  "threshold": "|t| >= 2.0 at h=20"
+                },
+                {
+                  "evidence": "E20_capacity_audit.json / phase4_tradability",
+                  "layer": "L2 TRADABILITY",
+                  "passed": false,
+                  "question": "does it survive restriction to names that can absorb the strategy?",
+                  "result": "T2 IC -0.01293 (t -0.985) at h=20, against IC 0.17066 (t 7.139) in the names capacity EXCLUDES",
+                  "threshold": "IC >= 0.02 AND ICIR >= 0.30 AND |t| >= 2.0 at T2"
+                },
+                {
+                  "evidence": "E20_capacity_audit.json / phase7_execution, phase8",
+                  "layer": "L3 MONETIZATION",
+                  "passed": false,
+                  "question": "does what remains survive execution, turnover and cost?",
+                  "result": "net -0.992%/period at T2 h=20; turnover 11.11/yr against a measured capacity of 4.45/yr",
+                  "threshold": "net > 0 AND turnover <= 4.45/yr AND >= 95th percentile of the liquidity-matched null"
+                }
+              ],
+              "nulls": {
+                "exposure_matched_market": {
+                  "arms": 1,
+                  "beats_p95": false,
+                  "note": "the benchmark IS the cross-sectional mean of the tradable universe, so a matched-exposure null has zero excess by construction",
+                  "null_mean_excess_pct": 0.0,
+                  "percentile": 0.0,
+                  "treatment_excess_pct": -0.02918
+                },
+                "liquidity_and_volatility_matched": {
+                  "arms": 30,
+                  "beats_p95": false,
+                  "empirical_p": 0.4333,
+                  "null_mean_excess_pct": -0.20417,
+                  "null_p95": 0.35435,
+                  "percentile": 56.67,
+                  "treatment_excess_pct": -0.02918
+                },
+                "liquidity_matched": {
+                  "arms": 30,
+                  "beats_p95": false,
+                  "empirical_p": 0.1,
+                  "null_mean_excess_pct": -0.42119,
+                  "null_p95": 0.05202,
+                  "percentile": 90.0,
+                  "treatment_excess_pct": -0.02918
+                },
+                "random_ranking": {
+                  "arms": 30,
+                  "beats_p95": false,
+                  "empirical_p": 0.0667,
+                  "null_mean_excess_pct": -0.54278,
+                  "null_p95": 0.02519,
+                  "percentile": 93.33,
+                  "treatment_excess_pct": -0.02918
+                },
+                "volatility_matched": {
+                  "arms": 30,
+                  "beats_p95": false,
+                  "empirical_p": 0.1333,
+                  "null_mean_excess_pct": -0.47158,
+                  "null_p95": 0.20353,
+                  "percentile": 86.67,
+                  "treatment_excess_pct": -0.02918
+                }
+              },
+              "walk_forward": {
+                "folds": [
+                  {
+                    "fold": 1,
+                    "names_per_date": 145.2,
+                    "net_per_period_pct": 3.5186,
+                    "test_end": "2017-02-08",
+                    "test_ic": 0.00884,
+                    "test_start": "2016-05-14",
+                    "train_ic": -0.05588,
+                    "turnover_per_year": 10.92
+                  },
+                  {
+                    "fold": 2,
+                    "names_per_date": 159.0,
+                    "net_per_period_pct": 0.1525,
+                    "test_end": "2017-12-12",
+                    "test_ic": -0.02749,
+                    "test_start": "2017-03-08",
+                    "train_ic": -0.02461,
+                    "turnover_per_year": 11.28
+                  },
+                  {
+                    "fold": 3,
+                    "names_per_date": 198.4,
+                    "net_per_period_pct": -1.8083,
+                    "test_end": "2018-10-07",
+                    "test_ic": -0.02412,
+                    "test_start": "2018-01-07",
+                    "train_ic": -0.00932,
+                    "turnover_per_year": 11.16
+                  },
+                  {
+                    "fold": 4,
+                    "names_per_date": 388.4,
+                    "net_per_period_pct": -2.5216,
+                    "test_end": "2019-08-05",
+                    "test_ic": -0.04409,
+                    "test_start": "2018-11-05",
+                    "train_ic": -0.0258,
+                    "turnover_per_year": 11.76
+                  },
+                  {
+                    "fold": 5,
+                    "names_per_date": 522.3,
+                    "net_per_period_pct": -8.862,
+                    "test_end": "2020-06-08",
+                    "test_ic": 0.01098,
+                    "test_start": "2019-09-04",
+                    "train_ic": -0.0341,
+                    "turnover_per_year": 11.76
+                  },
+                  {
+                    "fold": 6,
+                    "names_per_date": 523.0,
+                    "net_per_period_pct": 3.6068,
+                    "test_end": "2021-04-05",
+                    "test_ic": 0.05459,
+                    "test_start": "2020-07-07",
+                    "train_ic": -0.01656,
+                    "turnover_per_year": 10.56
+                  },
+                  {
+                    "fold": 7,
+                    "names_per_date": 519.0,
+                    "net_per_period_pct": 2.9519,
+                    "test_end": "2022-01-30",
+                    "test_ic": 0.08262,
+                    "test_start": "2021-05-03",
+                    "train_ic": 0.03278,
+                    "turnover_per_year": 10.92
+                  },
+                  {
+                    "fold": 8,
+                    "names_per_date": 620.5,
+                    "net_per_period_pct": -1.8629,
+                    "test_end": "2022-12-04",
+                    "test_ic": -0.02287,
+                    "test_start": "2022-02-28",
+                    "train_ic": 0.0686,
+                    "turnover_per_year": 11.28
+                  },
+                  {
+                    "fold": 9,
+                    "names_per_date": 660.8,
+                    "net_per_period_pct": -3.5862,
+                    "test_end": "2023-10-09",
+                    "test_ic": -0.06466,
+                    "test_start": "2023-01-02",
+                    "train_ic": 0.02988,
+                    "turnover_per_year": 11.64
+                  },
+                  {
+                    "fold": 10,
+                    "names_per_date": 668.9,
+                    "net_per_period_pct": 0.9923,
+                    "test_end": "2024-08-10",
+                    "test_ic": -0.01719,
+                    "test_start": "2023-11-06",
+                    "train_ic": -0.04377,
+                    "turnover_per_year": 11.88
+                  }
+                ],
+                "positive_fold_share": 0.4,
+                "positive_folds": 4,
+                "total_folds": 10
+              }
+            },
+            "recorded_at": "2026-08-19T11:25:43.458691",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": false,
+              "rank_correlation": false
+            },
+            "detail": {
+              "decomposition": {
+                "execution_loss_pp": -1.8024,
+                "exposure_effect_note": "not separable on a panel: the benchmark is the cross-sectional mean of the SAME eligible universe, so market direction is differenced out by construction",
+                "final_net_pct": -0.992,
+                "liquidity_effect_pp": -1.4003,
+                "selection_effect_note": "selection and signal are the same operation here -- the score IS the selection rule, so they cannot be separated without changing Alpha Core, which is forbidden",
+                "signal_information_full_pct": 3.1735,
+                "steps": [
+                  {
+                    "excess_pct": 3.1735,
+                    "step": "1. gross alpha, full universe, frictionless"
+                  },
+                  {
+                    "excess_pct": 1.7732,
+                    "step": "2. after restricting to tradable names (T2)"
+                  },
+                  {
+                    "excess_pct": -0.0292,
+                    "step": "3. after T+1 execution and unfilled slots"
+                  },
+                  {
+                    "excess_pct": -0.992,
+                    "step": "4. after turnover x round trip"
+                  },
+                  {
+                    "excess_pct": -1.1772,
+                    "step": "5. after 0.10%/leg slippage"
+                  }
+                ],
+                "transaction_cost_pp": -0.9629,
+                "turnover_per_year": 11.11
+              },
+              "layers": [
+                {
+                  "evidence": "E20_capacity_audit.json / phase3_information",
+                  "layer": "L1 INFORMATION",
+                  "passed": false,
+                  "question": "is there predictive information anywhere?",
+                  "result": "IC 0.01456 at the declared h=20, t 1.232; but IC 0.05101 at h=5, t 4.182",
+                  "threshold": "|t| >= 2.0 at h=20"
+                },
+                {
+                  "evidence": "E20_capacity_audit.json / phase4_tradability",
+                  "layer": "L2 TRADABILITY",
+                  "passed": false,
+                  "question": "does it survive restriction to names that can absorb the strategy?",
+                  "result": "T2 IC -0.01293 (t -0.985) at h=20, against IC 0.17066 (t 7.139) in the names capacity EXCLUDES",
+                  "threshold": "IC >= 0.02 AND ICIR >= 0.30 AND |t| >= 2.0 at T2"
+                },
+                {
+                  "evidence": "E20_capacity_audit.json / phase7_execution, phase8",
+                  "layer": "L3 MONETIZATION",
+                  "passed": false,
+                  "question": "does what remains survive execution, turnover and cost?",
+                  "result": "net -0.992%/period at T2 h=20; turnover 11.11/yr against a measured capacity of 4.45/yr",
+                  "threshold": "net > 0 AND turnover <= 4.45/yr AND >= 95th percentile of the liquidity-matched null"
+                }
+              ],
+              "nulls": {
+                "exposure_matched_market": {
+                  "arms": 1,
+                  "beats_p95": false,
+                  "note": "the benchmark IS the cross-sectional mean of the tradable universe, so a matched-exposure null has zero excess by construction",
+                  "null_mean_excess_pct": 0.0,
+                  "percentile": 0.0,
+                  "treatment_excess_pct": -0.02918
+                },
+                "liquidity_and_volatility_matched": {
+                  "arms": 30,
+                  "beats_p95": false,
+                  "empirical_p": 0.4333,
+                  "null_mean_excess_pct": -0.20417,
+                  "null_p95": 0.35435,
+                  "percentile": 56.67,
+                  "treatment_excess_pct": -0.02918
+                },
+                "liquidity_matched": {
+                  "arms": 30,
+                  "beats_p95": false,
+                  "empirical_p": 0.1,
+                  "null_mean_excess_pct": -0.42119,
+                  "null_p95": 0.05202,
+                  "percentile": 90.0,
+                  "treatment_excess_pct": -0.02918
+                },
+                "random_ranking": {
+                  "arms": 30,
+                  "beats_p95": false,
+                  "empirical_p": 0.0667,
+                  "null_mean_excess_pct": -0.54278,
+                  "null_p95": 0.02519,
+                  "percentile": 93.33,
+                  "treatment_excess_pct": -0.02918
+                },
+                "volatility_matched": {
+                  "arms": 30,
+                  "beats_p95": false,
+                  "empirical_p": 0.1333,
+                  "null_mean_excess_pct": -0.47158,
+                  "null_p95": 0.20353,
+                  "percentile": 86.67,
+                  "treatment_excess_pct": -0.02918
+                }
+              },
+              "walk_forward": {
+                "folds": [
+                  {
+                    "fold": 1,
+                    "names_per_date": 145.2,
+                    "net_per_period_pct": 3.5186,
+                    "test_end": "2017-02-08",
+                    "test_ic": 0.00884,
+                    "test_start": "2016-05-14",
+                    "train_ic": -0.05588,
+                    "turnover_per_year": 10.92
+                  },
+                  {
+                    "fold": 2,
+                    "names_per_date": 159.0,
+                    "net_per_period_pct": 0.1525,
+                    "test_end": "2017-12-12",
+                    "test_ic": -0.02749,
+                    "test_start": "2017-03-08",
+                    "train_ic": -0.02461,
+                    "turnover_per_year": 11.28
+                  },
+                  {
+                    "fold": 3,
+                    "names_per_date": 198.4,
+                    "net_per_period_pct": -1.8083,
+                    "test_end": "2018-10-07",
+                    "test_ic": -0.02412,
+                    "test_start": "2018-01-07",
+                    "train_ic": -0.00932,
+                    "turnover_per_year": 11.16
+                  },
+                  {
+                    "fold": 4,
+                    "names_per_date": 388.4,
+                    "net_per_period_pct": -2.5216,
+                    "test_end": "2019-08-05",
+                    "test_ic": -0.04409,
+                    "test_start": "2018-11-05",
+                    "train_ic": -0.0258,
+                    "turnover_per_year": 11.76
+                  },
+                  {
+                    "fold": 5,
+                    "names_per_date": 522.3,
+                    "net_per_period_pct": -8.862,
+                    "test_end": "2020-06-08",
+                    "test_ic": 0.01098,
+                    "test_start": "2019-09-04",
+                    "train_ic": -0.0341,
+                    "turnover_per_year": 11.76
+                  },
+                  {
+                    "fold": 6,
+                    "names_per_date": 523.0,
+                    "net_per_period_pct": 3.6068,
+                    "test_end": "2021-04-05",
+                    "test_ic": 0.05459,
+                    "test_start": "2020-07-07",
+                    "train_ic": -0.01656,
+                    "turnover_per_year": 10.56
+                  },
+                  {
+                    "fold": 7,
+                    "names_per_date": 519.0,
+                    "net_per_period_pct": 2.9519,
+                    "test_end": "2022-01-30",
+                    "test_ic": 0.08262,
+                    "test_start": "2021-05-03",
+                    "train_ic": 0.03278,
+                    "turnover_per_year": 10.92
+                  },
+                  {
+                    "fold": 8,
+                    "names_per_date": 620.5,
+                    "net_per_period_pct": -1.8629,
+                    "test_end": "2022-12-04",
+                    "test_ic": -0.02287,
+                    "test_start": "2022-02-28",
+                    "train_ic": 0.0686,
+                    "turnover_per_year": 11.28
+                  },
+                  {
+                    "fold": 9,
+                    "names_per_date": 660.8,
+                    "net_per_period_pct": -3.5862,
+                    "test_end": "2023-10-09",
+                    "test_ic": -0.06466,
+                    "test_start": "2023-01-02",
+                    "train_ic": 0.02988,
+                    "turnover_per_year": 11.64
+                  },
+                  {
+                    "fold": 10,
+                    "names_per_date": 668.9,
+                    "net_per_period_pct": 0.9923,
+                    "test_end": "2024-08-10",
+                    "test_ic": -0.01719,
+                    "test_start": "2023-11-06",
+                    "train_ic": -0.04377,
+                    "turnover_per_year": 11.88
+                  }
+                ],
+                "positive_fold_share": 0.4,
+                "positive_folds": 4,
+                "total_folds": 10
+              }
+            },
+            "recorded_at": "2026-08-19T11:25:43.474279",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
     }
   ],
   "chain": {
-    "entries": 12,
+    "entries": 13,
     "intact": true,
-    "head": "6a761c7ee07fc6087a540b3b7018a8786b0ba8784e68a0eaec0a418496847a34",
+    "head": "fcc4684bb2c5d394fe2e9d64024b8462eba24ceb47c702ef07a99141dc73b551",
     "note": "every entry hashes to its recorded value and every link matches"
   },
-  "exported_at": "2026-08-19T10:39:27.858466"
+  "exported_at": "2026-08-19T11:25:57.472915"
 }

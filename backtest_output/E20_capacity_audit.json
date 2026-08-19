@@ -1,0 +1,1067 @@
+{
+  "experiment_id": "E20-alpha-core-capacity",
+  "preregistration_hash": "1f9d15b09459975593e525db2e86122a2487df6cbd964a1a60a2cce8c9f03878",
+  "control_arm": "E19-alpha-core-tradable-edge",
+  "declared_horizon": 20,
+  "horizons": [
+    5,
+    10,
+    20,
+    60
+  ],
+  "seed": 20260820,
+  "independent_oos_available": false,
+  "rows": 66623,
+  "dates": 120,
+  "phase2_capacity_map": {
+    "account_equity": 1000000000,
+    "position_value": 100000000.0,
+    "levels": {
+      "T1_broad": {
+        "max_participation_pct": 10.0,
+        "implied_min_adv": 1000000000.0,
+        "rows": 50449,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 120,
+        "names_per_date_median": 487.0,
+        "names_per_date_min": 109,
+        "share_of_panel_pct": 75.72,
+        "median_adv": 21324935447.95,
+        "median_participation_pct": 0.4689345965153351,
+        "eligible": true
+      },
+      "T2_realistic": {
+        "max_participation_pct": 5.0,
+        "implied_min_adv": 2000000000.0,
+        "rows": 46370,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 120,
+        "names_per_date_median": 461.5,
+        "names_per_date_min": 71,
+        "share_of_panel_pct": 69.6,
+        "median_adv": 25107557101.875,
+        "median_participation_pct": 0.39828646565090664,
+        "eligible": true
+      },
+      "T3_conservative": {
+        "max_participation_pct": 1.0,
+        "implied_min_adv": 10000000000.0,
+        "rows": 34038,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 81,
+        "names_per_date_median": 301.5,
+        "names_per_date_min": 9,
+        "share_of_panel_pct": 51.09,
+        "median_adv": 40939057741.5,
+        "median_participation_pct": 0.2442655144430813,
+        "eligible": true
+      }
+    },
+    "curve": {
+      "50.0": {
+        "max_participation_pct": 50.0,
+        "implied_min_adv": 200000000.0,
+        "rows": 57288,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 120,
+        "names_per_date_median": 501.5,
+        "names_per_date_min": 220,
+        "share_of_panel_pct": 85.99,
+        "median_adv": 16325423571.875,
+        "median_participation_pct": 0.6125415347237079,
+        "eligible": true
+      },
+      "25.0": {
+        "max_participation_pct": 25.0,
+        "implied_min_adv": 400000000.0,
+        "rows": 54803,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 120,
+        "names_per_date_median": 498.5,
+        "names_per_date_min": 165,
+        "share_of_panel_pct": 82.26,
+        "median_adv": 18067130350.6,
+        "median_participation_pct": 0.5534913296105104,
+        "eligible": true
+      },
+      "10.0": {
+        "max_participation_pct": 10.0,
+        "implied_min_adv": 1000000000.0,
+        "rows": 50449,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 120,
+        "names_per_date_median": 487.0,
+        "names_per_date_min": 109,
+        "share_of_panel_pct": 75.72,
+        "median_adv": 21324935447.95,
+        "median_participation_pct": 0.4689345965153351,
+        "eligible": true
+      },
+      "5.0": {
+        "max_participation_pct": 5.0,
+        "implied_min_adv": 2000000000.0,
+        "rows": 46370,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 120,
+        "names_per_date_median": 461.5,
+        "names_per_date_min": 71,
+        "share_of_panel_pct": 69.6,
+        "median_adv": 25107557101.875,
+        "median_participation_pct": 0.39828646565090664,
+        "eligible": true
+      },
+      "2.0": {
+        "max_participation_pct": 2.0,
+        "implied_min_adv": 5000000000.0,
+        "rows": 40113,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 111,
+        "names_per_date_median": 404.0,
+        "names_per_date_min": 29,
+        "share_of_panel_pct": 60.21,
+        "median_adv": 32117259714.35,
+        "median_participation_pct": 0.3113590664004251,
+        "eligible": true
+      },
+      "1.0": {
+        "max_participation_pct": 1.0,
+        "implied_min_adv": 10000000000.0,
+        "rows": 34038,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 81,
+        "names_per_date_median": 301.5,
+        "names_per_date_min": 9,
+        "share_of_panel_pct": 51.09,
+        "median_adv": 40939057741.5,
+        "median_participation_pct": 0.2442655144430813,
+        "eligible": true
+      },
+      "0.5": {
+        "max_participation_pct": 0.5,
+        "implied_min_adv": 20000000000.0,
+        "rows": 26063,
+        "dates_with_any_name": 120,
+        "dates_with_enough_names": 72,
+        "names_per_date_median": 190.0,
+        "names_per_date_min": 4,
+        "share_of_panel_pct": 39.12,
+        "median_adv": 57691469368.0,
+        "median_participation_pct": 0.17333585206874186,
+        "eligible": true
+      },
+      "0.25": {
+        "max_participation_pct": 0.25,
+        "implied_min_adv": 40000000000.0,
+        "rows": 17302,
+        "dates_with_any_name": 119,
+        "dates_with_enough_names": 66,
+        "names_per_date_median": 90.0,
+        "names_per_date_min": 1,
+        "share_of_panel_pct": 25.97,
+        "median_adv": 90146610936.5,
+        "median_participation_pct": 0.11093040432996806,
+        "eligible": true
+      }
+    }
+  },
+  "phase3_information": {
+    "full_cross_section": {
+      "5": {
+        "label": "h=5",
+        "dates": 120,
+        "mean_ic": 0.05101,
+        "median_ic": 0.03099,
+        "icir": 0.3818,
+        "t_stat": 4.182,
+        "pct_positive": 64.17,
+        "ci95": [
+          0.0271,
+          0.07491
+        ]
+      },
+      "10": {
+        "label": "h=10",
+        "dates": 120,
+        "mean_ic": 0.03003,
+        "median_ic": 0.02128,
+        "icir": 0.2333,
+        "t_stat": 2.556,
+        "pct_positive": 56.67,
+        "ci95": [
+          0.007,
+          0.05306
+        ]
+      },
+      "20": {
+        "label": "h=20",
+        "dates": 120,
+        "mean_ic": 0.01456,
+        "median_ic": 0.0028,
+        "icir": 0.1125,
+        "t_stat": 1.232,
+        "pct_positive": 51.67,
+        "ci95": [
+          -0.00861,
+          0.03773
+        ]
+      },
+      "60": {
+        "label": "h=60",
+        "dates": 120,
+        "mean_ic": 0.01755,
+        "median_ic": 0.01218,
+        "icir": 0.1479,
+        "t_stat": 1.62,
+        "pct_positive": 55.83,
+        "ci95": [
+          -0.00369,
+          0.0388
+        ]
+      }
+    },
+    "L1_verdict": {
+      "declared_horizon": 20,
+      "mean_ic": 0.01456,
+      "t_stat": 1.232,
+      "threshold_abs_t": 2.0,
+      "passed": false
+    }
+  },
+  "phase4_tradability": {
+    "levels": {
+      "T1_broad": {
+        "5": {
+          "label": "T1_broad h=5",
+          "dates": 120,
+          "mean_ic": 0.02442,
+          "median_ic": 0.02263,
+          "icir": 0.1752,
+          "t_stat": 1.92,
+          "pct_positive": 55.83,
+          "ci95": [
+            -0.00051,
+            0.04936
+          ]
+        },
+        "10": {
+          "label": "T1_broad h=10",
+          "dates": 120,
+          "mean_ic": 0.00168,
+          "median_ic": -0.00616,
+          "icir": 0.0124,
+          "t_stat": 0.136,
+          "pct_positive": 47.5,
+          "ci95": [
+            -0.02256,
+            0.02593
+          ]
+        },
+        "20": {
+          "label": "T1_broad h=20",
+          "dates": 120,
+          "mean_ic": -0.01167,
+          "median_ic": -0.02287,
+          "icir": -0.0848,
+          "t_stat": -0.929,
+          "pct_positive": 43.33,
+          "ci95": [
+            -0.03629,
+            0.01296
+          ]
+        },
+        "60": {
+          "label": "T1_broad h=60",
+          "dates": 120,
+          "mean_ic": -0.00355,
+          "median_ic": -0.00604,
+          "icir": -0.0256,
+          "t_stat": -0.28,
+          "pct_positive": 46.67,
+          "ci95": [
+            -0.02842,
+            0.02131
+          ]
+        }
+      },
+      "T2_realistic": {
+        "5": {
+          "label": "T2_realistic h=5",
+          "dates": 120,
+          "mean_ic": 0.02765,
+          "median_ic": 0.02939,
+          "icir": 0.1942,
+          "t_stat": 2.127,
+          "pct_positive": 59.17,
+          "ci95": [
+            0.00217,
+            0.05312
+          ]
+        },
+        "10": {
+          "label": "T2_realistic h=10",
+          "dates": 120,
+          "mean_ic": 0.00349,
+          "median_ic": 0.00112,
+          "icir": 0.0245,
+          "t_stat": 0.268,
+          "pct_positive": 50.83,
+          "ci95": [
+            -0.02205,
+            0.02903
+          ]
+        },
+        "20": {
+          "label": "T2_realistic h=20",
+          "dates": 120,
+          "mean_ic": -0.01293,
+          "median_ic": -0.01279,
+          "icir": -0.09,
+          "t_stat": -0.985,
+          "pct_positive": 44.17,
+          "ci95": [
+            -0.03865,
+            0.01279
+          ]
+        },
+        "60": {
+          "label": "T2_realistic h=60",
+          "dates": 120,
+          "mean_ic": -0.00312,
+          "median_ic": -0.0009,
+          "icir": -0.0206,
+          "t_stat": -0.226,
+          "pct_positive": 50.0,
+          "ci95": [
+            -0.03019,
+            0.02395
+          ]
+        }
+      },
+      "T3_conservative": {
+        "5": {
+          "label": "T3_conservative h=5",
+          "dates": 81,
+          "mean_ic": 0.0442,
+          "median_ic": 0.03767,
+          "icir": 0.2705,
+          "t_stat": 2.434,
+          "pct_positive": 60.49,
+          "ci95": [
+            0.00861,
+            0.07978
+          ]
+        },
+        "10": {
+          "label": "T3_conservative h=10",
+          "dates": 81,
+          "mean_ic": 0.01776,
+          "median_ic": 0.01866,
+          "icir": 0.114,
+          "t_stat": 1.026,
+          "pct_positive": 56.79,
+          "ci95": [
+            -0.01616,
+            0.05168
+          ]
+        },
+        "20": {
+          "label": "T3_conservative h=20",
+          "dates": 81,
+          "mean_ic": -0.01286,
+          "median_ic": -0.02005,
+          "icir": -0.0752,
+          "t_stat": -0.677,
+          "pct_positive": 43.21,
+          "ci95": [
+            -0.0501,
+            0.02438
+          ]
+        },
+        "60": {
+          "label": "T3_conservative h=60",
+          "dates": 81,
+          "mean_ic": -0.00511,
+          "median_ic": -0.01632,
+          "icir": -0.0363,
+          "t_stat": -0.327,
+          "pct_positive": 44.44,
+          "ci95": [
+            -0.03578,
+            0.02556
+          ]
+        }
+      }
+    },
+    "curve": {
+      "50.0": {
+        "label": "part<=50.0",
+        "dates": 120,
+        "mean_ic": -0.00952,
+        "median_ic": -0.02304,
+        "icir": -0.0713,
+        "t_stat": -0.781,
+        "pct_positive": 45.0,
+        "ci95": [
+          -0.03341,
+          0.01438
+        ]
+      },
+      "25.0": {
+        "label": "part<=25.0",
+        "dates": 120,
+        "mean_ic": -0.01214,
+        "median_ic": -0.02108,
+        "icir": -0.0887,
+        "t_stat": -0.972,
+        "pct_positive": 44.17,
+        "ci95": [
+          -0.03661,
+          0.01234
+        ]
+      },
+      "10.0": {
+        "label": "part<=10.0",
+        "dates": 120,
+        "mean_ic": -0.01167,
+        "median_ic": -0.02287,
+        "icir": -0.0848,
+        "t_stat": -0.929,
+        "pct_positive": 43.33,
+        "ci95": [
+          -0.03629,
+          0.01296
+        ]
+      },
+      "5.0": {
+        "label": "part<=5.0",
+        "dates": 120,
+        "mean_ic": -0.01293,
+        "median_ic": -0.01279,
+        "icir": -0.09,
+        "t_stat": -0.985,
+        "pct_positive": 44.17,
+        "ci95": [
+          -0.03865,
+          0.01279
+        ]
+      },
+      "2.0": {
+        "label": "part<=2.0",
+        "dates": 111,
+        "mean_ic": -0.01144,
+        "median_ic": -0.01246,
+        "icir": -0.072,
+        "t_stat": -0.759,
+        "pct_positive": 46.85,
+        "ci95": [
+          -0.041,
+          0.01812
+        ]
+      },
+      "1.0": {
+        "label": "part<=1.0",
+        "dates": 81,
+        "mean_ic": -0.01286,
+        "median_ic": -0.02005,
+        "icir": -0.0752,
+        "t_stat": -0.677,
+        "pct_positive": 43.21,
+        "ci95": [
+          -0.0501,
+          0.02438
+        ]
+      },
+      "0.5": {
+        "label": "part<=0.5",
+        "dates": 72,
+        "mean_ic": -0.00908,
+        "median_ic": -0.02007,
+        "icir": -0.058,
+        "t_stat": -0.492,
+        "pct_positive": 44.44,
+        "ci95": [
+          -0.04526,
+          0.0271
+        ]
+      },
+      "0.25": {
+        "label": "part<=0.25",
+        "dates": 66,
+        "mean_ic": -0.01753,
+        "median_ic": -0.02276,
+        "icir": -0.1082,
+        "t_stat": -0.879,
+        "pct_positive": 40.91,
+        "ci95": [
+          -0.0566,
+          0.02155
+        ]
+      }
+    },
+    "excluded_at_T2": {
+      "label": "excluded at T2",
+      "dates": 93,
+      "mean_ic": 0.17066,
+      "median_ic": 0.10577,
+      "icir": 0.7402,
+      "t_stat": 7.139,
+      "pct_positive": 74.19,
+      "ci95": [
+        0.1238,
+        0.21752
+      ]
+    },
+    "L2_verdict": {
+      "level": "T2_realistic",
+      "mean_ic": -0.01293,
+      "icir": -0.09,
+      "t_stat": -0.985,
+      "passed": false
+    }
+  },
+  "phase7_execution": {
+    "levels": {
+      "T1_broad": {
+        "5": {
+          "label": "T1_broad h=5",
+          "periods": 120,
+          "gross_excess_pct": 0.6407,
+          "excess_t": 2.131,
+          "turnover_per_period": 0.9358,
+          "turnover_per_year": 44.92,
+          "cost_per_period_pct": 0.9733,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.3326,
+          "net_annualised_pct": -14.78,
+          "fill_rate_pct": 87.0,
+          "queue_ratio": 4.477,
+          "requested_excess_pct": 1.9962,
+          "max_drawdown_pct": -39.95,
+          "final_equity": 1.2598,
+          "net_positive": false
+        },
+        "10": {
+          "label": "T1_broad h=10",
+          "periods": 120,
+          "gross_excess_pct": 0.4072,
+          "excess_t": 0.949,
+          "turnover_per_period": 0.9358,
+          "turnover_per_year": 22.46,
+          "cost_per_period_pct": 0.9733,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.5661,
+          "net_annualised_pct": -12.74,
+          "fill_rate_pct": 87.0,
+          "queue_ratio": 4.477,
+          "requested_excess_pct": 2.0643,
+          "max_drawdown_pct": -30.87,
+          "final_equity": 2.5426,
+          "net_positive": false
+        },
+        "20": {
+          "label": "T1_broad h=20",
+          "periods": 120,
+          "gross_excess_pct": -0.2778,
+          "excess_t": -0.406,
+          "turnover_per_period": 0.9358,
+          "turnover_per_year": 11.23,
+          "cost_per_period_pct": 0.9733,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -1.2511,
+          "net_annualised_pct": -14.02,
+          "fill_rate_pct": 87.0,
+          "queue_ratio": 4.477,
+          "requested_excess_pct": 1.7581,
+          "max_drawdown_pct": -43.17,
+          "final_equity": 9.2473,
+          "net_positive": false
+        },
+        "60": {
+          "label": "T1_broad h=60",
+          "periods": 120,
+          "gross_excess_pct": -2.2227,
+          "excess_t": -2.215,
+          "turnover_per_period": 0.9358,
+          "turnover_per_year": 3.74,
+          "cost_per_period_pct": 0.9733,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -3.196,
+          "net_annualised_pct": -12.18,
+          "fill_rate_pct": 87.0,
+          "queue_ratio": 4.479,
+          "requested_excess_pct": 0.9081,
+          "max_drawdown_pct": -50.54,
+          "final_equity": 1924.7598,
+          "net_positive": false
+        }
+      },
+      "T2_realistic": {
+        "5": {
+          "label": "T2_realistic h=5",
+          "periods": 120,
+          "gross_excess_pct": 0.7545,
+          "excess_t": 2.553,
+          "turnover_per_period": 0.9258,
+          "turnover_per_year": 44.44,
+          "cost_per_period_pct": 0.9629,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.2083,
+          "net_annualised_pct": -9.53,
+          "fill_rate_pct": 87.67,
+          "queue_ratio": 4.22,
+          "requested_excess_pct": 2.0363,
+          "max_drawdown_pct": -37.02,
+          "final_equity": 1.4,
+          "net_positive": false
+        },
+        "10": {
+          "label": "T2_realistic h=10",
+          "periods": 120,
+          "gross_excess_pct": 0.5648,
+          "excess_t": 1.38,
+          "turnover_per_period": 0.9258,
+          "turnover_per_year": 22.22,
+          "cost_per_period_pct": 0.9629,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.3981,
+          "net_annualised_pct": -9.13,
+          "fill_rate_pct": 87.67,
+          "queue_ratio": 4.22,
+          "requested_excess_pct": 2.0602,
+          "max_drawdown_pct": -34.56,
+          "final_equity": 2.8892,
+          "net_positive": false
+        },
+        "20": {
+          "label": "T2_realistic h=20",
+          "periods": 120,
+          "gross_excess_pct": -0.0292,
+          "excess_t": -0.045,
+          "turnover_per_period": 0.9258,
+          "turnover_per_year": 11.11,
+          "cost_per_period_pct": 0.9629,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.992,
+          "net_annualised_pct": -11.28,
+          "fill_rate_pct": 87.67,
+          "queue_ratio": 4.22,
+          "requested_excess_pct": 1.7732,
+          "max_drawdown_pct": -45.54,
+          "final_equity": 11.2763,
+          "net_positive": false
+        },
+        "60": {
+          "label": "T2_realistic h=60",
+          "periods": 120,
+          "gross_excess_pct": -1.567,
+          "excess_t": -1.538,
+          "turnover_per_period": 0.9258,
+          "turnover_per_year": 3.7,
+          "cost_per_period_pct": 0.9629,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -2.5299,
+          "net_annualised_pct": -9.74,
+          "fill_rate_pct": 87.67,
+          "queue_ratio": 4.222,
+          "requested_excess_pct": 1.585,
+          "max_drawdown_pct": -51.95,
+          "final_equity": 3031.2477,
+          "net_positive": false
+        }
+      },
+      "T3_conservative": {
+        "5": {
+          "label": "T3_conservative h=5",
+          "periods": 81,
+          "gross_excess_pct": 0.9246,
+          "excess_t": 2.796,
+          "turnover_per_period": 0.9321,
+          "turnover_per_year": 44.74,
+          "cost_per_period_pct": 0.9694,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.0448,
+          "net_annualised_pct": -2.13,
+          "fill_rate_pct": 86.54,
+          "queue_ratio": 4.349,
+          "requested_excess_pct": 2.4418,
+          "max_drawdown_pct": -11.68,
+          "final_equity": 1.6328,
+          "net_positive": false
+        },
+        "10": {
+          "label": "T3_conservative h=10",
+          "periods": 81,
+          "gross_excess_pct": 0.5284,
+          "excess_t": 1.089,
+          "turnover_per_period": 0.9321,
+          "turnover_per_year": 22.37,
+          "cost_per_period_pct": 0.9694,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.441,
+          "net_annualised_pct": -10.06,
+          "fill_rate_pct": 86.54,
+          "queue_ratio": 4.349,
+          "requested_excess_pct": 2.2343,
+          "max_drawdown_pct": -23.74,
+          "final_equity": 1.8157,
+          "net_positive": false
+        },
+        "20": {
+          "label": "T3_conservative h=20",
+          "periods": 81,
+          "gross_excess_pct": -0.3871,
+          "excess_t": -0.484,
+          "turnover_per_period": 0.9321,
+          "turnover_per_year": 11.19,
+          "cost_per_period_pct": 0.9694,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -1.3565,
+          "net_annualised_pct": -15.12,
+          "fill_rate_pct": 86.54,
+          "queue_ratio": 4.349,
+          "requested_excess_pct": 1.9271,
+          "max_drawdown_pct": -29.41,
+          "final_equity": 6.4449,
+          "net_positive": false
+        },
+        "60": {
+          "label": "T3_conservative h=60",
+          "periods": 81,
+          "gross_excess_pct": -1.961,
+          "excess_t": -1.463,
+          "turnover_per_period": 0.9321,
+          "turnover_per_year": 3.73,
+          "cost_per_period_pct": 0.9694,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -2.9304,
+          "net_annualised_pct": -11.22,
+          "fill_rate_pct": 86.54,
+          "queue_ratio": 4.353,
+          "requested_excess_pct": 1.8879,
+          "max_drawdown_pct": -62.2,
+          "final_equity": 660.9892,
+          "net_positive": false
+        }
+      }
+    },
+    "horizons": {},
+    "L3_verdict": {
+      "level": "T2_realistic",
+      "horizon": 20,
+      "net_per_period_pct": -0.992,
+      "turnover_per_year": 11.11,
+      "measured_capacity": 4.45,
+      "within_capacity": false,
+      "max_drawdown_pct": -45.54,
+      "net_positive": false
+    }
+  },
+  "phase8_nulls": {
+    "available": true,
+    "treatment_excess_pct": -0.02918,
+    "nulls": {
+      "random_ranking": {
+        "arms": 30,
+        "null_mean_excess_pct": -0.54278,
+        "null_p95": 0.02519,
+        "treatment_excess_pct": -0.02918,
+        "percentile": 93.33,
+        "empirical_p": 0.0667,
+        "beats_p95": false
+      },
+      "liquidity_matched": {
+        "arms": 30,
+        "null_mean_excess_pct": -0.42119,
+        "null_p95": 0.05202,
+        "treatment_excess_pct": -0.02918,
+        "percentile": 90.0,
+        "empirical_p": 0.1,
+        "beats_p95": false
+      },
+      "volatility_matched": {
+        "arms": 30,
+        "null_mean_excess_pct": -0.47158,
+        "null_p95": 0.20353,
+        "treatment_excess_pct": -0.02918,
+        "percentile": 86.67,
+        "empirical_p": 0.1333,
+        "beats_p95": false
+      },
+      "liquidity_and_volatility_matched": {
+        "arms": 30,
+        "null_mean_excess_pct": -0.20417,
+        "null_p95": 0.35435,
+        "treatment_excess_pct": -0.02918,
+        "percentile": 56.67,
+        "empirical_p": 0.4333,
+        "beats_p95": false
+      },
+      "exposure_matched_market": {
+        "arms": 1,
+        "null_mean_excess_pct": 0.0,
+        "treatment_excess_pct": -0.02918,
+        "percentile": 0.0,
+        "beats_p95": false,
+        "note": "the benchmark IS the cross-sectional mean of the tradable universe, so a matched-exposure null has zero excess by construction"
+      }
+    },
+    "primary_null": "liquidity_matched",
+    "primary_percentile": 90.0
+  },
+  "phase9_splits": {
+    "segments": {
+      "in_sample": {
+        "window": [
+          "2014-09-21",
+          "2021-09-01"
+        ],
+        "ic": {
+          "label": "in_sample",
+          "dates": 84,
+          "mean_ic": -0.01285,
+          "median_ic": -0.01279,
+          "icir": -0.0811,
+          "t_stat": -0.743,
+          "pct_positive": 46.43,
+          "ci95": [
+            -0.04673,
+            0.02104
+          ]
+        },
+        "book": {
+          "label": "in_sample",
+          "periods": 84,
+          "gross_excess_pct": -0.3265,
+          "excess_t": -0.412,
+          "turnover_per_period": 0.9179,
+          "turnover_per_year": 11.01,
+          "cost_per_period_pct": 0.9546,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -1.2811,
+          "net_annualised_pct": -14.33,
+          "fill_rate_pct": 86.67,
+          "queue_ratio": 3.917,
+          "requested_excess_pct": 1.5207,
+          "max_drawdown_pct": -45.46,
+          "final_equity": 9.7767,
+          "net_positive": false
+        }
+      },
+      "validation": {
+        "window": [
+          "2021-09-01",
+          "2023-03-01"
+        ],
+        "ic": {
+          "label": "validation",
+          "dates": 18,
+          "mean_ic": 0.00389,
+          "median_ic": -0.00169,
+          "icir": 0.0313,
+          "t_stat": 0.133,
+          "pct_positive": 50.0,
+          "ci95": [
+            -0.05349,
+            0.06127
+          ]
+        },
+        "book": {
+          "label": "validation",
+          "periods": 18,
+          "gross_excess_pct": 0.656,
+          "excess_t": 0.374,
+          "turnover_per_period": 0.9111,
+          "turnover_per_year": 10.93,
+          "cost_per_period_pct": 0.9476,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.2915,
+          "net_annualised_pct": -3.44,
+          "fill_rate_pct": 86.67,
+          "queue_ratio": 6.314,
+          "requested_excess_pct": 3.3594,
+          "max_drawdown_pct": -20.26,
+          "final_equity": 1.036,
+          "net_positive": false
+        }
+      },
+      "reused_window": {
+        "window": [
+          "2023-03-01",
+          "2024-09-01"
+        ],
+        "ic": {
+          "label": "reused_window",
+          "dates": 18,
+          "mean_ic": -0.03013,
+          "median_ic": -0.02209,
+          "icir": -0.389,
+          "t_stat": -1.651,
+          "pct_positive": 27.78,
+          "ci95": [
+            -0.06591,
+            0.00565
+          ]
+        },
+        "book": {
+          "label": "reused_window",
+          "periods": 18,
+          "gross_excess_pct": 0.6731,
+          "excess_t": 0.494,
+          "turnover_per_period": 0.9778,
+          "turnover_per_year": 11.73,
+          "cost_per_period_pct": 1.0169,
+          "slippage_per_period_pct": 0.0,
+          "net_per_period_pct": -0.3438,
+          "net_annualised_pct": -4.05,
+          "fill_rate_pct": 93.33,
+          "queue_ratio": 4.156,
+          "requested_excess_pct": 1.3658,
+          "max_drawdown_pct": -14.94,
+          "final_equity": 1.1132,
+          "net_positive": false
+        }
+      }
+    },
+    "independent_oos_available": false,
+    "reason": "E19 spent 2023-03-01..2024-09-01; windows_touched records it and refuses a second evaluation"
+  },
+  "phase10_walk_forward": {
+    "folds": [
+      {
+        "fold": 1,
+        "test_start": "2016-05-14",
+        "test_end": "2017-02-08",
+        "train_ic": -0.05588,
+        "test_ic": 0.00884,
+        "names_per_date": 145.2,
+        "turnover_per_year": 10.92,
+        "net_per_period_pct": 3.5186
+      },
+      {
+        "fold": 2,
+        "test_start": "2017-03-08",
+        "test_end": "2017-12-12",
+        "train_ic": -0.02461,
+        "test_ic": -0.02749,
+        "names_per_date": 159.0,
+        "turnover_per_year": 11.28,
+        "net_per_period_pct": 0.1525
+      },
+      {
+        "fold": 3,
+        "test_start": "2018-01-07",
+        "test_end": "2018-10-07",
+        "train_ic": -0.00932,
+        "test_ic": -0.02412,
+        "names_per_date": 198.4,
+        "turnover_per_year": 11.16,
+        "net_per_period_pct": -1.8083
+      },
+      {
+        "fold": 4,
+        "test_start": "2018-11-05",
+        "test_end": "2019-08-05",
+        "train_ic": -0.0258,
+        "test_ic": -0.04409,
+        "names_per_date": 388.4,
+        "turnover_per_year": 11.76,
+        "net_per_period_pct": -2.5216
+      },
+      {
+        "fold": 5,
+        "test_start": "2019-09-04",
+        "test_end": "2020-06-08",
+        "train_ic": -0.0341,
+        "test_ic": 0.01098,
+        "names_per_date": 522.3,
+        "turnover_per_year": 11.76,
+        "net_per_period_pct": -8.862
+      },
+      {
+        "fold": 6,
+        "test_start": "2020-07-07",
+        "test_end": "2021-04-05",
+        "train_ic": -0.01656,
+        "test_ic": 0.05459,
+        "names_per_date": 523.0,
+        "turnover_per_year": 10.56,
+        "net_per_period_pct": 3.6068
+      },
+      {
+        "fold": 7,
+        "test_start": "2021-05-03",
+        "test_end": "2022-01-30",
+        "train_ic": 0.03278,
+        "test_ic": 0.08262,
+        "names_per_date": 519.0,
+        "turnover_per_year": 10.92,
+        "net_per_period_pct": 2.9519
+      },
+      {
+        "fold": 8,
+        "test_start": "2022-02-28",
+        "test_end": "2022-12-04",
+        "train_ic": 0.0686,
+        "test_ic": -0.02287,
+        "names_per_date": 620.5,
+        "turnover_per_year": 11.28,
+        "net_per_period_pct": -1.8629
+      },
+      {
+        "fold": 9,
+        "test_start": "2023-01-02",
+        "test_end": "2023-10-09",
+        "train_ic": 0.02988,
+        "test_ic": -0.06466,
+        "names_per_date": 660.8,
+        "turnover_per_year": 11.64,
+        "net_per_period_pct": -3.5862
+      },
+      {
+        "fold": 10,
+        "test_start": "2023-11-06",
+        "test_end": "2024-08-10",
+        "train_ic": -0.04377,
+        "test_ic": -0.01719,
+        "names_per_date": 668.9,
+        "turnover_per_year": 11.88,
+        "net_per_period_pct": 0.9923
+      }
+    ],
+    "positive_folds": 4,
+    "total_folds": 10,
+    "positive_fold_share": 0.4
+  },
+  "phase11_decomposition": {
+    "signal_information_full_pct": 3.1735,
+    "liquidity_effect_pp": -1.4003,
+    "selection_effect_note": "selection and signal are the same operation here -- the score IS the selection rule, so they cannot be separated without changing Alpha Core, which is forbidden",
+    "exposure_effect_note": "not separable on a panel: the benchmark is the cross-sectional mean of the SAME eligible universe, so market direction is differenced out by construction",
+    "execution_loss_pp": -1.8024,
+    "turnover_per_year": 11.11,
+    "transaction_cost_pp": -0.9629,
+    "final_net_pct": -0.992,
+    "steps": [
+      {
+        "step": "1. gross alpha, full universe, frictionless",
+        "excess_pct": 3.1735
+      },
+      {
+        "step": "2. after restricting to tradable names (T2)",
+        "excess_pct": 1.7732
+      },
+      {
+        "step": "3. after T+1 execution and unfilled slots",
+        "excess_pct": -0.0292
+      },
+      {
+        "step": "4. after turnover x round trip",
+        "excess_pct": -0.992
+      },
+      {
+        "step": "5. after 0.10%/leg slippage",
+        "excess_pct": -1.1772
+      }
+    ]
+  }
+}

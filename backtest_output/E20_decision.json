@@ -1,0 +1,81 @@
+{
+  "experiment_id": "E20-alpha-core-capacity",
+  "preregistration_hash": "1f9d15b09459975593e525db2e86122a2487df6cbd964a1a60a2cce8c9f03878",
+  "control_arm": "E19-alpha-core-tradable-edge",
+  "layers": [
+    {
+      "layer": "L1 INFORMATION",
+      "question": "is there predictive information anywhere?",
+      "result": "IC 0.01456 at the declared h=20, t 1.232; but IC 0.05101 at h=5, t 4.182",
+      "threshold": "|t| >= 2.0 at h=20",
+      "passed": false,
+      "evidence": "E20_capacity_audit.json / phase3_information"
+    },
+    {
+      "layer": "L2 TRADABILITY",
+      "question": "does it survive restriction to names that can absorb the strategy?",
+      "result": "T2 IC -0.01293 (t -0.985) at h=20, against IC 0.17066 (t 7.139) in the names capacity EXCLUDES",
+      "threshold": "IC >= 0.02 AND ICIR >= 0.30 AND |t| >= 2.0 at T2",
+      "passed": false,
+      "evidence": "E20_capacity_audit.json / phase4_tradability"
+    },
+    {
+      "layer": "L3 MONETIZATION",
+      "question": "does what remains survive execution, turnover and cost?",
+      "result": "net -0.992%/period at T2 h=20; turnover 11.11/yr against a measured capacity of 4.45/yr",
+      "threshold": "net > 0 AND turnover <= 4.45/yr AND >= 95th percentile of the liquidity-matched null",
+      "passed": false,
+      "evidence": "E20_capacity_audit.json / phase7_execution, phase8"
+    }
+  ],
+  "case": "B_INFORMATION_ONLY_IN_UNTRADABLE_SECURITIES",
+  "information_anywhere": true,
+  "information_in_tradable": false,
+  "monetizable": false,
+  "excluded_at_T2_ic": 0.17066,
+  "excluded_at_T2_t": 7.139,
+  "tradable_at_T2_ic": -0.01293,
+  "tradable_at_T2_t": -0.985,
+  "decomposition": {
+    "signal_information_full_pct": 3.1735,
+    "liquidity_effect_pp": -1.4003,
+    "selection_effect_note": "selection and signal are the same operation here -- the score IS the selection rule, so they cannot be separated without changing Alpha Core, which is forbidden",
+    "exposure_effect_note": "not separable on a panel: the benchmark is the cross-sectional mean of the SAME eligible universe, so market direction is differenced out by construction",
+    "execution_loss_pp": -1.8024,
+    "turnover_per_year": 11.11,
+    "transaction_cost_pp": -0.9629,
+    "final_net_pct": -0.992,
+    "steps": [
+      {
+        "step": "1. gross alpha, full universe, frictionless",
+        "excess_pct": 3.1735
+      },
+      {
+        "step": "2. after restricting to tradable names (T2)",
+        "excess_pct": 1.7732
+      },
+      {
+        "step": "3. after T+1 execution and unfilled slots",
+        "excess_pct": -0.0292
+      },
+      {
+        "step": "4. after turnover x round trip",
+        "excess_pct": -0.992
+      },
+      {
+        "step": "5. after 0.10%/leg slippage",
+        "excess_pct": -1.1772
+      }
+    ]
+  },
+  "primary_null_percentile": 90.0,
+  "independent_oos_available": false,
+  "decision": {
+    "experiment_id": "E20-alpha-core-capacity",
+    "decision": "REJECT",
+    "rejected_at_stage": 2,
+    "rejected_at_stage_name": "ECONOMIC SIGNAL VALIDATION",
+    "cheap_rejection": true,
+    "ledger_entry_hash": "fcc4684bb2c5d394fe2e9d64024b8462eba24ceb47c702ef07a99141dc73b551"
+  }
+}
