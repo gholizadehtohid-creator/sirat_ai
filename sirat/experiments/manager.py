@@ -542,10 +542,38 @@ class Manager(object):
                 % ", ".join("%d (%s)" % (s, stages.NAMES[s]) for s in missing))
 
         if not self._record["reproducible"]:
-            report = provenance.reproducibility_report()
+            # Explain the RECORD, not the working tree as it stands now.
+            #
+            # The refusal is driven by what was captured at registration, and
+            # that is permanent: an experiment registered from an unrecoverable
+            # tree stays unpromotable however clean the repository becomes
+            # afterwards. Reporting the current state instead would tell
+            # someone to commit their changes and try again, which for this
+            # experiment will never work -- the code that produced the result
+            # is already gone. The remedy is a new experiment, and the message
+            # has to say so.
+            stored = self._record
+
+            if stored["git_commit"] == provenance.UNAVAILABLE:
+                cause = ("no commit was recorded when it was registered, so "
+                         "there is no code version to reproduce from")
+            elif stored["git_dirty"]:
+                cause = ("it was registered from a working tree with "
+                         "uncommitted changes (commit %s), so the code that "
+                         "ran cannot be recovered from that commit"
+                         % stored["git_commit"][:12])
+            else:
+                cause = "its provenance was recorded as not reproducible"
+
+            current = provenance.reproducibility_report()
+
             raise NotReproducible(
-                "cannot PROMOTE a result that cannot be re-derived: %s "
-                "Remedy: %s" % (report.get("reason"), report.get("remedy")))
+                "cannot PROMOTE %s: %s. This cannot be repaired after the "
+                "fact -- register a new experiment citing this one, from a "
+                "recoverable tree. (The repository right now: %s.)"
+                % (self.experiment_id, cause,
+                   "reproducible" if current["reproducible"]
+                   else current["reason"]))
 
     # ==============================
     # THE RECORD

@@ -16,14 +16,14 @@
     "stage3": "net per period positive after cost and slippage",
     "stage5": ">= 95th percentile against 30 random controls"
   },
-  "registered_at": "2026-08-19T00:18:37.661834",
+  "registered_at": "2026-08-19T08:13:03.500408",
   "status": "ARCHIVE",
   "provenance": {
-    "git_commit": "UNAVAILABLE",
-    "git_dirty": null,
+    "git_commit": "b145fc4a26f3de61747e3322679639d756f6df28",
+    "git_dirty": true,
     "code_hash": "1d01ff973094ffbea1c2d47e1625ab9af67056122d8ac82f39d5157edd40885b",
     "config_hash": "b5749afd85a75937465eff42d3b28ea0868c2ee2b51fdcd5ffcfda3823e536a7",
-    "dataset_snapshot": "d4456b84c53ab120",
+    "dataset_snapshot": "4cd87c8818b8f4a6",
     "universe_snapshot": "u20260819-668658bb",
     "prereg_hash": "c442002fd94b01730fb968fd09337c331b79dfd1edd6bc188fe8f0cee6f33ad5",
     "reproducible": false
@@ -77,7 +77,7 @@
       "slippage_pct": 0.1
     },
     "seed": 20260819,
-    "frozen_at": "2026-08-19T00:18:37.667605",
+    "frozen_at": "2026-08-19T08:13:03.512277",
     "content_hash": "c442002fd94b01730fb968fd09337c331b79dfd1edd6bc188fe8f0cee6f33ad5"
   },
   "stages": [
@@ -119,7 +119,7 @@
           "universe_snapshot": "u20260819-668658bb"
         }
       },
-      "recorded_at": "2026-08-19T00:18:38.014099"
+      "recorded_at": "2026-08-19T08:13:03.864236"
     },
     {
       "stage": 2,
@@ -158,7 +158,7 @@
           "t_ic": 66.953
         }
       },
-      "recorded_at": "2026-08-19T00:18:44.029612"
+      "recorded_at": "2026-08-19T08:13:10.684923"
     },
     {
       "stage": 3,
@@ -200,7 +200,7 @@
           "universe_lock_rate_pct": 2.646
         }
       },
-      "recorded_at": "2026-08-19T00:18:44.252141"
+      "recorded_at": "2026-08-19T08:13:10.948723"
     },
     {
       "stage": 4,
@@ -274,7 +274,7 @@
           "source": "panel walk-forward"
         }
       },
-      "recorded_at": "2026-08-19T00:18:44.421003"
+      "recorded_at": "2026-08-19T08:13:11.152528"
     },
     {
       "stage": 5,
@@ -306,7 +306,7 @@
           "treatment_mean": 6.39289
         }
       },
-      "recorded_at": "2026-08-19T00:18:48.464719"
+      "recorded_at": "2026-08-19T08:13:16.160827"
     },
     {
       "stage": 6,
@@ -347,7 +347,7 @@
           }
         }
       },
-      "recorded_at": "2026-08-19T00:18:48.476154"
+      "recorded_at": "2026-08-19T08:13:16.173380"
     }
   ],
   "decision": {
@@ -355,7 +355,7 @@
     "decision": "ARCHIVE",
     "rationale": "Every gate passed, but the result cannot be re-derived: git is not installed, so there is no code version to reproduce from. Archived pending Week 1 item 1.",
     "rejected_at_stage": null,
-    "decided_at": "2026-08-19T00:18:48.484491",
+    "decided_at": "2026-08-19T08:13:16.254519",
     "decided_by": "quant research"
   }
 }

@@ -16,14 +16,14 @@
     "stage3": "net per period positive after cost and slippage",
     "stage5": ">= 95th percentile against 30 random controls"
   },
-  "registered_at": "2026-08-19T00:18:59.706922",
+  "registered_at": "2026-08-19T08:12:57.172410",
   "status": "REJECT",
   "provenance": {
-    "git_commit": "UNAVAILABLE",
-    "git_dirty": null,
+    "git_commit": "b145fc4a26f3de61747e3322679639d756f6df28",
+    "git_dirty": true,
     "code_hash": "1d01ff973094ffbea1c2d47e1625ab9af67056122d8ac82f39d5157edd40885b",
     "config_hash": "b5749afd85a75937465eff42d3b28ea0868c2ee2b51fdcd5ffcfda3823e536a7",
-    "dataset_snapshot": "d4456b84c53ab120",
+    "dataset_snapshot": "4cd87c8818b8f4a6",
     "universe_snapshot": "u20260819-668658bb",
     "prereg_hash": "c442002fd94b01730fb968fd09337c331b79dfd1edd6bc188fe8f0cee6f33ad5",
     "reproducible": false
@@ -77,7 +77,7 @@
       "slippage_pct": 0.1
     },
     "seed": 20260819,
-    "frozen_at": "2026-08-19T00:18:59.712883",
+    "frozen_at": "2026-08-19T08:12:57.181658",
     "content_hash": "c442002fd94b01730fb968fd09337c331b79dfd1edd6bc188fe8f0cee6f33ad5"
   },
   "stages": [
@@ -119,7 +119,7 @@
           "universe_snapshot": "u20260819-668658bb"
         }
       },
-      "recorded_at": "2026-08-19T00:19:00.051597"
+      "recorded_at": "2026-08-19T08:12:57.523840"
     },
     {
       "stage": 2,
@@ -158,7 +158,7 @@
           "t_ic": 4.002
         }
       },
-      "recorded_at": "2026-08-19T00:19:06.013697"
+      "recorded_at": "2026-08-19T08:13:03.246786"
     }
   ],
   "decision": {
@@ -166,7 +166,7 @@
     "decision": "REJECT",
     "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on factor_decay. Preregistered as an expected failure condition before the run.",
     "rejected_at_stage": 2,
-    "decided_at": "2026-08-19T00:19:06.023878",
+    "decided_at": "2026-08-19T08:13:03.255602",
     "decided_by": "quant research"
   }
 }

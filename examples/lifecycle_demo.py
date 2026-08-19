@@ -556,11 +556,95 @@ def _close(handle, outcomes):
     return handle
 
 
+def prove_promotion_blocked(path, snapshot_id):
+    """Six stages passed, and PROMOTE still refused. On purpose.
+
+    Once git exists this refusal stops firing in the ordinary demonstration,
+    which is exactly when it most needs proving: a control nobody can see
+    working is a control nobody will notice breaking.
+
+    Nothing is faked to produce it. `provenance` is pointed at a directory that
+    genuinely has no repository, so `git_commit()` returns UNAVAILABLE because
+    it really cannot answer -- the same measurement, in a place where the answer
+    is honestly absent. That is the state every Phase 1 experiment was recorded
+    in, and the point is that such a record can never be promoted afterwards,
+    however good its numbers turn out to be.
+    """
+
+    from sirat.experiments import provenance
+
+    rule("PROMOTION CONTROL -- a result that cannot be re-derived")
+
+    elsewhere = tempfile.mkdtemp(prefix="sirat_norepo_")
+
+    saved = provenance.ROOT
+
+    try:
+        provenance.ROOT = elsewhere
+        say("  capturing provenance from a directory with no repository ...")
+        say("    git_commit    %s" % provenance.git_commit())
+        say("    git_dirty     %s" % provenance.git_dirty())
+        say()
+
+        handle = mgr.Manager.register(
+            experiment_id="E18-unreproducible",
+            hypothesis=("Identical to E17 in every respect, registered from a "
+                        "working tree whose code version cannot be recovered."),
+            strategy_version="v3.0-reversal",
+            researcher="quant research",
+            notes=("Exists to prove the promotion control fires. The numbers "
+                   "are not the point; the provenance is."),
+            expected_failure=["the same conditions as E17"],
+            acceptance_criteria={"promotion": "all six stages AND reproducible"},
+            preregistration=preregistration(),
+            config={"round_trip_pct": ROUND_TRIP_PCT, "basket": BASKET},
+            universe_snapshot=snapshot_id,
+            path=path)
+    finally:
+        provenance.ROOT = saved
+
+    record = handle.record()
+
+    say("  registered      %s" % handle.experiment_id)
+    say("  git commit      %s" % record["provenance"]["git_commit"])
+    say("  reproducible    %s" % record["provenance"]["reproducible"])
+    say()
+
+    # Every stage passes. The refusal is not about the evidence.
+    for stage in stages.ORDER:
+        handle.run_stage(stage, {check: True
+                                 for check in stages.REQUIRED_CHECKS[stage]},
+                         detail={"note": "passed for the purposes of the "
+                                         "promotion-control demonstration"})
+
+    say("  all six stages recorded as PASS")
+    say()
+    say("  Attempting PROMOTE ...")
+
+    try:
+        handle.decide(mgr.PROMOTE, "every gate passed", "quant research")
+        say("  *** NOT REFUSED -- the promotion control is broken ***")
+        return False
+    except mgr.NotReproducible as exc:
+        say("  REFUSED: %s" % exc)
+
+    handle.decide(mgr.ARCHIVE,
+                  "Every gate passed and the result cannot be re-derived. "
+                  "Archived rather than promoted.", "quant research")
+
+    say()
+    say("  Research can continue. Capital promotion cannot.")
+
+    return True
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--passing", action="store_true",
                         help="run a hypothesis that survives every stage")
     parser.add_argument("--both", action="store_true")
+    parser.add_argument("--promotion-control", action="store_true",
+                        help="prove PROMOTE is refused without reproducibility")
     parser.add_argument("--db", default=None,
                         help="research database (default: a temporary one, so "
                              "the demonstration never writes into the real "
@@ -597,6 +681,9 @@ def main(argv=None):
             "a hypothesis that fails" if decays
             else "a hypothesis that survives every gate"))
         run(decays, experiment_id, path, snapshot_id)
+
+    if args.promotion_control or args.both:
+        prove_promotion_blocked(path, snapshot_id)
 
     rule("PLATFORM KPI")
 
