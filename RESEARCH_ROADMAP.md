@@ -246,7 +246,7 @@ Unchanged by any of the above, and not lifted by this roadmap:
 | | |
 |---|---|
 | unlocked by | `PLATFORM_ACCEPTANCE.md`, 2026-08-19 |
-| git commit | `7e0d943` |
+| git commit | `8410dd6` |
 | archive tag | `v2.0-archive` |
 | ledger head | `354ec88217f5e7a4…` (11 entries, chain intact) |
 | code changed | **none** — this document is a plan |

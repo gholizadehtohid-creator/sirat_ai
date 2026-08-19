@@ -109,13 +109,13 @@
       "named": true,
       "measured": 1.62845,
       "expected": "excess < round trip (1.04%)",
-      "direction": "",
+      "direction": "MOVED FAVOURABLY -- the edge now CLEARS the 1.04% round trip (1.6284%), so Alpha Core has become economic. This is the conclusion the entire programme rests on. Find what changed before believing it.",
       "all_failed": [
         "ic@h1",
         "h1_excess",
         "cost_failure_direction"
       ],
-      "flagged_favourable": false
+      "flagged_favourable": true
     },
     {
       "label": "E11 treatment arm improved",

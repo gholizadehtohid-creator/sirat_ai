@@ -16,10 +16,10 @@ Supersedes the Phase 2 stabilization report of the same name.
 | Item | Value |
 |---|---|
 | git | 2.55.0.windows.4 |
-| HEAD | `7e0d943` |
+| HEAD | `8410dd67879be5d157a00af4376774d9d0a2f59c` |
 | archive tag | **`v2.0-archive`** → `b145fc4a26f3de61747e3322679639d756f6df28` |
 | working tree | **clean** — 0 modified paths |
-| tracked files | 243 |
+| tracked files | 245 |
 | `sirat_market.db` (424 MB) | ignored, confirmed by `git check-ignore` |
 | `git_bootstrap.py --check` | **`reproducible = True`** |
 
