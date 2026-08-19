@@ -1247,13 +1247,120 @@
           }
         ]
       }
+    },
+    {
+      "seq": 12,
+      "experiment_id": "E19-alpha-core-tradable-edge",
+      "appended_at": "2026-08-19T10:34:00.907145",
+      "prev_hash": "354ec88217f5e7a45c07276bffd073c2f0aa5556d9b49d4c4769464022593c8b",
+      "entry_hash": "6a761c7ee07fc6087a540b3b7018a8786b0ba8784e68a0eaec0a418496847a34",
+      "entry": {
+        "acceptance_criteria": {
+          "outcome_A": "all gates pass -> proceed to controlled paper trading",
+          "outcome_B": "any mandatory gate fails on a measured number -> no robust edge",
+          "outcome_C": "a gate cannot be evaluated because the evidence does not exist -> inconclusive, and the missing evidence is named",
+          "overall": "ALL eleven mandatory gates must PASS. A single failed mandatory gate prevents any 'ready' conclusion, and no gate may be waived, re-weighted or re-thresholded after a number exists."
+        },
+        "author": "lead quantitative research",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "alpha_core_v1 (frozen, sha256 90024d86d7a5c268)"
+        },
+        "config_hash": "b475242ec0b83422b0f89e9917d188a082f69301800bc06a16324054bcade30e",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T10:34:00.899501",
+        "expected_failure": [
+          "G3: mean IC at h=20 below 0.02, or ICIR below 0.30 -- E13 measured 0.01456 and 0.113 on clean data",
+          "G6: the strategy does not beat exposure- and turnover-matched random ranking -- E11 measured the 3.3rd percentile",
+          "G7: the per-period edge does not clear the 1.04% round trip -- E13 measured 0.55% against 1.04% at h=1",
+          "G9: realized exposure falls far short of target -- E3 measured 29.22% against 54.79%",
+          "the predictive information is concentrated in names that are limit-locked and therefore unbuyable at t+1 -- E14 measured a 3.03x queue exposure ratio"
+        ],
+        "experiment_id": "E19-alpha-core-tradable-edge",
+        "final_verdict": {
+          "decided_by": "lead quantitative research",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, random_baseline, factor_decay. The declared test -- Alpha Core at h=20, all regimes, against every structurally-matched null -- produces mean IC 0.01456 (t=1.23) against a required 0.02, a NEGATIVE holdout IC of -0.02449, 5 of 10 positive walk-forward folds, and a net edge of -0.38% per period that stays negative under every cost perturbation including a favourable one. 7 of 11 preregistered gates fail. This was recorded as an expected failure condition before the experiment ran.",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "9a3c93aed225140066972b927b2810d0e0d15507",
+        "git_dirty": false,
+        "hypothesis": "Alpha Core (50% momentum rank + 50% Bollinger %B rank) contains predictive information that survives realistic trading: it orders future returns at the horizon it is actually traded at, that ordering beats structurally-matched null models, and the resulting book clears its own transaction costs under T+1 execution with price-limit queues.",
+        "preregistration_hash": "9fd80d297b6ec43632e742a9c529d84e810585de39cc5ec140889aa35665475f",
+        "registered_at": "2026-08-19T10:16:34.899370",
+        "reproducible": true,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "gates": {
+                "G1_data_integrity": {
+                  "evidence": "backtest_output/research_manifest.json",
+                  "gate": "G1_data_integrity",
+                  "metric": "PIT integrity, restorable universe snapshot, regression anchors",
+                  "observed": "snapshot u20260819-668658bb restorable=True; 11 anchors, all pass=True",
+                  "threshold": "all pass"
+                },
+                "G2_reproducibility": {
+                  "evidence": "research_manifest.json + E19_edge_audit.json",
+                  "gate": "G2_reproducibility",
+                  "metric": "result regenerates from (commit, code, config, data, seed)",
+                  "observed": "HEAD c498824, clean=True, panel sha e895b169594452ca, seed 20260819",
+                  "threshold": "reproducible = True"
+                }
+              },
+              "verdicts": {
+                "G1_data_integrity": true,
+                "G2_reproducibility": true
+              }
+            },
+            "recorded_at": "2026-08-19T10:34:00.887930",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": false,
+              "rank_correlation": false
+            },
+            "detail": {
+              "gates": {
+                "G3_predictive_edge": {
+                  "evidence": "E19_edge_audit.json / phase2_prediction.primary",
+                  "gate": "G3_predictive_edge",
+                  "metric": "mean IC / ICIR / %positive at the DECLARED h=20",
+                  "observed": "IC 0.01456 (t=1.232), ICIR 0.1125, %pos 51.67",
+                  "reason": "IC below threshold; ICIR an eighth of the floor; barely half the dates positive. Retention at the traded horizon is 13.9% of the h=1 peak.",
+                  "threshold": "IC >= 0.02 AND ICIR >= 0.30 AND %pos >= 55"
+                }
+              },
+              "verdicts": {
+                "G3_predictive_edge": false
+              }
+            },
+            "recorded_at": "2026-08-19T10:34:00.894029",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
     }
   ],
   "chain": {
-    "entries": 11,
+    "entries": 12,
     "intact": true,
-    "head": "354ec88217f5e7a45c07276bffd073c2f0aa5556d9b49d4c4769464022593c8b",
+    "head": "6a761c7ee07fc6087a540b3b7018a8786b0ba8784e68a0eaec0a418496847a34",
     "note": "every entry hashes to its recorded value and every link matches"
   },
-  "exported_at": "2026-08-19T08:39:57.611494"
+  "exported_at": "2026-08-19T10:39:27.858466"
 }

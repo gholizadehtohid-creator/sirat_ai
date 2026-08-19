@@ -7,10 +7,10 @@ breaks every link after it and `ledger.verify()` names the first entry that fail
 
 | | |
 |---|---|
-| entries | 11 |
+| entries | 12 |
 | chain intact | **True** |
-| head | `354ec88217f5e7a45c07276bffd073c2f0aa5556d9b49d4c4769464022593c8b` |
-| exported | 2026-08-19T08:39:57 |
+| head | `6a761c7ee07fc6087a540b3b7018a8786b0ba8784e68a0eaec0a418496847a34` |
+| exported | 2026-08-19T10:39:27 |
 
 ---
 
@@ -29,6 +29,7 @@ breaks every link after it and `ledger.verify()` names the first entry that fail
 | 9 | `E13-alpha-decay` | **REJECT** | 2 | no | phase 1 (replayed 2026-08-19) |
 | 10 | `E14-queue-artifact` | **REJECT** | 3 | no | phase 1 (replayed 2026-08-19) |
 | 11 | `E15-execution-aware-rescue` | **REJECT** | 2 | no | phase 1 (replayed 2026-08-19) |
+| 12 | `E19-alpha-core-tradable-edge` | **REJECT** | 2 | yes | lead quantitative research |
 
 ---
 
@@ -334,6 +335,34 @@ breaks every link after it and `ledger.verify()` names the first entry that fail
 | entry hash | `354ec88217f5e7a45c07276b` |
 
 **Rationale.** Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, random_baseline, factor_decay. filtered IC at h=20 is -0.03245, below 0.02 and the wrong sign
+
+| Stage | Status | Checks |
+|---|---|---|
+| 1 DATA INTEGRITY | **PASS** | all 4 passed |
+| 2 ECONOMIC SIGNAL VALIDATION | **FAIL** | failed: factor_decay, ic, random_baseline, rank_correlation |
+
+---
+
+## 12. `E19-alpha-core-tradable-edge`
+
+> Alpha Core (50% momentum rank + 50% Bollinger %B rank) contains predictive information that survives realistic trading: it orders future returns at the horizon it is actually traded at, that ordering beats structurally-matched null models, and the resulting book clears its own transaction costs under T+1 execution with price-limit queues.
+
+| Field | Value |
+|---|---|
+| date | 2026-08-19T10:34:00 |
+| author | lead quantitative research |
+| strategy version | alpha_core_v1 (frozen, sha256 90024d86d7a5c268) |
+| code hash | `d725813862b0bb77fdfd7e5a` |
+| git commit | `9a3c93aed225140066972b92` |
+| config hash | `b475242ec0b83422b0f89e99` |
+| dataset fingerprint | `90e30213b30e6e73` |
+| universe snapshot | `u20260819-668658bb` |
+| preregistration hash | `9fd80d297b6ec43632e742a9` |
+| reproducible | True |
+| **verdict** | **REJECT** |
+| entry hash | `6a761c7ee07fc6087a540b3b` |
+
+**Rationale.** Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, random_baseline, factor_decay. The declared test -- Alpha Core at h=20, all regimes, against every structurally-matched null -- produces mean IC 0.01456 (t=1.23) against a required 0.02, a NEGATIVE holdout IC of -0.02449, 5 of 10 positive walk-forward folds, and a net edge of -0.38% per period that stays negative under every cost perturbation including a favourable one. 7 of 11 preregistered gates fail. This was recorded as an expected failure condition before the experiment ran.
 
 | Stage | Status | Checks |
 |---|---|---|

@@ -1,0 +1,1129 @@
+{
+  "experiment_id": "E19-alpha-core-tradable-edge",
+  "preregistration_hash": "9fd80d297b6ec43632e742a9c529d84e810585de39cc5ec140889aa35665475f",
+  "audit_panel_sha256": "e895b169594452cabf793a3ba6822befe46b5035e617b64aadb2d3b4483c6316",
+  "declared_horizon": 20,
+  "seed": 20260819,
+  "rows": 66623,
+  "dates": 120,
+  "instruments": 757,
+  "phase2_prediction": {
+    "declared_horizon": 20,
+    "primary": {
+      "label": "h=20 (declared)",
+      "dates": 120,
+      "mean_ic": 0.01456,
+      "median_ic": 0.0028,
+      "icir": 0.1125,
+      "t_stat": 1.232,
+      "pct_positive": 51.67
+    },
+    "hit_rate": {
+      "dates": 120,
+      "hit_rate_pct": 68.33
+    },
+    "decay_curve": {
+      "1": {
+        "label": "h=1",
+        "dates": 119,
+        "mean_ic": 0.10492,
+        "median_ic": 0.10416,
+        "icir": 0.805,
+        "t_stat": 8.781,
+        "pct_positive": 81.51
+      },
+      "5": {
+        "label": "h=5",
+        "dates": 120,
+        "mean_ic": 0.05101,
+        "median_ic": 0.03099,
+        "icir": 0.3818,
+        "t_stat": 4.182,
+        "pct_positive": 64.17
+      },
+      "10": {
+        "label": "h=10",
+        "dates": 120,
+        "mean_ic": 0.03003,
+        "median_ic": 0.02128,
+        "icir": 0.2333,
+        "t_stat": 2.556,
+        "pct_positive": 56.67
+      },
+      "20": {
+        "label": "h=20",
+        "dates": 120,
+        "mean_ic": 0.01456,
+        "median_ic": 0.0028,
+        "icir": 0.1125,
+        "t_stat": 1.232,
+        "pct_positive": 51.67
+      }
+    },
+    "peak_ic": 0.10492,
+    "retention_at_declared_horizon": 0.1388,
+    "by_year": {
+      "2014": {
+        "label": "2014",
+        "dates": 4,
+        "mean_ic": 0.03881,
+        "median_ic": 0.05072,
+        "icir": 0.2748,
+        "t_stat": 0.55,
+        "pct_positive": 50.0
+      },
+      "2015": {
+        "label": "2015",
+        "dates": 12,
+        "mean_ic": 0.00331,
+        "median_ic": -0.01259,
+        "icir": 0.0513,
+        "t_stat": 0.178,
+        "pct_positive": 41.67
+      },
+      "2016": {
+        "label": "2016",
+        "dates": 12,
+        "mean_ic": 0.01448,
+        "median_ic": 0.01261,
+        "icir": 0.1516,
+        "t_stat": 0.525,
+        "pct_positive": 58.33
+      },
+      "2017": {
+        "label": "2017",
+        "dates": 12,
+        "mean_ic": -0.00768,
+        "median_ic": -0.02005,
+        "icir": -0.0756,
+        "t_stat": -0.262,
+        "pct_positive": 41.67
+      },
+      "2018": {
+        "label": "2018",
+        "dates": 12,
+        "mean_ic": -0.01657,
+        "median_ic": -0.01158,
+        "icir": -0.1252,
+        "t_stat": -0.434,
+        "pct_positive": 50.0
+      },
+      "2019": {
+        "label": "2019",
+        "dates": 12,
+        "mean_ic": -0.03395,
+        "median_ic": -0.0264,
+        "icir": -0.238,
+        "t_stat": -0.824,
+        "pct_positive": 33.33
+      },
+      "2020": {
+        "label": "2020",
+        "dates": 13,
+        "mean_ic": 0.11997,
+        "median_ic": 0.13864,
+        "icir": 0.867,
+        "t_stat": 3.126,
+        "pct_positive": 84.62
+      },
+      "2021": {
+        "label": "2021",
+        "dates": 11,
+        "mean_ic": 0.08115,
+        "median_ic": 0.07081,
+        "icir": 0.4001,
+        "t_stat": 1.327,
+        "pct_positive": 54.55
+      },
+      "2022": {
+        "label": "2022",
+        "dates": 12,
+        "mean_ic": 0.02627,
+        "median_ic": 0.0239,
+        "icir": 0.2469,
+        "t_stat": 0.855,
+        "pct_positive": 50.0
+      },
+      "2023": {
+        "label": "2023",
+        "dates": 12,
+        "mean_ic": -0.02983,
+        "median_ic": -0.03433,
+        "icir": -0.3608,
+        "t_stat": -1.25,
+        "pct_positive": 41.67
+      },
+      "2024": {
+        "label": "2024",
+        "dates": 8,
+        "mean_ic": -0.04151,
+        "median_ic": 0.00248,
+        "icir": -0.3104,
+        "t_stat": -0.878,
+        "pct_positive": 62.5
+      }
+    },
+    "by_sector": {
+      "محصولات شيميايي": {
+        "label": "محصولات شيميايي",
+        "dates": 120,
+        "mean_ic": 0.01281,
+        "median_ic": 0.00262,
+        "icir": 0.0596,
+        "t_stat": 0.653,
+        "pct_positive": 50.83
+      },
+      "سرمايه گذاريها": {
+        "label": "سرمايه گذاريها",
+        "dates": 120,
+        "mean_ic": 0.03159,
+        "median_ic": 0.0453,
+        "icir": 0.1403,
+        "t_stat": 1.537,
+        "pct_positive": 56.67
+      },
+      "مواد و محصولات دارويي": {
+        "label": "مواد و محصولات دارويي",
+        "dates": 120,
+        "mean_ic": 0.02514,
+        "median_ic": 0.03752,
+        "icir": 0.1225,
+        "t_stat": 1.342,
+        "pct_positive": 54.17
+      },
+      "سيمان، آهك و گچ": {
+        "label": "سيمان، آهك و گچ",
+        "dates": 120,
+        "mean_ic": -0.00823,
+        "median_ic": -0.00889,
+        "icir": -0.0354,
+        "t_stat": -0.387,
+        "pct_positive": 49.17
+      },
+      "فلزات اساسي": {
+        "label": "فلزات اساسي",
+        "dates": 114,
+        "mean_ic": 0.00718,
+        "median_ic": 0.03673,
+        "icir": 0.0328,
+        "t_stat": 0.35,
+        "pct_positive": 54.39
+      },
+      "محصولات غذايي و آشاميدني به جز قند و شكر": {
+        "label": "محصولات غذايي و آشاميدني به جز قند و شكر",
+        "dates": 91,
+        "mean_ic": -0.04472,
+        "median_ic": -0.06874,
+        "icir": -0.2141,
+        "t_stat": -2.042,
+        "pct_positive": 37.36
+      },
+      "خودرو و ساخت قطعات": {
+        "label": "خودرو و ساخت قطعات",
+        "dates": 120,
+        "mean_ic": -0.00327,
+        "median_ic": 0.00524,
+        "icir": -0.0147,
+        "t_stat": -0.161,
+        "pct_positive": 51.67
+      },
+      "انبوه سازي، املاك و مستغلات": {
+        "label": "انبوه سازي، املاك و مستغلات",
+        "dates": 99,
+        "mean_ic": -0.03125,
+        "median_ic": -0.01538,
+        "icir": -0.1229,
+        "t_stat": -1.223,
+        "pct_positive": 46.46
+      },
+      "ساير محصولات كاني غيرفلزي": {
+        "label": "ساير محصولات كاني غيرفلزي",
+        "dates": 59,
+        "mean_ic": 0.12295,
+        "median_ic": 0.13553,
+        "icir": 0.4677,
+        "t_stat": 3.592,
+        "pct_positive": 66.1
+      },
+      "بيمه وصندوق بازنشستگي به جزتامين اجتماعي": {
+        "label": "بيمه وصندوق بازنشستگي به جزتامين اجتماعي",
+        "dates": 21,
+        "mean_ic": -0.02198,
+        "median_ic": -0.01308,
+        "icir": -0.0964,
+        "t_stat": -0.442,
+        "pct_positive": 47.62
+      }
+    },
+    "by_liquidity": {
+      "Q1_illiquid": {
+        "label": "Q1_illiquid",
+        "dates": 120,
+        "mean_ic": 0.21219,
+        "median_ic": 0.20357,
+        "icir": 1.2211,
+        "t_stat": 13.376,
+        "pct_positive": 90.0
+      },
+      "Q2": {
+        "label": "Q2",
+        "dates": 120,
+        "mean_ic": 0.01269,
+        "median_ic": 0.00525,
+        "icir": 0.0869,
+        "t_stat": 0.952,
+        "pct_positive": 52.5
+      },
+      "Q3": {
+        "label": "Q3",
+        "dates": 120,
+        "mean_ic": -0.02034,
+        "median_ic": -0.02321,
+        "icir": -0.1333,
+        "t_stat": -1.46,
+        "pct_positive": 45.83
+      },
+      "Q4": {
+        "label": "Q4",
+        "dates": 120,
+        "mean_ic": -0.01681,
+        "median_ic": -0.00087,
+        "icir": -0.1023,
+        "t_stat": -1.12,
+        "pct_positive": 50.0
+      },
+      "Q5_liquid": {
+        "label": "Q5_liquid",
+        "dates": 120,
+        "mean_ic": -0.02973,
+        "median_ic": -0.03639,
+        "icir": -0.1687,
+        "t_stat": -1.848,
+        "pct_positive": 41.67
+      }
+    },
+    "by_volatility": {
+      "V1_calm": {
+        "label": "V1_calm",
+        "dates": 120,
+        "mean_ic": 0.24048,
+        "median_ic": 0.25671,
+        "icir": 1.3736,
+        "t_stat": 15.047,
+        "pct_positive": 93.33
+      },
+      "V2": {
+        "label": "V2",
+        "dates": 120,
+        "mean_ic": 0.05006,
+        "median_ic": 0.03466,
+        "icir": 0.3209,
+        "t_stat": 3.515,
+        "pct_positive": 57.5
+      },
+      "V3": {
+        "label": "V3",
+        "dates": 120,
+        "mean_ic": -0.01796,
+        "median_ic": -0.01438,
+        "icir": -0.1084,
+        "t_stat": -1.187,
+        "pct_positive": 45.83
+      },
+      "V4": {
+        "label": "V4",
+        "dates": 120,
+        "mean_ic": -0.03507,
+        "median_ic": -0.05345,
+        "icir": -0.2385,
+        "t_stat": -2.612,
+        "pct_positive": 33.33
+      },
+      "V5_wild": {
+        "label": "V5_wild",
+        "dates": 120,
+        "mean_ic": -0.07772,
+        "median_ic": -0.07711,
+        "icir": -0.4993,
+        "t_stat": -5.47,
+        "pct_positive": 32.5
+      }
+    },
+    "by_trend_regime": {
+      "BULL": {
+        "label": "BULL",
+        "dates": 60,
+        "mean_ic": 0.02876,
+        "median_ic": 0.0263,
+        "icir": 0.2034,
+        "t_stat": 1.575,
+        "pct_positive": 58.33
+      },
+      "BEAR": {
+        "label": "BEAR",
+        "dates": 40,
+        "mean_ic": -0.00642,
+        "median_ic": -0.01888,
+        "icir": -0.063,
+        "t_stat": -0.398,
+        "pct_positive": 42.5
+      },
+      "SIDEWAYS": {
+        "label": "SIDEWAYS",
+        "dates": 20,
+        "mean_ic": 0.01394,
+        "median_ic": -0.00158,
+        "icir": 0.0986,
+        "t_stat": 0.441,
+        "pct_positive": 50.0
+      }
+    },
+    "by_volatility_regime": {
+      "HIGH_VOLATILITY": {
+        "label": "HIGH_VOLATILITY",
+        "dates": 9,
+        "mean_ic": 0.07455,
+        "median_ic": 0.0642,
+        "icir": 0.4951,
+        "t_stat": 1.485,
+        "pct_positive": 77.78
+      },
+      "NORMAL_VOLATILITY": {
+        "label": "NORMAL_VOLATILITY",
+        "dates": 66,
+        "mean_ic": 0.00706,
+        "median_ic": -0.00862,
+        "icir": 0.0476,
+        "t_stat": 0.386,
+        "pct_positive": 46.97
+      },
+      "LOW_VOLATILITY": {
+        "label": "LOW_VOLATILITY",
+        "dates": 45,
+        "mean_ic": 0.01357,
+        "median_ic": 0.0043,
+        "icir": 0.1527,
+        "t_stat": 1.024,
+        "pct_positive": 53.33
+      }
+    }
+  },
+  "phase5_execution": {
+    "frictionless": {
+      "label": "frictionless",
+      "periods": 120,
+      "gross_excess_pct": 3.1735,
+      "excess_t": 3.932,
+      "turnover_per_period": 0.9383,
+      "turnover_per_year": 11.26,
+      "cost_per_period_pct": 0.9759,
+      "slippage_per_period_pct": 0.0,
+      "net_per_period_pct": 2.1976,
+      "net_annualised_pct": 29.8,
+      "fill_rate_pct": 84.92,
+      "queue_ratio": 5.014,
+      "requested_excess_pct": 3.1735,
+      "max_drawdown_pct": -29.66,
+      "final_equity": 388.8761,
+      "net_positive": true
+    },
+    "executed": {
+      "label": "executed",
+      "periods": 120,
+      "gross_excess_pct": 0.593,
+      "excess_t": 0.787,
+      "turnover_per_period": 0.9383,
+      "turnover_per_year": 11.26,
+      "cost_per_period_pct": 0.9759,
+      "slippage_per_period_pct": 0.0,
+      "net_per_period_pct": -0.3829,
+      "net_annualised_pct": -4.5,
+      "fill_rate_pct": 84.92,
+      "queue_ratio": 5.014,
+      "requested_excess_pct": 3.1735,
+      "max_drawdown_pct": -36.39,
+      "final_equity": 23.8345,
+      "net_positive": false
+    },
+    "executed_slippage": {
+      "label": "executed+slippage",
+      "periods": 120,
+      "gross_excess_pct": 0.593,
+      "excess_t": 0.787,
+      "turnover_per_period": 0.9383,
+      "turnover_per_year": 11.26,
+      "cost_per_period_pct": 0.9759,
+      "slippage_per_period_pct": 0.1877,
+      "net_per_period_pct": -0.5706,
+      "net_annualised_pct": -6.64,
+      "fill_rate_pct": 84.92,
+      "queue_ratio": 5.014,
+      "requested_excess_pct": 3.1735,
+      "max_drawdown_pct": -37.98,
+      "final_equity": 19.1225,
+      "net_positive": false
+    },
+    "execution_shortfall_pct": 2.5805,
+    "shortfall_share": 0.8131,
+    "attribution": {
+      "prediction_gross_pct": 3.1735,
+      "lost_to_execution_pp": 2.5805,
+      "lost_to_cost_pp": 0.9759,
+      "lost_to_slippage_pp": 0.1877,
+      "net_pct": -0.5706
+    }
+  },
+  "phase3_validation": {
+    "walk_forward": {
+      "train_dates": 20,
+      "test_dates": 10,
+      "folds": 10,
+      "positive_folds": 5,
+      "positive_fold_share": 0.5,
+      "mean_train_ic": 0.02135,
+      "mean_test_ic": 0.01657,
+      "detail": [
+        {
+          "fold": 1,
+          "train_start": "2014-09-21",
+          "train_end": "2016-04-16",
+          "test_start": "2016-05-14",
+          "test_end": "2017-02-08",
+          "train_ic": 0.0045,
+          "test_ic": 0.02755,
+          "test_net_pct": 3.8695,
+          "test_turnover_per_year": 10.92,
+          "test_max_drawdown_pct": -3.01
+        },
+        {
+          "fold": 2,
+          "train_start": "2015-07-22",
+          "train_end": "2017-02-08",
+          "test_start": "2017-03-08",
+          "test_end": "2017-12-12",
+          "train_ic": 0.0095,
+          "test_ic": -0.00892,
+          "test_net_pct": 6.23,
+          "test_turnover_per_year": 11.16,
+          "test_max_drawdown_pct": -10.43
+        },
+        {
+          "fold": 3,
+          "train_start": "2016-05-14",
+          "train_end": "2017-12-12",
+          "test_start": "2018-01-07",
+          "test_end": "2018-10-07",
+          "train_ic": 0.00932,
+          "test_ic": -0.01685,
+          "test_net_pct": -3.9366,
+          "test_turnover_per_year": 11.64,
+          "test_max_drawdown_pct": -18.08
+        },
+        {
+          "fold": 4,
+          "train_start": "2017-03-08",
+          "train_end": "2018-10-07",
+          "test_start": "2018-11-05",
+          "test_end": "2019-08-05",
+          "train_ic": -0.01288,
+          "test_ic": -0.02444,
+          "test_net_pct": -3.1604,
+          "test_turnover_per_year": 11.76,
+          "test_max_drawdown_pct": -3.87
+        },
+        {
+          "fold": 5,
+          "train_start": "2018-01-07",
+          "train_end": "2019-08-05",
+          "test_start": "2019-09-04",
+          "test_end": "2020-06-08",
+          "train_ic": -0.02064,
+          "test_ic": 0.05748,
+          "test_net_pct": -8.618,
+          "test_turnover_per_year": 11.76,
+          "test_max_drawdown_pct": -11.28
+        },
+        {
+          "fold": 6,
+          "train_start": "2018-11-05",
+          "train_end": "2020-06-08",
+          "test_start": "2020-07-07",
+          "test_end": "2021-04-05",
+          "train_ic": 0.01652,
+          "test_ic": 0.07156,
+          "test_net_pct": 3.798,
+          "test_turnover_per_year": 10.56,
+          "test_max_drawdown_pct": -11.67
+        },
+        {
+          "fold": 7,
+          "train_start": "2019-09-04",
+          "train_end": "2021-04-05",
+          "test_start": "2021-05-03",
+          "test_end": "2022-01-30",
+          "train_ic": 0.06452,
+          "test_ic": 0.12665,
+          "test_net_pct": 3.6375,
+          "test_turnover_per_year": 11.04,
+          "test_max_drawdown_pct": -10.93
+        },
+        {
+          "fold": 8,
+          "train_start": "2020-07-07",
+          "train_end": "2022-01-30",
+          "test_start": "2022-02-28",
+          "test_end": "2022-12-04",
+          "train_ic": 0.09911,
+          "test_ic": 0.00171,
+          "test_net_pct": -1.5753,
+          "test_turnover_per_year": 11.28,
+          "test_max_drawdown_pct": -21.2
+        },
+        {
+          "fold": 9,
+          "train_start": "2021-05-03",
+          "train_end": "2022-12-04",
+          "test_start": "2023-01-02",
+          "test_end": "2023-10-09",
+          "train_ic": 0.06418,
+          "test_ic": -0.04295,
+          "test_net_pct": -3.1341,
+          "test_turnover_per_year": 11.64,
+          "test_max_drawdown_pct": -14.05
+        },
+        {
+          "fold": 10,
+          "train_start": "2022-02-28",
+          "train_end": "2023-10-09",
+          "test_start": "2023-11-06",
+          "test_end": "2024-08-10",
+          "train_ic": -0.02062,
+          "test_ic": -0.02605,
+          "test_net_pct": 0.5203,
+          "test_turnover_per_year": 11.88,
+          "test_max_drawdown_pct": -18.55
+        }
+      ]
+    },
+    "out_of_sample": {
+      "segments": {
+        "in_sample": {
+          "window": [
+            "2014-09-21",
+            "2021-09-01"
+          ],
+          "ic": {
+            "label": "in_sample",
+            "dates": 84,
+            "mean_ic": 0.02053,
+            "median_ic": 0.01134,
+            "icir": 0.153,
+            "t_stat": 1.402,
+            "pct_positive": 52.38
+          },
+          "book": {
+            "label": "in_sample",
+            "periods": 84,
+            "gross_excess_pct": 0.5568,
+            "excess_t": 0.573,
+            "turnover_per_period": 0.9333,
+            "turnover_per_year": 11.2,
+            "cost_per_period_pct": 0.9707,
+            "slippage_per_period_pct": 0.0,
+            "net_per_period_pct": -0.4139,
+            "net_annualised_pct": -4.85,
+            "fill_rate_pct": 83.81,
+            "queue_ratio": 4.602,
+            "requested_excess_pct": 2.9656,
+            "max_drawdown_pct": -36.35,
+            "final_equity": 20.6831,
+            "net_positive": false
+          }
+        },
+        "validation": {
+          "window": [
+            "2021-09-01",
+            "2023-03-01"
+          ],
+          "ic": {
+            "label": "validation",
+            "dates": 18,
+            "mean_ic": 0.02578,
+            "median_ic": -0.00278,
+            "icir": 0.1966,
+            "t_stat": 0.834,
+            "pct_positive": 44.44
+          },
+          "book": {
+            "label": "validation",
+            "periods": 18,
+            "gross_excess_pct": 0.6561,
+            "excess_t": 0.377,
+            "turnover_per_period": 0.9222,
+            "turnover_per_year": 11.07,
+            "cost_per_period_pct": 0.9591,
+            "slippage_per_period_pct": 0.0,
+            "net_per_period_pct": -0.303,
+            "net_annualised_pct": -3.58,
+            "fill_rate_pct": 83.33,
+            "queue_ratio": 7.477,
+            "requested_excess_pct": 5.4023,
+            "max_drawdown_pct": -21.12,
+            "final_equity": 1.0512,
+            "net_positive": false
+          }
+        },
+        "holdout": {
+          "window": [
+            "2023-03-01",
+            "2024-09-01"
+          ],
+          "ic": {
+            "label": "holdout",
+            "dates": 18,
+            "mean_ic": -0.02449,
+            "median_ic": 0.00102,
+            "icir": -0.2407,
+            "t_stat": -1.021,
+            "pct_positive": 55.56
+          },
+          "book": {
+            "label": "holdout",
+            "periods": 18,
+            "gross_excess_pct": 0.6987,
+            "excess_t": 0.503,
+            "turnover_per_period": 0.9778,
+            "turnover_per_year": 11.73,
+            "cost_per_period_pct": 1.0169,
+            "slippage_per_period_pct": 0.0,
+            "net_per_period_pct": -0.3182,
+            "net_annualised_pct": -3.75,
+            "fill_rate_pct": 91.67,
+            "queue_ratio": 5.068,
+            "requested_excess_pct": 1.9145,
+            "max_drawdown_pct": -18.49,
+            "final_equity": 1.0961,
+            "net_positive": false
+          }
+        }
+      },
+      "degradation": 2.1929
+    },
+    "monte_carlo": {
+      "method": "stationary block bootstrap on realised excess, block=5, draws=5000, seed=20260819",
+      "observed_mean_excess_pct": 0.59298,
+      "ci95": [
+        -1.18142,
+        2.60445
+      ],
+      "p_le_zero": 0.2496,
+      "timing_shift_mean_excess_pct": 0.6325
+    }
+  },
+  "phase4_nulls": {
+    "treatment": {
+      "label": "alpha core",
+      "periods": 120,
+      "gross_excess_pct": 0.593,
+      "excess_t": 0.787,
+      "turnover_per_period": 0.9383,
+      "turnover_per_year": 11.26,
+      "cost_per_period_pct": 0.9759,
+      "slippage_per_period_pct": 0.0,
+      "net_per_period_pct": -0.3829,
+      "net_annualised_pct": -4.5,
+      "fill_rate_pct": 84.92,
+      "queue_ratio": 5.014,
+      "requested_excess_pct": 3.1735,
+      "max_drawdown_pct": -36.39,
+      "final_equity": 23.8345,
+      "net_positive": false
+    },
+    "nulls": {
+      "random_ranking": {
+        "arms": 30,
+        "null_mean_excess_pct": -0.55086,
+        "null_sd": 0.39552,
+        "null_p95": 0.0203,
+        "treatment_excess_pct": 0.59298,
+        "percentile": 100.0,
+        "empirical_p": 0.0,
+        "beats_p95": true
+      },
+      "sector_matched": {
+        "arms": 30,
+        "null_mean_excess_pct": -0.26671,
+        "null_sd": 0.40967,
+        "null_p95": 0.36016,
+        "treatment_excess_pct": 0.59298,
+        "percentile": 96.67,
+        "empirical_p": 0.0333,
+        "beats_p95": true
+      },
+      "liquidity_matched": {
+        "arms": 30,
+        "null_mean_excess_pct": -0.26248,
+        "null_sd": 0.45084,
+        "null_p95": 0.52336,
+        "treatment_excess_pct": 0.59298,
+        "percentile": 93.33,
+        "empirical_p": 0.0667,
+        "beats_p95": true
+      },
+      "volatility_matched": {
+        "arms": 30,
+        "null_mean_excess_pct": -0.11148,
+        "null_sd": 0.385,
+        "null_p95": 0.48529,
+        "treatment_excess_pct": 0.59298,
+        "percentile": 96.67,
+        "empirical_p": 0.0333,
+        "beats_p95": true
+      },
+      "equal_weight_market": {
+        "arms": 1,
+        "null_mean_excess_pct": 0.0,
+        "treatment_excess_pct": 0.59298,
+        "percentile": 100.0,
+        "beats_p95": true,
+        "note": "the benchmark is the cross-sectional mean, so its excess is zero by construction"
+      }
+    },
+    "worst_percentile": 93.33
+  },
+  "phase7_holding": {
+    "candidates": {
+      "1": {
+        "label": "h=1",
+        "periods": 120,
+        "gross_excess_pct": 0.6395,
+        "excess_t": 6.481,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 225.2,
+        "cost_per_period_pct": 0.9759,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.3363,
+        "net_annualised_pct": -55.45,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 1.2275,
+        "max_drawdown_pct": -29.1,
+        "final_equity": 0.7012,
+        "net_positive": false
+      },
+      "5": {
+        "label": "h=5",
+        "periods": 120,
+        "gross_excess_pct": 1.004,
+        "excess_t": 3.26,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 45.04,
+        "cost_per_period_pct": 0.9759,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": 0.0281,
+        "net_annualised_pct": 1.36,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 2.6245,
+        "max_drawdown_pct": -22.0,
+        "final_equity": 1.8798,
+        "net_positive": true
+      },
+      "10": {
+        "label": "h=10",
+        "periods": 120,
+        "gross_excess_pct": 0.9218,
+        "excess_t": 1.941,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 22.52,
+        "cost_per_period_pct": 0.9759,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.0541,
+        "net_annualised_pct": -1.29,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.0204,
+        "max_drawdown_pct": -24.4,
+        "final_equity": 4.2615,
+        "net_positive": false
+      },
+      "20": {
+        "label": "h=20",
+        "periods": 120,
+        "gross_excess_pct": 0.593,
+        "excess_t": 0.787,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 11.26,
+        "cost_per_period_pct": 0.9759,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.3829,
+        "net_annualised_pct": -4.5,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.1735,
+        "max_drawdown_pct": -36.39,
+        "final_equity": 23.8345,
+        "net_positive": false
+      }
+    },
+    "decomposition": {
+      "stock_selection_gross_pct": 3.1735,
+      "execution_effect_pp": -2.5805,
+      "cost_effect_pp": -0.9759,
+      "net_pct": -0.3829,
+      "market_exposure_effect": "not separable on a panel -- the benchmark IS the cross-sectional mean, so market direction is differenced out by construction"
+    }
+  },
+  "phase9_robustness": {
+    "cost_stress": {
+      "baseline": {
+        "label": "baseline",
+        "periods": 120,
+        "gross_excess_pct": 0.593,
+        "excess_t": 0.787,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 11.26,
+        "cost_per_period_pct": 0.9759,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.3829,
+        "net_annualised_pct": -4.5,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.1735,
+        "max_drawdown_pct": -36.39,
+        "final_equity": 23.8345,
+        "net_positive": false
+      },
+      "cost x1.25 (preregistered)": {
+        "label": "cost x1.25 (preregistered)",
+        "periods": 120,
+        "gross_excess_pct": 0.593,
+        "excess_t": 0.787,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 11.26,
+        "cost_per_period_pct": 1.2198,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.6269,
+        "net_annualised_pct": -7.27,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.1735,
+        "max_drawdown_pct": -38.45,
+        "final_equity": 17.8983,
+        "net_positive": false
+      },
+      "cost x1.50": {
+        "label": "cost x1.50",
+        "periods": 120,
+        "gross_excess_pct": 0.593,
+        "excess_t": 0.787,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 11.26,
+        "cost_per_period_pct": 1.4638,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.8708,
+        "net_annualised_pct": -9.96,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.1735,
+        "max_drawdown_pct": -40.45,
+        "final_equity": 13.4313,
+        "net_positive": false
+      },
+      "slippage 0.10%/leg": {
+        "label": "slippage 0.10%/leg",
+        "periods": 120,
+        "gross_excess_pct": 0.593,
+        "excess_t": 0.787,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 11.26,
+        "cost_per_period_pct": 0.9759,
+        "slippage_per_period_pct": 0.1877,
+        "net_per_period_pct": -0.5706,
+        "net_annualised_pct": -6.64,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.1735,
+        "max_drawdown_pct": -37.98,
+        "final_equity": 19.1225,
+        "net_positive": false
+      },
+      "cost x1.25 + slippage": {
+        "label": "cost x1.25 + slippage",
+        "periods": 120,
+        "gross_excess_pct": 0.593,
+        "excess_t": 0.787,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 11.26,
+        "cost_per_period_pct": 1.2198,
+        "slippage_per_period_pct": 0.1877,
+        "net_per_period_pct": -0.8145,
+        "net_annualised_pct": -9.35,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.1735,
+        "max_drawdown_pct": -40.0,
+        "final_equity": 14.3523,
+        "net_positive": false
+      },
+      "cost x0.75 (favourable)": {
+        "label": "cost x0.75 (favourable)",
+        "periods": 120,
+        "gross_excess_pct": 0.593,
+        "excess_t": 0.787,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 11.26,
+        "cost_per_period_pct": 0.7319,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.1389,
+        "net_annualised_pct": -1.65,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.1735,
+        "max_drawdown_pct": -34.27,
+        "final_equity": 31.7178,
+        "net_positive": false
+      }
+    },
+    "basket_stress": {
+      "5": {
+        "label": "basket=5",
+        "periods": 120,
+        "gross_excess_pct": 0.8325,
+        "excess_t": 0.882,
+        "turnover_per_period": 0.9567,
+        "turnover_per_year": 11.48,
+        "cost_per_period_pct": 0.9949,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.1625,
+        "net_annualised_pct": -1.93,
+        "fill_rate_pct": 85.17,
+        "queue_ratio": 5.079,
+        "requested_excess_pct": 3.7022,
+        "max_drawdown_pct": -32.5,
+        "final_equity": 25.4839,
+        "net_positive": false
+      },
+      "10": {
+        "label": "basket=10",
+        "periods": 120,
+        "gross_excess_pct": 0.593,
+        "excess_t": 0.787,
+        "turnover_per_period": 0.9383,
+        "turnover_per_year": 11.26,
+        "cost_per_period_pct": 0.9759,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.3829,
+        "net_annualised_pct": -4.5,
+        "fill_rate_pct": 84.92,
+        "queue_ratio": 5.014,
+        "requested_excess_pct": 3.1735,
+        "max_drawdown_pct": -36.39,
+        "final_equity": 23.8345,
+        "net_positive": false
+      },
+      "20": {
+        "label": "basket=20",
+        "periods": 120,
+        "gross_excess_pct": 0.6648,
+        "excess_t": 1.344,
+        "turnover_per_period": 0.9071,
+        "turnover_per_year": 10.88,
+        "cost_per_period_pct": 0.9434,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.2785,
+        "net_annualised_pct": -3.29,
+        "fill_rate_pct": 86.5,
+        "queue_ratio": 4.362,
+        "requested_excess_pct": 2.8468,
+        "max_drawdown_pct": -32.84,
+        "final_equity": 29.3528,
+        "net_positive": false
+      },
+      "47": {
+        "label": "basket=47",
+        "periods": 120,
+        "gross_excess_pct": 0.5094,
+        "excess_t": 1.376,
+        "turnover_per_period": 0.8184,
+        "turnover_per_year": 9.82,
+        "cost_per_period_pct": 0.8512,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -0.3417,
+        "net_annualised_pct": -4.02,
+        "fill_rate_pct": 89.13,
+        "queue_ratio": 3.262,
+        "requested_excess_pct": 2.3922,
+        "max_drawdown_pct": -30.05,
+        "final_equity": 26.5623,
+        "net_positive": false
+      }
+    },
+    "timing_stress": {},
+    "verdict": "UNIFORMLY NEGATIVE"
+  },
+  "phase10_regime": {
+    "available": true,
+    "by_trend": {
+      "BULL": {
+        "label": "BULL",
+        "periods": 60,
+        "gross_excess_pct": -0.3449,
+        "excess_t": -0.299,
+        "turnover_per_period": 0.9533,
+        "turnover_per_year": 11.44,
+        "cost_per_period_pct": 0.9915,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": -1.3364,
+        "net_annualised_pct": -14.91,
+        "fill_rate_pct": 84.67,
+        "queue_ratio": 3.915,
+        "requested_excess_pct": 2.5387,
+        "max_drawdown_pct": -12.79,
+        "final_equity": 7.011,
+        "net_positive": false
+      },
+      "BEAR": {
+        "label": "BEAR",
+        "periods": 40,
+        "gross_excess_pct": 1.1848,
+        "excess_t": 1.079,
+        "turnover_per_period": 0.935,
+        "turnover_per_year": 11.22,
+        "cost_per_period_pct": 0.9724,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": 0.2124,
+        "net_annualised_pct": 2.58,
+        "fill_rate_pct": 84.0,
+        "queue_ratio": 8.462,
+        "requested_excess_pct": 3.69,
+        "max_drawdown_pct": -22.18,
+        "final_equity": 1.705,
+        "net_positive": true
+      },
+      "SIDEWAYS": {
+        "label": "SIDEWAYS",
+        "periods": 20,
+        "gross_excess_pct": 2.223,
+        "excess_t": 1.161,
+        "turnover_per_period": 0.965,
+        "turnover_per_year": 11.58,
+        "cost_per_period_pct": 1.0036,
+        "slippage_per_period_pct": 0.0,
+        "net_per_period_pct": 1.2194,
+        "net_annualised_pct": 15.66,
+        "fill_rate_pct": 87.5,
+        "queue_ratio": 4.846,
+        "requested_excess_pct": 4.0447,
+        "max_drawdown_pct": -9.72,
+        "final_equity": 1.968,
+        "net_positive": true
+      }
+    },
+    "positive_regimes": [
+      "BEAR",
+      "SIDEWAYS"
+    ],
+    "single_regime_dependent": false
+  }
+}

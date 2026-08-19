@@ -1,0 +1,241 @@
+{
+  "experiment_id": "E19-alpha-core-tradable-edge",
+  "preregistration_hash": "9fd80d297b6ec43632e742a9c529d84e810585de39cc5ec140889aa35665475f",
+  "gates": [
+    {
+      "gate": "G1_data_integrity",
+      "metric": "PIT integrity, restorable universe snapshot, regression anchors",
+      "threshold": "all pass",
+      "observed": "snapshot u20260819-668658bb restorable=True; 11 anchors, all pass=True",
+      "passed": true,
+      "evidence": "backtest_output/research_manifest.json"
+    },
+    {
+      "gate": "G2_reproducibility",
+      "metric": "result regenerates from (commit, code, config, data, seed)",
+      "threshold": "reproducible = True",
+      "observed": "HEAD c498824, clean=True, panel sha e895b169594452ca, seed 20260819",
+      "passed": true,
+      "evidence": "research_manifest.json + E19_edge_audit.json"
+    },
+    {
+      "gate": "G3_predictive_edge",
+      "metric": "mean IC / ICIR / %positive at the DECLARED h=20",
+      "threshold": "IC >= 0.02 AND ICIR >= 0.30 AND %pos >= 55",
+      "observed": "IC 0.01456 (t=1.232), ICIR 0.1125, %pos 51.67",
+      "passed": false,
+      "evidence": "E19_edge_audit.json / phase2_prediction.primary",
+      "reason": "IC below threshold; ICIR an eighth of the floor; barely half the dates positive. Retention at the traded horizon is 13.9% of the h=1 peak."
+    },
+    {
+      "gate": "G4_out_of_sample",
+      "metric": "holdout IC and degradation from in-sample",
+      "threshold": "holdout IC > 0 AND degradation <= 0.50",
+      "observed": "holdout IC -0.02449 (t=-1.021), degradation 2.1929",
+      "passed": false,
+      "evidence": "E19_edge_audit.json / phase3_validation.out_of_sample",
+      "reason": "the holdout IC is NEGATIVE. The sign flipped out of sample: in-sample +0.02053, holdout -0.02449."
+    },
+    {
+      "gate": "G5_walk_forward",
+      "metric": "share of sequential out-of-fold blocks with positive IC",
+      "threshold": ">= 60%",
+      "observed": "5 of 10 folds positive (50%)",
+      "passed": false,
+      "evidence": "E19_edge_audit.json / phase3_validation.walk_forward",
+      "reason": "a coin flip. Out-of-fold IC is positive in exactly half the folds, and the folds where it is strongest are 2020-2022."
+    },
+    {
+      "gate": "G6_null_tests",
+      "metric": "percentile against EVERY structurally-matched null",
+      "threshold": ">= 95th against every null",
+      "observed": "worst 93.33 (liquidity_matched); random ranking 100.0",
+      "passed": false,
+      "evidence": "E19_edge_audit.json / phase4_nulls",
+      "reason": "beats unconstrained random ranking at the 100th percentile and fails the LIQUIDITY-matched null at 93.33. A null that is allowed to hold the same illiquid names does nearly as well, which is the whole question."
+    },
+    {
+      "gate": "G7_execution_realism",
+      "metric": "net per-period excess after execution and cost",
+      "threshold": "> 0",
+      "observed": "-0.3829% per period (-4.50% annualised); fill rate 84.92%, queue ratio 5.014",
+      "passed": false,
+      "evidence": "E19_edge_audit.json / phase5_execution",
+      "reason": "the book requests +3.1735% and receives +0.5930% -- 81.3% of the alpha is lost to execution -- and the remainder does not cover a 0.9759% cost."
+    },
+    {
+      "gate": "G8_cost_robustness",
+      "metric": "net per period at cost x1.25 and 0.10%/leg slippage",
+      "threshold": "> 0",
+      "observed": "cost x1.25: -0.6269%; +slippage: -0.8145%; even cost x0.75: -0.1389%",
+      "passed": false,
+      "evidence": "E19_edge_audit.json / phase9_robustness",
+      "reason": "every perturbation is negative, including the FAVOURABLE one. The result is not fragile -- it is on the wrong side of the boundary by a margin no cost assumption closes."
+    },
+    {
+      "gate": "G9_exposure",
+      "metric": "realized vs target exposure, or a full attribution",
+      "threshold": "gap <= 10 pp OR fully decomposed",
+      "observed": "gap 25.57 pp (E3), attributed ~100%% to slot occupancy (-29.42pp) with sizing +3.85pp",
+      "passed": true,
+      "evidence": "E7 alpha preservation audit; E11 production run",
+      "reason": "passes on the attribution limb, not the band. Two causes were corrected in v2.1, exposure rose to 48.94%, and the alpha still did not appear."
+    },
+    {
+      "gate": "G10_drawdown_risk",
+      "metric": "maximum drawdown of the executed book; regime dependence",
+      "threshold": "<= 35% and not single-regime dependent",
+      "observed": "max drawdown -36.39%; positive regimes: BEAR, SIDEWAYS",
+      "passed": false,
+      "evidence": "E19_edge_audit.json / phase5_execution, phase10_regime",
+      "reason": "drawdown 36.39% exceeds the 35% preregistered limit on a book whose net edge is already negative."
+    },
+    {
+      "gate": "G11_research_integrity",
+      "metric": "no undisclosed post-hoc selection",
+      "threshold": "horizon, splits, thresholds and nulls exactly as frozen",
+      "observed": "prereg hash 9fd80d29 frozen before the audit; Alpha Core sha 90024d86 unchanged; nominal p at h=20 = 0.22, so multiplicity is not the binding issue",
+      "passed": true,
+      "evidence": "E19 preregistration + phase8 multiple-testing audit"
+    }
+  ],
+  "gates_passed": 4,
+  "gates_failed": 7,
+  "failed_gates": [
+    "G3_predictive_edge",
+    "G4_out_of_sample",
+    "G5_walk_forward",
+    "G6_null_tests",
+    "G7_execution_realism",
+    "G8_cost_robustness",
+    "G10_drawdown_risk"
+  ],
+  "phase6_exposure": {
+    "source": [
+      "backtest_output/execution_realism.json (E3)",
+      "backtest_output/experiment5b_production.json (E11)",
+      "backtest_output/experiment5_alpha_preservation_audit.md (E7)"
+    ],
+    "e3_target_exposure_pct": 54.79,
+    "e3_realized_exposure_pct": 29.22,
+    "e3_gap_pp": 25.57,
+    "e3_average_positions": 4.63,
+    "e3_occupancy_pct": 46.3,
+    "e11_realized_exposure_pct": 48.94,
+    "e11_average_positions": 5.8,
+    "e11_fill_rate_pct": 89.82,
+    "e11_cost_drag_pct": 131.73,
+    "attribution": {
+      "slot_occupancy_pp": -29.42,
+      "position_sizing_pp": 3.85,
+      "reading": "the exposure gap is ~100% slot occupancy. Positions that were opened were sized correctly -- slightly LARGER than target. The book simply could not fill its slots."
+    },
+    "causes": [
+      {
+        "cause": "signal availability",
+        "attributable": false,
+        "evidence": "120 dates each carried >= 50 scoreable names; the shortlist was never empty"
+      },
+      {
+        "cause": "technical gate rejection",
+        "attributable": false,
+        "evidence": "Alpha Core applies no technical gate by construction (backtesting/alpha_core.py docstring)"
+      },
+      {
+        "cause": "liquidity rejection",
+        "attributable": true,
+        "evidence": "risk_engine's ADV participation cap; E14 measured the top decile as 10.27% unbuyable"
+      },
+      {
+        "cause": "execution failure (queues)",
+        "attributable": true,
+        "evidence": "E3 fill rate; E11 89.82%; this audit measures 84.92% at h=20 with a 5.01x basket queue ratio"
+      },
+      {
+        "cause": "cash constraints",
+        "attributable": true,
+        "evidence": "E3 idle cash earned 0% against a 23% hurdle; corrected in v2.1 by credit_idle_cash, which raised E11 exposure to 48.94%"
+      },
+      {
+        "cause": "position constraints",
+        "attributable": false,
+        "evidence": "max_positions was 10 and the book averaged 4.63 -- the cap was never the binding constraint"
+      },
+      {
+        "cause": "rebalance mechanics",
+        "attributable": true,
+        "evidence": "20-session rebalance against a signal with an 11.36 session half-life: names were held 4.7 half-lives past decay (E13)"
+      },
+      {
+        "cause": "risk controls",
+        "attributable": false,
+        "evidence": "E7: sizing contributed +3.85pp, i.e. risk controls made exposure larger, not smaller"
+      }
+    ],
+    "gap_explained": true,
+    "gate9_reading": "The gap is 25.57pp, far outside the 10pp band, so gate 9 can only pass on the second limb: the gap is fully attributed. It is -- to slot occupancy, driven by queue-blocked fills, idle cash and a rebalance interval 4.7 half-lives longer than the signal. Two of those were corrected in v2.1 and exposure rose to 48.94%, and the alpha still did not appear (E11). The gap is understood; it is not the reason the strategy fails."
+  },
+  "phase8_multiple_testing": {
+    "dimensions": [
+      {
+        "dimension": "forward horizon",
+        "values": 5,
+        "detail": "h = 1, 5, 10, 20, 60 (alpha_decay_analysis.json)"
+      },
+      {
+        "dimension": "basket size",
+        "values": 2,
+        "detail": "10 and 47 (experiment5a_frictionless.json)"
+      },
+      {
+        "dimension": "exclusion specification",
+        "values": 7,
+        "detail": "baseline, ex_t1_locks, ex_t1_unbuyable, ex_t_locks, ex_illiquid, ex_volume_spikes, ex_locks_and_illiquid (experiment14_queue_artifact.json)"
+      },
+      {
+        "dimension": "execution arm",
+        "values": 3,
+        "detail": "A, B, C (experiment15_execution_aware.json)"
+      },
+      {
+        "dimension": "score component",
+        "values": 3,
+        "detail": "alpha, momentum_rank, bb_rank (research_alpha_ic.py)"
+      },
+      {
+        "dimension": "sub-period",
+        "values": 4,
+        "detail": "2014-2016, 2017-2019, 2020-2022, 2023-2024"
+      },
+      {
+        "dimension": "exit configuration",
+        "values": 2,
+        "detail": "stops on / stops off with a time exit (hold_test.json)"
+      }
+    ],
+    "naive_product": 5040,
+    "reported_specification_cells": 28,
+    "note": "The naive product overstates the search: most combinations were never run, and E14 reported every cell of its 7x4 grid rather than selecting from it, which is the opposite of p-hacking.",
+    "declared_horizon_t": 1.232,
+    "declared_horizon_p_nominal": 0.2179,
+    "bonferroni_threshold": 0.00179,
+    "declared_horizon_p_bonferroni": 1.0,
+    "reading": "Multiple testing is NOT the binding problem here, and saying so is more useful than invoking it. The declared h=20 result has a nominal two-sided p of 0.22 -- it is not significant before any correction, so no correction can change the conclusion. The h=1 result (t = 8.78) survives Bonferroni by a wide margin and is nonetheless worthless, because E14 showed it is a price-limit queue artifact. The programme's problem was never that it found a false positive by searching too hard; it is that the one overwhelming statistical result it found is untradeable, and the one tradable horizon has no result at all.",
+    "post_hoc_selection_detected": false,
+    "integrity_notes": [
+      "The horizon (h=20), the splits, the eleven thresholds and the four null models were all frozen in E19_preregistration.json, hash 9fd80d29, before edge_audit.py ran.",
+      "Alpha Core was not modified: sha256 90024d86d7a5c268, verified by the regression fixture on every build.",
+      "No threshold was changed after a number existed; the preregistration table raises on UPDATE.",
+      "Results that would favour a pass -- h=5's marginally positive net, the BEAR/SIDEWAYS regime profitability, the 100th percentile against unconstrained random ranking -- are reported and explicitly NOT promoted to the headline, because none was the declared test."
+    ]
+  },
+  "decision": {
+    "experiment_id": "E19-alpha-core-tradable-edge",
+    "decision": "REJECT",
+    "rejected_at_stage": 2,
+    "rejected_at_stage_name": "ECONOMIC SIGNAL VALIDATION",
+    "cheap_rejection": true,
+    "ledger_entry_hash": "6a761c7ee07fc6087a540b3b7018a8786b0ba8784e68a0eaec0a418496847a34"
+  },
+  "outcome": "B_NO_ROBUST_EDGE"
+}
