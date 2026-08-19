@@ -1,14 +1,14 @@
 {
   "manifest_version": 1,
-  "created_at": "2026-08-19T10:03:08.008571",
+  "created_at": "2026-08-19T10:42:47.294597",
   "repository": {
-    "head": "c4988247f101a5e31d121374d8371872e6121850",
-    "head_short": "c498824",
-    "tag": "v2.0-archive-8-gc498824",
+    "head": "f10768d659410c5e614bd440226596412ad6c9a5",
+    "head_short": "f10768d",
+    "tag": "v2.0-archive-10-gf10768d",
     "archive_tag_commit": "b145fc4a26f3de61747e3322679639d756f6df28",
     "status_porcelain": "",
     "clean": true,
-    "tracked_files": 246
+    "tracked_files": 255
   },
   "protected_components": {
     "alpha_core_path": "backtesting/alpha_core.py",
@@ -32,9 +32,9 @@
     "restorable": true
   },
   "ledger": {
-    "entries": 11,
+    "entries": 12,
     "intact": true,
-    "head": "354ec88217f5e7a45c07276bffd073c2f0aa5556d9b49d4c4769464022593c8b"
+    "head": "6a761c7ee07fc6087a540b3b7018a8786b0ba8784e68a0eaec0a418496847a34"
   },
   "configuration": {
     "config_hash": "a0f8a89da1201b9ea2ddfbd0065bd78959d9ffc065d0688f1af7e81517f21831",

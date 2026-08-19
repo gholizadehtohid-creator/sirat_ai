@@ -1,0 +1,134 @@
+{
+  "experiment_id": "E20-alpha-core-capacity",
+
+  "hypothesis": "Alpha Core's predictive information survives restriction to securities that can genuinely absorb the strategy at measured market capacity. Stated as three separable claims: (L1) the score carries statistically credible information somewhere in the cross-section; (L2) that information is still present after the universe is restricted to names whose average traded value can absorb a position at a preregistered participation cap; (L3) whatever remains at L2 survives T+1 execution, queues, partial fills, turnover and a 1.04% round trip.",
+
+  "strategy_version": "alpha_core_v1 (frozen, sha256 90024d86d7a5c268) -- UNMODIFIED",
+
+  "researcher": "lead quantitative research",
+
+  "notes": "E20 is a DECOMPOSITION of E19's evidence, not an attempt to reverse it. E19 stands: no robust edge, 7 of 11 gates failed. E20 asks a narrower question E19 did not separate -- whether the information is absent everywhere, present only where it cannot be traded, or present in tradable names but destroyed by execution. TWO STRUCTURAL LIMITS ARE DECLARED HERE RATHER THAN DISCOVERED LATER. First: E19 spent the clean holdout 2023-03-01..2024-09-01 and the platform's windows_touched ledger will refuse a second evaluation, so E20 CANNOT produce an independent out-of-sample claim on this data. Second and consequently, E20 is capable of establishing a NEGATIVE conclusion (cases A/B/C of the mission's classification) but is NOT capable of establishing a positive one: a tradable edge found here would be an in-sample finding requiring a separate experiment on untouched data before it could mean anything. This asymmetry is deliberate and is not a defect.",
+
+  "expected_failure": [
+    "L2: IC collapses toward zero or turns negative once the universe is restricted to names with sufficient ADV -- E19 measured within-date IC of +0.212 in the most illiquid quintile against -0.030 in the most liquid",
+    "L3: whatever survives L2 fails to clear the 1.04% round trip at the turnover its horizon demands",
+    "capacity: the turnover required by any horizon with positive net economics exceeds the 4.45/year the market was measured to support",
+    "the whole result is an artifact of names that are limit-locked at t+1 and therefore unbuyable -- E14 measured a 3.03x queue exposure ratio"
+  ],
+
+  "acceptance_criteria": {
+    "L1_information": "mean IC over the full eligible cross-section at the declared horizon is distinguishable from zero: |t| >= 2.0",
+    "L2_tradability": "at capacity level T2 (the platform's own MAX_ADV_PARTICIPATION_PCT = 5%), mean IC >= 0.02 AND ICIR >= 0.30 AND the t-statistic >= 2.0",
+    "L3_monetization": "at T2, net excess per period after execution, turnover and the 1.04% round trip is > 0, AND required turnover <= 4.45/year (measured market capacity), AND the strategy reaches the 95th percentile of the liquidity-matched null",
+    "overall": "Case D (genuine tradable edge) requires L1 AND L2 AND L3. Any other combination classifies rather than passes, and NO combination authorises capital, because the holdout is already spent."
+  },
+
+  "preregistration": {
+    "seed": 20260820,
+
+    "parameters": {
+      "alpha_core_sha256": "90024d86d7a5c268",
+      "data_period": ["2014-09-21", "2024-09-01"],
+      "data_period_justification": "E13/E14/E15/E19's clean window. Post-2024-09 is EXCLUDED because research_factors.py fitted Alpha Core's two factors there (17,695 observations over 23 dates); it is contaminated for factor selection and is not a holdout.",
+      "universe": "u20260819-668658bb, 1394 instruments, restorable and hash-verified",
+
+      "horizons": [5, 10, 20, 60],
+      "horizon_justification": "The platform's EXISTING horizon set, defined in research_alpha_ic.py (HORIZONS = 5,10,20,60) and alpha_decay_analysis. The brief suggested h=40; no panel in this repository carries fwd_40 and inventing it would mean constructing a new forward-return column for this experiment alone. The brief's own instruction -- use existing definitions rather than inventing new ones -- is followed here. h=60 replaces h=40.",
+      "declared_primary_horizon": 20,
+      "declared_primary_justification": "The production rebalance interval, and the same horizon E19 declared. Holding it fixed is what makes E20 comparable to E19; changing it would make E20 a different experiment wearing E19's name.",
+
+      "account_equity": 1000000000,
+      "basket": 10,
+      "position_value": 100000000,
+      "position_value_note": "account_equity / basket, from config.ACCOUNT_EQUITY. Participation for a name is position_value / adv, where adv is the trailing 20-session mean traded value available at the decision date.",
+
+      "capacity_levels": {
+        "T1_broad": {"max_participation_pct": 10.0, "implied_min_adv": 1000000000},
+        "T2_realistic": {"max_participation_pct": 5.0, "implied_min_adv": 2000000000},
+        "T3_conservative": {"max_participation_pct": 1.0, "implied_min_adv": 10000000000}
+      },
+      "capacity_justification": "T2 IS the platform's existing constant config.MAX_ADV_PARTICIPATION_PCT = 5.0, not a number chosen for this experiment. T1 and T3 are one step either side (2x looser, 5x stricter) so the curve brackets the operating point rather than being centred on a value picked to succeed. All three are absolute participation caps, NOT within-date quantiles: a within-date quintile labels the least-bad name in a thin market as 'liquid', which is exactly the error that would make an untradable result look tradable.",
+
+      "capacity_curve_levels_pct": [50.0, 25.0, 10.0, 5.0, 2.0, 1.0, 0.5, 0.25],
+      "measured_market_turnover_capacity_per_year": 4.45,
+      "measured_capacity_source": "alpha_decay_analysis.json / realized.turnover_per_year",
+
+      "execution_model": "unchanged from E19: T+1 fill, an order blocked by a limit-lock, reopening or extreme gap at t+1 is NOT filled and NOT replaced by the next name down, the slot earns the policy rate instead",
+      "round_trip_pct": 1.04,
+      "risk_free_rate": 0.23,
+      "slippage_pct": 0.10,
+      "sessions_per_year": 240,
+
+      "splits": {
+        "in_sample": ["2014-09-21", "2021-09-01"],
+        "validation": ["2021-09-01", "2023-03-01"],
+        "reused_window": ["2023-03-01", "2024-09-01"]
+      },
+      "splits_note": "IDENTICAL to E19's, deliberately. The third window is labelled reused_window and NOT holdout: E19 spent it, windows_touched records that, and the platform will refuse to register it as a holdout again. Any statistic computed on it in E20 is a re-used-window statistic and is reported as such. E20 makes no independent out-of-sample claim.",
+
+      "null_models": [
+        "random ranking, identical eligibility",
+        "liquidity-matched random ranking",
+        "volatility-matched random ranking",
+        "liquidity AND volatility matched random ranking",
+        "exposure-matched random strategy"
+      ],
+      "null_arms": 30,
+      "primary_null": "liquidity-matched",
+      "primary_null_justification": "Liquidity is the hypothesis. Testing against unconstrained random ranking when the whole question is whether the signal lives in illiquid names would measure the liquidity tilt and call it alpha. E19 scored the 100th percentile against the unconstrained null and the 93.3rd against the liquidity-matched one; only the second is informative here.",
+
+      "walk_forward": {"train_dates": 20, "test_dates": 10, "sequential": true}
+    },
+
+    "validation_gates": {
+      "L1_information": "|t| of mean IC over the full cross-section at h=20 >= 2.0",
+      "L2_tradability": "at T2: mean IC >= 0.02 AND ICIR >= 0.30 AND |t| >= 2.0",
+      "L3_monetization": "at T2: net per period > 0 AND turnover <= 4.45/yr AND >= 95th percentile of the liquidity-matched null",
+      "capacity_monotonicity": "reported, not gated: does IC fall monotonically as the capacity constraint tightens",
+      "walk_forward_stability": ">= 60% of sequential out-of-fold blocks positive at T2",
+      "drawdown": "maximum drawdown at T2 <= 35%"
+    },
+
+    "expected_metrics": {
+      "t_full_cross_section_h20": 1.23,
+      "ic_T2_h20": 0.0,
+      "net_T2_h20_pct": -0.38,
+      "liquidity_matched_percentile": 93.3
+    },
+
+    "rejection_thresholds": {
+      "min_ic": 0.02,
+      "min_icir": 0.30,
+      "min_abs_t": 2.0,
+      "min_pct_positive_ic": 55.0,
+      "min_names_per_date": 50,
+      "min_control_percentile": 95.0,
+      "min_positive_fold_share": 0.60,
+      "max_drawdown_pct": 35.0,
+      "max_turnover_per_year": 4.45,
+      "max_participation_pct": 5.0,
+      "round_trip_pct": 1.04,
+      "slippage_pct": 0.10,
+      "max_oos_degradation": 0.50,
+      "max_missing_pct": 5.0,
+      "max_stale_pct": 30.0,
+      "min_fill_rate_pct": 90.0,
+      "min_liquid_share": 0.70,
+      "max_queue_ratio": 1.50,
+      "min_paper_sessions": 60,
+      "min_decay_retention": 0.50
+    }
+  },
+
+  "config": {
+    "declared_horizon": 20,
+    "basket": 10,
+    "account_equity": 1000000000,
+    "round_trip_pct": 1.04,
+    "capacity_T2_participation_pct": 5.0,
+    "manifest": "backtest_output/research_manifest.json",
+    "control_arm": "E19-alpha-core-tradable-edge"
+  },
+
+  "universe_snapshot": "u20260819-668658bb"
+}
