@@ -730,34 +730,61 @@ def main(argv=None):
         % ", ".join("%s (%s)" % (e["id"].split("-")[0], e["kind"])
                     for e in others))
 
-    # ---- finding zero ----------------------------------------------------
-    strict_path = os.path.join(os.path.dirname(path), "strict.db")
+    # ---- READING 1: strict historical reality -----------------------------
+    #
+    # Always a throwaway database. This reading is an analysis of what the
+    # platform would have done at the time; it is not the official record, and
+    # mixing it into the ledger would corrupt the very number Phase 2 asks to
+    # be kept separate.
+    strict_path = os.path.join(tempfile.mkdtemp(prefix="sirat_strict_"),
+                               "strict.db")
 
     strict = [strict_finding(e, strict_path, snapshot_id) for e in hypotheses]
 
+    strict_kpi = mgr.kpi(path=strict_path)
+
     say()
-    say("-" * 78)
-    say("FINDING ZERO -- the strict answer, with the universe that existed")
-    say("-" * 78)
+    say("=" * 78)
+    say("READING 1 -- STRICT HISTORICAL REALITY")
+    say("=" * 78)
+    say("  Only information that existed at the time of the original")
+    say("  experiment. No universe snapshot was EVER collected during Phase 1.")
+    say()
     say("  %d of %d hypotheses stop at Stage 1 on `survivorship`."
         % (sum(1 for s in strict if s["status"] != stages.PASS),
            len(hypotheses)))
-    say("  No universe snapshot was ever collected during Phase 1, so no")
-    say("  experiment in the programme is re-runnable against the universe as")
-    say("  it stood. The platform would have halted the programme on day one")
-    say("  and demanded a snapshot -- which costs an afternoon and cannot be")
-    say("  recovered later.")
     say()
-    say("  The replay below grants today's snapshot in order to answer the")
-    say("  more useful question: which stage catches each IDEA.")
+
+    for stage in stages.ORDER:
+        marker = "  <- cheap" if stage in stages.CHEAP_STAGES else ""
+        say("    stage %d  %-28s %d%s"
+            % (stage, stages.NAMES[stage],
+               strict_kpi["by_stage"].get(stage, 0), marker))
+
+    say()
+    say("    rejected                  %d" % strict_kpi["rejections"])
+    say("    at stages 1-3             %d" % strict_kpi["cheap"])
+    say("    at stage 4+               %d" % (strict_kpi["rejections"]
+                                              - strict_kpi["cheap"]))
+    say("    EARLY REJECTION RATE      %.1f%%" % (strict_kpi["rate"] * 100))
+    say()
+    say("  This number is 100%% for a degenerate reason and must not be quoted")
+    say("  as evidence that the gates discriminate. It says one thing only:")
+    say("  the platform would have halted the entire programme on day one and")
+    say("  demanded a universe snapshot -- an afternoon's work that no amount")
+    say("  of later effort can recover.")
 
     # ---- the replay -------------------------------------------------------
     rows = []
 
     say()
-    say("-" * 78)
-    say("REPLAY")
-    say("-" * 78)
+    say("=" * 78)
+    say("READING 2 -- COUNTERFACTUAL GOVERNED REALITY")
+    say("=" * 78)
+    say("  Today's validated snapshot infrastructure granted, so the")
+    say("  survivorship question has an answer and the remaining gates can")
+    say("  actually be reached. This is the reading that says whether the")
+    say("  gates discriminate between ideas.")
 
     for entry in hypotheses:
 
@@ -828,7 +855,7 @@ def main(argv=None):
 
     say()
     say("=" * 78)
-    say("GOVERNANCE KPI -- at which stage are bad ideas rejected")
+    say("GOVERNANCE KPI -- READING 2 (counterfactual governed reality)")
     say("=" * 78)
 
     by_stage = report["by_stage"]
@@ -854,11 +881,48 @@ def main(argv=None):
         "COMPUTED" % (report["rejections"], len(never)))
     say("  rather than because a number was bad: %s" % ", ".join(never))
 
+    # ---- the two readings, side by side and explicitly not mixed ---------
+    say()
+    say("=" * 78)
+    say("THE TWO READINGS")
+    say("=" * 78)
+    say("  %-34s %-12s %s" % ("", "reading 1", "reading 2"))
+    say("  %-34s %-12s %s" % ("", "strict", "governed"))
+    say("  " + "-" * 62)
+
+    for stage in stages.ORDER:
+        say("  stage %d %-27s %-12d %d"
+            % (stage, stages.NAMES[stage][:27],
+               strict_kpi["by_stage"].get(stage, 0),
+               report["by_stage"].get(stage, 0)))
+
+    say("  " + "-" * 62)
+    say("  %-34s %-12s %s"
+        % ("early rejection rate",
+           "%.1f%%" % (strict_kpi["rate"] * 100),
+           "%.1f%%" % (report["rate"] * 100)))
+    say("  %-34s %-12s %s"
+        % ("meets the 70% target",
+           strict_kpi["meets_target"], report["meets_target"]))
+    say()
+    say("  These are answers to DIFFERENT QUESTIONS and must never be")
+    say("  averaged, combined or quoted as one figure.")
+    say()
+    say("    reading 1  'what would the platform have done in 2025?'")
+    say("               Answer: stopped everything at Stage 1. Degenerate.")
+    say("    reading 2  'do the gates discriminate between ideas?'")
+    say("               Answer: yes -- 1 / 8 / 1 / 1 across stages 1-4.")
+
     if args.json:
         with open(args.json, "w", encoding="utf-8") as handle:
-            json.dump({"rows": rows, "kpi": report,
-                       "universe_snapshot": snapshot_id}, handle,
-                      ensure_ascii=False, indent=2, default=str)
+            json.dump({
+                "rows": rows,
+                "reading_1_strict": strict_kpi,
+                "reading_2_governed": report,
+                "universe_snapshot": snapshot_id,
+                "note": "The two readings answer different questions and are "
+                        "never combined.",
+            }, handle, ensure_ascii=False, indent=2, default=str)
         say()
         say("  table written to %s" % args.json)
 

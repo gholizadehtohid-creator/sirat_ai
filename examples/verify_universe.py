@@ -202,6 +202,105 @@ def main():
         "a corrupt snapshot is treated as absent and the schedule fires",
         correct))
 
+    # ---- 6. duplicate prevention -----------------------------------------
+    rule("6. DUPLICATE PREVENTION")
+
+    say("  Capturing the same universe again, twice, on the same day ...")
+
+    copy2 = os.path.join(workdir, "dup.db")
+
+    first = universe.capture(path=copy2)
+    second = universe.capture(path=copy2)
+
+    say("    first    %s  created=%s" % (first["snapshot_id"],
+                                         first["created"]))
+    say("    second   %s  created=%s" % (second["snapshot_id"],
+                                         second["created"]))
+
+    rows = universe.history(path=copy2)
+
+    say("    rows on record: %d" % len(rows))
+    say()
+    say("  An unchanged universe hashes to the same id, so the second call is")
+    say("  a no-op. This is what makes a daily schedule affordable: a quiet")
+    say("  week costs nothing and still proves the list did not move.")
+
+    no_duplicate = bool(first["created"] and not second["created"]
+                        and len(rows) == 1
+                        and first["snapshot_id"] == second["snapshot_id"])
+
+    results.append(("an unchanged universe does not create a second snapshot",
+                    no_duplicate))
+
+    # ---- 7. missing snapshot blocks promotion ----------------------------
+    rule("7. REMOVING THE SNAPSHOT BLOCKS PROMOTION")
+
+    from sirat.experiments import manager as mgr
+    from sirat.experiments import provenance as prov
+
+    promo_db = os.path.join(workdir, "promote.db")
+
+    frozen = universe.capture(path=promo_db)
+
+    saved_commit, saved_dirty = prov.git_commit, prov.git_dirty
+
+    prov.git_commit, prov.git_dirty = (lambda: "0" * 40), (lambda: False)
+
+    try:
+        handle = mgr.Manager.register(
+            experiment_id="E-PROMOTION-EVIDENCE",
+            hypothesis="A candidate that passes every gate.",
+            strategy_version="v3.0",
+            researcher="phase 6 acceptance",
+            notes="Exists to show that promotion re-verifies its evidence.",
+            expected_failure=["any gate fails"],
+            acceptance_criteria={"promotion": "six stages AND live evidence"},
+            preregistration={
+                "parameters": {"horizon": 20},
+                "validation_gates": {"all": "six stages"},
+                "expected_metrics": {"ic": 0.03},
+                "rejection_thresholds": {"min_ic": 0.02},
+                "seed": 20260819,
+            },
+            config={"demo": True},
+            universe_snapshot=frozen["snapshot_id"],
+            path=promo_db)
+    finally:
+        prov.git_commit, prov.git_dirty = saved_commit, saved_dirty
+
+    for stage in stages.ORDER:
+        handle.run_stage(stage,
+                         {c: True for c in stages.REQUIRED_CHECKS[stage]},
+                         detail={"note": "acceptance demonstration"})
+
+    say("  registered %s citing %s"
+        % (handle.experiment_id, frozen["snapshot_id"]))
+    say("  all six stages PASS")
+    say()
+    say("  Now the snapshot it cited is destroyed ...")
+
+    conn = sqlite3.connect(promo_db)
+    try:
+        conn.executescript("PRAGMA writable_schema = ON;")
+        conn.execute("UPDATE universe_snapshots SET payload = '[]' "
+                     "WHERE snapshot_id = ?", (frozen["snapshot_id"],))
+        conn.commit()
+    finally:
+        conn.close()
+
+    blocked = False
+
+    try:
+        handle.decide(mgr.PROMOTE, "every gate passed",
+                      "phase 6 acceptance", regression_check=lambda: None)
+        say("  *** PROMOTED ANYWAY -- the evidence check is broken ***")
+    except mgr.EvidenceMissing as exc:
+        blocked = True
+        say("  REFUSED: %s" % exc)
+
+    results.append(("promotion is blocked when the cited snapshot is gone",
+                    blocked))
+
     # ---- the pre-existing bad row ----------------------------------------
     rule("THE ROW THAT PROVED THIS MATTERS")
 

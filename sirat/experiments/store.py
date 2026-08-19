@@ -103,6 +103,34 @@ CREATE TABLE IF NOT EXISTS windows_touched (
     touched_at              TEXT NOT NULL
 );
 
+-- THE LEDGER: one row per closed experiment, chained.
+--
+-- The triggers below make a row unwritable. The chain makes a row
+-- unREMOVABLE, which the triggers cannot: a table can be dropped and rebuilt,
+-- and nothing in SQLite would notice. Each entry hashes the entry before it,
+-- so deleting, reordering or rebuilding any part of the history breaks every
+-- link after it and `ledger.verify()` reports exactly where.
+CREATE TABLE IF NOT EXISTS ledger (
+    seq                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    experiment_id           TEXT NOT NULL UNIQUE,
+    appended_at             TEXT NOT NULL,
+    prev_hash               TEXT NOT NULL,
+    entry_hash              TEXT NOT NULL,
+    payload                 TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_update
+BEFORE UPDATE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'the research ledger is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+BEFORE DELETE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'the research ledger is append-only');
+END;
+
 -- A frozen preregistration is the whole point of preregistering.
 CREATE TRIGGER IF NOT EXISTS prereg_no_update
 BEFORE UPDATE ON preregistration

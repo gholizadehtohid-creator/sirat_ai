@@ -511,18 +511,40 @@ def run(panel=None, full=False, verbose=True):
     # The direction check, which is the anchor the brief actually specifies.
     # Stated as its own check so a build that goes red says "the cost failure
     # stopped reproducing" rather than "a number moved".
+    excess = cost["excess_pct"]
+
+    # This anchor is a SIGN condition, not a tolerance band, so it needs its
+    # own direction message -- and it is the one that most needs one. It
+    # carries the single conclusion the whole programme rests on: the edge is
+    # smaller than the cost of capturing it. A band-based check would say
+    # "MOVED FAVOURABLY" automatically; without this, the most important
+    # failure in the fixture would be the only one that went unlabelled.
+    if excess is None:
+        cost_direction = ("NOT MEASURED -- the top-decile excess produced no "
+                          "value at all.")
+    elif excess >= ROUND_TRIP_PCT:
+        cost_direction = (
+            "MOVED FAVOURABLY -- the edge now CLEARS the %.2f%% round trip "
+            "(%.4f%%), so Alpha Core has become economic. This is the "
+            "conclusion the entire programme rests on. Find what changed "
+            "before believing it." % (ROUND_TRIP_PCT, excess))
+    elif excess <= 0.0:
+        cost_direction = (
+            "moved unfavourably -- the top-decile excess is no longer positive "
+            "(%.4f%%). The cost conclusion technically still holds, but for a "
+            "different reason than the one on record, and that needs "
+            "explaining too." % excess)
+    else:
+        cost_direction = None
+
     checks.append({
         "check": "cost_failure_direction",
-        "measured": (None if cost["excess_pct"] is None
-                     else round(cost["excess_pct"], 5)),
+        "measured": (None if excess is None else round(excess, 5)),
         "expected": "excess < round trip (%.2f%%)" % ROUND_TRIP_PCT,
-        "passed": bool(cost["excess_pct"] is not None
-                       and 0.0 < cost["excess_pct"] < ROUND_TRIP_PCT),
+        "passed": bool(excess is not None and 0.0 < excess < ROUND_TRIP_PCT),
         "note": ("The negative cost impact direction must remain: a per-period "
-                 "edge smaller than the round trip it pays. If this passes "
-                 "because the edge turned NEGATIVE, or fails because it now "
-                 "clears cost, both need explaining."),
-        "direction": None,
+                 "edge smaller than the round trip it pays."),
+        "direction": cost_direction,
     })
 
     # ---- 3. holding period ------------------------------------------------

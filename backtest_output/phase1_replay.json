@@ -263,7 +263,30 @@
       "note": "The filter removed the artifact and the alpha together, which is what E14 predicted. Stage 2 catches it because the filtered signal has no information at the traded horizon."
     }
   ],
-  "kpi": {
+  "reading_1_strict": {
+    "rejections": 11,
+    "cheap": 11,
+    "rate": 1.0,
+    "target": 0.7,
+    "meets_target": true,
+    "by_stage": {
+      "1": 11,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0
+    },
+    "reproducibility": {
+      "reproducible": false,
+      "reason": "the working tree has uncommitted changes, so the code that ran cannot be recovered from the commit",
+      "remedy": "commit or stash before registering an experiment",
+      "blocks": [
+        "PROMOTE decisions"
+      ]
+    }
+  },
+  "reading_2_governed": {
     "rejections": 11,
     "cheap": 10,
     "rate": 0.9091,
@@ -286,5 +309,6 @@
       ]
     }
   },
-  "universe_snapshot": "u20260819-668658bb"
+  "universe_snapshot": "u20260819-668658bb",
+  "note": "The two readings answer different questions and are never combined."
 }

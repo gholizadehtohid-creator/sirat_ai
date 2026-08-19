@@ -1,0 +1,150 @@
+{
+  "control": {
+    "ic_curve": {
+      "1": 0.10492,
+      "5": 0.05101,
+      "10": 0.03003,
+      "20": 0.01456
+    },
+    "queue": {
+      "ratio": 3.0283,
+      "top_pct": 7.7506,
+      "universe_pct": 2.5594,
+      "dates": 120,
+      "no_locks_detected": false
+    },
+    "h1_excess": {
+      "excess_pct": 0.5496,
+      "dates": 120,
+      "t_stat": 8.8796,
+      "round_trip_pct": 1.04,
+      "clears_round_trip": false
+    },
+    "holding_period": {
+      "dates": 120,
+      "requested_excess_pct": 3.1735,
+      "realised_excess_pct": 0.593,
+      "shortfall_pct": 2.5805,
+      "shortfall_share": 0.1869,
+      "fill_rate_pct": 84.9167,
+      "cash_per_slot_pct": 1.7401
+    },
+    "tail": {
+      "percentile": 3.3333,
+      "empirical_p": 0.9667,
+      "treatment_cagr_pct": 17.84,
+      "control_mean_cagr_pct": 23.897,
+      "controls": 30
+    }
+  },
+  "corruptions": [
+    {
+      "label": "queue detector switched off",
+      "anchor": "queue_ratio",
+      "effect": "the artifact disappears entirely",
+      "detected": true,
+      "named": true,
+      "measured": null,
+      "expected": 3.03,
+      "direction": "MOVED FAVOURABLY -- not one limit-locked bar was found anywhere in 120 dates. The queue artifact has not shrunk, it has vanished, which on this market means the detector broke. 2.56% of the universe is normally locked.",
+      "all_failed": [
+        "queue_ratio"
+      ],
+      "flagged_favourable": true
+    },
+    {
+      "label": "queue detector weakened",
+      "anchor": "queue_ratio",
+      "effect": "the ratio slides toward 1.0",
+      "detected": true,
+      "named": true,
+      "measured": 1.26761,
+      "expected": 3.03,
+      "direction": "MOVED FAVOURABLY -- find what stopped detecting the failure",
+      "all_failed": [
+        "queue_ratio"
+      ],
+      "flagged_favourable": true
+    },
+    {
+      "label": "unbuyable slots refilled",
+      "anchor": "realised_h20",
+      "effect": "the execution shortfall closes",
+      "detected": true,
+      "named": true,
+      "measured": 3.17348,
+      "expected": 0.59,
+      "direction": "MOVED FAVOURABLY -- find what stopped detecting the failure",
+      "all_failed": [
+        "realised_h20"
+      ],
+      "flagged_favourable": true
+    },
+    {
+      "label": "forward returns leak the score",
+      "anchor": "ic@h20",
+      "effect": "the signal survives to the traded horizon",
+      "detected": true,
+      "named": true,
+      "measured": 0.21771,
+      "expected": 0.01456,
+      "direction": "MOVED FAVOURABLY -- find what stopped detecting the failure",
+      "all_failed": [
+        "ic@h1",
+        "ic@h5",
+        "ic@h10",
+        "ic@h20",
+        "h1_excess",
+        "cost_failure_direction",
+        "requested_h20",
+        "realised_h20"
+      ],
+      "flagged_favourable": true
+    },
+    {
+      "label": "h=1 edge inflated past the round trip",
+      "anchor": "cost_failure_direction",
+      "effect": "the strategy becomes economic",
+      "detected": true,
+      "named": true,
+      "measured": 1.62845,
+      "expected": "excess < round trip (1.04%)",
+      "direction": "",
+      "all_failed": [
+        "ic@h1",
+        "h1_excess",
+        "cost_failure_direction"
+      ],
+      "flagged_favourable": false
+    },
+    {
+      "label": "E11 treatment arm improved",
+      "anchor": "tail_percentile",
+      "effect": "it leaves the tail of its own null",
+      "detected": true,
+      "named": true,
+      "measured": 100.0,
+      "expected": "<= 10.0th percentile",
+      "direction": "MOVED FAVOURABLY -- Alpha Core no longer sits in the tail of its own null",
+      "all_failed": [
+        "tail_percentile"
+      ],
+      "flagged_favourable": true
+    },
+    {
+      "label": "backtesting/alpha_core.py edited",
+      "anchor": "alpha_core_frozen",
+      "effect": "the frozen strategy is no longer frozen",
+      "detected": true,
+      "named": true,
+      "measured": "90024d86d7a5c268",
+      "expected": "fb239e436e30ebf0",
+      "direction": "",
+      "all_failed": [
+        "alpha_core_frozen"
+      ],
+      "flagged_favourable": false
+    }
+  ],
+  "proved": true
+}

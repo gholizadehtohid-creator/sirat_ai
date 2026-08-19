@@ -96,13 +96,21 @@ def run_fixture(full=False):
 def run_governance():
     """The state of the record. Reported; only one condition is fatal."""
 
-    from sirat.experiments import manager, universe
+    from sirat.experiments import ledger, manager, universe
 
     report = manager.kpi()
 
     snapshot = universe.due()
 
+    chain = ledger.verify()
+
     warnings = []
+
+    if not chain["intact"]:
+        warnings.append(
+            "THE RESEARCH LEDGER IS BROKEN at entry %s (%s): %s"
+            % (chain.get("broken_at"), chain.get("experiment_id"),
+               chain.get("reason")))
 
     if snapshot["due"]:
         warnings.append(
@@ -127,10 +135,16 @@ def run_governance():
         "stage": "GOVERNANCE",
         "kpi": report,
         "snapshot": snapshot,
+        "ledger": chain,
         "warnings": warnings,
-        # Nothing here fails the build. The KPI is a management signal, and a
-        # management signal wired to a red build becomes a deleted signal.
-        "passed": True,
+        # The KPI and the snapshot age are management signals, and a management
+        # signal wired to a red build becomes a deleted signal -- so they warn.
+        #
+        # A BROKEN LEDGER IS DIFFERENT AND DOES FAIL THE BUILD. It is not a
+        # signal about how research is going; it means the record of what was
+        # decided has been altered, and nothing built on top of it can be
+        # trusted until that is explained.
+        "passed": bool(chain["intact"]),
     }
 
 
@@ -152,6 +166,9 @@ def _print_governance(report):
           % kpi["reproducibility"]["reproducible"])
     print("  universe snapshot      %s"
           % (report["snapshot"]["latest"] or "NEVER TAKEN"))
+    print("  research ledger        %d entries, chain %s"
+          % (report["ledger"]["entries"],
+             "intact" if report["ledger"]["intact"] else "BROKEN"))
 
     for warning in report["warnings"]:
         print("\n  WARNING: %s" % warning)

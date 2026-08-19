@@ -92,6 +92,24 @@ class WindowAlreadySpent(GovernanceError):
     """A holdout window was about to be evaluated a second time."""
 
 
+class EvidenceMissing(GovernanceError):
+    """PROMOTE was attempted on a result whose evidence no longer exists.
+
+    Distinct from ValidationMissing, which is about stages that never ran. This
+    is about stages that ran against data nobody can recover: a universe
+    snapshot that has been deleted, or one that no longer hashes to its frozen
+    value. A citation to something unrecoverable is not evidence.
+    """
+
+
+class RegressionFailing(GovernanceError):
+    """PROMOTE was attempted while the platform's own regression suite is red.
+
+    A platform that cannot rediscover Alpha Core's documented failures is not
+    entitled to certify a new strategy for capital.
+    """
+
+
 class UnknownExperiment(GovernanceError):
     """No such experiment_id in the record."""
 
@@ -478,8 +496,14 @@ class Manager(object):
     # DECISION
     # ==============================
 
-    def decide(self, decision, rationale, by):
-        """Close the experiment. Refuses more than it accepts, on purpose."""
+    def decide(self, decision, rationale, by, regression_check=None):
+        """Close the experiment. Refuses more than it accepts, on purpose.
+
+        `regression_check` is the platform's own regression suite, called only
+        on PROMOTE. It is injectable so the test suite can exercise both a green
+        and a red platform without needing the 1.8 MB fixture panel on disk; the
+        default is the real Alpha Core fixture.
+        """
 
         self._assert_open()
 
@@ -510,12 +534,20 @@ class Manager(object):
                 "that runs next time -- record it and register the change.")
 
         if decision == PROMOTE:
-            self._assert_promotable(results)
+            self._assert_promotable(results, regression_check=regression_check)
 
         store.insert_decision(self.experiment_id, decision, rationale,
                               rejected_at, by, path=self.path)
 
         self._record = store.get_experiment(self.experiment_id, path=self.path)
+
+        # The ledger entry is written here rather than left to the researcher.
+        # Phase 1's record was a markdown table somebody remembered to update,
+        # and "remembered to" is the failure mode this whole layer exists to
+        # remove. Imported locally to keep the module import graph acyclic.
+        from sirat.experiments import ledger
+
+        entry = ledger.append(self.record(), path=self.path)
 
         return {
             "experiment_id": self.experiment_id,
@@ -524,11 +556,29 @@ class Manager(object):
             "rejected_at_stage_name": (stages.NAMES[rejected_at]
                                        if rejected_at else None),
             "cheap_rejection": bool(rejected_at in stages.CHEAP_STAGES),
+            "ledger_entry_hash": entry["entry_hash"],
         }
 
-    def _assert_promotable(self, results):
+    def _assert_promotable(self, results, regression_check=None):
         """PROMOTE is the only decision that can lose money, so it is the only
-        one with preconditions."""
+        one with preconditions.
+
+        Five, and all five must hold at the moment of promotion rather than at
+        the moment of registration:
+
+            1. every stage passed                        ValidationMissing
+            2. the code that ran can be recovered        NotReproducible
+            3. the dataset it ran on is identified       EvidenceMissing
+            4. the universe it ran on still restores     EvidenceMissing
+            5. the platform's regression suite is green  RegressionFailing
+
+        Three and four are checked LIVE, not read back from the record. An
+        experiment can be registered against a perfectly good universe snapshot
+        and promoted a month later, by which time the snapshot may have been
+        deleted or rewritten -- and a citation to something unrecoverable is not
+        evidence. This is the same rule that governs everything else here:
+        missing evidence is never a pass.
+        """
 
         passed = {r["stage"] for r in results if r["status"] == stages.PASS}
 
@@ -574,6 +624,50 @@ class Manager(object):
                 % (self.experiment_id, cause,
                    "reproducible" if current["reproducible"]
                    else current["reason"]))
+
+        # ---- 3. the dataset is identified ---------------------------------
+        dataset = self._record["dataset_snapshot"]
+
+        if not dataset or dataset.startswith(provenance.UNAVAILABLE):
+            raise EvidenceMissing(
+                "cannot PROMOTE %s: its dataset snapshot is %r. A result whose "
+                "input data cannot be identified cannot be checked by anyone."
+                % (self.experiment_id, dataset))
+
+        # ---- 4. the universe still restores -------------------------------
+        snapshot_id = self._record["universe_snapshot"]
+
+        if not snapshot_id or snapshot_id == provenance.UNAVAILABLE:
+            raise EvidenceMissing(
+                "cannot PROMOTE %s: no universe snapshot was recorded, so the "
+                "survivorship question has no answer and the experiment cannot "
+                "be re-run against the universe it actually used."
+                % self.experiment_id)
+
+        from sirat.experiments import universe as universe_module
+
+        try:
+            universe_module.restore(snapshot_id, path=self.path)
+        except Exception as exc:                                # noqa: BLE001
+            raise EvidenceMissing(
+                "cannot PROMOTE %s: its universe snapshot %r no longer "
+                "restores (%s). The experiment cited evidence that is now "
+                "gone or altered."
+                % (self.experiment_id, snapshot_id, exc))
+
+        # ---- 5. the platform's own regression suite ------------------------
+        if regression_check is None:
+            def regression_check():
+                from sirat.fixtures import alpha_core
+                alpha_core.assert_passes(verbose=False)
+
+        try:
+            regression_check()
+        except Exception as exc:                                # noqa: BLE001
+            raise RegressionFailing(
+                "cannot PROMOTE %s: the platform cannot currently rediscover "
+                "its own documented failures, so it has no standing to certify "
+                "anything for capital. %s" % (self.experiment_id, exc))
 
     # ==============================
     # THE RECORD

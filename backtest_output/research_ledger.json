@@ -1,0 +1,1259 @@
+{
+  "ledger": [
+    {
+      "seq": 1,
+      "experiment_id": "E1-market-exposure-baseline",
+      "appended_at": "2026-08-19T08:39:27.183007",
+      "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "entry_hash": "47b9134b203e755c96d7f1618016e9e195cad5d4ff4f2f018dc903ee5b171163",
+      "entry": {
+        "acceptance_criteria": {
+          "six preregistered conditions": "all"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "d6f3c2776311051e4f07212387bc7eeeeaaac224de32cf776d4669bb62e804a2",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:27.173068",
+        "expected_failure": [
+          "the engine does not beat an exposure-matched control"
+        ],
+        "experiment_id": "E1-market-exposure-baseline",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, random_baseline, factor_decay. NEVER MEASURED IN PHASE 1",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "A deterministic four-signal market-state engine decides when and how much to be invested better than fixed passive exposure.",
+        "preregistration_hash": "611d1f9ef110aee65c2929375bef7057eed0644c684037589c249e80419c83d6",
+        "registered_at": "2026-08-19T08:39:27.139652",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:27.157909",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": false,
+              "rank_correlation": false
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "NEVER MEASURED IN PHASE 1",
+                "source": "exposure_experiment.json",
+                "value": null
+              },
+              "ic": {
+                "basis": "NEVER MEASURED IN PHASE 1",
+                "source": "exposure_experiment.json",
+                "value": null
+              },
+              "random_baseline": {
+                "basis": "NEVER MEASURED IN PHASE 1",
+                "source": "exposure_experiment.json",
+                "value": null
+              },
+              "rank_correlation": {
+                "basis": "NEVER MEASURED IN PHASE 1",
+                "source": "exposure_experiment.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:27.165536",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 2,
+      "experiment_id": "E2-conditional-alpha-core",
+      "appended_at": "2026-08-19T08:39:27.563912",
+      "prev_hash": "47b9134b203e755c96d7f1618016e9e195cad5d4ff4f2f018dc903ee5b171163",
+      "entry_hash": "ff9831a9ceb9807d3f9b87df9e8093d864c366c8bc5adec6c0d6cbb10df16e11",
+      "entry": {
+        "acceptance_criteria": {
+          "percentile": "> random controls"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "4b7c7cd0e90a96f4de3f66b9d8ab67f67b2c6ff261f3adda66348421467d8715",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:27.554385",
+        "expected_failure": [
+          "the result depends on an unattainable fill"
+        ],
+        "experiment_id": "E2-conditional-alpha-core",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, factor_decay. 0.01456 < 0.02 required",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "Alpha Core selection adds value conditional on the exposure path.",
+        "preregistration_hash": "87db2bf17a2a291dd38507e6f86c9d183b841996f6ea7ddf0c4d6e38536a4673",
+        "registered_at": "2026-08-19T08:39:27.519311",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:27.537336",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": true,
+              "rank_correlation": false
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "0.01456 / 0.10492 = 0.139 of peak IC retained at h=20 < 0.50",
+                "source": "alpha_decay_analysis.json / decay_curve",
+                "value": 0.1388
+              },
+              "ic": {
+                "basis": "0.01456 < 0.02 required",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.mean_ic",
+                "value": 0.01456
+              },
+              "random_baseline": {
+                "basis": "the signal is real at h=1 (t = 8.78 vs a permutation null)",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.t_stat",
+                "value": 8.781
+              },
+              "rank_correlation": {
+                "basis": "ICIR 0.1125 < 0.30; 51.67% positive dates < 55%",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.icir",
+                "value": 0.1125
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:27.546795",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 3,
+      "experiment_id": "E3-execution-realism",
+      "appended_at": "2026-08-19T08:39:27.939538",
+      "prev_hash": "ff9831a9ceb9807d3f9b87df9e8093d864c366c8bc5adec6c0d6cbb10df16e11",
+      "entry_hash": "2c3694475e2a655b25a6956463de39534caa47cfc42f548e32c08b02912bfcaf",
+      "entry": {
+        "acceptance_criteria": {
+          "sharpe": "> random p95"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "180739892d92713d1b054a782576ea620220668ea9ab38f21e018a5d802f63ff",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:27.930776",
+        "expected_failure": [
+          "alpha core sharpe <= random p95 sharpe"
+        ],
+        "experiment_id": "E3-execution-realism",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, factor_decay. 0.01456 < 0.02 required",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "Alpha Core beats random selection under production execution.",
+        "preregistration_hash": "83798ce48bb33080210dbd32b33ff5b2608f850ba6f8b080f8170af5abc240b9",
+        "registered_at": "2026-08-19T08:39:27.896964",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:27.916088",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": true,
+              "rank_correlation": false
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "0.01456 / 0.10492 = 0.139 of peak IC retained at h=20 < 0.50",
+                "source": "alpha_decay_analysis.json / decay_curve",
+                "value": 0.1388
+              },
+              "ic": {
+                "basis": "0.01456 < 0.02 required",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.mean_ic",
+                "value": 0.01456
+              },
+              "random_baseline": {
+                "basis": "the signal is real at h=1 (t = 8.78 vs a permutation null)",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.t_stat",
+                "value": 8.781
+              },
+              "rank_correlation": {
+                "basis": "ICIR 0.1125 < 0.30; 51.67% positive dates < 55%",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.icir",
+                "value": 0.1125
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:27.923612",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 4,
+      "experiment_id": "E4-exposure-holdout",
+      "appended_at": "2026-08-19T08:39:28.316532",
+      "prev_hash": "2c3694475e2a655b25a6956463de39534caa47cfc42f548e32c08b02912bfcaf",
+      "entry_hash": "11d35d9d9f9d53f3d9ced75c6976aed24a64b97af5db786e4f37106dacb8001a",
+      "entry": {
+        "acceptance_criteria": {
+          "gates": "8 of 8"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "30deab9afe8deba325c57c3ae22ffb9dc98296b13471857a1d4a0c49886a3910",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:28.306729",
+        "expected_failure": [
+          "fewer than 8 of 8 gates on the holdout"
+        ],
+        "experiment_id": "E4-exposure-holdout",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 4 (ROBUSTNESS) failed on walk_forward, out_of_sample. block capture upside 52.7% vs downside 64.0%: the defensive claim inverts out of fold",
+          "rejected_at_stage": 4
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "The exposure engine delivers incremental value on unseen data.",
+        "preregistration_hash": "006cfc575c835c61a7ad61aba45f7e8060fd5bc5f542cdfed9714f8f41009c27",
+        "registered_at": "2026-08-19T08:39:28.252903",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:28.272025",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": true,
+              "ic": true,
+              "random_baseline": true,
+              "rank_correlation": true
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "a timing signal has no cross-sectional decay curve; not applicable",
+                "source": "holdout_report.md",
+                "value": null
+              },
+              "ic": {
+                "basis": "the engine was fitted in sample, where it scored",
+                "source": "holdout_report.md / training window",
+                "value": null
+              },
+              "random_baseline": {
+                "basis": "as above",
+                "source": "holdout_report.md",
+                "value": null
+              },
+              "rank_correlation": {
+                "basis": "as above",
+                "source": "holdout_report.md",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:28.279720",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "liquidity": true,
+              "participation_limits": true,
+              "queue_effects": true,
+              "slippage": true,
+              "transaction_costs": true
+            },
+            "detail": {
+              "liquidity": {
+                "basis": "index-level exposure, no single-name liquidity constraint",
+                "source": "holdout_report.md",
+                "value": null
+              },
+              "participation_limits": {
+                "basis": "index-level exposure",
+                "source": "holdout_report.md",
+                "value": null
+              },
+              "queue_effects": {
+                "basis": "no single-name queue exposure",
+                "source": "holdout_report.md",
+                "value": null
+              },
+              "slippage": {
+                "basis": "index-level exposure",
+                "source": "holdout_report.md",
+                "value": null
+              },
+              "transaction_costs": {
+                "basis": "42.24% CAGR net of a -3.17pp/yr cost drag: positive",
+                "source": "holdout_report.md",
+                "value": 42.24
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:28.287564",
+            "stage": 3,
+            "stage_name": "EXECUTION REALISM",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "out_of_sample": false,
+              "walk_forward": false
+            },
+            "detail": {
+              "out_of_sample": {
+                "basis": "exposure -> forward-return rho = -0.126, t = -0.59, p = 0.559 (n = 23); engine 42.24% CAGR vs control 43.31%, Sharpe 1.39 vs 1.77, MaxDD -14.87% vs -10.75%",
+                "source": "holdout_report.md",
+                "value": -0.126
+              },
+              "walk_forward": {
+                "basis": "block capture upside 52.7% vs downside 64.0%: the defensive claim inverts out of fold",
+                "source": "holdout_report.md / G7",
+                "value": 0.0
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:28.296943",
+            "stage": 4,
+            "stage_name": "ROBUSTNESS",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 5,
+      "experiment_id": "E5-experiment4-preflight",
+      "appended_at": "2026-08-19T08:39:28.730371",
+      "prev_hash": "11d35d9d9f9d53f3d9ced75c6976aed24a64b97af5db786e4f37106dacb8001a",
+      "entry_hash": "f3c95d8707b1bbea6d4cf8b29932aced8b8f142d98dd64bd973839d520076771",
+      "entry": {
+        "acceptance_criteria": {
+          "preconditions": "4 of 4"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "444fcfbce383c57b63c49006464d52a16da9613ecf066523b57f7742b528ba06",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:28.720293",
+        "expected_failure": [
+          "the proposed holdout has already been evaluated"
+        ],
+        "experiment_id": "E5-experiment4-preflight",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 1 (DATA INTEGRITY) failed on point_in_time. the proposed holdout 2024-09-01..2026-06-30 was already the fitted window: 17,695 observations over 23 dates",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "Alpha Core's two factors generalise to an untouched forward window.",
+        "preregistration_hash": "d4a9978f9a259819221cabbb9f98bb26e6643be665f66755a5487f84bc471136",
+        "registered_at": "2026-08-19T08:39:28.692212",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": false,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30%",
+                "source": "experiment14_queue_artifact.json",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "the proposed holdout 2024-09-01..2026-06-30 was already the fitted window: 17,695 observations over 23 dates",
+                "source": "experiment4_preflight_audit.md",
+                "value": 17695
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 dates with >= 50 names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:28.713200",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 6,
+      "experiment_id": "E6-alpha-core-rank-ic",
+      "appended_at": "2026-08-19T08:39:29.105443",
+      "prev_hash": "f3c95d8707b1bbea6d4cf8b29932aced8b8f142d98dd64bd973839d520076771",
+      "entry_hash": "d988603ea5011904a19ec413b97acfb68ca51d5942caf269520c5f09e0610e34",
+      "entry": {
+        "acceptance_criteria": {
+          "% positive": "> 50",
+          "ICIR": "> 0.3",
+          "mean IC": "> 0"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "32e7b973e742165e3a10e15011805ffe03638e7e8bb23ffd9f2fe9a74f8203d0",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:29.096710",
+        "expected_failure": [
+          "ICIR below 0.30 at the traded horizon"
+        ],
+        "experiment_id": "E6-alpha-core-rank-ic",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, factor_decay. 0.01456 < 0.02 required",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "The Alpha Core score orders future returns.",
+        "preregistration_hash": "5442c7a26751ca2ac9566f88767f0137e431c12ab429370a5e282cd3b6c8b5b3",
+        "registered_at": "2026-08-19T08:39:29.067029",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:29.083158",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": true,
+              "rank_correlation": false
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "0.01456 / 0.10492 = 0.139 of peak IC retained at h=20 < 0.50",
+                "source": "alpha_decay_analysis.json / decay_curve",
+                "value": 0.1388
+              },
+              "ic": {
+                "basis": "0.01456 < 0.02 required",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.mean_ic",
+                "value": 0.01456
+              },
+              "random_baseline": {
+                "basis": "the signal is real at h=1 (t = 8.78 vs a permutation null)",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.t_stat",
+                "value": 8.781
+              },
+              "rank_correlation": {
+                "basis": "ICIR 0.1125 < 0.30; 51.67% positive dates < 55%",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.icir",
+                "value": 0.1125
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:29.090151",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 7,
+      "experiment_id": "E9-experiment5a-frictionless",
+      "appended_at": "2026-08-19T08:39:29.535525",
+      "prev_hash": "d988603ea5011904a19ec413b97acfb68ca51d5942caf269520c5f09e0610e34",
+      "entry_hash": "23a7d6384c984b15467f7bd0f981c226553405ee751d7bc1bd2f6738b474ad14",
+      "entry": {
+        "acceptance_criteria": {
+          "CAGR": "> random mean",
+          "paired test": "significant"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "e409e9fef8704623715a1c0abc51c6ac74851df6ab38daf23361b0be4aabac49",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:29.526419",
+        "expected_failure": [
+          "alpha CAGR <= random mean"
+        ],
+        "experiment_id": "E9-experiment5a-frictionless",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, factor_decay. 0.01456 < 0.02 required",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "Alpha Core creates portfolio value before the allocator and order book are introduced.",
+        "preregistration_hash": "480beece095d7ba1a8e52b48e049ef11d5003d3184f80f96ce796acbac37b3e8",
+        "registered_at": "2026-08-19T08:39:29.491720",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:29.511985",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": true,
+              "rank_correlation": false
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "0.01456 / 0.10492 = 0.139 of peak IC retained at h=20 < 0.50",
+                "source": "alpha_decay_analysis.json / decay_curve",
+                "value": 0.1388
+              },
+              "ic": {
+                "basis": "0.01456 < 0.02 required",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.mean_ic",
+                "value": 0.01456
+              },
+              "random_baseline": {
+                "basis": "the signal is real at h=1 (t = 8.78 vs a permutation null)",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.t_stat",
+                "value": 8.781
+              },
+              "rank_correlation": {
+                "basis": "ICIR 0.1125 < 0.30; 51.67% positive dates < 55%",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.icir",
+                "value": 0.1125
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:29.519184",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 8,
+      "experiment_id": "E11-experiment5b-production",
+      "appended_at": "2026-08-19T08:39:29.923172",
+      "prev_hash": "23a7d6384c984b15467f7bd0f981c226553405ee751d7bc1bd2f6738b474ad14",
+      "entry_hash": "d485f4ecc2e72e5e937240195fae806707e859ad02725a5210f1943ccb4c89c4",
+      "entry": {
+        "acceptance_criteria": {
+          "recoverable_fraction": "> 0.50"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "687c758e2cdc9740eb6925f1ce9b42996276733b3aacf416427f3d5214fa129e",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:29.914100",
+        "expected_failure": [
+          "recoverable fraction below 20%"
+        ],
+        "experiment_id": "E11-experiment5b-production",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, factor_decay. 0.01456 < 0.02 required",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "Alpha Core retains incremental value through the real allocator and order book.",
+        "preregistration_hash": "35f980d9446c9158ed1588972d1f1bb8fad524012630483ecb5be38f41ed8a13",
+        "registered_at": "2026-08-19T08:39:29.884896",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:29.899944",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": true,
+              "rank_correlation": false
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "0.01456 / 0.10492 = 0.139 of peak IC retained at h=20 < 0.50",
+                "source": "alpha_decay_analysis.json / decay_curve",
+                "value": 0.1388
+              },
+              "ic": {
+                "basis": "0.01456 < 0.02 required",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.mean_ic",
+                "value": 0.01456
+              },
+              "random_baseline": {
+                "basis": "the signal is real at h=1 (t = 8.78 vs a permutation null)",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.t_stat",
+                "value": 8.781
+              },
+              "rank_correlation": {
+                "basis": "ICIR 0.1125 < 0.30; 51.67% positive dates < 55%",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.icir",
+                "value": 0.1125
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:29.906665",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 9,
+      "experiment_id": "E13-alpha-decay",
+      "appended_at": "2026-08-19T08:39:30.288585",
+      "prev_hash": "d485f4ecc2e72e5e937240195fae806707e859ad02725a5210f1943ccb4c89c4",
+      "entry_hash": "fa17661db116e9e336551e79a3cd24822d999741b010d07a11c579f9e1df158c",
+      "entry": {
+        "acceptance_criteria": {
+          "IC at h=20": ">= 0.02 with ICIR >= 0.30"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "33a0e58f4a2fc48c29a46935aac3fb54ceb8dbfce8e8706e64442e9a0f9e90a6",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:30.280391",
+        "expected_failure": [
+          "the decay curve is flat, i.e. no decay"
+        ],
+        "experiment_id": "E13-alpha-decay",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, factor_decay. 0.01456 < 0.02 required",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "The signal exists but decays faster than the trading system can harvest it.",
+        "preregistration_hash": "009ed04579ec32c870ce4ab342e9bb63c15e61638ac08d1c4c3f66bb1cd20674",
+        "registered_at": "2026-08-19T08:39:30.245803",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:30.264689",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": true,
+              "rank_correlation": false
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "0.01456 / 0.10492 = 0.139 of peak IC retained at h=20 < 0.50",
+                "source": "alpha_decay_analysis.json / decay_curve",
+                "value": 0.1388
+              },
+              "ic": {
+                "basis": "0.01456 < 0.02 required",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.mean_ic",
+                "value": 0.01456
+              },
+              "random_baseline": {
+                "basis": "the signal is real at h=1 (t = 8.78 vs a permutation null)",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.t_stat",
+                "value": 8.781
+              },
+              "rank_correlation": {
+                "basis": "ICIR 0.1125 < 0.30; 51.67% positive dates < 55%",
+                "source": "alpha_decay_analysis.json / decay_curve.h20.icir",
+                "value": 0.1125
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:30.271853",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 10,
+      "experiment_id": "E14-queue-artifact",
+      "appended_at": "2026-08-19T08:39:30.666184",
+      "prev_hash": "fa17661db116e9e336551e79a3cd24822d999741b010d07a11c579f9e1df158c",
+      "entry_hash": "ab78877e0ab460c01fa0817af1f897ebf3b3061a0094dbfac081932a97c1c9a6",
+      "entry": {
+        "acceptance_criteria": {
+          "queue_exposure_ratio": ">= 2.0 confirms the artifact"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "86b3ceecacb691cbb912700633320d8e535abefec8da98ac876fde72ab6de91f",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:30.655729",
+        "expected_failure": [
+          "queue exposure below 2.0x"
+        ],
+        "experiment_id": "E14-queue-artifact",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 3 (EXECUTION REALISM) failed on transaction_costs, liquidity, participation_limits, slippage, queue_effects. top-decile h=1 excess 0.5496% against a 1.04% round trip: -0.49% per period, -69%/yr",
+          "rejected_at_stage": 3
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "The h=1 signal detects stocks entering or remaining in price-limit queues, not persistent alpha.",
+        "preregistration_hash": "b3c5328b8221ad116286b8702070f5695bea782763288ed22027662de75468b3",
+        "registered_at": "2026-08-19T08:39:30.616454",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:30.633717",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": true,
+              "ic": true,
+              "random_baseline": true,
+              "rank_correlation": true
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "h=1 IS the peak; retention 1.00 by construction",
+                "source": "alpha_decay_analysis.json / decay_curve",
+                "value": 1.0
+              },
+              "ic": {
+                "basis": "0.10492 >= 0.02",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.mean_ic",
+                "value": 0.10492
+              },
+              "random_baseline": {
+                "basis": "t = 8.78 against the permutation null",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.t_stat",
+                "value": 8.781
+              },
+              "rank_correlation": {
+                "basis": "ICIR 0.805 >= 0.30; 81.51% positive dates >= 55%",
+                "source": "alpha_decay_analysis.json / decay_curve.h1.icir",
+                "value": 0.805
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:30.640868",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "liquidity": false,
+              "participation_limits": false,
+              "queue_effects": false,
+              "slippage": false,
+              "transaction_costs": false
+            },
+            "detail": {
+              "liquidity": {
+                "basis": "removing locks AND illiquid names turns h=20 IC significantly negative (-0.0249, t = -2.01)",
+                "source": "experiment14_queue_artifact.json / exclusion_tests",
+                "value": null
+              },
+              "participation_limits": {
+                "basis": "NEVER MEASURED IN PHASE 1",
+                "source": "experiment14_queue_artifact.json",
+                "value": null
+              },
+              "queue_effects": {
+                "basis": "top decile 7.751% locked at t+1 against a universe 2.561% = 3.03x, above the 1.50x limit",
+                "source": "experiment14_queue_artifact.json / queue_exposure",
+                "value": 3.026
+              },
+              "slippage": {
+                "basis": "slippage was held at 0.0% in every result the programme produced; a failure at zero slippage is a failure at any",
+                "source": "every Phase 1 artifact",
+                "value": 0.0
+              },
+              "transaction_costs": {
+                "basis": "top-decile h=1 excess 0.5496% against a 1.04% round trip: -0.49% per period, -69%/yr",
+                "source": "experiment14_queue_artifact.json / decomposition",
+                "value": 0.5496
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:30.649059",
+            "stage": 3,
+            "stage_name": "EXECUTION REALISM",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 11,
+      "experiment_id": "E15-execution-aware-rescue",
+      "appended_at": "2026-08-19T08:39:31.065018",
+      "prev_hash": "ab78877e0ab460c01fa0817af1f897ebf3b3061a0094dbfac081932a97c1c9a6",
+      "entry_hash": "354ec88217f5e7a45c07276bffd073c2f0aa5556d9b49d4c4769464022593c8b",
+      "entry": {
+        "acceptance_criteria": {
+          "6 gates": "all"
+        },
+        "author": "phase 1 (replayed 2026-08-19)",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "phase-1 (v2.0-archive)"
+        },
+        "config_hash": "3a8e3e793755b4cf81c3d30139a8b5e27107178822b1c21bc27b9d2fa36eb2d4",
+        "dataset_fingerprint": "90e30213b30e6e73",
+        "date": "2026-08-19T08:39:31.054516",
+        "expected_failure": [
+          "net alpha remains negative after filtering"
+        ],
+        "experiment_id": "E15-execution-aware-rescue",
+        "final_verdict": {
+          "decided_by": "phase 1 (replayed 2026-08-19)",
+          "decision": "REJECT",
+          "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on ic, rank_correlation, random_baseline, factor_decay. filtered IC at h=20 is -0.03245, below 0.02 and the wrong sign",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "422c1ad9da36460860176f18330073388e446c18",
+        "git_dirty": true,
+        "hypothesis": "An execution-aware filter using only decision-time information converts the Alpha Core signal into a positive net edge after costs.",
+        "preregistration_hash": "0fb5a5ff9acec7f7dfc855d118feb0ed5818a70a8669526c6484ec4f9390189c",
+        "registered_at": "2026-08-19T08:39:31.022914",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "missing_data": {
+                "basis": "22.29% stale < 30% limit",
+                "source": "experiment14_queue_artifact.json / data_validation.stale_pct",
+                "value": 22.29
+              },
+              "point_in_time": {
+                "basis": "session-aware forwards; 1,473,796 bars in window, no impossible forward returns after the shift(-h) defect was corrected",
+                "source": "experiment14_queue_artifact.json / data_validation",
+                "value": 0
+              },
+              "survivorship": {
+                "basis": "GRANTED RETROSPECTIVELY: snapshot u20260819-668658bb exists today. No snapshot existed during Phase 1 -- see finding zero, where this check fails for every experiment.",
+                "source": "sirat_research.db / universe_snapshots",
+                "value": "u20260819-668658bb"
+              },
+              "universe_valid": {
+                "basis": "120 decision dates each carrying >= 50 scoreable names",
+                "source": "alpha_core_rank_ic.json",
+                "value": 120
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:31.040487",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": false,
+              "random_baseline": false,
+              "rank_correlation": false
+            },
+            "detail": {
+              "factor_decay": {
+                "basis": "0.03033 at h=1 to -0.03245 at h=20: no retention",
+                "source": "experiment15_execution_aware.json",
+                "value": null
+              },
+              "ic": {
+                "basis": "filtered IC at h=20 is -0.03245, below 0.02 and the wrong sign",
+                "source": "experiment15_execution_aware.json / arms.B",
+                "value": -0.03245
+              },
+              "random_baseline": {
+                "basis": "G3 passes only by losing less than a worse control (arm B at h=1 is -86.21%/yr)",
+                "source": "experiment15_execution_aware.json / gates.G3",
+                "value": null
+              },
+              "rank_correlation": {
+                "basis": "h=5/10/20 all flip negative after filtering",
+                "source": "experiment15_execution_aware.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-08-19T08:39:31.047722",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    }
+  ],
+  "chain": {
+    "entries": 11,
+    "intact": true,
+    "head": "354ec88217f5e7a45c07276bffd073c2f0aa5556d9b49d4c4769464022593c8b",
+    "note": "every entry hashes to its recorded value and every link matches"
+  },
+  "exported_at": "2026-08-19T08:39:57.611494"
+}

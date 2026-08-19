@@ -657,12 +657,19 @@ def main(argv=None):
 
     say("research database: %s" % path)
 
-    # A real snapshot if one exists, so Stage 1's survivorship check is
-    # answered by an actual frozen universe rather than a placeholder.
+    # A real snapshot, captured INTO the demonstration's own database.
+    #
+    # Citing the live record's snapshot id would not do: promotion re-verifies
+    # that the cited universe still restores, and it looks for it in the
+    # experiment's own research database. An id that resolves nowhere is a
+    # citation to nothing, and the platform is right to refuse it -- so the
+    # demonstration has to freeze a real universe of its own.
     try:
-        current = universe.latest()
-        snapshot_id = current["snapshot_id"] if current else "UNAVAILABLE"
-    except Exception:                                          # noqa: BLE001
+        snapshot = universe.capture(path=path)
+        snapshot_id = snapshot["snapshot_id"]
+    except Exception as exc:                                   # noqa: BLE001
+        say("could not freeze a universe (%s); Stage 1 will fail on "
+            "survivorship, which is the correct behaviour" % exc)
         snapshot_id = "UNAVAILABLE"
 
     say("universe snapshot: %s" % snapshot_id)

@@ -57,6 +57,56 @@ def register(path, experiment_id="E-TEST", **overrides):
     return mgr.Manager.register(**kwargs)
 
 
+def register_reproducible(path, **overrides):
+    """Register with provenance reporting a clean, committed tree.
+
+    The promotion preconditions are checked in order, and reproducibility comes
+    second. Without this the tests for preconditions three, four and five would
+    pass or fail depending on whether the developer happened to have committed
+    -- they would be testing the state of the working directory rather than the
+    control. Reproducibility itself is covered by
+    `test_promote_needs_a_reproducible_result`, against the real thing.
+    """
+
+    from sirat.experiments import provenance
+
+    saved = (provenance.git_commit, provenance.git_dirty)
+
+    provenance.git_commit = lambda: "0" * 40
+    provenance.git_dirty = lambda: False
+
+    try:
+        return register(path, **overrides)
+    finally:
+        provenance.git_commit, provenance.git_dirty = saved
+
+
+def _tiny_market(directory):
+    """A stand-in market database, so a snapshot can be frozen without the
+    424 MB file being present."""
+
+    path = os.path.join(directory, "market.db")
+
+    conn = sqlite3.connect(path)
+
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS instruments ("
+            "ins_code TEXT PRIMARY KEY, symbol_fa TEXT, symbol_raw TEXT, "
+            "name_fa TEXT, isin TEXT, kind TEXT, board TEXT, "
+            "is_equity INTEGER, sector_code TEXT, sector_name TEXT, "
+            "updated_at TEXT)")
+        conn.executemany(
+            "INSERT OR IGNORE INTO instruments (ins_code, symbol_fa, "
+            "is_equity) VALUES (?,?,?)",
+            [("%d" % (1000 + i), "SYM%d" % i, 1) for i in range(8)])
+        conn.commit()
+    finally:
+        conn.close()
+
+    return path
+
+
 PASSING = {
     stages.DATA_INTEGRITY: {"point_in_time": True, "survivorship": True,
                             "universe_valid": True, "missing_data": True},
@@ -378,6 +428,129 @@ class Decisions(ManagerTestCase):
         else:
             with self.assertRaises(mgr.NotReproducible):
                 handle.decide(mgr.PROMOTE, "every gate passed", "tester")
+
+    def test_promote_needs_a_universe_snapshot(self):
+        """Missing evidence is never a pass, and this is the sharpest case.
+
+        Without a frozen universe the survivorship question has no answer and
+        the experiment cannot be re-run against the universe it actually used.
+        """
+
+        handle = register_reproducible(self.path, universe_snapshot=None)
+        self.run_all_stages(handle)
+
+        with self.assertRaises(mgr.EvidenceMissing) as caught:
+            handle.decide(mgr.PROMOTE, "every gate passed", "tester",
+                          regression_check=lambda: None)
+
+        self.assertIn("universe snapshot", str(caught.exception))
+
+    def test_promote_re_verifies_the_snapshot_at_promotion_time(self):
+        """An experiment can be registered against a good snapshot and promoted
+        a month later, by which time the snapshot may be gone. The check has to
+        happen now, not at registration."""
+
+        from sirat.experiments import universe as universe_module
+
+        market = _tiny_market(self.dir)
+
+        snapshot = universe_module.capture(market_db=market, path=self.path)
+
+        handle = register_reproducible(
+            self.path, universe_snapshot=snapshot["snapshot_id"])
+        self.run_all_stages(handle)
+
+        # The snapshot is rewritten after every stage passed.
+        conn = sqlite3.connect(self.path)
+        try:
+            conn.execute("UPDATE universe_snapshots SET payload = '[]' "
+                         "WHERE snapshot_id = ?", (snapshot["snapshot_id"],))
+            conn.commit()
+        finally:
+            conn.close()
+
+        with self.assertRaises(mgr.EvidenceMissing) as caught:
+            handle.decide(mgr.PROMOTE, "every gate passed", "tester",
+                          regression_check=lambda: None)
+
+        self.assertIn("no longer restores", str(caught.exception))
+
+    def test_promote_is_refused_while_the_regression_suite_is_red(self):
+        """A platform that cannot rediscover its own documented failures has no
+        standing to certify a new strategy for capital."""
+
+        from sirat.experiments import universe as universe_module
+
+        market = _tiny_market(self.dir)
+
+        snapshot = universe_module.capture(market_db=market, path=self.path)
+
+        handle = register_reproducible(
+            self.path, universe_snapshot=snapshot["snapshot_id"])
+        self.run_all_stages(handle)
+
+        def broken():
+            raise AssertionError("queue_ratio measured 1.01, expected 3.03")
+
+        with self.assertRaises(mgr.RegressionFailing) as caught:
+            handle.decide(mgr.PROMOTE, "every gate passed", "tester",
+                          regression_check=broken)
+
+        self.assertIn("queue_ratio", str(caught.exception))
+
+    def test_promote_succeeds_when_every_precondition_holds(self):
+        """The positive case, so the refusals above are not vacuous.
+
+        A control that refuses everything is indistinguishable from a control
+        that is broken, and this is the test that tells them apart.
+        """
+
+        from sirat.experiments import provenance
+        from sirat.experiments import universe as universe_module
+
+        market = _tiny_market(self.dir)
+
+        snapshot = universe_module.capture(market_db=market, path=self.path)
+
+        handle = register_reproducible(
+            self.path, universe_snapshot=snapshot["snapshot_id"])
+        self.run_all_stages(handle)
+
+        if handle.record()["provenance"]["dataset_snapshot"].startswith(
+                provenance.UNAVAILABLE):
+            self.skipTest("no market database on this machine, so the dataset "
+                          "precondition cannot be satisfied here")
+
+        out = handle.decide(mgr.PROMOTE, "all six stages passed", "tester",
+                            regression_check=lambda: None)
+
+        self.assertEqual(out["decision"], mgr.PROMOTE)
+
+    def test_promote_needs_an_identified_dataset(self):
+        from sirat.experiments import provenance
+        from sirat.experiments import universe as universe_module
+
+        market = _tiny_market(self.dir)
+
+        snapshot = universe_module.capture(market_db=market, path=self.path)
+
+        saved = provenance.dataset_snapshot
+
+        provenance.dataset_snapshot = lambda: provenance.UNAVAILABLE + ":test"
+
+        try:
+            handle = register_reproducible(
+                self.path, universe_snapshot=snapshot["snapshot_id"])
+        finally:
+            provenance.dataset_snapshot = saved
+
+        self.run_all_stages(handle)
+
+        with self.assertRaises(mgr.EvidenceMissing) as caught:
+            handle.decide(mgr.PROMOTE, "every gate passed", "tester",
+                          regression_check=lambda: None)
+
+        self.assertIn("dataset snapshot", str(caught.exception))
 
     def test_unattributed_decision_is_refused(self):
         handle = register(self.path)

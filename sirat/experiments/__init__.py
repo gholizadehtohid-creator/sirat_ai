@@ -28,12 +28,14 @@ enforcement can be.
 
 from sirat.experiments.manager import (
     ARCHIVE,
+    EvidenceMissing,
     ExperimentClosed,
     GovernanceError,
     HOLDOUT,
     Manager,
     NoEvidence,
     NotReproducible,
+    RegressionFailing,
     PROMOTE,
     PreregistrationIncomplete,
     PreregistrationTampered,
@@ -71,6 +73,8 @@ __all__ = [
     "NoEvidence",
     "ValidationMissing",
     "NotReproducible",
+    "EvidenceMissing",
+    "RegressionFailing",
     "WindowAlreadySpent",
     "UnknownExperiment",
 ]
