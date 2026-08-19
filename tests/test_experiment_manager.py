@@ -411,23 +411,46 @@ class Decisions(ManagerTestCase):
             handle.decide(mgr.PROMOTE, "looks strong", "tester")
 
     def test_promote_needs_a_reproducible_result(self):
-        """Today this refuses everything, and that is the correct behaviour.
+        """Reproducibility, isolated from the other four preconditions.
 
-        git is not installed, so no result in this repository can be re-derived.
-        Research proceeds; promotion does not.
+        Written when reproducibility and stage completion were the only two
+        conditions, this test assumed that a reproducible experiment would
+        promote. That stopped being true when the evidence checks were added,
+        and it started failing the moment the repository became clean -- which
+        is the test doing its job: an assumption about the contract expired and
+        said so.
+
+        It now supplies everything the other preconditions need, so a refusal
+        here can only be about reproducibility. Both branches are real: on a
+        clean committed tree the promotion succeeds, and on a dirty one it is
+        refused.
         """
 
-        handle = register(self.path)
+        from sirat.experiments import provenance
+        from sirat.experiments import universe as universe_module
+
+        market = _tiny_market(self.dir)
+
+        snapshot = universe_module.capture(market_db=market, path=self.path)
+
+        handle = register(self.path,
+                          universe_snapshot=snapshot["snapshot_id"])
         self.run_all_stages(handle)
 
-        reproducible = handle.record()["provenance"]["reproducible"]
+        record = handle.record()["provenance"]
 
-        if reproducible:
-            out = handle.decide(mgr.PROMOTE, "every gate passed", "tester")
+        if record["dataset_snapshot"].startswith(provenance.UNAVAILABLE):
+            self.skipTest("no market database on this machine, so the dataset "
+                          "precondition cannot be satisfied here")
+
+        if record["reproducible"]:
+            out = handle.decide(mgr.PROMOTE, "every gate passed", "tester",
+                                regression_check=lambda: None)
             self.assertEqual(out["decision"], mgr.PROMOTE)
         else:
             with self.assertRaises(mgr.NotReproducible):
-                handle.decide(mgr.PROMOTE, "every gate passed", "tester")
+                handle.decide(mgr.PROMOTE, "every gate passed", "tester",
+                              regression_check=lambda: None)
 
     def test_promote_needs_a_universe_snapshot(self):
         """Missing evidence is never a pass, and this is the sharpest case.
