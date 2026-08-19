@@ -1,0 +1,716 @@
+{
+ "window": {
+  "start": "2014-09-21",
+  "end": "2024-09-01"
+ },
+ "config": {
+  "initial_capital": 1000000000,
+  "round_trip_pct": 1.039,
+  "max_positions": 10,
+  "rebalance_sessions": 20
+ },
+ "alpha_analysis": {
+  "f_momentum": {
+   "5": {
+    "ic": 0.0313,
+    "ic_stderr": 0.0129,
+    "t_stat": 2.42,
+    "dates": 120,
+    "hit_rate": 53.3,
+    "top_pct": 1.349,
+    "bottom_pct": 0.32,
+    "spread_pct": 1.029,
+    "market_pct": 0.527,
+    "alpha_pct": 0.822,
+    "alpha_t": 5.1,
+    "alpha_net_pct": -0.218,
+    "beat_market_pct": 68.3
+   },
+   "10": {
+    "ic": 0.0188,
+    "ic_stderr": 0.0128,
+    "t_stat": 1.48,
+    "dates": 120,
+    "hit_rate": 53.3,
+    "top_pct": 2.343,
+    "bottom_pct": 0.924,
+    "spread_pct": 1.419,
+    "market_pct": 1.36,
+    "alpha_pct": 0.982,
+    "alpha_t": 4.79,
+    "alpha_net_pct": -0.058,
+    "beat_market_pct": 70.8
+   },
+   "20": {
+    "ic": 0.0063,
+    "ic_stderr": 0.0132,
+    "t_stat": 0.48,
+    "dates": 120,
+    "hit_rate": 47.5,
+    "top_pct": 4.386,
+    "bottom_pct": 2.585,
+    "spread_pct": 1.801,
+    "market_pct": 3.245,
+    "alpha_pct": 1.141,
+    "alpha_t": 3.68,
+    "alpha_net_pct": 0.101,
+    "beat_market_pct": 61.7
+   },
+   "60": {
+    "ic": 0.0115,
+    "ic_stderr": 0.0131,
+    "t_stat": 0.88,
+    "dates": 120,
+    "hit_rate": 55.0,
+    "top_pct": 12.55,
+    "bottom_pct": 9.513,
+    "spread_pct": 3.036,
+    "market_pct": 10.881,
+    "alpha_pct": 1.669,
+    "alpha_t": 3.54,
+    "alpha_net_pct": 0.629,
+    "beat_market_pct": 62.5
+   }
+  },
+  "bb_pct": {
+   "5": {
+    "ic": 0.0682,
+    "ic_stderr": 0.0122,
+    "t_stat": 5.6,
+    "dates": 120,
+    "hit_rate": 69.2,
+    "top_pct": 2.164,
+    "bottom_pct": -0.217,
+    "spread_pct": 2.381,
+    "market_pct": 0.557,
+    "alpha_pct": 1.607,
+    "alpha_t": 10.84,
+    "alpha_net_pct": 0.567,
+    "beat_market_pct": 87.5
+   },
+   "10": {
+    "ic": 0.0476,
+    "ic_stderr": 0.0119,
+    "t_stat": 4.01,
+    "dates": 120,
+    "hit_rate": 58.3,
+    "top_pct": 3.374,
+    "bottom_pct": 0.359,
+    "spread_pct": 3.015,
+    "market_pct": 1.439,
+    "alpha_pct": 1.935,
+    "alpha_t": 9.16,
+    "alpha_net_pct": 0.895,
+    "beat_market_pct": 83.3
+   },
+   "20": {
+    "ic": 0.0328,
+    "ic_stderr": 0.012,
+    "t_stat": 2.72,
+    "dates": 120,
+    "hit_rate": 60.8,
+    "top_pct": 5.719,
+    "bottom_pct": 1.686,
+    "spread_pct": 4.032,
+    "market_pct": 3.417,
+    "alpha_pct": 2.301,
+    "alpha_t": 7.04,
+    "alpha_net_pct": 1.261,
+    "beat_market_pct": 75.8
+   },
+   "60": {
+    "ic": 0.0328,
+    "ic_stderr": 0.0104,
+    "t_stat": 3.15,
+    "dates": 120,
+    "hit_rate": 62.5,
+    "top_pct": 15.135,
+    "bottom_pct": 9.218,
+    "spread_pct": 5.917,
+    "market_pct": 11.415,
+    "alpha_pct": 3.72,
+    "alpha_t": 6.03,
+    "alpha_net_pct": 2.68,
+    "beat_market_pct": 73.3
+   }
+  },
+  "alpha_core": {
+   "5": {
+    "ic": 0.051,
+    "ic_stderr": 0.0122,
+    "t_stat": 4.18,
+    "dates": 120,
+    "hit_rate": 64.2,
+    "top_pct": 1.955,
+    "bottom_pct": 0.098,
+    "spread_pct": 1.857,
+    "market_pct": 0.557,
+    "alpha_pct": 1.397,
+    "alpha_t": 7.91,
+    "alpha_net_pct": 0.357,
+    "beat_market_pct": 85.8
+   },
+   "10": {
+    "ic": 0.03,
+    "ic_stderr": 0.0117,
+    "t_stat": 2.56,
+    "dates": 120,
+    "hit_rate": 56.7,
+    "top_pct": 3.178,
+    "bottom_pct": 0.775,
+    "spread_pct": 2.403,
+    "market_pct": 1.439,
+    "alpha_pct": 1.739,
+    "alpha_t": 7.74,
+    "alpha_net_pct": 0.699,
+    "beat_market_pct": 80.8
+   },
+   "20": {
+    "ic": 0.0146,
+    "ic_stderr": 0.0118,
+    "t_stat": 1.23,
+    "dates": 120,
+    "hit_rate": 51.7,
+    "top_pct": 5.39,
+    "bottom_pct": 2.454,
+    "spread_pct": 2.936,
+    "market_pct": 3.417,
+    "alpha_pct": 1.973,
+    "alpha_t": 5.68,
+    "alpha_net_pct": 0.933,
+    "beat_market_pct": 68.3
+   },
+   "60": {
+    "ic": 0.0176,
+    "ic_stderr": 0.0108,
+    "t_stat": 1.62,
+    "dates": 120,
+    "hit_rate": 55.8,
+    "top_pct": 14.545,
+    "bottom_pct": 10.709,
+    "spread_pct": 3.836,
+    "market_pct": 11.415,
+    "alpha_pct": 3.13,
+    "alpha_t": 4.95,
+    "alpha_net_pct": 2.09,
+    "beat_market_pct": 72.5
+   }
+  }
+ },
+ "signal_grid": [
+  {
+   "signal": "alpha_core",
+   "horizon": 5,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.986,
+   "beat_market_pct": 61.7
+  },
+  {
+   "signal": "alpha_core",
+   "horizon": 5,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.533,
+   "beat_market_pct": 65.0
+  },
+  {
+   "signal": "alpha_core",
+   "horizon": 5,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.172,
+   "beat_market_pct": 63.3
+  },
+  {
+   "signal": "alpha_core",
+   "horizon": 10,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": 2.286,
+   "beat_market_pct": 60.0
+  },
+  {
+   "signal": "alpha_core",
+   "horizon": 10,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.826,
+   "beat_market_pct": 60.0
+  },
+  {
+   "signal": "alpha_core",
+   "horizon": 10,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.645,
+   "beat_market_pct": 65.0
+  },
+  {
+   "signal": "alpha_core",
+   "horizon": 20,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": 2.235,
+   "beat_market_pct": 49.2
+  },
+  {
+   "signal": "alpha_core",
+   "horizon": 20,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.938,
+   "beat_market_pct": 55.8
+  },
+  {
+   "signal": "alpha_core",
+   "horizon": 20,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.719,
+   "beat_market_pct": 57.5
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 5,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": -0.054,
+   "beat_market_pct": 48.3
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 5,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": -0.017,
+   "beat_market_pct": 46.7
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 5,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": -0.04,
+   "beat_market_pct": 45.8
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 10,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": 0.492,
+   "beat_market_pct": 50.8
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 10,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": 0.7,
+   "beat_market_pct": 55.8
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 10,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": 0.178,
+   "beat_market_pct": 51.7
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 20,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": 0.727,
+   "beat_market_pct": 51.7
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 20,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": 0.987,
+   "beat_market_pct": 56.7
+  },
+  {
+   "signal": "f_momentum",
+   "horizon": 20,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": 0.284,
+   "beat_market_pct": 51.7
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 5,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": 2.114,
+   "beat_market_pct": 67.5
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 5,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.818,
+   "beat_market_pct": 70.8
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 5,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.336,
+   "beat_market_pct": 64.2
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 10,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": 2.61,
+   "beat_market_pct": 64.2
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 10,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": 2.233,
+   "beat_market_pct": 69.2
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 10,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": 1.649,
+   "beat_market_pct": 67.5
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 20,
+   "top_n": 5,
+   "periods": 120,
+   "mean_excess_per_period_pct": 3.449,
+   "beat_market_pct": 59.2
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 20,
+   "top_n": 10,
+   "periods": 120,
+   "mean_excess_per_period_pct": 3.328,
+   "beat_market_pct": 70.8
+  },
+  {
+   "signal": "bb_pct",
+   "horizon": 20,
+   "top_n": 20,
+   "periods": 120,
+   "mean_excess_per_period_pct": 2.168,
+   "beat_market_pct": 64.2
+  }
+ ],
+ "benchmarks": {
+  "tedpix": {
+   "label": "شاخص کل (TEDPIX)",
+   "return_pct": 2849.89,
+   "sessions": 2396,
+   "excess_pct": -2913.89
+  },
+  "tedpix_equal_weight": {
+   "label": "شاخص هم‌وزن",
+   "return_pct": 6556.01,
+   "sessions": 2396,
+   "excess_pct": -6620.01
+  },
+  "risk_free": {
+   "label": "سپرده بانکی (23% سالانه)",
+   "return_pct": 689.18,
+   "sessions": 2396,
+   "note": "no drawdown, no execution risk, no queue",
+   "excess_pct": -753.18
+  }
+ },
+ "primary": {
+  "alpha_core": {
+   "label": "alpha_core",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": -64.0,
+   "cagr_pct": -9.73,
+   "volatility_pct": 9.76,
+   "max_drawdown_pct": -64.9,
+   "sharpe": -3.12,
+   "sortino": -3.8,
+   "calmar": -0.15,
+   "risk_free_pct": 23.0,
+   "trades": 920,
+   "win_rate_pct": 31.52,
+   "average_win_pct": 13.08,
+   "average_loss_pct": -7.91,
+   "profit_factor": 0.75,
+   "payoff_ratio": 1.63,
+   "average_holding_days": 15.9,
+   "turnover_per_year": 7.6,
+   "average_positions": 3.46,
+   "average_cash_pct": 70.33,
+   "average_exposure_pct": 29.67,
+   "sessions_fully_in_cash": 195,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 7.6,
+    "distinct": 45
+   },
+   "commission": 252439661.0,
+   "tax": 233511041.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2913.89
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6620.01
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -753.18
+    }
+   }
+  },
+  "v2": {
+   "label": "v2",
+   "engine": "v2",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": -36.05,
+   "cagr_pct": -4.38,
+   "volatility_pct": 7.58,
+   "max_drawdown_pct": -37.26,
+   "sharpe": -3.29,
+   "sortino": -4.07,
+   "calmar": -0.12,
+   "risk_free_pct": 23.0,
+   "trades": 415,
+   "win_rate_pct": 28.92,
+   "average_win_pct": 16.84,
+   "average_loss_pct": -8.58,
+   "profit_factor": 0.78,
+   "payoff_ratio": 1.93,
+   "average_holding_days": 15.0,
+   "turnover_per_year": 3.62,
+   "average_positions": 1.73,
+   "average_cash_pct": 84.89,
+   "average_exposure_pct": 15.11,
+   "sessions_fully_in_cash": 936,
+   "sector_concentration": {
+    "sector": "مواد و محصولات دارويي",
+    "share_pct": 8.0,
+    "distinct": 38
+   },
+   "commission": 151250401.0,
+   "tax": 140008416.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2885.94
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6592.06
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -725.23
+    }
+   }
+  }
+ },
+ "robust_size": [
+  {
+   "variant": "top 5",
+   "label": "top 5",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": -63.72,
+   "cagr_pct": -9.66,
+   "volatility_pct": 8.05,
+   "max_drawdown_pct": -64.78,
+   "sharpe": -3.79,
+   "sortino": -4.45,
+   "calmar": -0.15,
+   "risk_free_pct": 23.0,
+   "trades": 466,
+   "win_rate_pct": 30.26,
+   "average_win_pct": 12.65,
+   "average_loss_pct": -8.14,
+   "profit_factor": 0.62,
+   "payoff_ratio": 1.43,
+   "average_holding_days": 13.7,
+   "turnover_per_year": 4.89,
+   "average_positions": 1.58,
+   "average_cash_pct": 83.23,
+   "average_exposure_pct": 16.77,
+   "sessions_fully_in_cash": 551,
+   "sector_concentration": {
+    "sector": "خودرو و ساخت قطعات",
+    "share_pct": 9.9,
+    "distinct": 42
+   },
+   "commission": 161556706.0,
+   "tax": 148458995.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2913.61
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6619.73
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -752.9
+    }
+   }
+  },
+  {
+   "variant": "top 10",
+   "label": "top 10",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": -64.0,
+   "cagr_pct": -9.73,
+   "volatility_pct": 9.76,
+   "max_drawdown_pct": -64.9,
+   "sharpe": -3.12,
+   "sortino": -3.8,
+   "calmar": -0.15,
+   "risk_free_pct": 23.0,
+   "trades": 920,
+   "win_rate_pct": 31.52,
+   "average_win_pct": 13.08,
+   "average_loss_pct": -7.91,
+   "profit_factor": 0.75,
+   "payoff_ratio": 1.63,
+   "average_holding_days": 15.9,
+   "turnover_per_year": 7.6,
+   "average_positions": 3.46,
+   "average_cash_pct": 70.33,
+   "average_exposure_pct": 29.67,
+   "sessions_fully_in_cash": 195,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 7.6,
+    "distinct": 45
+   },
+   "commission": 252439661.0,
+   "tax": 233511041.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2913.89
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6620.01
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -753.18
+    }
+   }
+  },
+  {
+   "variant": "top 20",
+   "label": "top 20",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": -51.11,
+   "cagr_pct": -6.92,
+   "volatility_pct": 8.07,
+   "max_drawdown_pct": -52.12,
+   "sharpe": -3.41,
+   "sortino": -4.04,
+   "calmar": -0.13,
+   "risk_free_pct": 23.0,
+   "trades": 1689,
+   "win_rate_pct": 33.45,
+   "average_win_pct": 13.29,
+   "average_loss_pct": -7.93,
+   "profit_factor": 0.8,
+   "payoff_ratio": 1.59,
+   "average_holding_days": 16.1,
+   "turnover_per_year": 7.56,
+   "average_positions": 6.76,
+   "average_cash_pct": 68.32,
+   "average_exposure_pct": 31.68,
+   "sessions_fully_in_cash": 70,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 7.9,
+    "distinct": 46
+   },
+   "commission": 250392840.0,
+   "tax": 232152655.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2901.0
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6607.12
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -740.29
+    }
+   }
+  }
+ ]
+}

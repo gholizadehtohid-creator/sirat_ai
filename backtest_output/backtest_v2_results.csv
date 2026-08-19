@@ -1,0 +1,2 @@
+﻿variant,start,end,available,initial_capital,final_capital,total_return_pct,cagr_pct,max_drawdown_pct,sharpe,sortino,calmar,trades,win_rate_pct,profit_factor,expectancy,round_trip_pct
+technical,2024-09-01 00:00:00,2026-08-11 00:00:00,True,1000000000.0,1089486414.0,8.95,4.51,-13.87,-1.69,-2.41,0.33,137,50.36,1.14,653186.0,1.039

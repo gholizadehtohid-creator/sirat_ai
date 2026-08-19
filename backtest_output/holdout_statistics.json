@@ -1,0 +1,161 @@
+{
+ "primary_hypothesis": "engine outperforms the exposure-matched control",
+ "primary_control": "B_fixed_matched at 55.02% (training-window exposure)",
+ "tests": {
+  "engine_vs_fixed_matched_PRIMARY": {
+   "sharpe_a": 1.395,
+   "sharpe_b": 1.766,
+   "delta_sharpe": -0.371,
+   "correlation": 0.9613,
+   "z": -1.852,
+   "p_value": 0.0641,
+   "ci95_delta_sharpe": [
+    -0.764,
+    0.022
+   ],
+   "significant_at_5pct": false
+  },
+  "engine_vs_buy_hold_secondary": {
+   "sharpe_a": 1.395,
+   "sharpe_b": 1.757,
+   "delta_sharpe": -0.362,
+   "correlation": 0.9597,
+   "z": -1.769,
+   "p_value": 0.0769,
+   "ci95_delta_sharpe": [
+    -0.763,
+    0.039
+   ],
+   "significant_at_5pct": false
+  }
+ },
+ "bootstrap": {
+  "method": "stationary (Politis-Romano) block bootstrap, paired, geometric blocks, mean length 20 sessions",
+  "replicates": 5000,
+  "seed": 20240901,
+  "delta_sharpe": {
+   "metric": "engine - control Sharpe",
+   "point_estimate": -0.385,
+   "ci95": [
+    -0.965,
+    0.191
+   ],
+   "excludes_zero": false,
+   "pct_replicates_engine_ahead": 10.0
+  },
+  "delta_cagr_pct": {
+   "metric": "engine - control CAGR (pp)",
+   "point_estimate": -0.651,
+   "ci95": [
+    -10.571,
+    13.641
+   ],
+   "excludes_zero": false,
+   "pct_replicates_engine_ahead": 41.1
+  },
+  "delta_max_drawdown_pct": {
+   "metric": "engine - control MaxDD (pp)",
+   "point_estimate": -4.313,
+   "ci95": [
+    -9.327,
+    -1.16
+   ],
+   "excludes_zero": true,
+   "pct_replicates_engine_ahead": 0.2
+  }
+ },
+ "exposure_forward_return": {
+  "n_blocks": 23,
+  "spearman_rho_target_exposure_vs_next_block_benchmark": -0.1265,
+  "t_stat": -0.584,
+  "approx_p_value": 0.559,
+  "reading": "higher exposure preceded LOWER benchmark returns"
+ },
+ "leave_one_episode_out": [
+  {
+   "dropped_episode": "down 2024-09-10..2024-11-06",
+   "engine_cum_pct": 99.07,
+   "control_cum_pct": 100.82,
+   "excess_pp": -1.75,
+   "sign_reversed": false
+  },
+  {
+   "dropped_episode": "up 2024-11-06..2025-04-12",
+   "engine_cum_pct": 70.86,
+   "control_cum_pct": 71.33,
+   "excess_pp": -0.48,
+   "sign_reversed": false
+  },
+  {
+   "dropped_episode": "down 2025-04-12..2025-05-10",
+   "engine_cum_pct": 82.9,
+   "control_cum_pct": 83.98,
+   "excess_pp": -1.08,
+   "sign_reversed": false
+  },
+  {
+   "dropped_episode": "up 2025-05-10..2025-08-09",
+   "engine_cum_pct": 128.27,
+   "control_cum_pct": 119.23,
+   "excess_pp": 9.04,
+   "sign_reversed": true
+  },
+  {
+   "dropped_episode": "down 2025-08-09..2025-10-07",
+   "engine_cum_pct": 91.4,
+   "control_cum_pct": 92.04,
+   "excess_pp": -0.64,
+   "sign_reversed": false
+  },
+  {
+   "dropped_episode": "up 2025-10-07..2026-03-04",
+   "engine_cum_pct": 73.19,
+   "control_cum_pct": 80.11,
+   "excess_pp": -6.92,
+   "sign_reversed": false
+  },
+  {
+   "dropped_episode": "down 2026-03-04..2026-06-08",
+   "engine_cum_pct": 72.9,
+   "control_cum_pct": 73.99,
+   "excess_pp": -1.09,
+   "sign_reversed": false
+  },
+  {
+   "dropped_episode": "up 2026-06-08..2026-08-17",
+   "engine_cum_pct": 52.48,
+   "control_cum_pct": 64.01,
+   "excess_pp": -11.52,
+   "sign_reversed": false
+  }
+ ],
+ "block_consistency": {
+  "blocks": 23,
+  "engine_ahead": 11,
+  "pct_ahead": 47.8
+ },
+ "capture_ratios": {
+  "note": "block frequency is the primary unit; daily compounding makes subset capture convex and is reported for completeness only",
+  "block_frequency": {
+   "engine": {
+    "upside_pct": 52.7,
+    "downside_pct": 64.0
+   },
+   "control": {
+    "upside_pct": 47.5,
+    "downside_pct": 46.2
+   }
+  },
+  "daily_frequency_compound": {
+   "engine": {
+    "upside_pct": 40.0,
+    "downside_pct": 76.5
+   },
+   "control": {
+    "upside_pct": 33.0,
+    "downside_pct": 66.2
+   }
+  }
+ },
+ "power_caveat": "23 decisions over 1.95 years. The holdout is underpowered to CONFIRM a modest positive effect. It is not underpowered against the observed result, because G1/G2/G6/G7 fail on the SIGN of the point estimate, not on significance."
+}

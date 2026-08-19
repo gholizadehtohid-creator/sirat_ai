@@ -1,0 +1,5 @@
+﻿label,sizing_mode,available,reason,total_return_pct,cagr_pct,sharpe,sortino,max_drawdown_pct,calmar,profit_factor,win_rate_pct,trades,average_holding_days,average_cash_pct,average_positions,benchmark_difference_pp,final_capital
+risk_based,risk_based,True,,8.95,4.51,-1.69,-2.41,-13.87,0.33,1.14,50.36,137,16.9,58.63,3.08,-162.86,1089486414.0
+equal_weight,equal_weight,True,,2.45,1.25,-2.21,-2.97,-12.92,0.1,1.04,47.78,180,16.7,60.12,4.03,-169.36,1024462801.0
+fixed_fractional,fixed_fractional,True,,8.34,4.21,-1.73,-2.45,-14.65,0.29,1.13,50.0,128,17.7,57.94,2.96,-163.47,1083355145.0
+volatility_adjusted,volatility_adjusted,True,,5.36,2.73,-2.04,-2.82,-13.06,0.21,1.08,48.88,178,16.7,59.71,4.01,-166.45,1053600563.0

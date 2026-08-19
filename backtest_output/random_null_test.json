@@ -1,0 +1,1766 @@
+{
+ "protocol": {
+  "window": {
+   "start": "2014-09-21",
+   "end": "2024-09-01"
+  },
+  "hold_sessions": 40,
+  "top_n": 10,
+  "seeds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30
+  ],
+  "control_cagr_expected": 17.25,
+  "control_tolerance": 0.1,
+  "pass_rule": "control CAGR > p95 of seeds AND exposure within +/-5 points of seed mean",
+  "fail_rule": "control CAGR <= median of seeds"
+ },
+ "control": {
+  "label": "control",
+  "engine": "alpha_core",
+  "available": true,
+  "insufficient": [],
+  "total_return_pct": 389.49,
+  "cagr_pct": 17.25,
+  "volatility_pct": 13.42,
+  "max_drawdown_pct": -30.99,
+  "sharpe": -0.29,
+  "sortino": -0.42,
+  "calmar": 0.56,
+  "risk_free_pct": 23.0,
+  "trades": 702,
+  "win_rate_pct": 44.87,
+  "average_win_pct": 28.08,
+  "average_loss_pct": -14.6,
+  "profit_factor": 1.56,
+  "payoff_ratio": 1.92,
+  "average_holding_days": 66.4,
+  "turnover_per_year": 3.21,
+  "average_positions": 8.77,
+  "average_cash_pct": 42.46,
+  "average_exposure_pct": 57.54,
+  "sessions_fully_in_cash": 2,
+  "sector_concentration": {
+   "sector": "محصولات شيميايي",
+   "share_pct": 7.3,
+   "distinct": 44
+  },
+  "commission": 457976928.0,
+  "tax": 445492836.0,
+  "benchmarks": {
+   "tedpix": {
+    "label": "شاخص کل (TEDPIX)",
+    "return_pct": 2849.89,
+    "sessions": 2396,
+    "excess_pct": -2460.4
+   },
+   "tedpix_equal_weight": {
+    "label": "شاخص هم‌وزن",
+    "return_pct": 6556.01,
+    "sessions": 2396,
+    "excess_pct": -6166.52
+   },
+   "risk_free": {
+    "label": "سپرده بانکی (23% سالانه)",
+    "return_pct": 689.18,
+    "sessions": 2396,
+    "note": "no drawdown, no execution risk, no queue",
+    "excess_pct": -299.69
+   }
+  }
+ },
+ "seeds": [
+  {
+   "label": "seed 01",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 392.32,
+   "cagr_pct": 17.32,
+   "volatility_pct": 12.0,
+   "max_drawdown_pct": -25.53,
+   "sharpe": -0.33,
+   "sortino": -0.48,
+   "calmar": 0.68,
+   "risk_free_pct": 23.0,
+   "trades": 739,
+   "win_rate_pct": 44.52,
+   "average_win_pct": 19.5,
+   "average_loss_pct": -11.67,
+   "profit_factor": 1.76,
+   "payoff_ratio": 2.19,
+   "average_holding_days": 64.3,
+   "turnover_per_year": 3.24,
+   "average_positions": 8.72,
+   "average_cash_pct": 44.72,
+   "average_exposure_pct": 55.28,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "فلزات اساسي",
+    "share_pct": 8.5,
+    "distinct": 40
+   },
+   "commission": 452507403.0,
+   "tax": 440496076.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2457.57
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6163.69
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -296.86
+    }
+   },
+   "seed": 1
+  },
+  {
+   "label": "seed 02",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 494.57,
+   "cagr_pct": 19.56,
+   "volatility_pct": 11.62,
+   "max_drawdown_pct": -35.23,
+   "sharpe": -0.19,
+   "sortino": -0.27,
+   "calmar": 0.56,
+   "risk_free_pct": 23.0,
+   "trades": 709,
+   "win_rate_pct": 46.26,
+   "average_win_pct": 22.5,
+   "average_loss_pct": -12.57,
+   "profit_factor": 1.64,
+   "payoff_ratio": 1.9,
+   "average_holding_days": 68.9,
+   "turnover_per_year": 2.92,
+   "average_positions": 8.99,
+   "average_cash_pct": 45.42,
+   "average_exposure_pct": 54.58,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "مواد و محصولات دارويي",
+    "share_pct": 8.9,
+    "distinct": 41
+   },
+   "commission": 578994009.0,
+   "tax": 563304687.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2355.32
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6061.44
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -194.61
+    }
+   },
+   "seed": 2
+  },
+  {
+   "label": "seed 03",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 538.66,
+   "cagr_pct": 20.42,
+   "volatility_pct": 12.31,
+   "max_drawdown_pct": -28.33,
+   "sharpe": -0.11,
+   "sortino": -0.16,
+   "calmar": 0.72,
+   "risk_free_pct": 23.0,
+   "trades": 834,
+   "win_rate_pct": 41.49,
+   "average_win_pct": 25.27,
+   "average_loss_pct": -12.14,
+   "profit_factor": 1.59,
+   "payoff_ratio": 2.25,
+   "average_holding_days": 65.2,
+   "turnover_per_year": 3.23,
+   "average_positions": 8.67,
+   "average_cash_pct": 44.65,
+   "average_exposure_pct": 55.35,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.4,
+    "distinct": 44
+   },
+   "commission": 663700255.0,
+   "tax": 644493516.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2311.23
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6017.35
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -150.52
+    }
+   },
+   "seed": 3
+  },
+  {
+   "label": "seed 04",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 1155.14,
+   "cagr_pct": 28.85,
+   "volatility_pct": 12.17,
+   "max_drawdown_pct": -28.3,
+   "sharpe": 0.44,
+   "sortino": 0.67,
+   "calmar": 1.02,
+   "risk_free_pct": 23.0,
+   "trades": 830,
+   "win_rate_pct": 43.25,
+   "average_win_pct": 25.02,
+   "average_loss_pct": -11.66,
+   "profit_factor": 2.06,
+   "payoff_ratio": 2.71,
+   "average_holding_days": 65.9,
+   "turnover_per_year": 2.96,
+   "average_positions": 8.34,
+   "average_cash_pct": 47.26,
+   "average_exposure_pct": 52.74,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "سرمايه گذاريها",
+    "share_pct": 8.6,
+    "distinct": 42
+   },
+   "commission": 901855794.0,
+   "tax": 894051317.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -1694.75
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -5400.87
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": 465.96
+    }
+   },
+   "seed": 4
+  },
+  {
+   "label": "seed 05",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 417.53,
+   "cagr_pct": 17.91,
+   "volatility_pct": 12.07,
+   "max_drawdown_pct": -26.1,
+   "sharpe": -0.29,
+   "sortino": -0.42,
+   "calmar": 0.69,
+   "risk_free_pct": 23.0,
+   "trades": 726,
+   "win_rate_pct": 46.28,
+   "average_win_pct": 22.44,
+   "average_loss_pct": -12.63,
+   "profit_factor": 1.65,
+   "payoff_ratio": 1.92,
+   "average_holding_days": 64.6,
+   "turnover_per_year": 3.07,
+   "average_positions": 8.61,
+   "average_cash_pct": 44.94,
+   "average_exposure_pct": 55.06,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "مواد و محصولات دارويي",
+    "share_pct": 8.7,
+    "distinct": 44
+   },
+   "commission": 472576313.0,
+   "tax": 460369602.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2432.36
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6138.48
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -271.65
+    }
+   },
+   "seed": 5
+  },
+  {
+   "label": "seed 06",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 674.49,
+   "cagr_pct": 22.77,
+   "volatility_pct": 12.11,
+   "max_drawdown_pct": -31.5,
+   "sharpe": 0.04,
+   "sortino": 0.07,
+   "calmar": 0.72,
+   "risk_free_pct": 23.0,
+   "trades": 741,
+   "win_rate_pct": 45.34,
+   "average_win_pct": 22.03,
+   "average_loss_pct": -11.05,
+   "profit_factor": 1.85,
+   "payoff_ratio": 2.22,
+   "average_holding_days": 69.6,
+   "turnover_per_year": 3.04,
+   "average_positions": 8.94,
+   "average_cash_pct": 44.7,
+   "average_exposure_pct": 55.3,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "مواد و محصولات دارويي",
+    "share_pct": 7.4,
+    "distinct": 41
+   },
+   "commission": 675675315.0,
+   "tax": 661573799.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2175.4
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -5881.52
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -14.69
+    }
+   },
+   "seed": 6
+  },
+  {
+   "label": "seed 07",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 505.59,
+   "cagr_pct": 19.78,
+   "volatility_pct": 11.56,
+   "max_drawdown_pct": -27.67,
+   "sharpe": -0.17,
+   "sortino": -0.25,
+   "calmar": 0.71,
+   "risk_free_pct": 23.0,
+   "trades": 703,
+   "win_rate_pct": 47.65,
+   "average_win_pct": 23.93,
+   "average_loss_pct": -13.1,
+   "profit_factor": 1.77,
+   "payoff_ratio": 1.95,
+   "average_holding_days": 67.5,
+   "turnover_per_year": 3.03,
+   "average_positions": 8.86,
+   "average_cash_pct": 44.63,
+   "average_exposure_pct": 55.37,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 9.4,
+    "distinct": 43
+   },
+   "commission": 499201732.0,
+   "tax": 489097181.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2344.3
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6050.42
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -183.59
+    }
+   },
+   "seed": 7
+  },
+  {
+   "label": "seed 08",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 537.58,
+   "cagr_pct": 20.4,
+   "volatility_pct": 12.12,
+   "max_drawdown_pct": -26.46,
+   "sharpe": -0.12,
+   "sortino": -0.17,
+   "calmar": 0.77,
+   "risk_free_pct": 23.0,
+   "trades": 714,
+   "win_rate_pct": 44.82,
+   "average_win_pct": 23.9,
+   "average_loss_pct": -12.08,
+   "profit_factor": 1.69,
+   "payoff_ratio": 2.07,
+   "average_holding_days": 66.5,
+   "turnover_per_year": 3.04,
+   "average_positions": 8.67,
+   "average_cash_pct": 44.28,
+   "average_exposure_pct": 55.72,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "مواد و محصولات دارويي",
+    "share_pct": 9.5,
+    "distinct": 43
+   },
+   "commission": 560158106.0,
+   "tax": 547533982.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2312.31
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6018.43
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -151.6
+    }
+   },
+   "seed": 8
+  },
+  {
+   "label": "seed 09",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 663.05,
+   "cagr_pct": 22.59,
+   "volatility_pct": 11.74,
+   "max_drawdown_pct": -29.04,
+   "sharpe": 0.03,
+   "sortino": 0.04,
+   "calmar": 0.78,
+   "risk_free_pct": 23.0,
+   "trades": 755,
+   "win_rate_pct": 47.42,
+   "average_win_pct": 23.88,
+   "average_loss_pct": -11.51,
+   "profit_factor": 1.73,
+   "payoff_ratio": 1.92,
+   "average_holding_days": 66.3,
+   "turnover_per_year": 3.05,
+   "average_positions": 8.55,
+   "average_cash_pct": 45.38,
+   "average_exposure_pct": 54.62,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "سرمايه گذاريها",
+    "share_pct": 8.5,
+    "distinct": 43
+   },
+   "commission": 704385937.0,
+   "tax": 687951785.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2186.84
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -5892.96
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -26.13
+    }
+   },
+   "seed": 9
+  },
+  {
+   "label": "seed 10",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 562.06,
+   "cagr_pct": 20.85,
+   "volatility_pct": 12.72,
+   "max_drawdown_pct": -24.75,
+   "sharpe": -0.08,
+   "sortino": -0.11,
+   "calmar": 0.84,
+   "risk_free_pct": 23.0,
+   "trades": 719,
+   "win_rate_pct": 48.4,
+   "average_win_pct": 23.49,
+   "average_loss_pct": -12.31,
+   "profit_factor": 1.79,
+   "payoff_ratio": 1.91,
+   "average_holding_days": 63.4,
+   "turnover_per_year": 3.26,
+   "average_positions": 8.36,
+   "average_cash_pct": 45.14,
+   "average_exposure_pct": 54.86,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.2,
+    "distinct": 41
+   },
+   "commission": 593157670.0,
+   "tax": 579478974.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2287.83
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -5993.95
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -127.12
+    }
+   },
+   "seed": 10
+  },
+  {
+   "label": "seed 11",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 405.62,
+   "cagr_pct": 17.63,
+   "volatility_pct": 11.83,
+   "max_drawdown_pct": -26.16,
+   "sharpe": -0.32,
+   "sortino": -0.44,
+   "calmar": 0.67,
+   "risk_free_pct": 23.0,
+   "trades": 754,
+   "win_rate_pct": 45.09,
+   "average_win_pct": 22.68,
+   "average_loss_pct": -11.59,
+   "profit_factor": 1.75,
+   "payoff_ratio": 2.13,
+   "average_holding_days": 68.4,
+   "turnover_per_year": 3.12,
+   "average_positions": 8.87,
+   "average_cash_pct": 44.11,
+   "average_exposure_pct": 55.89,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.4,
+    "distinct": 44
+   },
+   "commission": 451144066.0,
+   "tax": 439794629.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2444.27
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6150.39
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -283.56
+    }
+   },
+   "seed": 11
+  },
+  {
+   "label": "seed 12",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 516.59,
+   "cagr_pct": 20.0,
+   "volatility_pct": 12.86,
+   "max_drawdown_pct": -30.05,
+   "sharpe": -0.13,
+   "sortino": -0.19,
+   "calmar": 0.67,
+   "risk_free_pct": 23.0,
+   "trades": 719,
+   "win_rate_pct": 45.2,
+   "average_win_pct": 23.19,
+   "average_loss_pct": -11.82,
+   "profit_factor": 1.65,
+   "payoff_ratio": 2.0,
+   "average_holding_days": 64.5,
+   "turnover_per_year": 3.23,
+   "average_positions": 8.13,
+   "average_cash_pct": 44.98,
+   "average_exposure_pct": 55.02,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.1,
+    "distinct": 44
+   },
+   "commission": 592885096.0,
+   "tax": 577258240.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2333.3
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6039.42
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -172.59
+    }
+   },
+   "seed": 12
+  },
+  {
+   "label": "seed 13",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 283.36,
+   "cagr_pct": 14.41,
+   "volatility_pct": 12.39,
+   "max_drawdown_pct": -40.24,
+   "sharpe": -0.52,
+   "sortino": -0.73,
+   "calmar": 0.36,
+   "risk_free_pct": 23.0,
+   "trades": 690,
+   "win_rate_pct": 45.51,
+   "average_win_pct": 24.1,
+   "average_loss_pct": -12.11,
+   "profit_factor": 1.47,
+   "payoff_ratio": 1.76,
+   "average_holding_days": 65.2,
+   "turnover_per_year": 3.11,
+   "average_positions": 8.95,
+   "average_cash_pct": 43.24,
+   "average_exposure_pct": 56.76,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 10.1,
+    "distinct": 41
+   },
+   "commission": 418392303.0,
+   "tax": 403854565.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2566.53
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6272.65
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -405.82
+    }
+   },
+   "seed": 13
+  },
+  {
+   "label": "seed 14",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 487.82,
+   "cagr_pct": 19.42,
+   "volatility_pct": 11.62,
+   "max_drawdown_pct": -27.99,
+   "sharpe": -0.2,
+   "sortino": -0.28,
+   "calmar": 0.69,
+   "risk_free_pct": 23.0,
+   "trades": 731,
+   "win_rate_pct": 41.59,
+   "average_win_pct": 24.2,
+   "average_loss_pct": -12.47,
+   "profit_factor": 1.58,
+   "payoff_ratio": 2.22,
+   "average_holding_days": 64.8,
+   "turnover_per_year": 3.12,
+   "average_positions": 8.51,
+   "average_cash_pct": 45.18,
+   "average_exposure_pct": 54.82,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "سرمايه گذاريها",
+    "share_pct": 7.5,
+    "distinct": 41
+   },
+   "commission": 585989436.0,
+   "tax": 569560253.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2362.07
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6068.19
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -201.36
+    }
+   },
+   "seed": 14
+  },
+  {
+   "label": "seed 15",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 448.94,
+   "cagr_pct": 18.61,
+   "volatility_pct": 12.42,
+   "max_drawdown_pct": -30.35,
+   "sharpe": -0.23,
+   "sortino": -0.33,
+   "calmar": 0.61,
+   "risk_free_pct": 23.0,
+   "trades": 697,
+   "win_rate_pct": 44.76,
+   "average_win_pct": 22.51,
+   "average_loss_pct": -12.17,
+   "profit_factor": 1.56,
+   "payoff_ratio": 1.92,
+   "average_holding_days": 63.7,
+   "turnover_per_year": 3.26,
+   "average_positions": 8.48,
+   "average_cash_pct": 44.4,
+   "average_exposure_pct": 55.6,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "خودرو و ساخت قطعات",
+    "share_pct": 8.3,
+    "distinct": 43
+   },
+   "commission": 592503943.0,
+   "tax": 573977009.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2400.95
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6107.07
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -240.24
+    }
+   },
+   "seed": 15
+  },
+  {
+   "label": "seed 16",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 460.22,
+   "cagr_pct": 18.85,
+   "volatility_pct": 12.12,
+   "max_drawdown_pct": -27.67,
+   "sharpe": -0.22,
+   "sortino": -0.31,
+   "calmar": 0.68,
+   "risk_free_pct": 23.0,
+   "trades": 722,
+   "win_rate_pct": 46.95,
+   "average_win_pct": 22.63,
+   "average_loss_pct": -12.69,
+   "profit_factor": 1.65,
+   "payoff_ratio": 1.87,
+   "average_holding_days": 64.3,
+   "turnover_per_year": 3.21,
+   "average_positions": 8.66,
+   "average_cash_pct": 43.87,
+   "average_exposure_pct": 56.13,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "خودرو و ساخت قطعات",
+    "share_pct": 8.0,
+    "distinct": 41
+   },
+   "commission": 543334844.0,
+   "tax": 528443410.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2389.67
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6095.79
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -228.96
+    }
+   },
+   "seed": 16
+  },
+  {
+   "label": "seed 17",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 151.37,
+   "cagr_pct": 9.68,
+   "volatility_pct": 12.25,
+   "max_drawdown_pct": -42.34,
+   "sharpe": -0.88,
+   "sortino": -1.21,
+   "calmar": 0.23,
+   "risk_free_pct": 23.0,
+   "trades": 663,
+   "win_rate_pct": 40.57,
+   "average_win_pct": 22.09,
+   "average_loss_pct": -12.42,
+   "profit_factor": 1.32,
+   "payoff_ratio": 1.93,
+   "average_holding_days": 63.0,
+   "turnover_per_year": 3.2,
+   "average_positions": 8.26,
+   "average_cash_pct": 45.78,
+   "average_exposure_pct": 54.22,
+   "sessions_fully_in_cash": 18,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.3,
+    "distinct": 40
+   },
+   "commission": 325170308.0,
+   "tax": 310895517.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2698.52
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6404.64
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -537.81
+    }
+   },
+   "seed": 17
+  },
+  {
+   "label": "seed 18",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 496.83,
+   "cagr_pct": 19.6,
+   "volatility_pct": 11.72,
+   "max_drawdown_pct": -29.53,
+   "sharpe": -0.18,
+   "sortino": -0.26,
+   "calmar": 0.66,
+   "risk_free_pct": 23.0,
+   "trades": 709,
+   "win_rate_pct": 45.98,
+   "average_win_pct": 22.52,
+   "average_loss_pct": -12.31,
+   "profit_factor": 1.66,
+   "payoff_ratio": 1.94,
+   "average_holding_days": 65.9,
+   "turnover_per_year": 3.0,
+   "average_positions": 8.63,
+   "average_cash_pct": 45.78,
+   "average_exposure_pct": 54.22,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "سرمايه گذاريها",
+    "share_pct": 9.4,
+    "distinct": 41
+   },
+   "commission": 559493042.0,
+   "tax": 545149879.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2353.06
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6059.18
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -192.35
+    }
+   },
+   "seed": 18
+  },
+  {
+   "label": "seed 19",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 444.38,
+   "cagr_pct": 18.51,
+   "volatility_pct": 11.89,
+   "max_drawdown_pct": -33.81,
+   "sharpe": -0.25,
+   "sortino": -0.36,
+   "calmar": 0.55,
+   "risk_free_pct": 23.0,
+   "trades": 742,
+   "win_rate_pct": 47.44,
+   "average_win_pct": 21.79,
+   "average_loss_pct": -12.7,
+   "profit_factor": 1.58,
+   "payoff_ratio": 1.75,
+   "average_holding_days": 66.8,
+   "turnover_per_year": 3.02,
+   "average_positions": 8.7,
+   "average_cash_pct": 44.64,
+   "average_exposure_pct": 55.36,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.4,
+    "distinct": 39
+   },
+   "commission": 557926967.0,
+   "tax": 541416640.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2405.51
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6111.63
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -244.8
+    }
+   },
+   "seed": 19
+  },
+  {
+   "label": "seed 20",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 425.32,
+   "cagr_pct": 18.08,
+   "volatility_pct": 11.61,
+   "max_drawdown_pct": -28.26,
+   "sharpe": -0.29,
+   "sortino": -0.42,
+   "calmar": 0.64,
+   "risk_free_pct": 23.0,
+   "trades": 764,
+   "win_rate_pct": 49.08,
+   "average_win_pct": 20.26,
+   "average_loss_pct": -12.27,
+   "profit_factor": 1.87,
+   "payoff_ratio": 1.94,
+   "average_holding_days": 65.8,
+   "turnover_per_year": 3.13,
+   "average_positions": 8.59,
+   "average_cash_pct": 44.37,
+   "average_exposure_pct": 55.63,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 7.7,
+    "distinct": 43
+   },
+   "commission": 431343993.0,
+   "tax": 422114190.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2424.57
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6130.69
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -263.86
+    }
+   },
+   "seed": 20
+  },
+  {
+   "label": "seed 21",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 645.73,
+   "cagr_pct": 22.3,
+   "volatility_pct": 12.21,
+   "max_drawdown_pct": -23.91,
+   "sharpe": 0.01,
+   "sortino": 0.02,
+   "calmar": 0.93,
+   "risk_free_pct": 23.0,
+   "trades": 714,
+   "win_rate_pct": 44.54,
+   "average_win_pct": 23.82,
+   "average_loss_pct": -10.59,
+   "profit_factor": 2.06,
+   "payoff_ratio": 2.57,
+   "average_holding_days": 68.4,
+   "turnover_per_year": 3.03,
+   "average_positions": 8.67,
+   "average_cash_pct": 44.77,
+   "average_exposure_pct": 55.23,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 9.5,
+    "distinct": 39
+   },
+   "commission": 570556993.0,
+   "tax": 561942377.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2204.16
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -5910.28
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -43.45
+    }
+   },
+   "seed": 21
+  },
+  {
+   "label": "seed 22",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 282.32,
+   "cagr_pct": 14.38,
+   "volatility_pct": 11.81,
+   "max_drawdown_pct": -25.8,
+   "sharpe": -0.56,
+   "sortino": -0.76,
+   "calmar": 0.56,
+   "risk_free_pct": 23.0,
+   "trades": 743,
+   "win_rate_pct": 44.15,
+   "average_win_pct": 22.29,
+   "average_loss_pct": -11.79,
+   "profit_factor": 1.56,
+   "payoff_ratio": 1.97,
+   "average_holding_days": 65.4,
+   "turnover_per_year": 3.24,
+   "average_positions": 8.68,
+   "average_cash_pct": 44.07,
+   "average_exposure_pct": 55.93,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.6,
+    "distinct": 44
+   },
+   "commission": 398678852.0,
+   "tax": 385358523.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2567.57
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6273.69
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -406.86
+    }
+   },
+   "seed": 22
+  },
+  {
+   "label": "seed 23",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 408.66,
+   "cagr_pct": 17.7,
+   "volatility_pct": 12.14,
+   "max_drawdown_pct": -23.15,
+   "sharpe": -0.3,
+   "sortino": -0.43,
+   "calmar": 0.76,
+   "risk_free_pct": 23.0,
+   "trades": 755,
+   "win_rate_pct": 42.12,
+   "average_win_pct": 22.04,
+   "average_loss_pct": -12.3,
+   "profit_factor": 1.73,
+   "payoff_ratio": 2.38,
+   "average_holding_days": 63.5,
+   "turnover_per_year": 3.24,
+   "average_positions": 8.5,
+   "average_cash_pct": 45.32,
+   "average_exposure_pct": 54.68,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.2,
+    "distinct": 43
+   },
+   "commission": 465980506.0,
+   "tax": 453812836.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2441.23
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6147.35
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -280.52
+    }
+   },
+   "seed": 23
+  },
+  {
+   "label": "seed 24",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 483.59,
+   "cagr_pct": 19.34,
+   "volatility_pct": 12.7,
+   "max_drawdown_pct": -24.55,
+   "sharpe": -0.17,
+   "sortino": -0.25,
+   "calmar": 0.79,
+   "risk_free_pct": 23.0,
+   "trades": 743,
+   "win_rate_pct": 42.93,
+   "average_win_pct": 25.86,
+   "average_loss_pct": -11.42,
+   "profit_factor": 1.79,
+   "payoff_ratio": 2.37,
+   "average_holding_days": 64.9,
+   "turnover_per_year": 3.12,
+   "average_positions": 8.62,
+   "average_cash_pct": 45.02,
+   "average_exposure_pct": 54.98,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 8.7,
+    "distinct": 38
+   },
+   "commission": 513261954.0,
+   "tax": 501306420.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2366.3
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6072.42
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -205.59
+    }
+   },
+   "seed": 24
+  },
+  {
+   "label": "seed 25",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 457.31,
+   "cagr_pct": 18.79,
+   "volatility_pct": 12.04,
+   "max_drawdown_pct": -34.83,
+   "sharpe": -0.23,
+   "sortino": -0.33,
+   "calmar": 0.54,
+   "risk_free_pct": 23.0,
+   "trades": 753,
+   "win_rate_pct": 44.49,
+   "average_win_pct": 22.67,
+   "average_loss_pct": -12.28,
+   "profit_factor": 1.64,
+   "payoff_ratio": 2.05,
+   "average_holding_days": 63.4,
+   "turnover_per_year": 3.23,
+   "average_positions": 8.59,
+   "average_cash_pct": 44.78,
+   "average_exposure_pct": 55.22,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "مواد و محصولات دارويي",
+    "share_pct": 9.6,
+    "distinct": 40
+   },
+   "commission": 570496261.0,
+   "tax": 553740129.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2392.58
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6098.7
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -231.87
+    }
+   },
+   "seed": 25
+  },
+  {
+   "label": "seed 26",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 747.52,
+   "cagr_pct": 23.88,
+   "volatility_pct": 12.49,
+   "max_drawdown_pct": -22.66,
+   "sharpe": 0.12,
+   "sortino": 0.18,
+   "calmar": 1.05,
+   "risk_free_pct": 23.0,
+   "trades": 739,
+   "win_rate_pct": 47.5,
+   "average_win_pct": 24.88,
+   "average_loss_pct": -11.44,
+   "profit_factor": 1.94,
+   "payoff_ratio": 2.14,
+   "average_holding_days": 65.1,
+   "turnover_per_year": 3.03,
+   "average_positions": 8.34,
+   "average_cash_pct": 44.46,
+   "average_exposure_pct": 55.54,
+   "sessions_fully_in_cash": 21,
+   "sector_concentration": {
+    "sector": "مواد و محصولات دارويي",
+    "share_pct": 7.2,
+    "distinct": 45
+   },
+   "commission": 668169592.0,
+   "tax": 657705602.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2102.37
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -5808.49
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": 58.34
+    }
+   },
+   "seed": 26
+  },
+  {
+   "label": "seed 27",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 292.11,
+   "cagr_pct": 14.67,
+   "volatility_pct": 12.28,
+   "max_drawdown_pct": -32.79,
+   "sharpe": -0.51,
+   "sortino": -0.71,
+   "calmar": 0.45,
+   "risk_free_pct": 23.0,
+   "trades": 757,
+   "win_rate_pct": 43.99,
+   "average_win_pct": 19.4,
+   "average_loss_pct": -12.2,
+   "profit_factor": 1.49,
+   "payoff_ratio": 1.9,
+   "average_holding_days": 62.9,
+   "turnover_per_year": 3.24,
+   "average_positions": 8.6,
+   "average_cash_pct": 44.14,
+   "average_exposure_pct": 55.86,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "مواد و محصولات دارويي",
+    "share_pct": 9.6,
+    "distinct": 40
+   },
+   "commission": 434289836.0,
+   "tax": 419112943.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2557.78
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6263.9
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -397.07
+    }
+   },
+   "seed": 27
+  },
+  {
+   "label": "seed 28",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 281.04,
+   "cagr_pct": 14.35,
+   "volatility_pct": 11.91,
+   "max_drawdown_pct": -33.07,
+   "sharpe": -0.55,
+   "sortino": -0.77,
+   "calmar": 0.43,
+   "risk_free_pct": 23.0,
+   "trades": 743,
+   "win_rate_pct": 41.18,
+   "average_win_pct": 23.66,
+   "average_loss_pct": -12.17,
+   "profit_factor": 1.51,
+   "payoff_ratio": 2.16,
+   "average_holding_days": 64.7,
+   "turnover_per_year": 3.23,
+   "average_positions": 8.52,
+   "average_cash_pct": 44.64,
+   "average_exposure_pct": 55.36,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "سرمايه گذاريها",
+    "share_pct": 8.6,
+    "distinct": 43
+   },
+   "commission": 402516131.0,
+   "tax": 388894793.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2568.85
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6274.97
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -408.14
+    }
+   },
+   "seed": 28
+  },
+  {
+   "label": "seed 29",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 162.36,
+   "cagr_pct": 10.15,
+   "volatility_pct": 11.9,
+   "max_drawdown_pct": -42.66,
+   "sharpe": -0.87,
+   "sortino": -1.21,
+   "calmar": 0.24,
+   "risk_free_pct": 23.0,
+   "trades": 707,
+   "win_rate_pct": 41.73,
+   "average_win_pct": 20.51,
+   "average_loss_pct": -11.94,
+   "profit_factor": 1.36,
+   "payoff_ratio": 1.89,
+   "average_holding_days": 66.1,
+   "turnover_per_year": 3.18,
+   "average_positions": 8.71,
+   "average_cash_pct": 43.97,
+   "average_exposure_pct": 56.03,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "محصولات شيميايي",
+    "share_pct": 9.9,
+    "distinct": 41
+   },
+   "commission": 315872016.0,
+   "tax": 302667616.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2687.53
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6393.65
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -526.82
+    }
+   },
+   "seed": 29
+  },
+  {
+   "label": "seed 30",
+   "engine": "alpha_core",
+   "available": true,
+   "insufficient": [],
+   "total_return_pct": 543.71,
+   "cagr_pct": 20.51,
+   "volatility_pct": 12.17,
+   "max_drawdown_pct": -27.64,
+   "sharpe": -0.11,
+   "sortino": -0.15,
+   "calmar": 0.74,
+   "risk_free_pct": 23.0,
+   "trades": 780,
+   "win_rate_pct": 46.41,
+   "average_win_pct": 22.57,
+   "average_loss_pct": -11.34,
+   "profit_factor": 1.65,
+   "payoff_ratio": 1.9,
+   "average_holding_days": 65.0,
+   "turnover_per_year": 3.2,
+   "average_positions": 8.58,
+   "average_cash_pct": 44.51,
+   "average_exposure_pct": 55.49,
+   "sessions_fully_in_cash": 2,
+   "sector_concentration": {
+    "sector": "سرمايه گذاريها",
+    "share_pct": 8.8,
+    "distinct": 37
+   },
+   "commission": 631552813.0,
+   "tax": 614622559.0,
+   "benchmarks": {
+    "tedpix": {
+     "label": "شاخص کل (TEDPIX)",
+     "return_pct": 2849.89,
+     "sessions": 2396,
+     "excess_pct": -2306.18
+    },
+    "tedpix_equal_weight": {
+     "label": "شاخص هم‌وزن",
+     "return_pct": 6556.01,
+     "sessions": 2396,
+     "excess_pct": -6012.3
+    },
+    "risk_free": {
+     "label": "سپرده بانکی (23% سالانه)",
+     "return_pct": 689.18,
+     "sessions": 2396,
+     "note": "no drawdown, no execution risk, no queue",
+     "excess_pct": -145.47
+    }
+   },
+   "seed": 30
+  }
+ ],
+ "distribution": {
+  "n": 30,
+  "mean": 18.71,
+  "std": 3.83,
+  "p5": 12.04,
+  "p50": 19.095,
+  "p95": 23.38,
+  "min": 9.68,
+  "max": 28.85,
+  "exposure_mean": 55.23,
+  "control_percentile": 20.0,
+  "exposure_gap": 2.31
+ },
+ "verdict": "FAIL"
+}

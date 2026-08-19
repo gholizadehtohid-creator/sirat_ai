@@ -1,0 +1,4 @@
+﻿label,slippage_pct,round_trip_pct,available,reason,total_return_pct,cagr_pct,sharpe,sortino,max_drawdown_pct,calmar,profit_factor,win_rate_pct,trades,average_holding_days,average_cash_pct,average_positions,benchmark_difference_pp,final_capital,return_lost_pp
+slippage 0.00%,0.0,1.039,True,,8.95,4.51,-1.69,-2.41,-13.87,0.33,1.14,50.36,137,16.9,58.63,3.08,-162.86,1089486414.0,0.0
+slippage 0.25%,0.25,1.539,True,,-0.67,-0.35,-2.16,-2.95,-15.45,-0.02,0.99,50.36,137,16.9,58.57,3.08,-172.48,993296750.0,9.62
+slippage 0.50%,0.5,2.039,True,,-9.46,-4.99,-2.6,-3.41,-18.06,-0.28,0.86,50.36,137,16.9,58.52,3.08,-181.27,905381889.0,18.41

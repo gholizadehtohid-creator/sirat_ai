@@ -1,0 +1,811 @@
+/* SIRAT AI admin panel.
+   Palette values are the validated data-viz reference instance: categorical
+   slots in fixed order, status tokens reserved for state, chrome recessive. */
+
+:root {
+  color-scheme: light;
+
+  --page:            #f9f9f7;
+  --surface-1:       #fcfcfb;
+  --surface-2:       #f2f1ed;
+
+  --text-primary:    #0b0b0b;
+  --text-secondary:  #52514e;
+  --text-muted:      #898781;
+
+  --grid:            #e1e0d9;
+  --axis:            #c3c2b7;
+  --border:          rgba(11, 11, 11, 0.10);
+
+  --series-1:        #2a78d6;
+  --series-2:        #eb6834;
+  --series-3:        #1baf7a;
+  --series-4:        #eda100;
+  --series-5:        #e87ba4;
+  --series-6:        #008300;
+
+  --diverge-pos:     #2a78d6;
+  --diverge-neg:     #e34948;
+  --diverge-mid:     #f0efec;
+
+  --status-good:     #0ca30c;
+  --status-warning:  #fab219;
+  --status-serious:  #ec835a;
+  --status-critical: #d03b3b;
+
+  --success-text:    #006300;
+  --danger-text:     #b52a2a;
+
+  --radius: 10px;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232322;
+
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+
+    --grid:           #2c2c2a;
+    --axis:           #383835;
+    --border:         rgba(255, 255, 255, 0.10);
+
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --series-3:       #199e70;
+    --series-4:       #c98500;
+    --series-5:       #d55181;
+    --series-6:       #008300;
+
+    --diverge-pos:    #3987e5;
+    --diverge-neg:    #e66767;
+    --diverge-mid:    #383835;
+
+    --success-text:   #0ca30c;
+    --danger-text:    #e66767;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page:           #0d0d0d;
+  --surface-1:      #1a1a19;
+  --surface-2:      #232322;
+
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted:     #898781;
+
+  --grid:           #2c2c2a;
+  --axis:           #383835;
+  --border:         rgba(255, 255, 255, 0.10);
+
+  --series-1:       #3987e5;
+  --series-2:       #d95926;
+  --series-3:       #199e70;
+  --series-4:       #c98500;
+  --series-5:       #d55181;
+  --series-6:       #008300;
+
+  --diverge-pos:    #3987e5;
+  --diverge-neg:    #e66767;
+  --diverge-mid:    #383835;
+
+  --success-text:   #0ca30c;
+  --danger-text:    #e66767;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--page);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---------- layout ---------- */
+
+.wrap {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 24px 64px;
+}
+
+header.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.brand {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.brand span {
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 8px;
+  font-size: 13px;
+}
+
+.top-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---------- provenance banner ---------- */
+
+.banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--status-warning);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  margin: 16px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.banner.is-live { border-left-color: var(--status-good); }
+.banner.is-error { border-left-color: var(--status-critical); }
+.banner strong { color: var(--text-primary); }
+.banner .icon { flex: none; font-size: 15px; line-height: 1.35; }
+
+/* ---------- data-loading progress ----------
+   State, not data: the bar and the step pills use status tokens, never a
+   categorical series hue. */
+
+.load-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  padding: 14px 16px 16px;
+  margin: 16px 0 20px;
+}
+
+.load-panel.is-idle { opacity: 0.82; }
+
+.load-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.load-title {
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.load-stage {
+  font-size: 13.5px;
+  color: var(--text-primary);
+  margin-top: 3px;
+  font-weight: 550;
+}
+
+.load-meter { text-align: right; }
+
+.load-pct {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.load-elapsed {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--series-1);
+  transition: width 0.35s ease;
+}
+
+.bar.is-done   .bar-fill { background: var(--status-good); }
+.bar.is-behind .bar-fill { background: var(--status-warning); }
+.bar.is-error  .bar-fill { background: var(--status-critical); }
+
+/* A step whose size is unknown gets a moving stripe rather than a fake
+   percentage — the honest reading of "running, length unknown". */
+.bar.is-indeterminate .bar-fill {
+  width: 32%;
+  transition: none;
+  animation: bar-slide 1.3s ease-in-out infinite;
+}
+
+@keyframes bar-slide {
+  0%   { margin-left: -32%; }
+  100% { margin-left: 100%; }
+}
+
+.stage-group { margin-top: 12px; }
+
+.stage-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.steps li .st {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+
+.steps li .n {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+
+.steps li.running {
+  border-color: var(--series-1);
+  background: color-mix(in srgb, var(--series-1) 12%, var(--surface-2));
+  color: var(--text-primary);
+}
+
+.steps li.running .st {
+  background: var(--series-1);
+  animation: step-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes step-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+.steps li.done    .st { background: var(--status-good); }
+.steps li.warn    .st { background: var(--status-warning); }
+.steps li.failed  .st { background: var(--status-critical); }
+.steps li.failed { border-color: var(--status-critical); }
+.steps li.queued { opacity: 0.65; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bar.is-indeterminate .bar-fill { animation: none; width: 100%; opacity: 0.5; }
+  .steps li.running .st { animation: none; }
+  .bar-fill { transition: none; }
+}
+
+.load-foot {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.load-log {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  max-height: 190px;
+  overflow: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+/* ---------- filter row (one row, scopes every chart) ---------- */
+
+.filters {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+}
+
+.filters.advanced {
+  margin-top: -8px;
+  border-style: dashed;
+}
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field.grow { flex: 1 1 340px; min-width: 280px; }
+
+.field label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+select, input[type="number"] {
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  min-width: 130px;
+}
+
+button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  padding: 8px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+button:hover { background: var(--grid); }
+button:disabled { opacity: 0.5; cursor: progress; }
+
+button.primary {
+  background: var(--series-1);
+  border-color: transparent;
+  color: #fff;
+}
+
+button.primary:hover { filter: brightness(1.08); }
+
+/* ---------- symbol chips ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+  font-size: 12.5px;
+  user-select: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.chip input { accent-color: var(--series-1); margin: 0; cursor: pointer; }
+.chip i { color: var(--text-muted); font-style: normal; }
+.chip:hover { border-color: var(--text-muted); }
+
+.chip:has(input:checked) {
+  background: color-mix(in srgb, var(--series-1) 12%, var(--surface-2));
+  border-color: var(--series-1);
+}
+
+.chip:has(input:checked) i { color: var(--text-secondary); }
+
+.chip-actions { display: flex; gap: 10px; margin-top: 2px; }
+
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11.5px;
+  color: var(--series-1);
+  font-weight: 550;
+  cursor: pointer;
+}
+
+button.link:hover { background: none; text-decoration: underline; }
+
+.field label .count {
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.warmup-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: -8px 0 18px;
+}
+
+/* ---------- KPI row ---------- */
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.tile .k {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.tile .v {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 4px;
+  /* proportional figures: tabular-nums makes display sizes look loose */
+}
+
+.tile .sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.up { color: var(--success-text); }
+.down { color: var(--danger-text); }
+
+/* ---------- cards & charts ---------- */
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px 18px;
+  min-width: 0;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.card h2 {
+  font-size: 14px;
+  font-weight: 620;
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+
+.card .hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 2px 0 14px;
+}
+
+/* Inline provenance tag inside a table cell. Used where two numbers share a
+   column but come from different models -- a Codal score built from filed
+   statements against a snapshot score built from price and EPS. Without the
+   tag the column reads as one comparable measure, which it is not. */
+.hint-inline {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.toggle-table {
+  font-size: 11px;
+  padding: 4px 9px;
+  color: var(--text-secondary);
+}
+
+/* Container grows with content so the x-axis band is never clipped. */
+.chart { width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.legend .item { display: flex; align-items: center; gap: 6px; }
+
+.legend .swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: none;
+}
+
+/* Evidence lists: the reasons behind a verdict, not decoration. Each item is
+   a separate claim, so they get separators rather than bullet glyphs -- a
+   bulleted list in an RTL block inherits the marker on the wrong side. */
+.evidence {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.evidence li {
+  padding: 7px 0 7px 12px;
+  border-left: 2px solid var(--border);
+}
+
+.evidence li + li { border-top: 1px solid var(--border-subtle, var(--border)); }
+
+.evidence li:first-child { padding-top: 0; }
+
+/* The portfolio table is the widest thing on the page: seventeen columns of
+   numbers that must stay comparable down the column. Scroll it rather than
+   letting it wrap into unreadable stacks. */
+#portfolioTable table,
+#correlationTable table { white-space: nowrap; }
+
+#portfolioTable td:nth-child(2) { font-weight: 600; }
+
+/* ---------- tables ---------- */
+
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+th, td {
+  text-align: right;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--grid);
+  white-space: nowrap;
+}
+
+th:first-child, td:first-child { text-align: left; }
+
+th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom-color: var(--axis);
+}
+
+tbody tr:hover { background: var(--surface-2); }
+
+.hidden { display: none; }
+
+/* ---------- status badges (icon + label, never color alone) ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.badge.good     .dot { background: var(--status-good); }
+.badge.warning  .dot { background: var(--status-warning); }
+.badge.serious  .dot { background: var(--status-serious); }
+.badge.critical .dot { background: var(--status-critical); }
+.badge.neutral  .dot { background: var(--text-muted); }
+
+/* ---------- tooltip ---------- */
+
+.tip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 12px;
+  color: var(--text-primary);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+  max-width: 260px;
+}
+
+.tip .t-title {
+  font-weight: 650;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.tip .t-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.tip .t-row b { color: var(--text-primary); font-weight: 600; }
+
+.tip .t-row .sw {
+  width: 9px; height: 9px; border-radius: 2px;
+  display: inline-block; margin-right: 6px;
+}
+
+/* ---------- misc ---------- */
+
+.empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.loading { opacity: 0.45; transition: opacity 0.15s; }
+
+.footnote {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin: 26px 0 12px;
+}
+
+
+/* ================= EVIDENCE GROUPS =================
+   The panel produces one answer -- the basket -- and ten sections of working
+   that led to it. Those sections are what let a reader see how much data
+   actually stood behind the recommendation, so they are collapsed rather
+   than removed: available in one click, never in the way. */
+
+.evidence-group {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  background: var(--card);
+}
+
+.evidence-group > summary {
+  cursor: pointer;
+  padding: 13px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  user-select: none;
+  border-radius: 10px;
+}
+
+.evidence-group > summary::-webkit-details-marker { display: none; }
+
+/* The disclosure arrow is drawn rather than inherited, so it points the same
+   way in an RTL document -- the native marker mirrors and reads backwards. */
+.evidence-group > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-inline-end: 6px solid var(--text-muted);
+  transition: transform 0.15s ease;
+  flex: none;
+}
+
+.evidence-group[open] > summary::before {
+  transform: rotate(-90deg);
+}
+
+.evidence-group > summary:hover { background: var(--hover, rgba(127,127,127,0.06)); }
+
+.evidence-group[open] > summary {
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+}
+
+.evidence-group > *:not(summary) {
+  margin-inline: 14px;
+}
+
+.evidence-group > *:not(summary):last-child {
+  margin-bottom: 14px;
+}
+
+.evidence-group > .card:first-of-type { margin-top: 14px; }

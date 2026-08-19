@@ -1,0 +1,55 @@
+# SIRAT-AI -- what must never enter version control, and why.
+#
+# The rule is not "big files are annoying". It is that a git repository exists
+# to make CODE recoverable. Data that is refetched, caches that are rebuilt and
+# outputs that are regenerated are not code, and putting them in the history
+# makes the history unusable for the one job it has.
+
+# ---- market data -----------------------------------------------------------
+# 424 MB. Refetched from TSETMC; identified in a result by pit.fingerprint(),
+# which is the correct way to pin data to a result.
+sirat_market.db
+sirat_market.db.bak
+sirat_market.db-journal
+sirat_market.db-wal
+sirat_market.db-shm
+sirat_fundamentals.db
+sirat_fundamentals.db-journal
+sirat_fundamentals.db-wal
+sirat_fundamentals.db-shm
+
+# ---- the research record ---------------------------------------------------
+# Deliberately NOT ignored in full. sirat_research.db is append-only and is the
+# audit trail; a team would keep it on shared storage rather than in git, but
+# on a single machine losing it loses the governance history. Ignore only the
+# transient sqlite sidecars.
+sirat_research.db-journal
+sirat_research.db-wal
+sirat_research.db-shm
+
+# ---- generated ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Panel caches: rebuilt from the database, keyed by fingerprint.
+backtest_output/cache/
+
+# factor_panel.csv is 23 MB of derived panel; swing_observations.csv 2.7 MB;
+# experiment5b_arms.csv 1.3 MB. All regenerable from the database.
+backtest_output/factor_panel.csv
+backtest_output/swing_observations.csv
+backtest_output/experiment5b_arms.csv
+backtest_output/*.png
+backtest_output/*.html
+
+# Logs
+logs/
+*.log
+
+# ---- NOT ignored, on purpose ----------------------------------------------
+# backtest_output/*.json   the experiment artifacts ARE the record of Phase 1
+# backtest_output/*.md     the reports that interpret them
+# sirat/fixtures/data/     the frozen regression panel; the build depends on it

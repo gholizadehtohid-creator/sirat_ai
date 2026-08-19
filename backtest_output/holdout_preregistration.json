@@ -1,0 +1,84 @@
+{
+  "title": "SIRAT-AI Exposure Engine -- holdout validation, pre-registered protocol",
+  "written_before_any_holdout_result_was_computed": true,
+  "authored": "2026-08-18",
+
+  "hypothesis": "The four-signal exposure engine, exactly as implemented in market_exposure.py, delivers incremental risk-adjusted value over an exposure-matched static control on data it has never seen.",
+
+  "window": {
+    "start": "2024-09-02",
+    "end": "2026-08-17",
+    "note": "Everything at or before 2024-09-01 was the training window of Experiment 1 and is used only for warm-up history and for fixing the control's exposure level."
+  },
+
+  "arms": {
+    "A_engine": "market_exposure.exposure_for() called on history ending at each decision session. Unmodified.",
+    "B_fixed_matched": "Static target rebalanced on the identical decision grid. PRIMARY CONTROL.",
+    "C_buy_hold": "100% invested from session one. SECONDARY REFERENCE ONLY -- never used to decide the primary hypothesis."
+  },
+
+  "exposure_matching_rule": {
+    "value_pct": 55.02,
+    "source": "backtest_output/exposure_experiment.json -> arms.engine.average_exposure_pct",
+    "justification": "The engine's realised average exposure over the 2014-09-21..2024-09-01 TRAINING window. Known in full on 2024-09-01, before the holdout begins. Contains no holdout information.",
+    "forbidden": "Matching the control to the engine's holdout-realised exposure would be look-ahead and is NOT used for any gate. It is computed only as a labelled diagnostic."
+  },
+
+  "harness": "experiment_exposure.simulate() and .metrics(), reused verbatim. Idle cash earns (1+0.23)^(1/240)-1 per session. Cost of 1.04% charged on |target - drifted weight| at each rebalance. Return is credited BEFORE the rebalance, so a decision taken at a close first earns the next session (T+1).",
+
+  "gates": {
+    "G1_positive_net_alpha": {
+      "rule": "CAGR_engine > CAGR_control, net of all costs",
+      "margin": "none; strict inequality"
+    },
+    "G2_risk_improvement": {
+      "rule": "PASS if ANY of the three clears its margin",
+      "max_drawdown": "|DD_engine| <= 0.90 * |DD_control|  (10% relatively shallower)",
+      "calmar": "Calmar_engine >= Calmar_control + 0.20",
+      "downside_deviation": "DD_dev_engine <= 0.90 * DD_dev_control",
+      "justification": "Experiment 1 pre-registered a 20% relative drawdown improvement. These margins are deliberately MORE lenient than the original, so the gate cannot be accused of having been tightened after the fact."
+    },
+    "G3_statistical_credibility": {
+      "primary": "Memmel-corrected Jobson-Korkie test on the Sharpe difference vs the control, two-sided, p < 0.05",
+      "secondary": "stationary block bootstrap (Politis-Romano), mean block 20 sessions, 5000 replicates, seed 20240901, paired resampling to preserve cross-correlation; 95% CI on delta-Sharpe must exclude zero",
+      "rule": "PASS requires the primary test. Both are reported regardless of outcome. No third test will be introduced after seeing results."
+    },
+    "G4_cost_survival": {
+      "rule": "net alpha > 0 AND the incremental cost drag must not consume the majority of gross alpha",
+      "flag_if": "cost_difference >= 0.50 * gross_alpha"
+    },
+    "G5_episode_independence": {
+      "rule": "Remove the single contiguous episode with the largest engine-minus-control excess and recompound. FAIL if the sign of the cumulative excess reverses.",
+      "episode_definition": "Contiguous maximal runs of the benchmark trend state, where trend state at a decision date = (60-session benchmark return > 0). This reuses a threshold already frozen in market_exposure.py and uses only information available at the decision date. Volatility state = 20-session realised vol <= its own trailing 240-session median, also already frozen."
+    },
+    "G6_consistency": {
+      "rule": "The engine must beat the control in STRICTLY MORE THAN 50% of the inter-decision blocks (the natural coin-flip threshold, not a tuned number).",
+      "unit": "inter-decision blocks, because the holdout spans only one full calendar year plus two partial ones -- too few years to gate on. Calendar years are reported but not gated.",
+      "stated_before_results": true
+    },
+    "G7_economic_interpretation": {
+      "defensive_if": "downside capture < upside capture AND beta <= average realised exposure",
+      "pro_cyclical_if": "beta > average realised exposure",
+      "supporting_test": "Spearman rank correlation between target exposure at a decision date and the benchmark's return over the FOLLOWING block, with p-value",
+      "rule": "If the mechanism is pro-cyclical, the 'defensive overlay' claim FAILS even if CAGR is positive."
+    },
+    "G8_research_validity": {
+      "rule": "Any confirmed look-ahead, survivorship, cash-accounting, exposure-matching, execution-timing or performance-calculation defect that materially affects the result makes the experiment INVALID. PASS may not be reported."
+    }
+  },
+
+  "known_defects_carried_into_this_experiment": [
+    {
+      "defect": "backtest_portfolio.py never credits idle cash while performance.py charges a 23% hurdle",
+      "affects_this_experiment": false,
+      "reason": "That is the stock-selection harness used by Experiment 3. This experiment uses experiment_exposure.simulate(), which credits idle cash at the policy rate every session. Verified by inspection before running. NOT fixed, NOT touched."
+    }
+  ],
+
+  "stopping_rule": "The holdout is evaluated ONCE. No parameter, threshold, window, cost assumption or arm definition may be altered after results are seen. If the engine fails, the reported outcome is REJECTED and no remediation is attempted in this experiment.",
+
+  "determinism": {
+    "bootstrap_seed": 20240901,
+    "replicates": 5000
+  }
+}

@@ -1,0 +1,214 @@
+"""The build. One command, and it is the one that decides whether work ships.
+
+    python ci.py              the fast build -- unit suite + fixture tier 1
+    python ci.py --full       adds fixture tier 2 (rebuilds the panel from the
+                              424 MB market database)
+    python ci.py --json       machine-readable, for a runner
+
+WHAT A RED BUILD MEANS HERE
+----------------------------
+Three different things, and the report says which:
+
+  TESTS       something in the platform broke
+  FIXTURE     the platform can no longer rediscover Alpha Core's failures, and
+              is therefore not entitled to judge anything else
+  GOVERNANCE  the record itself is in a state that should not ship -- a
+              universe snapshot months overdue, or a KPI showing that
+              rejections have drifted back to the expensive stages
+
+The third is a warning rather than a failure, and that distinction is
+deliberate. A build that goes red because the KPI slipped would get the KPI
+removed. A build that reports it every time gets it looked at.
+
+REPRODUCIBILITY IS REPORTED, NOT ENFORCED, AND ONLY FOR NOW
+------------------------------------------------------------
+git is not installed on this machine, so every build currently reports
+`reproducible: False`. Failing the build on that would mean nothing could ever
+be built until someone installs software, which is not this script's decision
+to force. What IS enforced, in `Manager.decide()`, is that nothing can be
+PROMOTED while it holds. Research proceeds; capital does not move.
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+import unittest
+
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+
+def run_tests(verbosity=1):
+    """The whole unit suite, discovered the way the project already runs it."""
+
+    loader = unittest.TestLoader()
+
+    suite = loader.discover(start_dir=os.path.join(ROOT, "tests"),
+                            top_level_dir=ROOT)
+
+    runner = unittest.TextTestRunner(verbosity=verbosity, stream=sys.stdout)
+
+    started = time.time()
+
+    result = runner.run(suite)
+
+    return {
+        "stage": "TESTS",
+        "run": result.testsRun,
+        "failures": len(result.failures),
+        "errors": len(result.errors),
+        "skipped": len(result.skipped),
+        "seconds": round(time.time() - started, 2),
+        "passed": result.wasSuccessful(),
+        "detail": [str(t) for t, _ in result.failures + result.errors],
+    }
+
+
+def run_fixture(full=False):
+    """Alpha Core must still fail, for all the reasons it failed before."""
+
+    from sirat.fixtures import alpha_core
+
+    started = time.time()
+
+    try:
+        report = alpha_core.run(full=full, verbose=True)
+    except SystemExit as exc:
+        return {"stage": "FIXTURE", "passed": False, "seconds": 0.0,
+                "detail": [str(exc)]}
+
+    return {
+        "stage": "FIXTURE",
+        "tier": report["tier"],
+        "checks": len(report["checks"]),
+        "failed": report["failed"],
+        "seconds": round(time.time() - started, 2),
+        "passed": report["passed"],
+        "measurements": report["measurements"],
+    }
+
+
+def run_governance():
+    """The state of the record. Reported; only one condition is fatal."""
+
+    from sirat.experiments import manager, universe
+
+    report = manager.kpi()
+
+    snapshot = universe.due()
+
+    warnings = []
+
+    if snapshot["due"]:
+        warnings.append(
+            "universe snapshot overdue (%s). Survivorship is the one defect "
+            "only elapsed time can fix -- every week of delay is a week "
+            "permanently unrecoverable."
+            % snapshot["reason"])
+
+    if not report["reproducibility"]["reproducible"]:
+        warnings.append(
+            "results are not reproducible: %s. PROMOTE decisions are blocked "
+            "until this is fixed." % report["reproducibility"]["reason"])
+
+    if report["meets_target"] is False:
+        warnings.append(
+            "only %.0f%% of rejections happened at stages 1-3, against a %.0f%% "
+            "target. Rejections are drifting back toward the expensive stages, "
+            "which is what a backtester does."
+            % (report["rate"] * 100, report["target"] * 100))
+
+    return {
+        "stage": "GOVERNANCE",
+        "kpi": report,
+        "snapshot": snapshot,
+        "warnings": warnings,
+        # Nothing here fails the build. The KPI is a management signal, and a
+        # management signal wired to a red build becomes a deleted signal.
+        "passed": True,
+    }
+
+
+def _print_governance(report):
+    print()
+    print("=" * 74)
+    print("GOVERNANCE")
+    print("=" * 74)
+
+    kpi = report["kpi"]
+
+    if kpi["rejections"]:
+        print("  cheap rejection rate   %.0f%% of %d  (target %.0f%%)"
+              % (kpi["rate"] * 100, kpi["rejections"], kpi["target"] * 100))
+    else:
+        print("  cheap rejection rate   undefined -- no rejections recorded")
+
+    print("  reproducible           %s"
+          % kpi["reproducibility"]["reproducible"])
+    print("  universe snapshot      %s"
+          % (report["snapshot"]["latest"] or "NEVER TAKEN"))
+
+    for warning in report["warnings"]:
+        print("\n  WARNING: %s" % warning)
+
+    print("=" * 74)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="The SIRAT-AI build.")
+    parser.add_argument("--full", action="store_true",
+                        help="rebuild the fixture panel from sirat_market.db")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--skip-tests", action="store_true",
+                        help="fixture and governance only")
+    parser.add_argument("-v", "--verbose", action="count", default=1)
+
+    args = parser.parse_args(argv)
+
+    stages = []
+
+    if not args.skip_tests:
+        if not args.json:
+            print("=" * 74)
+            print("UNIT SUITE")
+            print("=" * 74)
+        stages.append(run_tests(verbosity=0 if args.json else args.verbose))
+
+    stages.append(run_fixture(full=args.full))
+
+    governance = run_governance()
+
+    stages.append(governance)
+
+    passed = all(s["passed"] for s in stages)
+
+    if args.json:
+        print(json.dumps({"passed": passed, "stages": stages}, indent=2,
+                         default=str))
+        return 0 if passed else 1
+
+    _print_governance(governance)
+
+    print()
+    print("=" * 74)
+
+    for stage in stages:
+        print("  [%s] %-12s %s"
+              % ("PASS" if stage["passed"] else "FAIL", stage["stage"],
+                 ", ".join(str(x) for x in (stage.get("failed")
+                                            or stage.get("detail") or []))[:60]))
+
+    print("=" * 74)
+    print("  BUILD %s" % ("GREEN" if passed else "RED"))
+    print("=" * 74)
+
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

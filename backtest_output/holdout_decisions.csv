@@ -1,0 +1,24 @@
+﻿date,exposure_pct,votes,available,history_sessions,last_close_used,breadth_above_pct
+2024-09-10,25.0,"{'trend': False, 'momentum': False, 'breadth': False, 'volatility': True}",4,2522,668689.0,33.33
+2024-10-09,50.0,"{'trend': False, 'momentum': False, 'breadth': True, 'volatility': True}",4,2542,696730.0,66.37
+2024-11-06,50.0,"{'trend': False, 'momentum': True, 'breadth': False, 'volatility': True}",4,2562,656497.0,22.17
+2024-12-04,75.0,"{'trend': True, 'momentum': True, 'breadth': True, 'volatility': False}",4,2582,802353.0,80.97
+2025-01-01,75.0,"{'trend': True, 'momentum': True, 'breadth': True, 'volatility': False}",4,2602,852396.0,77.78
+2025-02-02,50.0,"{'trend': True, 'momentum': True, 'breadth': False, 'volatility': False}",4,2622,870379.0,48.27
+2025-03-04,75.0,"{'trend': True, 'momentum': True, 'breadth': False, 'volatility': True}",4,2642,829154.0,22.02
+2025-04-12,50.0,"{'trend': True, 'momentum': False, 'breadth': False, 'volatility': True}",4,2662,819070.0,24.33
+2025-05-10,75.0,"{'trend': True, 'momentum': True, 'breadth': True, 'volatility': False}",4,2682,953896.0,71.79
+2025-06-08,75.0,"{'trend': True, 'momentum': True, 'breadth': False, 'volatility': True}",4,2702,936925.0,47.43
+2025-07-12,75.0,"{'trend': True, 'momentum': True, 'breadth': False, 'volatility': True}",4,2722,829960.0,7.34
+2025-08-09,25.0,"{'trend': False, 'momentum': False, 'breadth': False, 'volatility': True}",4,2742,784365.0,6.83
+2025-09-08,25.0,"{'trend': False, 'momentum': False, 'breadth': False, 'volatility': True}",4,2762,790218.0,22.61
+2025-10-07,50.0,"{'trend': False, 'momentum': True, 'breadth': True, 'volatility': False}",4,2782,835908.0,58.53
+2025-11-04,100.0,"{'trend': True, 'momentum': True, 'breadth': True, 'volatility': True}",4,2802,928737.0,80.55
+2025-12-03,100.0,"{'trend': True, 'momentum': True, 'breadth': True, 'volatility': True}",4,2822,959971.0,72.5
+2025-12-31,75.0,"{'trend': True, 'momentum': True, 'breadth': True, 'volatility': False}",4,2842,1104530.0,83.42
+2026-02-01,50.0,"{'trend': True, 'momentum': True, 'breadth': False, 'volatility': False}",4,2862,1000928.0,22.02
+2026-03-04,25.0,"{'trend': True, 'momentum': False, 'breadth': False, 'volatility': False}",4,2882,952681.0,12.12
+2026-04-11,50.0,"{'trend': True, 'momentum': False, 'breadth': False, 'volatility': True}",4,2902,952681.0,13.98
+2026-05-10,50.0,"{'trend': True, 'momentum': False, 'breadth': False, 'volatility': True}",4,2922,952681.0,35.42
+2026-06-08,75.0,"{'trend': True, 'momentum': True, 'breadth': True, 'volatility': False}",4,2942,1188070.0,78.5
+2026-07-12,75.0,"{'trend': True, 'momentum': True, 'breadth': True, 'volatility': False}",4,2962,1338330.0,75.03

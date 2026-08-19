@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIRAT AI — مدیریت هوشمند سبد سهام</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>📈</text></svg>">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">SIRAT AI <span>مدیریت هوشمند سبد سهام بورس تهران</span></div>
+    <div class="top-actions">
+      <button id="themeBtn" title="Toggle light / dark">◐ Theme</button>
+      <button id="refreshBtn" class="primary">↻ Refresh data</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner">
+    <span class="icon">…</span>
+    <div id="bannerText">Loading data status…</div>
+  </div>
+
+  <!-- ================= DATA LOADING PROGRESS =================
+       Downloads run in the background and take minutes. Which stage they are
+       at is the difference between "working" and "hung". -->
+
+  <section class="load-panel" id="loadPanel">
+
+    <div class="load-head">
+      <div class="load-heading">
+        <div class="load-title">بارگذاری داده — Data loading</div>
+        <div class="load-stage" id="loadStage">Checking what is stored…</div>
+      </div>
+      <div class="load-meter">
+        <div class="load-pct" id="loadPct">—</div>
+        <div class="load-elapsed" id="loadElapsed"></div>
+      </div>
+    </div>
+
+    <div class="bar" id="loadBarWrap" role="progressbar"
+         aria-valuemin="0" aria-valuemax="100" aria-label="Data loading progress">
+      <div class="bar-fill" id="loadBar"></div>
+    </div>
+
+    <div class="stage-group">
+      <div class="stage-label">دریافت از TSETMC — download stages</div>
+      <ol class="steps" id="loadSteps"></ol>
+    </div>
+
+    <div class="stage-group">
+      <div class="stage-label">تحلیل — analysis stages</div>
+      <ol class="steps" id="taskSteps"></ol>
+    </div>
+
+    <div class="load-foot">
+      <button type="button" class="link" id="loadLogBtn">Show log</button>
+      <button type="button" class="link" id="loadFetchBtn">Fetch what is missing or stale</button>
+    </div>
+
+    <pre class="load-log hidden" id="loadLog"></pre>
+
+  </section>
+
+  <!-- Portfolio controls. The indicator windows below are tuning; these are
+       the decisions that change what the basket actually is. -->
+  <div class="filters">
+
+    <div class="field">
+      <label for="equityInput">سرمایه کل ({{ currency }})</label>
+      <input id="equityInput" type="number" min="1000000" step="100000000" value="{{ equity }}">
+    </div>
+
+    <div class="field">
+      <label for="sizeInput">تعداد نماد در سبد</label>
+      <input id="sizeInput" type="number" min="1" max="50" value="{{ portfolio_size }}">
+    </div>
+
+    <div class="field">
+      <label for="sectorCapInput">حداکثر نماد در هر صنعت</label>
+      <input id="sectorCapInput" type="number" min="1" max="10" value="{{ max_per_sector }}">
+    </div>
+
+    <div class="field">
+      <label for="minScoreInput">حداقل امتیاز ترکیبی</label>
+      <input id="minScoreInput" type="number" min="0" max="100" step="5" value="{{ min_score }}">
+    </div>
+
+    <div class="field">
+      <label for="riskInput">ریسک هر موقعیت (٪)</label>
+      <input id="riskInput" type="number" min="0.05" max="10" step="0.25" value="{{ risk_pct }}">
+    </div>
+
+    <button id="applyBtn" class="primary">اعمال</button>
+    <button id="advancedBtn" type="button">دوره‌ها ▾</button>
+  </div>
+
+  <!-- Indicator windows: collapsed by default, they are tuning not filtering -->
+  <div class="filters advanced hidden" id="advancedRow">
+    <div class="field">
+      <label for="maFast">Fast MA</label>
+      <input id="maFast" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.ma_fast }}">
+    </div>
+    <div class="field">
+      <label for="maSlow">Slow MA</label>
+      <input id="maSlow" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.ma_slow }}">
+    </div>
+    <div class="field">
+      <label for="rsiWin">RSI period</label>
+      <input id="rsiWin" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.rsi_window }}">
+    </div>
+    <div class="field">
+      <label for="macdFast">MACD fast</label>
+      <input id="macdFast" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.macd_fast }}">
+    </div>
+    <div class="field">
+      <label for="macdSlow">MACD slow</label>
+      <input id="macdSlow" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.macd_slow }}">
+    </div>
+    <div class="field">
+      <label for="macdSignal">MACD signal</label>
+      <input id="macdSignal" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.macd_signal }}">
+    </div>
+    <div class="field">
+      <label for="volumeMa">Volume MA</label>
+      <input id="volumeMa" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.volume_ma }}">
+    </div>
+    <button id="resetBtn" type="button">Reset periods</button>
+  </div>
+
+  <p class="warmup-note" id="warmupNote"></p>
+
+  <!-- ================= SUGGESTED PORTFOLIO =================
+       The answer comes first. Everything below it is the evidence that
+       produced it, and evidence belongs after the conclusion, not in front
+       of it -- this section used to sit tenth of eleven, so the one thing a
+       reader opens the page for was the last thing they reached. -->
+
+  <div class="section-title">سبد پیشنهادی — Risk-managed portfolio</div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>ترکیب پیشنهادی سبد</h2>
+      <div class="top-actions">
+        <button id="runPortfolioBtn" class="primary">▶ ساخت سبد</button>
+      </div>
+    </div>
+    <p class="hint">
+      امتیاز تعیین می‌کند کدام نماد <em>وارد</em> سبد شود؛ نوسان تعیین می‌کند
+      <em>چقدر</em>. هر موقعیت طوری اندازه‌گذاری شده که خوردن حد ضرر همان درصد
+      ثابت از سرمایه را ببرد، و سقف صنعت اجباری است — نه ترجیح.
+    </p>
+
+    <div id="portfolioStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="portfolioStatusText">Not run yet.</div>
+    </div>
+
+    <div class="kpi-row" id="portfolioKpis"></div>
+
+    <div class="table-wrap" id="portfolioTable" style="margin-top:16px"></div>
+
+    <ul class="evidence" id="portfolioNotes" style="margin-top:12px"></ul>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><h2>توزیع صنعتی سبد</h2></div>
+      <p class="hint">وزن هر صنعت در سرمایه‌ی تخصیص‌یافته.</p>
+      <div class="chart" id="allocationChart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>ریسک سبد</h2></div>
+      <p class="hint" id="riskHint">
+        ریسک هر موقعیت به‌تنهایی کافی نیست: ده موقعیت که هرکدام ۱٪ ریسک دارند،
+        اگر با هم بیفتند ۱۰٪ ریسک ندارند — بستگی به همبستگی‌شان دارد.
+      </p>
+      <div class="table-wrap" id="riskTable"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>ماتریس همبستگی</h2>
+    </div>
+    <p class="hint" id="corrHint">
+      همبستگی بالا یعنی تنوع اسمی است نه واقعی. مقادیر نزدیک ۱ یعنی دو نماد
+      عملاً یک موقعیت‌اند.
+    </p>
+    <div class="table-wrap" id="correlationTable"></div>
+  </div>
+
+  <!-- ================= THE EVIDENCE =================
+       Collapsed, not deleted. This system is not validated enough to be a
+       black box: the sections below are what let a reader see how much data
+       stood behind the basket above, and refuse it when the answer is
+       "not much". Closed by default so they are available without being in
+       the way. -->
+
+  <div class="section-title">شواهد پشت این سبد — Evidence</div>
+
+  <details class="evidence-group" id="evidenceRegime">
+  <summary>وضعیت بازار و سقف سرمایه‌گذاری</summary>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>رژیم بازار و سقف سرمایه‌گذاری</h2>
+      <div class="top-actions">
+        <button id="runRegimeBtn" class="primary">▶ تشخیص</button>
+      </div>
+    </div>
+    <p class="hint">
+      یک مدل انتخاب سهم درباره‌ی خودِ بازار نظری ندارد؛ در سقوط هم با همان اطمینان
+      ده نماد برتر را رتبه می‌دهد. این بخش تصمیم می‌گیرد آن ده نماد اجازه دارند
+      چه سهمی از سرمایه را در اختیار بگیرند. سه رأی مستقل: روند شاخص کل، روند
+      شاخص هم‌وزن، و مشارکت بازار.
+    </p>
+
+    <div id="regimeStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="regimeStatusText">Not run yet.</div>
+    </div>
+
+    <div class="kpi-row" id="regimeKpis"></div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>مشارکت بازار</h2></div>
+        <p class="hint">درصد نمادهایی که بالای میانگین متحرک خودشان معامله می‌شوند — مستقل از وزن‌دهی هر شاخص.</p>
+        <div class="chart" id="participationChart"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>شواهد تصمیم</h2></div>
+        <p class="hint">هر سطر یک رأی مستقل است. رژیم از رأی اکثریت می‌آید، نه از یک اندیکاتور.</p>
+        <ul class="evidence" id="regimeEvidence"></ul>
+      </div>
+    </div>
+  </div>
+
+  </details>
+
+  <!-- ================= INDEX: شاخص کل ================= -->
+
+  <details class="evidence-group" id="evidenceIndices">
+  <summary>تحلیل تکنیکال شاخص‌ها</summary>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>شاخص کل (وزنی بر اساس ارزش بازار)</h2>
+      <div class="top-actions">
+        <button id="importIndicesBtn">↓ دریافت شاخص‌ها</button>
+        <button id="runIndicesBtn" class="primary">▶ تحلیل</button>
+      </div>
+    </div>
+    <p class="hint">
+      همان مدل شش‌مؤلفه‌ای سهام، روی سری منتشرشده‌ی شاخص. یک شاخص حجم معاملات
+      مخصوص خود ندارد، پس مؤلفه‌ی حجم با ارزش کل معاملات بازار تغذیه می‌شود —
+      و این موضوع صریحاً اعلام می‌شود، نه اینکه ضمنی فرض شود.
+    </p>
+
+    <div id="capIndexStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="capIndexStatusText">Not run yet.</div>
+    </div>
+
+    <div class="kpi-row" id="capIndexKpis"></div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>شاخص و میانگین‌های متحرک</h2></div>
+        <p class="hint" id="capIndexChartHint">بسته در برابر دو میانگین متحرک.</p>
+        <div class="chart" id="capIndexChart"></div>
+        <div class="legend" id="capIndexLegend"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>اجزای امتیاز</h2></div>
+        <p class="hint">شش مؤلفه‌ی وزنی که امتیاز ۰–۱۰۰ را می‌سازند.</p>
+        <div class="chart" id="capIndexBreakdown"></div>
+      </div>
+    </div>
+
+    <div class="table-wrap" id="capIndexTable"></div>
+  </div>
+
+  <!-- ================= INDEX: شاخص کل هم‌وزن ================= -->
+
+  <div class="section-title">تحلیل تکنیکال شاخص کل هم‌وزن — Equal-weighted</div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>شاخص کل هم‌وزن</h2>
+    </div>
+    <p class="hint">
+      در این شاخص هر شرکت وزن یکسان دارد، پس حرکت آن نماینده‌ی «سهم متوسط بازار»
+      است نه چند غول بزرگ. وقتی این شاخص از شاخص کل عقب می‌ماند، رشد بازار روی
+      دوش چند نماد بزرگ است — و سبدی که از کل بازار انتخاب می‌شود آن رشد را
+      نمی‌بیند.
+    </p>
+
+    <div id="ewIndexStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="ewIndexStatusText">Not run yet.</div>
+    </div>
+
+    <div class="kpi-row" id="ewIndexKpis"></div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>شاخص و میانگین‌های متحرک</h2></div>
+        <p class="hint" id="ewIndexChartHint">بسته در برابر دو میانگین متحرک.</p>
+        <div class="chart" id="ewIndexChart"></div>
+        <div class="legend" id="ewIndexLegend"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>عمق بازار — هم‌وزن منهای کل</h2></div>
+        <p class="hint">
+          شاخصِ وزنیِ ارزش بازار می‌تواند صعود کند در حالی که اکثر سهام می‌ریزند.
+          فاصله‌ی این دو شاخص، همان را مستقیم اندازه می‌گیرد.
+        </p>
+        <div class="chart" id="breadthChart"></div>
+        <div id="breadthVerdict" class="hint"></div>
+      </div>
+    </div>
+
+    <div class="table-wrap" id="ewIndexTable"></div>
+  </div>
+
+  </details>
+
+  <!-- ================= SECTORS: FUNDAMENTAL ================= -->
+
+  <details class="evidence-group" id="evidenceSectors">
+  <summary>تحلیل صنایع — بنیادی و تکنیکال</summary>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>توزیع امتیاز بنیادی در هر صنعت</h2>
+      <div class="top-actions">
+        <button id="importSectorsBtn">↓ دریافت صنایع</button>
+        <button id="runSectorsBtn" class="primary">▶ تحلیل</button>
+      </div>
+    </div>
+    <p class="hint" id="sectorFundHint">
+      بنیاد یک صنعت، <em>توزیع</em> امتیاز اعضای آن است نه یک عدد میانگین:
+      صنعتی که اکثر نمادهایش قبول می‌شوند با صنعتی که یک غول ارزان آن را بالا
+      نگه داشته، دو چیز کاملاً متفاوت‌اند.
+    </p>
+
+    <div id="sectorStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="sectorStatusText">Not run yet.</div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>میانه‌ی امتیاز بنیادی</h2></div>
+        <p class="hint">میانه، نه میانگین — یک نماد پرت میانگین صنعت را جابه‌جا می‌کند.</p>
+        <div class="chart" id="sectorFundChart"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>نرخ تأیید در هر صنعت</h2></div>
+        <p class="hint">درصد اعضایی که از غربال بنیادی عبور کرده‌اند.</p>
+        <div class="chart" id="sectorApprovalChart"></div>
+      </div>
+    </div>
+
+    <div class="card" style="border:none;padding:0;margin-top:16px">
+      <div class="card-head">
+        <h2>جدول بنیادی صنایع</h2>
+        <button class="toggle-table" data-target="sectorMembersTable">اعضا</button>
+      </div>
+      <p class="hint">روی نام یک صنعت کلیک کنید تا اعضای آن فهرست شود.</p>
+      <div class="table-wrap" id="sectorFundTable"></div>
+      <div id="sectorMembersTable" class="table-wrap hidden"></div>
+    </div>
+  </div>
+
+  <!-- ================= SECTORS: TECHNICAL ================= -->
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-head">
+      <h2>امتیاز تکنیکال و عمق هر صنعت</h2>
+    </div>
+    <p class="hint">
+      خوانش تکنیکال از یک شاخص هم‌وزن ساخته‌شده از بسته‌ی اعضا می‌آید. بورس
+      شاخص صنعت منتشر می‌کند اما فهرست کدهای آن را در دسترس نمی‌گذارد، پس این
+      شاخص <strong>اینجا محاسبه می‌شود، نه از TSETMC خوانده می‌شود</strong>.
+    </p>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>امتیاز تکنیکال هر صنعت</h2></div>
+        <p class="hint">شاخص مشتق‌شده‌ی صنعت، با همان مدل ۰–۱۰۰.</p>
+        <div class="chart" id="sectorTechChart"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>عمق هر صنعت</h2></div>
+        <p class="hint">درصد اعضای بالای میانگین متحرک کند خودشان. به هیچ ساختار شاخصی وابسته نیست.</p>
+        <div class="chart" id="sectorBreadthChart"></div>
+      </div>
+    </div>
+
+    <div class="table-wrap" id="sectorTechTable" style="margin-top:16px"></div>
+  </div>
+
+  </details>
+
+  <!-- ================= FUNDAMENTALS (کدال) ================= -->
+
+  <details class="evidence-group" id="evidenceCodal">
+  <summary>تحلیل بنیادی کدال — صورت‌های مالی</summary>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>صورت‌های مالی و امتیاز بنیادی</h2>
+      <div class="top-actions">
+        <button id="importCodalBtn">↓ دریافت کدال</button>
+        <button id="runFundBtn" class="primary">▶ تحلیل</button>
+      </div>
+    </div>
+    <p class="hint">
+      امتیاز از <strong>صورت‌های مالی واقعیِ ثبت‌شده در کدال</strong> ساخته
+      می‌شود — سود و زیان، ترازنامه و جریان وجوه نقد — نه از تصویر لحظه‌ای
+      بازار. شش ستون: سودآوری، رشد، ارزش‌گذاری، سلامت مالی، جریان نقدی و
+      کیفیت سود. ستونی که در قالب یک شرکت وجود ندارد (بانک حاشیه سود ناخالص
+      ندارد) وزنش بین بقیه پخش می‌شود، نه اینکه صفر بگیرد.
+    </p>
+    <p class="hint">
+      <strong>دو نکته که ارقام کدال را عوض می‌کنند:</strong> مبالغ صورت‌ها به
+      <em>میلیون ریال</em> است ولی سود هر سهم در همان صفحه به <em>ریال</em>؛ و
+      گزارش میان‌دوره‌ای، سودِ همان دوره را می‌دهد نه سالانه — پس برای
+      P/E سالانه‌سازی می‌شود، وگرنه یک گزارش سه‌ماهه P/E را چهار برابر
+      نشان می‌دهد.
+    </p>
+
+    <div id="fundStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="fundStatusText">Not run yet.</div>
+    </div>
+
+    <div class="kpi-row" id="fundKpis"></div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>قوی‌ترین بنیادها</h2></div>
+        <p class="hint">امتیاز ۰–۱۰۰ از صورت‌های مالی ثبت‌شده.</p>
+        <div class="chart" id="fundTopChart"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>وضعیت اتصال کدال</h2></div>
+        <p class="hint">
+          کدال و تِseتمک از دو مسیر شبکه‌ی متفاوت در دسترس‌اند؛ برنامه هرکدام
+          را جدا پیدا می‌کند و بعد از تغییر وضعیت فیلترشکن خودکار دوباره
+          می‌سنجد.
+        </p>
+        <div class="table-wrap" id="codalRoutes"></div>
+      </div>
+    </div>
+
+    <div class="card" style="border:none;padding:0;margin-top:16px">
+      <div class="card-head">
+        <h2>جدول بنیادی</h2>
+        <button class="toggle-table" data-target="fundWeakTable">ضعیف‌ترین‌ها</button>
+      </div>
+      <p class="hint" id="fundTableHint">
+        هر سطر از آخرین صورت مالی ثبت‌شده‌ی همان شرکت می‌آید؛ دوره و
+        حسابرسی‌شده‌بودن در ستون آخر است.
+      </p>
+      <div class="table-wrap" id="fundTable"></div>
+      <div id="fundWeakTable" class="table-wrap hidden"></div>
+    </div>
+  </div>
+
+  </details>
+
+  <!-- ================= MONEY FLOW (حقیقی / حقوقی) ================= -->
+
+  <details class="evidence-group" id="evidenceFlow">
+  <summary>جریان پول حقیقی و حقوقی — معیاری که سبد با آن مرتب می‌شود</summary>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>قدرت خریدار و ورود پول حقیقی</h2>
+      <div class="top-actions">
+        <button id="importFlowBtn">↓ دریافت حقیقی/حقوقی</button>
+        <button id="runFlowBtn" class="primary">▶ تحلیل</button>
+      </div>
+    </div>
+    <p class="hint">
+      بورس برای هر جلسه اعلام می‌کند هر طرف چقدر خرید و فروش کرده و
+      <strong>با چند کد معاملاتی</strong>. همان تعدادهاست که این داده را از یک
+      عدد ساده جدا می‌کند: یک میلیارد ریال خرید از یک نفر با یک میلیارد ریال خرید
+      از هزار نفر دو رویداد کاملاً متفاوت‌اند، و ستون ارزش به‌تنهایی نمی‌تواند
+      آن‌ها را تشخیص دهد. <em>قدرت خریدار</em> = سرانه‌ی خرید حقیقی تقسیم بر
+      سرانه‌ی فروش حقیقی.
+    </p>
+    <p class="hint">
+      <strong>یک نکته که دو بار شمرده نمی‌شود:</strong> هر ریالی که خریده شده،
+      توسط کسی فروخته شده است. پس خالص خرید حقیقی دقیقاً قرینه‌ی خالص خرید حقوقی
+      است — «پول حقیقی وارد شد <em>و</em> حقوقی توزیع کرد» یک واقعیت است، نه دو
+      تأیید مستقل. اینجا فقط یک جهت محاسبه می‌شود.
+    </p>
+
+    <div id="flowStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="flowStatusText">Not run yet.</div>
+    </div>
+
+    <div class="kpi-row" id="flowKpis"></div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>بیشترین ورود و خروج پول حقیقی</h2></div>
+        <p class="hint" id="flowNetHint">
+          خالص خرید حقیقی به‌صورت درصدی از گردش خودِ همان نماد — تا یک غول و یک
+          شرکت کوچک با یک مقیاس سنجیده شوند.
+        </p>
+        <div class="chart" id="flowNetChart"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>بالاترین قدرت خریدار</h2></div>
+        <p class="hint">
+          نسبت بالای ۱ یعنی خریدارِ متوسط بزرگ‌تر از فروشندهٔ متوسط است:
+          تجمیع متمرکز در برابر فروش پراکنده.
+        </p>
+        <div class="chart" id="flowPowerChart"></div>
+      </div>
+    </div>
+
+    <div class="card" style="border:none;padding:0;margin-top:16px">
+      <div class="card-head">
+        <h2>جدول جریان پول</h2>
+        <button class="toggle-table" data-target="flowOutflowTable">خروج پول</button>
+      </div>
+      <p class="hint" id="flowTableHint">
+        فقط نمادهایی که کف نقدشوندگی را رد می‌کنند فهرست می‌شوند.
+      </p>
+      <div class="table-wrap" id="flowInflowTable"></div>
+      <div id="flowOutflowTable" class="table-wrap hidden"></div>
+    </div>
+  </div>
+
+  </details>
+
+  <!-- ================= FULL MARKET SCREEN ================= -->
+
+  <details class="evidence-group" id="evidenceScreen">
+  <summary>پایش کل بازار — ۸۱۸ نماد، و چرا هرکدام ماند یا رفت</summary>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>غربال دومرحله‌ای</h2>
+      <div class="top-actions">
+        <button id="importUniverseBtn">↓ ورود نمادها</button>
+        <button id="importSnapshotBtn">↓ دریافت بنیادی</button>
+        <button id="runScreenBtn" class="primary">▶ اجرای غربال</button>
+      </div>
+    </div>
+    <p class="hint">
+      هر سهم ابتدا بنیادی غربال می‌شود؛ فقط قبول‌شده‌ها تحلیل تکنیکال می‌شوند.
+      سهامی که داده ندارند به‌عنوان <strong>داده‌ی ناکافی</strong> گزارش می‌شوند،
+      هرگز به‌عنوان ردشده.
+    </p>
+
+    <div id="screenStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="screenStatusText">Not run yet.</div>
+    </div>
+
+    <div class="kpi-row" id="screenKpis"></div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>قیف غربال</h2></div>
+        <p class="hint">در هر مرحله چه بر سر نمادها می‌آید.</p>
+        <div class="chart" id="funnelChart"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head">
+          <h2>امتیاز بنیادی فهرست نهایی</h2>
+          <button class="toggle-table" data-target="fundBreakdownTable">جدول</button>
+        </div>
+        <p class="hint">مؤلفه‌های وزنی. وزن مؤلفه‌های غایب بازتوزیع می‌شود و پوشش در هر سطر گزارش می‌شود.</p>
+        <div class="chart" id="fundBreakdownChart"></div>
+        <div class="legend" id="fundLegend"></div>
+        <div id="fundBreakdownTable" class="table-wrap hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>گزارش نهایی — غربال بنیادی، سپس رتبه‌بندی تکنیکال</h2>
+    </div>
+    <p class="hint" id="finalHint">
+      مرتب‌شده بر اساس امتیاز ترکیبی. بنیاد تعیین می‌کند <em>آیا</em>؛ تکنیکال تعیین می‌کند <em>کِی</em>.
+    </p>
+    <div class="table-wrap" id="finalTable"></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head">
+        <h2>چرا نمادها کنار گذاشته شدند</h2>
+        <button class="toggle-table" data-target="excludedTable">جدول</button>
+      </div>
+      <p class="hint" id="excludedHint">دروازه‌های سخت واقعیت‌های ردکننده‌اند، نه ترجیح.</p>
+      <div class="chart" id="gateChart"></div>
+      <div id="excludedTable" class="table-wrap hidden"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>پوشش داده</h2></div>
+      <p class="hint">غربال واقعاً با چه چیزی کار کرده است.</p>
+      <div class="table-wrap" id="coverageTable"></div>
+    </div>
+  </div>
+
+  </details>
+
+  <p class="footnote" id="footnote"></p>
+
+  <p class="footnote" style="margin-top:8px">
+    این گزارش پیشنهاد سرمایه‌گذاری نیست. هر عدد یک امتیاز یا برآورد ریسک است،
+    نه پیش‌بینی قطعی. مدیریت ریسک همیشه بر سیگنال مقدم است.
+  </p>
+
+</div>
+
+<script type="module" src="{{ url_for('static', filename='js/panel.js') }}"></script>
+</body>
+</html>

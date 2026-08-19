@@ -1,0 +1,55 @@
+{
+ "git": "NOT A GIT REPOSITORY — c:\\SIRAT-AI is not under version control; no commit hash can be recorded. File mtimes are the only provenance available.",
+ "source_files": {
+  "market_exposure.py": {
+   "bytes": 9305,
+   "mtime": "2026-08-18 03:24:16"
+  },
+  "experiment_exposure.py": {
+   "bytes": 20464,
+   "mtime": "2026-08-18 03:41:48"
+  },
+  "experiment_holdout.py": {
+   "bytes": 34465,
+   "mtime": "2026-08-18 07:56:46"
+  },
+  "performance.py": {
+   "bytes": 13014,
+   "mtime": "2026-08-10 18:42:44"
+  },
+  "config.py": {
+   "bytes": 52414,
+   "mtime": "2026-08-14 21:58:01"
+  }
+ },
+ "data_snapshot": {
+  "sirat_market.db": {
+   "bytes": 424411136,
+   "mtime": "2026-08-18 05:54:30"
+  },
+  "backtest_output\\factor_panel.csv": {
+   "bytes": 23518487,
+   "mtime": "2026-08-17 13:20:18"
+  }
+ },
+ "executed": "2026-08-18 11:59:49",
+ "environment": {
+  "python": "3.14.7",
+  "platform": "Windows-11-10.0.22631-SP0",
+  "numpy": "2.5.1",
+  "pandas": "3.0.5",
+  "db_mtime": "2026-08-18 05:54:30",
+  "executed": "2026-08-18 11:50:25"
+ },
+ "config": {
+  "RISK_FREE_RATE": 0.23,
+  "TRANSACTION_COST_PCT": 1.04,
+  "TRADING_DAYS_PER_YEAR": 240,
+  "INFLATION_RATE": 40.0
+ },
+ "determinism": {
+  "bootstrap_seed": 20240901,
+  "replicates": 5000,
+  "mean_block_sessions": 20
+ }
+}

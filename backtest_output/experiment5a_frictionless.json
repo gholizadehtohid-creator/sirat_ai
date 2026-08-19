@@ -1,0 +1,2784 @@
+{
+ "protocol": {
+  "purpose": "localisation only -- NOT alpha validation",
+  "window": [
+   "2014-09-21",
+   "2024-09-01"
+  ],
+  "decision_dates": 120,
+  "horizon_sessions": 20,
+  "periods_per_year": 12.0,
+  "baskets": [
+   10,
+   47
+  ],
+  "seeds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30
+  ],
+  "round_trip_cost_pct": 1.04,
+  "risk_free_pct": 23.0,
+  "fills": "perfect",
+  "allocator": "not used",
+  "execution_model": "not used",
+  "post_2024_data_read": false
+ },
+ "arms": {
+  "A_top10": {
+   "label": "alpha top-10",
+   "periods": 120,
+   "years": 10.0,
+   "cumulative_return_pct": 36432.82,
+   "cagr_pct": 80.41,
+   "gross_cagr_pct": 102.94,
+   "volatility_pct": 36.87,
+   "sharpe": 1.24,
+   "sortino": 2.923,
+   "max_drawdown_pct": -29.61,
+   "average_holdings": 10.0,
+   "realized_exposure_pct": 100.0,
+   "turnover_per_year": 11.26,
+   "rebalance_events": 120,
+   "mean_period_return_pct": 5.5512,
+   "median_period_return_pct": 4.6058
+  },
+  "A_top47": {
+   "label": "alpha top-47",
+   "periods": 120,
+   "years": 10.0,
+   "cumulative_return_pct": 19195.29,
+   "cagr_pct": 69.26,
+   "gross_cagr_pct": 87.54,
+   "volatility_pct": 33.78,
+   "sharpe": 1.125,
+   "sortino": 2.909,
+   "max_drawdown_pct": -25.95,
+   "average_holdings": 47.0,
+   "realized_exposure_pct": 100.0,
+   "turnover_per_year": 9.82,
+   "rebalance_events": 120,
+   "mean_period_return_pct": 4.9073,
+   "median_period_return_pct": 3.1423
+  }
+ },
+ "controls": {
+  "C_top10": {
+   "seeds": 30,
+   "cagr_mean": 24.32,
+   "cagr_median": 23.31,
+   "cagr_sd": 6.09,
+   "cagr_p5": 15.43,
+   "cagr_p95": 32.16,
+   "cagr_min": 12.17,
+   "cagr_max": 37.92,
+   "sharpe_mean": 0.188,
+   "sharpe_p95": 0.368,
+   "alpha_percentile": 100.0,
+   "alpha_beats_p95": true,
+   "per_seed": [
+    {
+     "label": "random top-10 seed 1",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1052.41,
+     "cagr_pct": 27.69,
+     "gross_cagr_pct": 44.38,
+     "volatility_pct": 33.92,
+     "sharpe": 0.268,
+     "sortino": 0.504,
+     "max_drawdown_pct": -47.08,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.75,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.4964,
+     "median_period_return_pct": -0.0562
+    },
+    {
+     "label": "random top-10 seed 2",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 410.54,
+     "cagr_pct": 17.71,
+     "gross_cagr_pct": 33.16,
+     "volatility_pct": 32.29,
+     "sharpe": 0.01,
+     "sortino": 0.018,
+     "max_drawdown_pct": -49.54,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.8,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 1.7676,
+     "median_period_return_pct": 0.3437
+    },
+    {
+     "label": "random top-10 seed 3",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 544.44,
+     "cagr_pct": 20.48,
+     "gross_cagr_pct": 36.24,
+     "volatility_pct": 36.38,
+     "sharpe": 0.11,
+     "sortino": 0.193,
+     "max_drawdown_pct": -52.08,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.76,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.0738,
+     "median_period_return_pct": -0.5967
+    },
+    {
+     "label": "random top-10 seed 4",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 928.38,
+     "cagr_pct": 26.25,
+     "gross_cagr_pct": 42.8,
+     "volatility_pct": 34.35,
+     "sharpe": 0.234,
+     "sortino": 0.442,
+     "max_drawdown_pct": -43.22,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.79,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.4093,
+     "median_period_return_pct": -0.1482
+    },
+    {
+     "label": "random top-10 seed 5",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 215.45,
+     "cagr_pct": 12.17,
+     "gross_cagr_pct": 26.79,
+     "volatility_pct": 33.08,
+     "sharpe": -0.127,
+     "sortino": -0.2,
+     "max_drawdown_pct": -56.99,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.72,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 1.3895,
+     "median_period_return_pct": -0.2349
+    },
+    {
+     "label": "random top-10 seed 6",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 411.51,
+     "cagr_pct": 17.73,
+     "gross_cagr_pct": 33.23,
+     "volatility_pct": 35.15,
+     "sharpe": 0.034,
+     "sortino": 0.06,
+     "max_drawdown_pct": -51.65,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.83,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 1.8402,
+     "median_period_return_pct": -0.4429
+    },
+    {
+     "label": "random top-10 seed 7",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1245.95,
+     "cagr_pct": 29.69,
+     "gross_cagr_pct": 46.68,
+     "volatility_pct": 38.17,
+     "sharpe": 0.311,
+     "sortino": 0.631,
+     "max_drawdown_pct": -52.13,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.78,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.729,
+     "median_period_return_pct": 0.2811
+    },
+    {
+     "label": "random top-10 seed 8",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 696.04,
+     "cagr_pct": 23.05,
+     "gross_cagr_pct": 39.21,
+     "volatility_pct": 38.14,
+     "sharpe": 0.174,
+     "sortino": 0.32,
+     "max_drawdown_pct": -60.54,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.8,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.2936,
+     "median_period_return_pct": 0.5563
+    },
+    {
+     "label": "random top-10 seed 9",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 450.21,
+     "cagr_pct": 18.59,
+     "gross_cagr_pct": 34.09,
+     "volatility_pct": 38.18,
+     "sharpe": 0.077,
+     "sortino": 0.137,
+     "max_drawdown_pct": -57.46,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.75,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 1.9861,
+     "median_period_return_pct": -0.2716
+    },
+    {
+     "label": "random top-10 seed 10",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 681.35,
+     "cagr_pct": 22.82,
+     "gross_cagr_pct": 38.82,
+     "volatility_pct": 36.21,
+     "sharpe": 0.162,
+     "sortino": 0.288,
+     "max_drawdown_pct": -48.58,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.71,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.2304,
+     "median_period_return_pct": -0.5422
+    },
+    {
+     "label": "random top-10 seed 11",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1570.43,
+     "cagr_pct": 32.52,
+     "gross_cagr_pct": 49.86,
+     "volatility_pct": 34.18,
+     "sharpe": 0.377,
+     "sortino": 0.733,
+     "max_drawdown_pct": -37.11,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.76,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.8139,
+     "median_period_return_pct": 0.784
+    },
+    {
+     "label": "random top-10 seed 12",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 554.76,
+     "cagr_pct": 20.67,
+     "gross_cagr_pct": 36.49,
+     "volatility_pct": 34.36,
+     "sharpe": 0.104,
+     "sortino": 0.177,
+     "max_drawdown_pct": -56.79,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.78,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.0366,
+     "median_period_return_pct": 0.4199
+    },
+    {
+     "label": "random top-10 seed 13",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 2390.47,
+     "cagr_pct": 37.92,
+     "gross_cagr_pct": 56.01,
+     "volatility_pct": 35.88,
+     "sharpe": 0.49,
+     "sortino": 0.984,
+     "max_drawdown_pct": -39.78,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.79,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 3.2056,
+     "median_period_return_pct": 0.9142
+    },
+    {
+     "label": "random top-10 seed 14",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 375.86,
+     "cagr_pct": 16.88,
+     "gross_cagr_pct": 32.23,
+     "volatility_pct": 31.61,
+     "sharpe": -0.017,
+     "sortino": -0.029,
+     "max_drawdown_pct": -47.33,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.8,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 1.6944,
+     "median_period_return_pct": 0.1115
+    },
+    {
+     "label": "random top-10 seed 15",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1026.51,
+     "cagr_pct": 27.4,
+     "gross_cagr_pct": 44.05,
+     "volatility_pct": 35.61,
+     "sharpe": 0.265,
+     "sortino": 0.479,
+     "max_drawdown_pct": -50.18,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.75,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.5255,
+     "median_period_return_pct": 0.8085
+    },
+    {
+     "label": "random top-10 seed 16",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 278.81,
+     "cagr_pct": 14.25,
+     "gross_cagr_pct": 29.29,
+     "volatility_pct": 36.57,
+     "sharpe": -0.036,
+     "sortino": -0.062,
+     "max_drawdown_pct": -63.53,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.83,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 1.6294,
+     "median_period_return_pct": -0.6804
+    },
+    {
+     "label": "random top-10 seed 17",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1347.36,
+     "cagr_pct": 30.63,
+     "gross_cagr_pct": 47.78,
+     "volatility_pct": 36.0,
+     "sharpe": 0.332,
+     "sortino": 0.662,
+     "max_drawdown_pct": -53.73,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.8,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.7359,
+     "median_period_return_pct": 0.1973
+    },
+    {
+     "label": "random top-10 seed 18",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1105.3,
+     "cagr_pct": 28.27,
+     "gross_cagr_pct": 45.1,
+     "volatility_pct": 35.41,
+     "sharpe": 0.281,
+     "sortino": 0.539,
+     "max_drawdown_pct": -42.34,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.8,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.57,
+     "median_period_return_pct": 0.2869
+    },
+    {
+     "label": "random top-10 seed 19",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 730.43,
+     "cagr_pct": 23.57,
+     "gross_cagr_pct": 39.77,
+     "volatility_pct": 35.56,
+     "sharpe": 0.179,
+     "sortino": 0.305,
+     "max_drawdown_pct": -48.84,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.78,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.2703,
+     "median_period_return_pct": 0.6278
+    },
+    {
+     "label": "random top-10 seed 20",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1473.24,
+     "cagr_pct": 31.73,
+     "gross_cagr_pct": 49.05,
+     "volatility_pct": 35.95,
+     "sharpe": 0.358,
+     "sortino": 0.688,
+     "max_drawdown_pct": -48.7,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.82,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.8124,
+     "median_period_return_pct": 0.1268
+    },
+    {
+     "label": "random top-10 seed 21",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 535.21,
+     "cagr_pct": 20.31,
+     "gross_cagr_pct": 36.04,
+     "volatility_pct": 34.8,
+     "sharpe": 0.098,
+     "sortino": 0.162,
+     "max_drawdown_pct": -48.57,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.76,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.0252,
+     "median_period_return_pct": 0.8908
+    },
+    {
+     "label": "random top-10 seed 22",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 455.05,
+     "cagr_pct": 18.7,
+     "gross_cagr_pct": 34.33,
+     "volatility_pct": 37.71,
+     "sharpe": 0.072,
+     "sortino": 0.13,
+     "max_drawdown_pct": -62.43,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.84,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 1.9665,
+     "median_period_return_pct": 0.0103
+    },
+    {
+     "label": "random top-10 seed 23",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 954.53,
+     "cagr_pct": 26.56,
+     "gross_cagr_pct": 43.07,
+     "volatility_pct": 34.03,
+     "sharpe": 0.24,
+     "sortino": 0.446,
+     "max_drawdown_pct": -38.6,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.73,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.4215,
+     "median_period_return_pct": 0.3034
+    },
+    {
+     "label": "random top-10 seed 24",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1178.94,
+     "cagr_pct": 29.03,
+     "gross_cagr_pct": 45.86,
+     "volatility_pct": 33.32,
+     "sharpe": 0.294,
+     "sortino": 0.613,
+     "max_drawdown_pct": -46.46,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.73,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.5573,
+     "median_period_return_pct": 0.3106
+    },
+    {
+     "label": "random top-10 seed 25",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 556.82,
+     "cagr_pct": 20.71,
+     "gross_cagr_pct": 36.41,
+     "volatility_pct": 36.46,
+     "sharpe": 0.114,
+     "sortino": 0.206,
+     "max_drawdown_pct": -62.38,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.7,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.0852,
+     "median_period_return_pct": -0.3974
+    },
+    {
+     "label": "random top-10 seed 26",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1445.19,
+     "cagr_pct": 31.49,
+     "gross_cagr_pct": 48.72,
+     "volatility_pct": 33.92,
+     "sharpe": 0.356,
+     "sortino": 0.68,
+     "max_drawdown_pct": -30.53,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.78,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.7454,
+     "median_period_return_pct": 0.6123
+    },
+    {
+     "label": "random top-10 seed 27",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 623.71,
+     "cagr_pct": 21.89,
+     "gross_cagr_pct": 37.83,
+     "volatility_pct": 33.63,
+     "sharpe": 0.131,
+     "sortino": 0.219,
+     "max_drawdown_pct": -56.93,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.76,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.1065,
+     "median_period_return_pct": 0.4356
+    },
+    {
+     "label": "random top-10 seed 28",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 641.49,
+     "cagr_pct": 22.18,
+     "gross_cagr_pct": 38.25,
+     "volatility_pct": 35.47,
+     "sharpe": 0.142,
+     "sortino": 0.26,
+     "max_drawdown_pct": -54.62,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.82,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.1599,
+     "median_period_return_pct": -0.569
+    },
+    {
+     "label": "random top-10 seed 29",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1113.67,
+     "cagr_pct": 28.35,
+     "gross_cagr_pct": 45.24,
+     "volatility_pct": 32.51,
+     "sharpe": 0.288,
+     "sortino": 0.488,
+     "max_drawdown_pct": -53.14,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.82,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.52,
+     "median_period_return_pct": 1.0963
+    },
+    {
+     "label": "random top-10 seed 30",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1317.29,
+     "cagr_pct": 30.36,
+     "gross_cagr_pct": 47.47,
+     "volatility_pct": 35.0,
+     "sharpe": 0.33,
+     "sortino": 0.598,
+     "max_drawdown_pct": -49.61,
+     "average_holdings": 10.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.8,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.7034,
+     "median_period_return_pct": 1.2085
+    }
+   ]
+  },
+  "C_top47": {
+   "seeds": 30,
+   "cagr_mean": 28.08,
+   "cagr_median": 27.93,
+   "cagr_sd": 2.16,
+   "cagr_p5": 25.0,
+   "cagr_p95": 31.75,
+   "cagr_min": 24.02,
+   "cagr_max": 32.89,
+   "sharpe_mean": 0.275,
+   "sharpe_p95": 0.361,
+   "alpha_percentile": 100.0,
+   "alpha_beats_p95": true,
+   "per_seed": [
+    {
+     "label": "random top-47 seed 1",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1225.06,
+     "cagr_pct": 29.49,
+     "gross_cagr_pct": 45.11,
+     "volatility_pct": 33.45,
+     "sharpe": 0.31,
+     "sortino": 0.59,
+     "max_drawdown_pct": -47.38,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.9,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.6053,
+     "median_period_return_pct": 0.1777
+    },
+    {
+     "label": "random top-47 seed 2",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1304.66,
+     "cagr_pct": 30.24,
+     "gross_cagr_pct": 46.07,
+     "volatility_pct": 33.28,
+     "sharpe": 0.328,
+     "sortino": 0.635,
+     "max_drawdown_pct": -36.11,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.97,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.649,
+     "median_period_return_pct": 0.152
+    },
+    {
+     "label": "random top-47 seed 3",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1236.6,
+     "cagr_pct": 29.6,
+     "gross_cagr_pct": 45.3,
+     "volatility_pct": 33.15,
+     "sharpe": 0.313,
+     "sortino": 0.595,
+     "max_drawdown_pct": -41.06,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.94,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.6045,
+     "median_period_return_pct": -0.2744
+    },
+    {
+     "label": "random top-47 seed 4",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 890.91,
+     "cagr_pct": 25.78,
+     "gross_cagr_pct": 41.05,
+     "volatility_pct": 31.42,
+     "sharpe": 0.218,
+     "sortino": 0.394,
+     "max_drawdown_pct": -43.53,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.97,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.3105,
+     "median_period_return_pct": 0.157
+    },
+    {
+     "label": "random top-47 seed 5",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1076.28,
+     "cagr_pct": 27.95,
+     "gross_cagr_pct": 43.44,
+     "volatility_pct": 35.09,
+     "sharpe": 0.273,
+     "sortino": 0.532,
+     "max_drawdown_pct": -41.11,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.93,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.5391,
+     "median_period_return_pct": 0.0997
+    },
+    {
+     "label": "random top-47 seed 6",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 890.61,
+     "cagr_pct": 25.77,
+     "gross_cagr_pct": 41.06,
+     "volatility_pct": 31.41,
+     "sharpe": 0.218,
+     "sortino": 0.391,
+     "max_drawdown_pct": -42.9,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.98,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.3114,
+     "median_period_return_pct": 0.0731
+    },
+    {
+     "label": "random top-47 seed 7",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1069.61,
+     "cagr_pct": 27.88,
+     "gross_cagr_pct": 43.42,
+     "volatility_pct": 32.43,
+     "sharpe": 0.271,
+     "sortino": 0.511,
+     "max_drawdown_pct": -44.06,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.97,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.472,
+     "median_period_return_pct": -0.0889
+    },
+    {
+     "label": "random top-47 seed 8",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1153.02,
+     "cagr_pct": 28.76,
+     "gross_cagr_pct": 44.37,
+     "volatility_pct": 33.27,
+     "sharpe": 0.293,
+     "sortino": 0.551,
+     "max_drawdown_pct": -54.24,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.95,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.5528,
+     "median_period_return_pct": 0.2168
+    },
+    {
+     "label": "random top-47 seed 9",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 761.04,
+     "cagr_pct": 24.02,
+     "gross_cagr_pct": 39.16,
+     "volatility_pct": 32.32,
+     "sharpe": 0.175,
+     "sortino": 0.314,
+     "max_drawdown_pct": -48.25,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.02,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.2126,
+     "median_period_return_pct": 0.0605
+    },
+    {
+     "label": "random top-47 seed 10",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1192.29,
+     "cagr_pct": 29.16,
+     "gross_cagr_pct": 44.8,
+     "volatility_pct": 32.55,
+     "sharpe": 0.302,
+     "sortino": 0.576,
+     "max_drawdown_pct": -46.14,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.94,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.5598,
+     "median_period_return_pct": 0.4834
+    },
+    {
+     "label": "random top-47 seed 11",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1194.23,
+     "cagr_pct": 29.18,
+     "gross_cagr_pct": 44.77,
+     "volatility_pct": 31.61,
+     "sharpe": 0.303,
+     "sortino": 0.581,
+     "max_drawdown_pct": -40.55,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.9,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.538,
+     "median_period_return_pct": 0.5137
+    },
+    {
+     "label": "random top-47 seed 12",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 911.32,
+     "cagr_pct": 26.03,
+     "gross_cagr_pct": 41.39,
+     "volatility_pct": 32.7,
+     "sharpe": 0.227,
+     "sortino": 0.405,
+     "max_drawdown_pct": -51.37,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.0,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.3599,
+     "median_period_return_pct": 0.5694
+    },
+    {
+     "label": "random top-47 seed 13",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1616.99,
+     "cagr_pct": 32.89,
+     "gross_cagr_pct": 48.89,
+     "volatility_pct": 33.4,
+     "sharpe": 0.387,
+     "sortino": 0.788,
+     "max_drawdown_pct": -41.73,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.88,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.8167,
+     "median_period_return_pct": 0.4301
+    },
+    {
+     "label": "random top-47 seed 14",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1212.15,
+     "cagr_pct": 29.36,
+     "gross_cagr_pct": 45.2,
+     "volatility_pct": 33.14,
+     "sharpe": 0.307,
+     "sortino": 0.584,
+     "max_drawdown_pct": -46.82,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.05,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.5884,
+     "median_period_return_pct": 0.1255
+    },
+    {
+     "label": "random top-47 seed 15",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1127.37,
+     "cagr_pct": 28.5,
+     "gross_cagr_pct": 44.01,
+     "volatility_pct": 33.18,
+     "sharpe": 0.287,
+     "sortino": 0.532,
+     "max_drawdown_pct": -51.72,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.91,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.5338,
+     "median_period_return_pct": 1.0361
+    },
+    {
+     "label": "random top-47 seed 16",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 916.41,
+     "cagr_pct": 26.1,
+     "gross_cagr_pct": 41.48,
+     "volatility_pct": 33.06,
+     "sharpe": 0.229,
+     "sortino": 0.423,
+     "max_drawdown_pct": -40.3,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.01,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.3703,
+     "median_period_return_pct": 0.3424
+    },
+    {
+     "label": "random top-47 seed 17",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1594.58,
+     "cagr_pct": 32.71,
+     "gross_cagr_pct": 48.66,
+     "volatility_pct": 34.01,
+     "sharpe": 0.382,
+     "sortino": 0.775,
+     "max_drawdown_pct": -40.86,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.86,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.824,
+     "median_period_return_pct": -0.0847
+    },
+    {
+     "label": "random top-47 seed 18",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1340.29,
+     "cagr_pct": 30.57,
+     "gross_cagr_pct": 46.5,
+     "volatility_pct": 32.77,
+     "sharpe": 0.335,
+     "sortino": 0.657,
+     "max_drawdown_pct": -36.89,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.01,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.6543,
+     "median_period_return_pct": 0.2191
+    },
+    {
+     "label": "random top-47 seed 19",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 969.84,
+     "cagr_pct": 26.75,
+     "gross_cagr_pct": 41.98,
+     "volatility_pct": 31.72,
+     "sharpe": 0.244,
+     "sortino": 0.44,
+     "max_drawdown_pct": -49.87,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.86,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.3838,
+     "median_period_return_pct": 0.7137
+    },
+    {
+     "label": "random top-47 seed 20",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1012.21,
+     "cagr_pct": 27.24,
+     "gross_cagr_pct": 42.67,
+     "volatility_pct": 31.99,
+     "sharpe": 0.255,
+     "sortino": 0.469,
+     "max_drawdown_pct": -49.57,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.95,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.4211,
+     "median_period_return_pct": 0.409
+    },
+    {
+     "label": "random top-47 seed 21",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 937.49,
+     "cagr_pct": 26.36,
+     "gross_cagr_pct": 41.76,
+     "volatility_pct": 32.63,
+     "sharpe": 0.232,
+     "sortino": 0.447,
+     "max_drawdown_pct": -43.6,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.01,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.3711,
+     "median_period_return_pct": 0.0435
+    },
+    {
+     "label": "random top-47 seed 22",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 939.82,
+     "cagr_pct": 26.39,
+     "gross_cagr_pct": 41.77,
+     "volatility_pct": 32.47,
+     "sharpe": 0.234,
+     "sortino": 0.439,
+     "max_drawdown_pct": -48.05,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.0,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.3731,
+     "median_period_return_pct": 0.5333
+    },
+    {
+     "label": "random top-47 seed 23",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1080.35,
+     "cagr_pct": 28.0,
+     "gross_cagr_pct": 43.58,
+     "volatility_pct": 32.71,
+     "sharpe": 0.273,
+     "sortino": 0.527,
+     "max_drawdown_pct": -41.71,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.99,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.485,
+     "median_period_return_pct": -0.4464
+    },
+    {
+     "label": "random top-47 seed 24",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1321.7,
+     "cagr_pct": 30.4,
+     "gross_cagr_pct": 46.14,
+     "volatility_pct": 31.64,
+     "sharpe": 0.334,
+     "sortino": 0.65,
+     "max_drawdown_pct": -45.89,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.91,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.6202,
+     "median_period_return_pct": 0.3412
+    },
+    {
+     "label": "random top-47 seed 25",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1046.56,
+     "cagr_pct": 27.63,
+     "gross_cagr_pct": 43.15,
+     "volatility_pct": 32.92,
+     "sharpe": 0.265,
+     "sortino": 0.507,
+     "max_drawdown_pct": -49.39,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.99,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.4662,
+     "median_period_return_pct": -0.0333
+    },
+    {
+     "label": "random top-47 seed 26",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1068.44,
+     "cagr_pct": 27.87,
+     "gross_cagr_pct": 43.29,
+     "volatility_pct": 33.1,
+     "sharpe": 0.27,
+     "sortino": 0.518,
+     "max_drawdown_pct": -49.65,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.9,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.485,
+     "median_period_return_pct": 0.3433
+    },
+    {
+     "label": "random top-47 seed 27",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1072.09,
+     "cagr_pct": 27.91,
+     "gross_cagr_pct": 43.43,
+     "volatility_pct": 32.66,
+     "sharpe": 0.272,
+     "sortino": 0.515,
+     "max_drawdown_pct": -45.89,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 10.96,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.4812,
+     "median_period_return_pct": -0.4072
+    },
+    {
+     "label": "random top-47 seed 28",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 832.74,
+     "cagr_pct": 25.02,
+     "gross_cagr_pct": 40.27,
+     "volatility_pct": 31.59,
+     "sharpe": 0.198,
+     "sortino": 0.364,
+     "max_drawdown_pct": -45.35,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.02,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.2614,
+     "median_period_return_pct": 0.0965
+    },
+    {
+     "label": "random top-47 seed 29",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 1253.97,
+     "cagr_pct": 29.77,
+     "gross_cagr_pct": 45.61,
+     "volatility_pct": 32.22,
+     "sharpe": 0.318,
+     "sortino": 0.604,
+     "max_drawdown_pct": -37.09,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.02,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.5938,
+     "median_period_return_pct": 0.649
+    },
+    {
+     "label": "random top-47 seed 30",
+     "periods": 120,
+     "years": 10.0,
+     "cumulative_return_pct": 830.08,
+     "cagr_pct": 24.98,
+     "gross_cagr_pct": 40.27,
+     "volatility_pct": 30.55,
+     "sharpe": 0.196,
+     "sortino": 0.342,
+     "max_drawdown_pct": -52.83,
+     "average_holdings": 47.0,
+     "realized_exposure_pct": 100.0,
+     "turnover_per_year": 11.04,
+     "rebalance_events": 120,
+     "mean_period_return_pct": 2.2399,
+     "median_period_return_pct": 0.5893
+    }
+   ]
+  }
+ },
+ "statistics": {
+  "A10_vs_C10": {
+   "comparison": "alpha top-10 vs random top-10 mean",
+   "observations": 120,
+   "mean_period_diff_pct": 3.2578,
+   "median_period_diff_pct": 2.4425,
+   "sd_pct": 8.8439,
+   "standard_error_pct": 0.8073,
+   "ci95_pct": [
+    1.6754,
+    4.8402
+   ],
+   "t_stat": 4.035,
+   "p_value": 5e-05,
+   "significant_at_5pct": true,
+   "pct_periods_positive": 63.33
+  },
+  "A47_vs_C47": {
+   "comparison": "alpha top-47 vs random top-47 mean",
+   "observations": 120,
+   "mean_period_diff_pct": 2.4179,
+   "median_period_diff_pct": 1.5305,
+   "sd_pct": 4.1716,
+   "standard_error_pct": 0.3808,
+   "ci95_pct": [
+    1.6715,
+    3.1643
+   ],
+   "t_stat": 6.349,
+   "p_value": 0.0,
+   "significant_at_5pct": true,
+   "pct_periods_positive": 72.5
+  }
+ },
+ "spread": {
+  "top10": {
+   "mean_spread_pct": 3.2425,
+   "median_spread_pct": 2.4012,
+   "pct_periods_positive": 62.5,
+   "best_period_pct": 35.757,
+   "worst_period_pct": -16.447,
+   "per_date": [
+    {
+     "date": "2014-09-21",
+     "alpha_basket_pct": 5.132,
+     "random_basket_pct": 8.256,
+     "difference_pct": -3.124
+    },
+    {
+     "date": "2014-10-21",
+     "alpha_basket_pct": 1.6121,
+     "random_basket_pct": 5.4242,
+     "difference_pct": -3.8121
+    },
+    {
+     "date": "2014-11-22",
+     "alpha_basket_pct": -15.2151,
+     "random_basket_pct": -7.3902,
+     "difference_pct": -7.8249
+    },
+    {
+     "date": "2014-12-22",
+     "alpha_basket_pct": -5.2231,
+     "random_basket_pct": -7.402,
+     "difference_pct": 2.1789
+    },
+    {
+     "date": "2015-01-20",
+     "alpha_basket_pct": 2.9456,
+     "random_basket_pct": 1.3292,
+     "difference_pct": 1.6164
+    },
+    {
+     "date": "2015-02-18",
+     "alpha_basket_pct": 1.2768,
+     "random_basket_pct": -1.188,
+     "difference_pct": 2.4648
+    },
+    {
+     "date": "2015-03-18",
+     "alpha_basket_pct": 3.9621,
+     "random_basket_pct": 2.0748,
+     "difference_pct": 1.8873
+    },
+    {
+     "date": "2015-04-22",
+     "alpha_basket_pct": -1.0654,
+     "random_basket_pct": -4.1393,
+     "difference_pct": 3.0739
+    },
+    {
+     "date": "2015-05-24",
+     "alpha_basket_pct": -0.6322,
+     "random_basket_pct": -0.8363,
+     "difference_pct": 0.2041
+    },
+    {
+     "date": "2015-06-22",
+     "alpha_basket_pct": 4.2126,
+     "random_basket_pct": 3.1798,
+     "difference_pct": 1.0328
+    },
+    {
+     "date": "2015-07-22",
+     "alpha_basket_pct": -0.9282,
+     "random_basket_pct": -4.0682,
+     "difference_pct": 3.14
+    },
+    {
+     "date": "2015-08-22",
+     "alpha_basket_pct": -4.4943,
+     "random_basket_pct": -2.9359,
+     "difference_pct": -1.5584
+    },
+    {
+     "date": "2015-09-19",
+     "alpha_basket_pct": -6.9569,
+     "random_basket_pct": -0.5106,
+     "difference_pct": -6.4463
+    },
+    {
+     "date": "2015-10-17",
+     "alpha_basket_pct": 5.6063,
+     "random_basket_pct": -0.6552,
+     "difference_pct": 6.2615
+    },
+    {
+     "date": "2015-11-15",
+     "alpha_basket_pct": -2.7458,
+     "random_basket_pct": -1.3838,
+     "difference_pct": -1.362
+    },
+    {
+     "date": "2015-12-15",
+     "alpha_basket_pct": 10.1449,
+     "random_basket_pct": 5.0791,
+     "difference_pct": 5.0658
+    },
+    {
+     "date": "2016-01-13",
+     "alpha_basket_pct": 10.6315,
+     "random_basket_pct": 18.2864,
+     "difference_pct": -7.6549
+    },
+    {
+     "date": "2016-02-10",
+     "alpha_basket_pct": 12.2605,
+     "random_basket_pct": -1.6613,
+     "difference_pct": 13.9218
+    },
+    {
+     "date": "2016-03-09",
+     "alpha_basket_pct": 12.4595,
+     "random_basket_pct": 2.5596,
+     "difference_pct": 9.8999
+    },
+    {
+     "date": "2016-04-16",
+     "alpha_basket_pct": -0.8332,
+     "random_basket_pct": 2.7533,
+     "difference_pct": -3.5865
+    },
+    {
+     "date": "2016-05-14",
+     "alpha_basket_pct": -9.7262,
+     "random_basket_pct": -1.7456,
+     "difference_pct": -7.9806
+    },
+    {
+     "date": "2016-06-13",
+     "alpha_basket_pct": 12.0254,
+     "random_basket_pct": -1.4432,
+     "difference_pct": 13.4686
+    },
+    {
+     "date": "2016-07-13",
+     "alpha_basket_pct": 12.0894,
+     "random_basket_pct": 4.9321,
+     "difference_pct": 7.1573
+    },
+    {
+     "date": "2016-08-13",
+     "alpha_basket_pct": -2.1961,
+     "random_basket_pct": -1.0071,
+     "difference_pct": -1.189
+    },
+    {
+     "date": "2016-09-10",
+     "alpha_basket_pct": 6.9529,
+     "random_basket_pct": 2.727,
+     "difference_pct": 4.2259
+    },
+    {
+     "date": "2016-10-10",
+     "alpha_basket_pct": 4.4027,
+     "random_basket_pct": 2.9979,
+     "difference_pct": 1.4048
+    },
+    {
+     "date": "2016-11-09",
+     "alpha_basket_pct": 7.0571,
+     "random_basket_pct": 1.3183,
+     "difference_pct": 5.7388
+    },
+    {
+     "date": "2016-12-12",
+     "alpha_basket_pct": -0.215,
+     "random_basket_pct": -4.2189,
+     "difference_pct": 4.0039
+    },
+    {
+     "date": "2017-01-11",
+     "alpha_basket_pct": 30.1462,
+     "random_basket_pct": 1.0685,
+     "difference_pct": 29.0777
+    },
+    {
+     "date": "2017-02-08",
+     "alpha_basket_pct": 9.0314,
+     "random_basket_pct": 0.0184,
+     "difference_pct": 9.013
+    },
+    {
+     "date": "2017-03-08",
+     "alpha_basket_pct": 18.9059,
+     "random_basket_pct": 18.0588,
+     "difference_pct": 0.8471
+    },
+    {
+     "date": "2017-04-16",
+     "alpha_basket_pct": 12.1767,
+     "random_basket_pct": -0.1169,
+     "difference_pct": 12.2936
+    },
+    {
+     "date": "2017-05-15",
+     "alpha_basket_pct": 7.0535,
+     "random_basket_pct": 1.7676,
+     "difference_pct": 5.2859
+    },
+    {
+     "date": "2017-06-14",
+     "alpha_basket_pct": 37.3479,
+     "random_basket_pct": 1.5911,
+     "difference_pct": 35.7568
+    },
+    {
+     "date": "2017-07-16",
+     "alpha_basket_pct": 24.5483,
+     "random_basket_pct": 1.5306,
+     "difference_pct": 23.0177
+    },
+    {
+     "date": "2017-08-14",
+     "alpha_basket_pct": 10.5906,
+     "random_basket_pct": -1.5819,
+     "difference_pct": 12.1725
+    },
+    {
+     "date": "2017-09-12",
+     "alpha_basket_pct": -0.1843,
+     "random_basket_pct": -1.5226,
+     "difference_pct": 1.3383
+    },
+    {
+     "date": "2017-10-14",
+     "alpha_basket_pct": 5.3675,
+     "random_basket_pct": 2.2807,
+     "difference_pct": 3.0868
+    },
+    {
+     "date": "2017-11-11",
+     "alpha_basket_pct": -4.0726,
+     "random_basket_pct": -0.438,
+     "difference_pct": -3.6346
+    },
+    {
+     "date": "2017-12-12",
+     "alpha_basket_pct": 5.9637,
+     "random_basket_pct": -2.7165,
+     "difference_pct": 8.6802
+    },
+    {
+     "date": "2018-01-07",
+     "alpha_basket_pct": 6.4768,
+     "random_basket_pct": 0.9787,
+     "difference_pct": 5.4981
+    },
+    {
+     "date": "2018-02-04",
+     "alpha_basket_pct": -1.9421,
+     "random_basket_pct": -1.1609,
+     "difference_pct": -0.7812
+    },
+    {
+     "date": "2018-03-06",
+     "alpha_basket_pct": 8.7035,
+     "random_basket_pct": -3.4281,
+     "difference_pct": 12.1316
+    },
+    {
+     "date": "2018-04-11",
+     "alpha_basket_pct": -12.9553,
+     "random_basket_pct": -1.2716,
+     "difference_pct": -11.6837
+    },
+    {
+     "date": "2018-05-13",
+     "alpha_basket_pct": 4.6816,
+     "random_basket_pct": 6.9461,
+     "difference_pct": -2.2645
+    },
+    {
+     "date": "2018-06-13",
+     "alpha_basket_pct": -3.9046,
+     "random_basket_pct": -0.0913,
+     "difference_pct": -3.8133
+    },
+    {
+     "date": "2018-07-15",
+     "alpha_basket_pct": -0.6287,
+     "random_basket_pct": 3.7427,
+     "difference_pct": -4.3714
+    },
+    {
+     "date": "2018-08-08",
+     "alpha_basket_pct": 13.0353,
+     "random_basket_pct": 22.6686,
+     "difference_pct": -9.6333
+    },
+    {
+     "date": "2018-09-08",
+     "alpha_basket_pct": 28.9142,
+     "random_basket_pct": 29.4217,
+     "difference_pct": -0.5075
+    },
+    {
+     "date": "2018-10-07",
+     "alpha_basket_pct": -9.7417,
+     "random_basket_pct": -8.6083,
+     "difference_pct": -1.1334
+    },
+    {
+     "date": "2018-11-05",
+     "alpha_basket_pct": 6.5694,
+     "random_basket_pct": -3.0186,
+     "difference_pct": 9.588
+    },
+    {
+     "date": "2018-12-05",
+     "alpha_basket_pct": -3.3717,
+     "random_basket_pct": 2.7047,
+     "difference_pct": -6.0764
+    },
+    {
+     "date": "2019-01-02",
+     "alpha_basket_pct": 6.3138,
+     "random_basket_pct": 5.4492,
+     "difference_pct": 0.8646
+    },
+    {
+     "date": "2019-01-30",
+     "alpha_basket_pct": -2.8484,
+     "random_basket_pct": 2.7559,
+     "difference_pct": -5.6043
+    },
+    {
+     "date": "2019-03-03",
+     "alpha_basket_pct": 9.7839,
+     "random_basket_pct": 15.3831,
+     "difference_pct": -5.5992
+    },
+    {
+     "date": "2019-04-08",
+     "alpha_basket_pct": 20.4311,
+     "random_basket_pct": 14.5889,
+     "difference_pct": 5.8422
+    },
+    {
+     "date": "2019-05-07",
+     "alpha_basket_pct": 21.5504,
+     "random_basket_pct": 20.6003,
+     "difference_pct": 0.9501
+    },
+    {
+     "date": "2019-06-09",
+     "alpha_basket_pct": 6.0071,
+     "random_basket_pct": 16.2792,
+     "difference_pct": -10.2721
+    },
+    {
+     "date": "2019-07-08",
+     "alpha_basket_pct": 12.9439,
+     "random_basket_pct": 4.8329,
+     "difference_pct": 8.111
+    },
+    {
+     "date": "2019-08-05",
+     "alpha_basket_pct": 8.906,
+     "random_basket_pct": 17.3675,
+     "difference_pct": -8.4615
+    },
+    {
+     "date": "2019-09-04",
+     "alpha_basket_pct": 17.5625,
+     "random_basket_pct": 13.9659,
+     "difference_pct": 3.5966
+    },
+    {
+     "date": "2019-10-06",
+     "alpha_basket_pct": -10.3445,
+     "random_basket_pct": -7.8264,
+     "difference_pct": -2.5181
+    },
+    {
+     "date": "2019-11-09",
+     "alpha_basket_pct": 7.5507,
+     "random_basket_pct": 17.6155,
+     "difference_pct": -10.0648
+    },
+    {
+     "date": "2019-12-07",
+     "alpha_basket_pct": 18.3957,
+     "random_basket_pct": 19.3049,
+     "difference_pct": -0.9092
+    },
+    {
+     "date": "2020-01-04",
+     "alpha_basket_pct": 12.4843,
+     "random_basket_pct": 22.4299,
+     "difference_pct": -9.9456
+    },
+    {
+     "date": "2020-02-03",
+     "alpha_basket_pct": 9.2812,
+     "random_basket_pct": 25.7285,
+     "difference_pct": -16.4473
+    },
+    {
+     "date": "2020-03-03",
+     "alpha_basket_pct": 26.8701,
+     "random_basket_pct": 12.0507,
+     "difference_pct": 14.8194
+    },
+    {
+     "date": "2020-04-08",
+     "alpha_basket_pct": 45.493,
+     "random_basket_pct": 36.064,
+     "difference_pct": 9.429
+    },
+    {
+     "date": "2020-05-06",
+     "alpha_basket_pct": 18.6945,
+     "random_basket_pct": 11.7139,
+     "difference_pct": 6.9806
+    },
+    {
+     "date": "2020-06-08",
+     "alpha_basket_pct": 31.0754,
+     "random_basket_pct": 25.1366,
+     "difference_pct": 5.9388
+    },
+    {
+     "date": "2020-07-07",
+     "alpha_basket_pct": 8.8245,
+     "random_basket_pct": 9.0168,
+     "difference_pct": -0.1923
+    },
+    {
+     "date": "2020-08-04",
+     "alpha_basket_pct": -10.5437,
+     "random_basket_pct": -13.0339,
+     "difference_pct": 2.4902
+    },
+    {
+     "date": "2020-09-06",
+     "alpha_basket_pct": 9.6583,
+     "random_basket_pct": -6.3226,
+     "difference_pct": 15.9809
+    },
+    {
+     "date": "2020-10-04",
+     "alpha_basket_pct": 18.1165,
+     "random_basket_pct": -5.1595,
+     "difference_pct": 23.276
+    },
+    {
+     "date": "2020-11-04",
+     "alpha_basket_pct": 8.3071,
+     "random_basket_pct": 11.029,
+     "difference_pct": -2.7219
+    },
+    {
+     "date": "2020-12-02",
+     "alpha_basket_pct": 15.0097,
+     "random_basket_pct": 9.856,
+     "difference_pct": 5.1537
+    },
+    {
+     "date": "2020-12-30",
+     "alpha_basket_pct": 26.9917,
+     "random_basket_pct": -3.4282,
+     "difference_pct": 30.4199
+    },
+    {
+     "date": "2021-01-30",
+     "alpha_basket_pct": 4.5554,
+     "random_basket_pct": -1.3154,
+     "difference_pct": 5.8708
+    },
+    {
+     "date": "2021-02-28",
+     "alpha_basket_pct": 0.8024,
+     "random_basket_pct": 1.813,
+     "difference_pct": -1.0106
+    },
+    {
+     "date": "2021-04-05",
+     "alpha_basket_pct": 2.6375,
+     "random_basket_pct": -3.7616,
+     "difference_pct": 6.3991
+    },
+    {
+     "date": "2021-05-03",
+     "alpha_basket_pct": -3.5225,
+     "random_basket_pct": -7.1344,
+     "difference_pct": 3.6119
+    },
+    {
+     "date": "2021-06-01",
+     "alpha_basket_pct": 2.7679,
+     "random_basket_pct": 0.0563,
+     "difference_pct": 2.7116
+    },
+    {
+     "date": "2021-07-03",
+     "alpha_basket_pct": 15.9708,
+     "random_basket_pct": 3.8116,
+     "difference_pct": 12.1592
+    },
+    {
+     "date": "2021-08-04",
+     "alpha_basket_pct": 10.6355,
+     "random_basket_pct": 12.1206,
+     "difference_pct": -1.4851
+    },
+    {
+     "date": "2021-09-07",
+     "alpha_basket_pct": -7.1571,
+     "random_basket_pct": -10.2682,
+     "difference_pct": 3.1111
+    },
+    {
+     "date": "2021-10-09",
+     "alpha_basket_pct": 0.6139,
+     "random_basket_pct": -7.8396,
+     "difference_pct": 8.4535
+    },
+    {
+     "date": "2021-11-07",
+     "alpha_basket_pct": -1.5531,
+     "random_basket_pct": -6.1174,
+     "difference_pct": 4.5643
+    },
+    {
+     "date": "2021-12-05",
+     "alpha_basket_pct": 5.4454,
+     "random_basket_pct": -1.7839,
+     "difference_pct": 7.2293
+    },
+    {
+     "date": "2022-01-02",
+     "alpha_basket_pct": 5.1541,
+     "random_basket_pct": -9.7247,
+     "difference_pct": 14.8788
+    },
+    {
+     "date": "2022-01-30",
+     "alpha_basket_pct": 31.4157,
+     "random_basket_pct": 0.0174,
+     "difference_pct": 31.3983
+    },
+    {
+     "date": "2022-02-28",
+     "alpha_basket_pct": 9.9083,
+     "random_basket_pct": 10.9021,
+     "difference_pct": -0.9938
+    },
+    {
+     "date": "2022-04-05",
+     "alpha_basket_pct": 7.593,
+     "random_basket_pct": 15.607,
+     "difference_pct": -8.014
+    },
+    {
+     "date": "2022-05-08",
+     "alpha_basket_pct": 6.8869,
+     "random_basket_pct": -2.0664,
+     "difference_pct": 8.9533
+    },
+    {
+     "date": "2022-06-07",
+     "alpha_basket_pct": -0.8958,
+     "random_basket_pct": -2.0721,
+     "difference_pct": 1.1763
+    },
+    {
+     "date": "2022-07-05",
+     "alpha_basket_pct": -5.7167,
+     "random_basket_pct": -8.0267,
+     "difference_pct": 2.31
+    },
+    {
+     "date": "2022-08-06",
+     "alpha_basket_pct": -0.0636,
+     "random_basket_pct": 5.5823,
+     "difference_pct": -5.6459
+    },
+    {
+     "date": "2022-09-05",
+     "alpha_basket_pct": 6.1378,
+     "random_basket_pct": -8.3981,
+     "difference_pct": 14.5359
+    },
+    {
+     "date": "2022-10-09",
+     "alpha_basket_pct": 12.2237,
+     "random_basket_pct": 1.5734,
+     "difference_pct": 10.6503
+    },
+    {
+     "date": "2022-11-06",
+     "alpha_basket_pct": 13.8208,
+     "random_basket_pct": 8.7863,
+     "difference_pct": 5.0345
+    },
+    {
+     "date": "2022-12-04",
+     "alpha_basket_pct": 24.2728,
+     "random_basket_pct": 14.3785,
+     "difference_pct": 9.8943
+    },
+    {
+     "date": "2023-01-02",
+     "alpha_basket_pct": -11.7993,
+     "random_basket_pct": 2.209,
+     "difference_pct": -14.0083
+    },
+    {
+     "date": "2023-01-30",
+     "alpha_basket_pct": 16.5321,
+     "random_basket_pct": 7.9379,
+     "difference_pct": 8.5942
+    },
+    {
+     "date": "2023-03-04",
+     "alpha_basket_pct": 24.8227,
+     "random_basket_pct": 23.7111,
+     "difference_pct": 1.1116
+    },
+    {
+     "date": "2023-04-09",
+     "alpha_basket_pct": 8.7121,
+     "random_basket_pct": 11.517,
+     "difference_pct": -2.8049
+    },
+    {
+     "date": "2023-05-10",
+     "alpha_basket_pct": 2.7996,
+     "random_basket_pct": -1.9558,
+     "difference_pct": 4.7554
+    },
+    {
+     "date": "2023-06-12",
+     "alpha_basket_pct": 2.4971,
+     "random_basket_pct": 6.2843,
+     "difference_pct": -3.7872
+    },
+    {
+     "date": "2023-07-10",
+     "alpha_basket_pct": 2.2168,
+     "random_basket_pct": -6.2781,
+     "difference_pct": 8.4949
+    },
+    {
+     "date": "2023-08-08",
+     "alpha_basket_pct": -4.205,
+     "random_basket_pct": 0.1634,
+     "difference_pct": -4.3684
+    },
+    {
+     "date": "2023-09-05",
+     "alpha_basket_pct": 1.6273,
+     "random_basket_pct": -4.899,
+     "difference_pct": 6.5263
+    },
+    {
+     "date": "2023-10-09",
+     "alpha_basket_pct": 5.6928,
+     "random_basket_pct": -0.9172,
+     "difference_pct": 6.61
+    },
+    {
+     "date": "2023-11-06",
+     "alpha_basket_pct": 4.577,
+     "random_basket_pct": 6.4608,
+     "difference_pct": -1.8838
+    },
+    {
+     "date": "2023-12-04",
+     "alpha_basket_pct": 2.008,
+     "random_basket_pct": 2.297,
+     "difference_pct": -0.289
+    },
+    {
+     "date": "2024-01-02",
+     "alpha_basket_pct": 10.8846,
+     "random_basket_pct": -2.9159,
+     "difference_pct": 13.8005
+    },
+    {
+     "date": "2024-01-30",
+     "alpha_basket_pct": 0.3885,
+     "random_basket_pct": -0.6761,
+     "difference_pct": 1.0646
+    },
+    {
+     "date": "2024-03-02",
+     "alpha_basket_pct": -1.0659,
+     "random_basket_pct": 1.7356,
+     "difference_pct": -2.8015
+    },
+    {
+     "date": "2024-04-06",
+     "alpha_basket_pct": -0.4952,
+     "random_basket_pct": -0.3336,
+     "difference_pct": -0.1616
+    },
+    {
+     "date": "2024-05-06",
+     "alpha_basket_pct": -3.811,
+     "random_basket_pct": -10.0619,
+     "difference_pct": 6.2509
+    },
+    {
+     "date": "2024-06-08",
+     "alpha_basket_pct": -1.8778,
+     "random_basket_pct": 4.3383,
+     "difference_pct": -6.2161
+    },
+    {
+     "date": "2024-07-08",
+     "alpha_basket_pct": -8.1556,
+     "random_basket_pct": -11.0307,
+     "difference_pct": 2.8751
+    },
+    {
+     "date": "2024-08-10",
+     "alpha_basket_pct": 5.8468,
+     "random_basket_pct": 3.5093,
+     "difference_pct": 2.3375
+    }
+   ]
+  },
+  "top47": {
+   "mean_spread_pct": 2.337,
+   "median_spread_pct": 1.501,
+   "pct_periods_positive": 70.83,
+   "best_period_pct": 16.959,
+   "worst_period_pct": -6.773,
+   "per_date": [
+    {
+     "date": "2014-09-21",
+     "alpha_basket_pct": 7.2706,
+     "random_basket_pct": 7.9362,
+     "difference_pct": -0.6656
+    },
+    {
+     "date": "2014-10-21",
+     "alpha_basket_pct": 5.7651,
+     "random_basket_pct": 4.4388,
+     "difference_pct": 1.3263
+    },
+    {
+     "date": "2014-11-22",
+     "alpha_basket_pct": -9.5767,
+     "random_basket_pct": -6.847,
+     "difference_pct": -2.7297
+    },
+    {
+     "date": "2014-12-22",
+     "alpha_basket_pct": -5.0234,
+     "random_basket_pct": -7.7163,
+     "difference_pct": 2.6929
+    },
+    {
+     "date": "2015-01-20",
+     "alpha_basket_pct": 0.1583,
+     "random_basket_pct": 0.2673,
+     "difference_pct": -0.109
+    },
+    {
+     "date": "2015-02-18",
+     "alpha_basket_pct": -2.4266,
+     "random_basket_pct": -0.8089,
+     "difference_pct": -1.6177
+    },
+    {
+     "date": "2015-03-18",
+     "alpha_basket_pct": 5.2649,
+     "random_basket_pct": 2.1323,
+     "difference_pct": 3.1326
+    },
+    {
+     "date": "2015-04-22",
+     "alpha_basket_pct": -2.7486,
+     "random_basket_pct": -4.3654,
+     "difference_pct": 1.6168
+    },
+    {
+     "date": "2015-05-24",
+     "alpha_basket_pct": -1.4312,
+     "random_basket_pct": -0.9093,
+     "difference_pct": -0.5219
+    },
+    {
+     "date": "2015-06-22",
+     "alpha_basket_pct": 4.2701,
+     "random_basket_pct": 4.5442,
+     "difference_pct": -0.2741
+    },
+    {
+     "date": "2015-07-22",
+     "alpha_basket_pct": -2.7397,
+     "random_basket_pct": -3.9503,
+     "difference_pct": 1.2106
+    },
+    {
+     "date": "2015-08-22",
+     "alpha_basket_pct": -0.1842,
+     "random_basket_pct": -2.1006,
+     "difference_pct": 1.9164
+    },
+    {
+     "date": "2015-09-19",
+     "alpha_basket_pct": -2.132,
+     "random_basket_pct": -0.0148,
+     "difference_pct": -2.1172
+    },
+    {
+     "date": "2015-10-17",
+     "alpha_basket_pct": 0.7341,
+     "random_basket_pct": 0.2334,
+     "difference_pct": 0.5007
+    },
+    {
+     "date": "2015-11-15",
+     "alpha_basket_pct": -2.7255,
+     "random_basket_pct": -1.9193,
+     "difference_pct": -0.8062
+    },
+    {
+     "date": "2015-12-15",
+     "alpha_basket_pct": 5.8584,
+     "random_basket_pct": 5.9086,
+     "difference_pct": -0.0502
+    },
+    {
+     "date": "2016-01-13",
+     "alpha_basket_pct": 17.9426,
+     "random_basket_pct": 18.374,
+     "difference_pct": -0.4314
+    },
+    {
+     "date": "2016-02-10",
+     "alpha_basket_pct": 4.2207,
+     "random_basket_pct": -1.5006,
+     "difference_pct": 5.7213
+    },
+    {
+     "date": "2016-03-09",
+     "alpha_basket_pct": 1.3582,
+     "random_basket_pct": 1.5683,
+     "difference_pct": -0.2101
+    },
+    {
+     "date": "2016-04-16",
+     "alpha_basket_pct": 5.3021,
+     "random_basket_pct": 2.1408,
+     "difference_pct": 3.1613
+    },
+    {
+     "date": "2016-05-14",
+     "alpha_basket_pct": -2.1796,
+     "random_basket_pct": -1.5699,
+     "difference_pct": -0.6097
+    },
+    {
+     "date": "2016-06-13",
+     "alpha_basket_pct": 2.8495,
+     "random_basket_pct": -0.7163,
+     "difference_pct": 3.5658
+    },
+    {
+     "date": "2016-07-13",
+     "alpha_basket_pct": 4.0711,
+     "random_basket_pct": 4.4919,
+     "difference_pct": -0.4208
+    },
+    {
+     "date": "2016-08-13",
+     "alpha_basket_pct": -0.9403,
+     "random_basket_pct": -1.1563,
+     "difference_pct": 0.216
+    },
+    {
+     "date": "2016-09-10",
+     "alpha_basket_pct": 9.4656,
+     "random_basket_pct": 3.722,
+     "difference_pct": 5.7436
+    },
+    {
+     "date": "2016-10-10",
+     "alpha_basket_pct": 2.5674,
+     "random_basket_pct": 2.972,
+     "difference_pct": -0.4046
+    },
+    {
+     "date": "2016-11-09",
+     "alpha_basket_pct": 6.2859,
+     "random_basket_pct": 1.8881,
+     "difference_pct": 4.3978
+    },
+    {
+     "date": "2016-12-12",
+     "alpha_basket_pct": -2.6591,
+     "random_basket_pct": -4.1167,
+     "difference_pct": 1.4576
+    },
+    {
+     "date": "2017-01-11",
+     "alpha_basket_pct": 9.0528,
+     "random_basket_pct": 1.3641,
+     "difference_pct": 7.6887
+    },
+    {
+     "date": "2017-02-08",
+     "alpha_basket_pct": -0.0988,
+     "random_basket_pct": 0.1942,
+     "difference_pct": -0.293
+    },
+    {
+     "date": "2017-03-08",
+     "alpha_basket_pct": 17.8811,
+     "random_basket_pct": 19.4277,
+     "difference_pct": -1.5466
+    },
+    {
+     "date": "2017-04-16",
+     "alpha_basket_pct": 2.7108,
+     "random_basket_pct": 1.431,
+     "difference_pct": 1.2798
+    },
+    {
+     "date": "2017-05-15",
+     "alpha_basket_pct": 4.0869,
+     "random_basket_pct": 1.4446,
+     "difference_pct": 2.6423
+    },
+    {
+     "date": "2017-06-14",
+     "alpha_basket_pct": 7.8421,
+     "random_basket_pct": 1.8092,
+     "difference_pct": 6.0329
+    },
+    {
+     "date": "2017-07-16",
+     "alpha_basket_pct": 7.982,
+     "random_basket_pct": 2.4295,
+     "difference_pct": 5.5525
+    },
+    {
+     "date": "2017-08-14",
+     "alpha_basket_pct": -0.6418,
+     "random_basket_pct": -1.0552,
+     "difference_pct": 0.4134
+    },
+    {
+     "date": "2017-09-12",
+     "alpha_basket_pct": -0.2122,
+     "random_basket_pct": -1.0531,
+     "difference_pct": 0.8409
+    },
+    {
+     "date": "2017-10-14",
+     "alpha_basket_pct": 0.7632,
+     "random_basket_pct": 1.9706,
+     "difference_pct": -1.2074
+    },
+    {
+     "date": "2017-11-11",
+     "alpha_basket_pct": -2.3369,
+     "random_basket_pct": -0.594,
+     "difference_pct": -1.7429
+    },
+    {
+     "date": "2017-12-12",
+     "alpha_basket_pct": 0.3056,
+     "random_basket_pct": -2.065,
+     "difference_pct": 2.3706
+    },
+    {
+     "date": "2018-01-07",
+     "alpha_basket_pct": 3.9424,
+     "random_basket_pct": 1.2846,
+     "difference_pct": 2.6578
+    },
+    {
+     "date": "2018-02-04",
+     "alpha_basket_pct": -1.2265,
+     "random_basket_pct": -0.9348,
+     "difference_pct": -0.2917
+    },
+    {
+     "date": "2018-03-06",
+     "alpha_basket_pct": 2.3121,
+     "random_basket_pct": -3.0292,
+     "difference_pct": 5.3413
+    },
+    {
+     "date": "2018-04-11",
+     "alpha_basket_pct": -2.146,
+     "random_basket_pct": -0.2766,
+     "difference_pct": -1.8694
+    },
+    {
+     "date": "2018-05-13",
+     "alpha_basket_pct": 6.605,
+     "random_basket_pct": 5.9791,
+     "difference_pct": 0.6259
+    },
+    {
+     "date": "2018-06-13",
+     "alpha_basket_pct": 6.1163,
+     "random_basket_pct": 0.2606,
+     "difference_pct": 5.8557
+    },
+    {
+     "date": "2018-07-15",
+     "alpha_basket_pct": -0.2978,
+     "random_basket_pct": 2.528,
+     "difference_pct": -2.8258
+    },
+    {
+     "date": "2018-08-08",
+     "alpha_basket_pct": 15.239,
+     "random_basket_pct": 22.0117,
+     "difference_pct": -6.7727
+    },
+    {
+     "date": "2018-09-08",
+     "alpha_basket_pct": 27.6944,
+     "random_basket_pct": 29.5179,
+     "difference_pct": -1.8235
+    },
+    {
+     "date": "2018-10-07",
+     "alpha_basket_pct": -7.6643,
+     "random_basket_pct": -8.115,
+     "difference_pct": 0.4507
+    },
+    {
+     "date": "2018-11-05",
+     "alpha_basket_pct": -0.0123,
+     "random_basket_pct": -3.1876,
+     "difference_pct": 3.1753
+    },
+    {
+     "date": "2018-12-05",
+     "alpha_basket_pct": 4.173,
+     "random_basket_pct": 2.7874,
+     "difference_pct": 1.3856
+    },
+    {
+     "date": "2019-01-02",
+     "alpha_basket_pct": 7.9507,
+     "random_basket_pct": 6.7545,
+     "difference_pct": 1.1962
+    },
+    {
+     "date": "2019-01-30",
+     "alpha_basket_pct": 3.6361,
+     "random_basket_pct": 2.0917,
+     "difference_pct": 1.5444
+    },
+    {
+     "date": "2019-03-03",
+     "alpha_basket_pct": 19.8997,
+     "random_basket_pct": 16.3691,
+     "difference_pct": 3.5306
+    },
+    {
+     "date": "2019-04-08",
+     "alpha_basket_pct": 15.3461,
+     "random_basket_pct": 15.09,
+     "difference_pct": 0.2561
+    },
+    {
+     "date": "2019-05-07",
+     "alpha_basket_pct": 26.6305,
+     "random_basket_pct": 22.0566,
+     "difference_pct": 4.5739
+    },
+    {
+     "date": "2019-06-09",
+     "alpha_basket_pct": 8.5653,
+     "random_basket_pct": 14.423,
+     "difference_pct": -5.8577
+    },
+    {
+     "date": "2019-07-08",
+     "alpha_basket_pct": 18.9764,
+     "random_basket_pct": 4.0768,
+     "difference_pct": 14.8996
+    },
+    {
+     "date": "2019-08-05",
+     "alpha_basket_pct": 15.9534,
+     "random_basket_pct": 17.6282,
+     "difference_pct": -1.6748
+    },
+    {
+     "date": "2019-09-04",
+     "alpha_basket_pct": 19.0586,
+     "random_basket_pct": 14.8393,
+     "difference_pct": 4.2193
+    },
+    {
+     "date": "2019-10-06",
+     "alpha_basket_pct": -10.7846,
+     "random_basket_pct": -7.4,
+     "difference_pct": -3.3846
+    },
+    {
+     "date": "2019-11-09",
+     "alpha_basket_pct": 12.7064,
+     "random_basket_pct": 18.3514,
+     "difference_pct": -5.645
+    },
+    {
+     "date": "2019-12-07",
+     "alpha_basket_pct": 20.9045,
+     "random_basket_pct": 19.5349,
+     "difference_pct": 1.3696
+    },
+    {
+     "date": "2020-01-04",
+     "alpha_basket_pct": 26.7791,
+     "random_basket_pct": 22.5127,
+     "difference_pct": 4.2664
+    },
+    {
+     "date": "2020-02-03",
+     "alpha_basket_pct": 27.5197,
+     "random_basket_pct": 24.6539,
+     "difference_pct": 2.8658
+    },
+    {
+     "date": "2020-03-03",
+     "alpha_basket_pct": 17.9912,
+     "random_basket_pct": 13.2243,
+     "difference_pct": 4.7669
+    },
+    {
+     "date": "2020-04-08",
+     "alpha_basket_pct": 46.3109,
+     "random_basket_pct": 36.1591,
+     "difference_pct": 10.1518
+    },
+    {
+     "date": "2020-05-06",
+     "alpha_basket_pct": 18.7617,
+     "random_basket_pct": 11.2415,
+     "difference_pct": 7.5202
+    },
+    {
+     "date": "2020-06-08",
+     "alpha_basket_pct": 34.7825,
+     "random_basket_pct": 26.2983,
+     "difference_pct": 8.4842
+    },
+    {
+     "date": "2020-07-07",
+     "alpha_basket_pct": 17.4833,
+     "random_basket_pct": 8.406,
+     "difference_pct": 9.0773
+    },
+    {
+     "date": "2020-08-04",
+     "alpha_basket_pct": -12.1639,
+     "random_basket_pct": -13.2447,
+     "difference_pct": 1.0808
+    },
+    {
+     "date": "2020-09-06",
+     "alpha_basket_pct": 4.5828,
+     "random_basket_pct": -7.306,
+     "difference_pct": 11.8888
+    },
+    {
+     "date": "2020-10-04",
+     "alpha_basket_pct": 3.7853,
+     "random_basket_pct": -4.5841,
+     "difference_pct": 8.3694
+    },
+    {
+     "date": "2020-11-04",
+     "alpha_basket_pct": 14.9483,
+     "random_basket_pct": 11.8703,
+     "difference_pct": 3.078
+    },
+    {
+     "date": "2020-12-02",
+     "alpha_basket_pct": 22.0772,
+     "random_basket_pct": 9.6684,
+     "difference_pct": 12.4088
+    },
+    {
+     "date": "2020-12-30",
+     "alpha_basket_pct": 12.145,
+     "random_basket_pct": -4.8141,
+     "difference_pct": 16.9591
+    },
+    {
+     "date": "2021-01-30",
+     "alpha_basket_pct": 5.8079,
+     "random_basket_pct": -0.6375,
+     "difference_pct": 6.4454
+    },
+    {
+     "date": "2021-02-28",
+     "alpha_basket_pct": 4.5796,
+     "random_basket_pct": 1.0014,
+     "difference_pct": 3.5782
+    },
+    {
+     "date": "2021-04-05",
+     "alpha_basket_pct": -0.2279,
+     "random_basket_pct": -3.4108,
+     "difference_pct": 3.1829
+    },
+    {
+     "date": "2021-05-03",
+     "alpha_basket_pct": 0.0799,
+     "random_basket_pct": -6.7912,
+     "difference_pct": 6.8711
+    },
+    {
+     "date": "2021-06-01",
+     "alpha_basket_pct": 5.7205,
+     "random_basket_pct": 0.0865,
+     "difference_pct": 5.634
+    },
+    {
+     "date": "2021-07-03",
+     "alpha_basket_pct": 10.4174,
+     "random_basket_pct": 3.1086,
+     "difference_pct": 7.3088
+    },
+    {
+     "date": "2021-08-04",
+     "alpha_basket_pct": 10.8184,
+     "random_basket_pct": 12.952,
+     "difference_pct": -2.1336
+    },
+    {
+     "date": "2021-09-07",
+     "alpha_basket_pct": -6.8384,
+     "random_basket_pct": -9.5772,
+     "difference_pct": 2.7388
+    },
+    {
+     "date": "2021-10-09",
+     "alpha_basket_pct": -0.8253,
+     "random_basket_pct": -8.3308,
+     "difference_pct": 7.5054
+    },
+    {
+     "date": "2021-11-07",
+     "alpha_basket_pct": -2.3432,
+     "random_basket_pct": -5.6054,
+     "difference_pct": 3.2622
+    },
+    {
+     "date": "2021-12-05",
+     "alpha_basket_pct": -2.9616,
+     "random_basket_pct": -1.6197,
+     "difference_pct": -1.3419
+    },
+    {
+     "date": "2022-01-02",
+     "alpha_basket_pct": -0.7599,
+     "random_basket_pct": -9.3164,
+     "difference_pct": 8.5565
+    },
+    {
+     "date": "2022-01-30",
+     "alpha_basket_pct": 16.4969,
+     "random_basket_pct": 1.684,
+     "difference_pct": 14.8129
+    },
+    {
+     "date": "2022-02-28",
+     "alpha_basket_pct": 16.7638,
+     "random_basket_pct": 11.4081,
+     "difference_pct": 5.3557
+    },
+    {
+     "date": "2022-04-05",
+     "alpha_basket_pct": 16.2617,
+     "random_basket_pct": 15.5991,
+     "difference_pct": 0.6626
+    },
+    {
+     "date": "2022-05-08",
+     "alpha_basket_pct": 0.6321,
+     "random_basket_pct": -1.866,
+     "difference_pct": 2.4981
+    },
+    {
+     "date": "2022-06-07",
+     "alpha_basket_pct": 2.6634,
+     "random_basket_pct": -1.4328,
+     "difference_pct": 4.0962
+    },
+    {
+     "date": "2022-07-05",
+     "alpha_basket_pct": -5.9992,
+     "random_basket_pct": -7.7881,
+     "difference_pct": 1.7889
+    },
+    {
+     "date": "2022-08-06",
+     "alpha_basket_pct": 4.511,
+     "random_basket_pct": 5.5513,
+     "difference_pct": -1.0403
+    },
+    {
+     "date": "2022-09-05",
+     "alpha_basket_pct": -5.5956,
+     "random_basket_pct": -8.1111,
+     "difference_pct": 2.5155
+    },
+    {
+     "date": "2022-10-09",
+     "alpha_basket_pct": 5.5134,
+     "random_basket_pct": 0.1424,
+     "difference_pct": 5.371
+    },
+    {
+     "date": "2022-11-06",
+     "alpha_basket_pct": 11.1002,
+     "random_basket_pct": 8.5375,
+     "difference_pct": 2.5627
+    },
+    {
+     "date": "2022-12-04",
+     "alpha_basket_pct": 22.1539,
+     "random_basket_pct": 14.7628,
+     "difference_pct": 7.3911
+    },
+    {
+     "date": "2023-01-02",
+     "alpha_basket_pct": -3.0899,
+     "random_basket_pct": 3.2726,
+     "difference_pct": -6.3625
+    },
+    {
+     "date": "2023-01-30",
+     "alpha_basket_pct": 5.4005,
+     "random_basket_pct": 9.5081,
+     "difference_pct": -4.1076
+    },
+    {
+     "date": "2023-03-04",
+     "alpha_basket_pct": 24.3593,
+     "random_basket_pct": 24.2582,
+     "difference_pct": 0.1011
+    },
+    {
+     "date": "2023-04-09",
+     "alpha_basket_pct": 9.9031,
+     "random_basket_pct": 11.5761,
+     "difference_pct": -1.673
+    },
+    {
+     "date": "2023-05-10",
+     "alpha_basket_pct": -0.1992,
+     "random_basket_pct": -2.7274,
+     "difference_pct": 2.5282
+    },
+    {
+     "date": "2023-06-12",
+     "alpha_basket_pct": 6.6557,
+     "random_basket_pct": 4.8738,
+     "difference_pct": 1.7819
+    },
+    {
+     "date": "2023-07-10",
+     "alpha_basket_pct": -3.4774,
+     "random_basket_pct": -6.2036,
+     "difference_pct": 2.7262
+    },
+    {
+     "date": "2023-08-08",
+     "alpha_basket_pct": 0.9508,
+     "random_basket_pct": 0.79,
+     "difference_pct": 0.1608
+    },
+    {
+     "date": "2023-09-05",
+     "alpha_basket_pct": -4.0203,
+     "random_basket_pct": -5.4505,
+     "difference_pct": 1.4302
+    },
+    {
+     "date": "2023-10-09",
+     "alpha_basket_pct": 3.1184,
+     "random_basket_pct": -1.1077,
+     "difference_pct": 4.2261
+    },
+    {
+     "date": "2023-11-06",
+     "alpha_basket_pct": 7.6541,
+     "random_basket_pct": 6.9993,
+     "difference_pct": 0.6548
+    },
+    {
+     "date": "2023-12-04",
+     "alpha_basket_pct": 3.4012,
+     "random_basket_pct": 2.0425,
+     "difference_pct": 1.3587
+    },
+    {
+     "date": "2024-01-02",
+     "alpha_basket_pct": 2.9249,
+     "random_basket_pct": -2.445,
+     "difference_pct": 5.3699
+    },
+    {
+     "date": "2024-01-30",
+     "alpha_basket_pct": -1.9483,
+     "random_basket_pct": -1.0898,
+     "difference_pct": -0.8585
+    },
+    {
+     "date": "2024-03-02",
+     "alpha_basket_pct": 1.4789,
+     "random_basket_pct": 1.2757,
+     "difference_pct": 0.2032
+    },
+    {
+     "date": "2024-04-06",
+     "alpha_basket_pct": 0.1,
+     "random_basket_pct": -0.0605,
+     "difference_pct": 0.1605
+    },
+    {
+     "date": "2024-05-06",
+     "alpha_basket_pct": -1.9144,
+     "random_basket_pct": -9.9964,
+     "difference_pct": 8.082
+    },
+    {
+     "date": "2024-06-08",
+     "alpha_basket_pct": -0.6621,
+     "random_basket_pct": 3.1656,
+     "difference_pct": -3.8277
+    },
+    {
+     "date": "2024-07-08",
+     "alpha_basket_pct": -10.4933,
+     "random_basket_pct": -10.7289,
+     "difference_pct": 0.2356
+    },
+    {
+     "date": "2024-08-10",
+     "alpha_basket_pct": 4.4913,
+     "random_basket_pct": 3.4457,
+     "difference_pct": 1.0456
+    }
+   ]
+  }
+ },
+ "stability": {
+  "top10": {
+   "2014-2016": {
+    "periods": 28,
+    "cagr_pct": 12.62,
+    "sharpe": -0.251,
+    "alpha_spread_pct": 1.5074,
+    "pct_periods_alpha_ahead": 64.3
+   },
+   "2017-2019": {
+    "periods": 36,
+    "cagr_pct": 123.55,
+    "sharpe": 1.746,
+    "alpha_spread_pct": 2.7729,
+    "pct_periods_alpha_ahead": 52.8
+   },
+   "2020-2022": {
+    "periods": 36,
+    "cagr_pct": 163.56,
+    "sharpe": 2.119,
+    "alpha_spread_pct": 6.1382,
+    "pct_periods_alpha_ahead": 75.0
+   },
+   "2023-2024": {
+    "periods": 20,
+    "cagr_pct": 19.92,
+    "sharpe": 0.035,
+    "alpha_spread_pct": 1.305,
+    "pct_periods_alpha_ahead": 55.0
+   }
+  },
+  "top47": {
+   "2014-2016": {
+    "periods": 28,
+    "cagr_pct": 9.51,
+    "sharpe": -0.553,
+    "alpha_spread_pct": 0.9176,
+    "pct_periods_alpha_ahead": 50.0
+   },
+   "2017-2019": {
+    "periods": 36,
+    "cagr_pct": 99.55,
+    "sharpe": 1.718,
+    "alpha_spread_pct": 1.1936,
+    "pct_periods_alpha_ahead": 63.9
+   },
+   "2020-2022": {
+    "periods": 36,
+    "cagr_pct": 150.45,
+    "sharpe": 1.917,
+    "alpha_spread_pct": 5.515,
+    "pct_periods_alpha_ahead": 91.7
+   },
+   "2023-2024": {
+    "periods": 20,
+    "cagr_pct": 14.34,
+    "sharpe": -0.201,
+    "alpha_spread_pct": 0.6618,
+    "pct_periods_alpha_ahead": 75.0
+   }
+  }
+ },
+ "verdicts": {
+  "top10": {
+   "pass_localization": true,
+   "alpha_cagr_pct": 80.41,
+   "random_mean_cagr_pct": 24.32,
+   "alpha_percentile": 100.0,
+   "p_value": 5e-05
+  },
+  "top47": {
+   "pass_localization": true,
+   "alpha_cagr_pct": 69.26,
+   "random_mean_cagr_pct": 28.08,
+   "alpha_percentile": 100.0,
+   "p_value": 0.0
+  }
+ },
+ "environment": {
+  "python": "3.14.7",
+  "numpy": "2.5.1",
+  "pandas": "3.0.5",
+  "executed": "2026-08-18 14:14:46"
+ }
+}

@@ -1,0 +1,198 @@
+{
+ "protocol": {
+  "purpose": "diagnosis only -- no tuning, no model change",
+  "window": [
+   "2014-09-21",
+   "2024-09-01"
+  ],
+  "horizons": [
+   1,
+   5,
+   10,
+   20,
+   60
+  ],
+  "round_trip_pct": 1.04,
+  "sessions_per_year": 240,
+  "fwd1_validation": {
+   "comparable_rows": 71461,
+   "median_abs_diff_pp": 0.00021,
+   "pct_within_tolerance": 98.31,
+   "tolerance_pp": 0.05,
+   "trusted": true
+  }
+ },
+ "decay_curve": {
+  "h1": {
+   "horizon": 1,
+   "dates": 119,
+   "mean_ic": 0.10492,
+   "median_ic": 0.10416,
+   "ic_sd": 0.13034,
+   "icir": 0.805,
+   "t_stat": 8.781,
+   "pct_positive_ic": 81.51,
+   "top_minus_market_pct": 0.5496,
+   "top_minus_bottom_pct": 0.7877,
+   "hit_ratio_pct": 54.96,
+   "ic_per_sqrt_session": 0.10492
+  },
+  "h5": {
+   "horizon": 5,
+   "dates": 120,
+   "mean_ic": 0.05101,
+   "median_ic": 0.03099,
+   "ic_sd": 0.13361,
+   "icir": 0.3818,
+   "t_stat": 4.182,
+   "pct_positive_ic": 64.17,
+   "top_minus_market_pct": 1.385,
+   "top_minus_bottom_pct": 1.8267,
+   "hit_ratio_pct": 56.02,
+   "ic_per_sqrt_session": 0.11405
+  },
+  "h10": {
+   "horizon": 10,
+   "dates": 120,
+   "mean_ic": 0.03003,
+   "median_ic": 0.02128,
+   "ic_sd": 0.12871,
+   "icir": 0.2333,
+   "t_stat": 2.556,
+   "pct_positive_ic": 56.67,
+   "top_minus_market_pct": 1.7222,
+   "top_minus_bottom_pct": 2.3653,
+   "hit_ratio_pct": 54.27,
+   "ic_per_sqrt_session": 0.09495
+  },
+  "h20": {
+   "horizon": 20,
+   "dates": 120,
+   "mean_ic": 0.01456,
+   "median_ic": 0.0028,
+   "ic_sd": 0.1295,
+   "icir": 0.1125,
+   "t_stat": 1.232,
+   "pct_positive_ic": 51.67,
+   "top_minus_market_pct": 1.9573,
+   "top_minus_bottom_pct": 2.8914,
+   "hit_ratio_pct": 50.95,
+   "ic_per_sqrt_session": 0.06513
+  },
+  "h60": {
+   "horizon": 60,
+   "dates": 120,
+   "mean_ic": 0.01755,
+   "median_ic": 0.01218,
+   "ic_sd": 0.11872,
+   "icir": 0.1479,
+   "t_stat": 1.62,
+   "pct_positive_ic": 55.83,
+   "top_minus_market_pct": 3.1388,
+   "top_minus_bottom_pct": 3.8365,
+   "hit_ratio_pct": 51.56,
+   "ic_per_sqrt_session": 0.13598
+  }
+ },
+ "marginal_accrual": [
+  {
+   "from_session": 0,
+   "to_session": 1,
+   "sessions": 1,
+   "alpha_gained_pct": 0.5496,
+   "per_session_pct": 0.5496
+  },
+  {
+   "from_session": 1,
+   "to_session": 5,
+   "sessions": 4,
+   "alpha_gained_pct": 0.8354,
+   "per_session_pct": 0.20885
+  },
+  {
+   "from_session": 5,
+   "to_session": 10,
+   "sessions": 5,
+   "alpha_gained_pct": 0.3372,
+   "per_session_pct": 0.06744
+  },
+  {
+   "from_session": 10,
+   "to_session": 20,
+   "sessions": 10,
+   "alpha_gained_pct": 0.2351,
+   "per_session_pct": 0.02351
+  },
+  {
+   "from_session": 20,
+   "to_session": 60,
+   "sessions": 40,
+   "alpha_gained_pct": 1.1815,
+   "per_session_pct": 0.02954
+  }
+ ],
+ "half_life": {
+  "tau_sessions": 16.389,
+  "half_life_sessions": 11.36
+ },
+ "feasibility": {
+  "h1": {
+   "horizon": 1,
+   "alpha_pct": 0.5496,
+   "cost_pct": 1.04,
+   "net_per_period_pct": -0.4904,
+   "periods_per_year": 240.0,
+   "net_per_year_pct": -69.27,
+   "clears_commission": false
+  },
+  "h5": {
+   "horizon": 5,
+   "alpha_pct": 1.385,
+   "cost_pct": 1.04,
+   "net_per_period_pct": 0.345,
+   "periods_per_year": 48.0,
+   "net_per_year_pct": 17.98,
+   "clears_commission": true
+  },
+  "h10": {
+   "horizon": 10,
+   "alpha_pct": 1.7222,
+   "cost_pct": 1.04,
+   "net_per_period_pct": 0.6822,
+   "periods_per_year": 24.0,
+   "net_per_year_pct": 17.72,
+   "clears_commission": true
+  },
+  "h20": {
+   "horizon": 20,
+   "alpha_pct": 1.9573,
+   "cost_pct": 1.04,
+   "net_per_period_pct": 0.9173,
+   "periods_per_year": 12.0,
+   "net_per_year_pct": 11.58,
+   "clears_commission": true
+  },
+  "h60": {
+   "horizon": 60,
+   "alpha_pct": 3.1388,
+   "cost_pct": 1.04,
+   "net_per_period_pct": 2.0988,
+   "periods_per_year": 4.0,
+   "net_per_year_pct": 8.66,
+   "clears_commission": true
+  }
+ },
+ "breakeven_horizon": 5,
+ "realized": {
+  "turnover_per_year": 4.45,
+  "implied_holding_sessions": 53.93,
+  "rebalance_sessions": 20,
+  "half_lives_held": 4.75
+ },
+ "environment": {
+  "python": "3.14.7",
+  "numpy": "2.5.1",
+  "pandas": "3.0.5",
+  "executed": "2026-08-18 21:57:54"
+ }
+}

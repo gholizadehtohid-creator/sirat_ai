@@ -1,0 +1,930 @@
+{
+  "variant": "technical",
+  "start": "2024-09-01 00:00:00",
+  "end": "2026-08-11 00:00:00",
+  "available": true,
+  "insufficient_data": [],
+  "metrics": {
+    "available": true,
+    "sessions": 466,
+    "years": 1.94,
+    "total_return_pct": 8.95,
+    "cagr_pct": 4.51,
+    "volatility_pct": 9.36,
+    "risk_free_pct": 23.0,
+    "sharpe": -1.69,
+    "sortino": -2.41,
+    "calmar": 0.33,
+    "best_day_pct": 2.76,
+    "worst_day_pct": -2.25,
+    "positive_days_pct": 30.26,
+    "drawdown": {
+      "max_drawdown_pct": -13.87,
+      "peak_date": "2025-01-08",
+      "trough_date": "2025-04-07",
+      "recovery_date": "2025-12-08",
+      "recovered": true,
+      "current_pct": -3.34,
+      "sessions_underwater": 433
+    },
+    "excess_over_cash_pct": -18.49,
+    "final_equity": 1089486414.0,
+    "profit": 89486414.0,
+    "benchmark": {
+      "available": true,
+      "sessions": 466,
+      "strategy_return_pct": 8.95,
+      "benchmark_return_pct": 171.81,
+      "excess_return_pct": -162.86,
+      "beta": 0.233,
+      "alpha_pct": -20.92,
+      "tracking_error_pct": 16.75,
+      "information_ratio": -2.89,
+      "correlation": 0.472
+    },
+    "initial_capital": 1000000000.0,
+    "final_capital": 1089486414.0,
+    "average_drawdown_pct": -3.45,
+    "drawdown_episodes": 12,
+    "deepest_episodes": [
+      {
+        "start": "2025-01-11 00:00:00",
+        "end": "2025-12-08 00:00:00",
+        "depth_pct": -13.87
+      },
+      {
+        "start": "2025-12-29 00:00:00",
+        "end": "2026-07-07 00:00:00",
+        "depth_pct": -10.21
+      },
+      {
+        "start": "2026-07-08 00:00:00",
+        "end": "2026-08-11 00:00:00",
+        "depth_pct": -6.32,
+        "recovered": false
+      },
+      {
+        "start": "2024-10-14 00:00:00",
+        "end": "2024-12-04 00:00:00",
+        "depth_pct": -5.98
+      },
+      {
+        "start": "2024-12-07 00:00:00",
+        "end": "2024-12-11 00:00:00",
+        "depth_pct": -1.37
+      }
+    ],
+    "downside_volatility_pct": 6.59,
+    "annual_returns": [
+      {
+        "year": 2024,
+        "return_pct": 6.42,
+        "sessions": 85
+      },
+      {
+        "year": 2025,
+        "return_pct": 0.77,
+        "sessions": 241
+      },
+      {
+        "year": 2026,
+        "return_pct": 3.26,
+        "sessions": 141
+      }
+    ],
+    "trades": {
+      "available": true,
+      "trades": 137,
+      "wins": 69,
+      "losses": 68,
+      "win_rate_pct": 50.36,
+      "gross_profit": 749747353.0,
+      "gross_loss": 660260931.0,
+      "net_profit": 89486422.0,
+      "profit_factor": 1.14,
+      "average_win": 10865904.0,
+      "average_loss": -9709720.0,
+      "average_win_pct": 7.83,
+      "average_loss_pct": -7.2,
+      "largest_win": 14362168.0,
+      "largest_loss": -36416569.0,
+      "average_trade": 653186.0,
+      "average_trade_pct": 0.37,
+      "expectancy": 653186.0,
+      "expectancy_pct": 0.37,
+      "payoff_ratio": 1.12,
+      "average_holding_days": 16.9,
+      "max_holding_days": 95,
+      "min_holding_days": 0,
+      "max_consecutive_wins": 8,
+      "max_consecutive_losses": 14,
+      "exit_reasons": {
+        "stop": 58,
+        "target": 65,
+        "rotated out": 13,
+        "end of window": 1
+      }
+    },
+    "exposure": {
+      "average_cash_pct": 58.63,
+      "average_positions": 3.08,
+      "sessions_fully_in_cash": 96
+    }
+  },
+  "benchmarks": {
+    "tedpix": {
+      "label": "شاخص کل (TEDPIX)",
+      "return_pct": 171.81,
+      "sessions": 467,
+      "excess_pct": -162.86
+    },
+    "tedpix_equal_weight": {
+      "label": "شاخص هم‌وزن",
+      "return_pct": 143.8,
+      "sessions": 467,
+      "excess_pct": -134.85
+    },
+    "liquid_basket": {
+      "label": "سبد نقدشونده‌ی بازار (10 نماد، خرید و نگهداری)",
+      "return_pct": 187.67,
+      "names": 10,
+      "excess_pct": -178.72
+    },
+    "strategy_return_pct": 8.95
+  },
+  "diagnostics": {
+    "sessions": 467,
+    "rebalances": 24,
+    "signals_total": 2388,
+    "signals_per_rebalance": [
+      {
+        "date": "2024-09-01",
+        "signals": 253
+      },
+      {
+        "date": "2024-10-02",
+        "signals": 172
+      },
+      {
+        "date": "2024-10-30",
+        "signals": 67
+      },
+      {
+        "date": "2024-11-27",
+        "signals": 158
+      },
+      {
+        "date": "2024-12-25",
+        "signals": 27
+      },
+      {
+        "date": "2025-01-25",
+        "signals": 13
+      },
+      {
+        "date": "2025-02-25",
+        "signals": 75
+      },
+      {
+        "date": "2025-04-05",
+        "signals": 118
+      },
+      {
+        "date": "2025-05-03",
+        "signals": 251
+      },
+      {
+        "date": "2025-05-31",
+        "signals": 63
+      },
+      {
+        "date": "2025-07-01",
+        "signals": 0
+      },
+      {
+        "date": "2025-08-02",
+        "signals": 35
+      },
+      {
+        "date": "2025-08-31",
+        "signals": 78
+      },
+      {
+        "date": "2025-09-30",
+        "signals": 289
+      },
+      {
+        "date": "2025-10-28",
+        "signals": 204
+      },
+      {
+        "date": "2025-11-26",
+        "signals": 102
+      },
+      {
+        "date": "2025-12-24",
+        "signals": 46
+      },
+      {
+        "date": "2026-01-25",
+        "signals": 9
+      },
+      {
+        "date": "2026-02-24",
+        "signals": 42
+      },
+      {
+        "date": "2026-04-04",
+        "signals": 0
+      },
+      {
+        "date": "2026-05-03",
+        "signals": 0
+      },
+      {
+        "date": "2026-06-01",
+        "signals": 232
+      },
+      {
+        "date": "2026-06-30",
+        "signals": 36
+      },
+      {
+        "date": "2026-08-02",
+        "signals": 118
+      }
+    ],
+    "empty_rebalances": 3,
+    "orders_raised": 234,
+    "orders_expired": 130,
+    "stopped_out": 52,
+    "target_hit": 65,
+    "rotated_out": 26,
+    "queue_blocked_exit": 20,
+    "orders": 0,
+    "filled": 99,
+    "partial": 101,
+    "unfilled": 0,
+    "blocked_buy_queue": 74,
+    "blocked_sell_queue": 7,
+    "capped_by_participation": 9,
+    "expired": 0,
+    "commission_paid": 102854745.0,
+    "tax_paid": 96656488.0,
+    "blocked_future_reads": 0
+  },
+  "trades": 137,
+  "config": {
+    "round_trip_pct": 1.039,
+    "execution_delay_sessions": 1,
+    "execution_price": "open",
+    "rebalance_sessions": 20,
+    "max_positions": 10,
+    "risk_per_trade_pct": 1.0,
+    "stop_atr_multiple": 2.0,
+    "take_profit_atr_multiple": 3.0,
+    "trail_atr_multiple": 3.0,
+    "technical_gate": 70,
+    "selection_mode": "gate_then_flow",
+    "model_queues": true,
+    "slippage_pct": 0.0
+  },
+  "assumptions": {
+    "cost_provenance": [
+      {
+        "item": "buy commission",
+        "value_pct": 0.464,
+        "provenance": "DOCUMENTED",
+        "source": "config.TRANSACTION_COST_PCT, buy side"
+      },
+      {
+        "item": "sell commission",
+        "value_pct": 0.075,
+        "provenance": "INFERRED",
+        "source": "documented 0.575% sell side minus the statutory 0.5% tax"
+      },
+      {
+        "item": "sell tax",
+        "value_pct": 0.5,
+        "provenance": "STATUTORY",
+        "source": "ماده ۱۴۳ قانون مالیات‌های مستقیم"
+      },
+      {
+        "item": "slippage",
+        "value_pct": 0.0,
+        "provenance": "UNMEASURED",
+        "source": "no intraday or order-book data is stored; swept, not assumed"
+      }
+    ],
+    "round_trip_pct": 1.039,
+    "queues_are_approximated": true,
+    "survivorship_bias": "the universe is instruments listed today; delisted companies are absent from every window"
+  },
+  "out_of_sample": {
+    "available": true,
+    "reason": null,
+    "degradation": {
+      "available": true,
+      "in_sample_cagr_pct": 1.87,
+      "out_of_sample_cagr_pct": 3.41,
+      "retained": 1.82,
+      "drop": -0.82
+    },
+    "segments": {
+      "in_sample": {
+        "start": "2024-09-01",
+        "end": "2025-10-01",
+        "available": true,
+        "reason": null,
+        "metrics": {
+          "total_return_pct": 2.04,
+          "cagr_pct": 1.87,
+          "max_drawdown_pct": -13.87,
+          "sharpe": -2.08,
+          "sortino": -2.83,
+          "calmar": 0.13,
+          "trades": 85,
+          "win_rate_pct": 47.06,
+          "profit_factor": 1.05
+        }
+      },
+      "validation": {
+        "start": "2025-10-01",
+        "end": "2026-01-01",
+        "available": true,
+        "reason": null,
+        "metrics": {
+          "total_return_pct": -2.61,
+          "cagr_pct": -9.43,
+          "max_drawdown_pct": -4.92,
+          "sharpe": -3.51,
+          "sortino": -3.98,
+          "calmar": -1.92,
+          "trades": 19,
+          "win_rate_pct": 31.58,
+          "profit_factor": 0.72
+        }
+      },
+      "out_of_sample": {
+        "start": "2026-01-01",
+        "end": "2026-08-11",
+        "available": true,
+        "reason": null,
+        "metrics": {
+          "total_return_pct": 1.98,
+          "cagr_pct": 3.41,
+          "max_drawdown_pct": -6.32,
+          "sharpe": -1.87,
+          "sortino": -3.01,
+          "calmar": 0.54,
+          "trades": 31,
+          "win_rate_pct": 54.84,
+          "profit_factor": 1.12
+        }
+      }
+    }
+  },
+  "walk_forward": {
+    "parameter": "technical_gate",
+    "values": [
+      60,
+      65,
+      70,
+      75,
+      80
+    ],
+    "metric": "calmar",
+    "folds": [
+      {
+        "fold": 1,
+        "train": [
+          "2024-09-01",
+          "2025-06-01"
+        ],
+        "test": [
+          "2025-06-01",
+          "2025-09-01"
+        ],
+        "parameter": "technical_gate",
+        "chosen": 75,
+        "train_metric": 0.65,
+        "test_metric": 4.32,
+        "train_return_pct": 6.34,
+        "test_return_pct": 1.75,
+        "test_trades": 6,
+        "metric": "calmar"
+      },
+      {
+        "fold": 2,
+        "train": [
+          "2024-12-01",
+          "2025-09-01"
+        ],
+        "test": [
+          "2025-09-01",
+          "2025-12-01"
+        ],
+        "parameter": "technical_gate",
+        "chosen": 70,
+        "train_metric": -0.55,
+        "test_metric": 3.14,
+        "train_return_pct": -5.76,
+        "test_return_pct": 3.53,
+        "test_trades": 20,
+        "metric": "calmar"
+      },
+      {
+        "fold": 3,
+        "train": [
+          "2025-03-01",
+          "2025-12-01"
+        ],
+        "test": [
+          "2025-12-01",
+          "2026-03-01"
+        ],
+        "parameter": "technical_gate",
+        "chosen": 80,
+        "train_metric": 1.74,
+        "test_metric": -3.31,
+        "train_return_pct": 11.91,
+        "test_return_pct": -9.5,
+        "test_trades": 18,
+        "metric": "calmar"
+      },
+      {
+        "fold": 4,
+        "train": [
+          "2025-06-01",
+          "2026-03-01"
+        ],
+        "test": [
+          "2026-03-01",
+          "2026-06-01"
+        ],
+        "parameter": "technical_gate",
+        "chosen": 75,
+        "train_metric": 1.91,
+        "test_metric": null,
+        "train_return_pct": 10.11,
+        "test_return_pct": 0.0,
+        "test_trades": null,
+        "metric": "calmar"
+      }
+    ],
+    "summary": {
+      "available": true,
+      "folds": 3,
+      "mean_train_metric": 0.613,
+      "mean_test_metric": 1.383,
+      "positive_test_folds": 2,
+      "parameter_stability": 1.0,
+      "chosen_values": [
+        75,
+        70,
+        80
+      ]
+    }
+  },
+  "monte_carlo": {
+    "available": true,
+    "runs": 2000,
+    "method": "bootstrap",
+    "trades_per_path": 137,
+    "median_return_pct": 10.43,
+    "mean_return_pct": 11.28,
+    "probability_of_loss_pct": 21.4,
+    "expected_max_drawdown_pct": -10.6,
+    "worst_drawdown_pct": -32.89,
+    "percentiles": {
+      "p5_return_pct": -9.91,
+      "p5_drawdown_pct": -5.54,
+      "p25_return_pct": 1.33,
+      "p25_drawdown_pct": -7.58,
+      "p50_return_pct": 10.43,
+      "p50_drawdown_pct": -9.92,
+      "p75_return_pct": 20.05,
+      "p75_drawdown_pct": -12.84,
+      "p95_return_pct": 35.46,
+      "p95_drawdown_pct": -18.14
+    },
+    "realised_return_pct": 8.95,
+    "realised_percentile": 46.0
+  },
+  "sensitivity": {
+    "metric": "calmar",
+    "parameters": {
+      "technical_gate": {
+        "values": [
+          {
+            "value": 60,
+            "metric": 0.05,
+            "return_pct": 1.43,
+            "max_drawdown_pct": -13.44,
+            "trades": 144
+          },
+          {
+            "value": 65,
+            "metric": 0.09,
+            "return_pct": 2.32,
+            "max_drawdown_pct": -13.45,
+            "trades": 145
+          },
+          {
+            "value": 70,
+            "metric": 0.33,
+            "return_pct": 8.95,
+            "max_drawdown_pct": -13.87,
+            "trades": 137
+          },
+          {
+            "value": 75,
+            "metric": 0.69,
+            "return_pct": 18.21,
+            "max_drawdown_pct": -13.08,
+            "trades": 138
+          },
+          {
+            "value": 80,
+            "metric": 0.51,
+            "return_pct": 13.98,
+            "max_drawdown_pct": -13.58,
+            "trades": 143
+          }
+        ],
+        "coefficient_of_variation": 0.731,
+        "fragile": true,
+        "best_value": 75,
+        "best_metric": 0.69,
+        "live_value": 70
+      },
+      "stop_atr_multiple": {
+        "values": [
+          {
+            "value": 1.5,
+            "metric": 0.14,
+            "return_pct": 3.9,
+            "max_drawdown_pct": -14.21,
+            "trades": 141
+          },
+          {
+            "value": 2.0,
+            "metric": 0.33,
+            "return_pct": 8.95,
+            "max_drawdown_pct": -13.87,
+            "trades": 137
+          },
+          {
+            "value": 2.5,
+            "metric": 0.49,
+            "return_pct": 13.21,
+            "max_drawdown_pct": -13.56,
+            "trades": 157
+          },
+          {
+            "value": 3.0,
+            "metric": 0.36,
+            "return_pct": 11.03,
+            "max_drawdown_pct": -15.56,
+            "trades": 174
+          }
+        ],
+        "coefficient_of_variation": 0.379,
+        "fragile": false,
+        "best_value": 2.5,
+        "best_metric": 0.49,
+        "live_value": 2.0
+      },
+      "take_profit_atr_multiple": {
+        "values": [
+          {
+            "value": 0.0,
+            "metric": 1.52,
+            "return_pct": 55.59,
+            "max_drawdown_pct": -16.78,
+            "trades": 134
+          },
+          {
+            "value": 2.0,
+            "metric": -0.23,
+            "return_pct": -7.0,
+            "max_drawdown_pct": -15.7,
+            "trades": 139
+          },
+          {
+            "value": 3.0,
+            "metric": 0.33,
+            "return_pct": 8.95,
+            "max_drawdown_pct": -13.87,
+            "trades": 137
+          },
+          {
+            "value": 4.0,
+            "metric": 0.69,
+            "return_pct": 20.14,
+            "max_drawdown_pct": -14.42,
+            "trades": 139
+          }
+        ],
+        "coefficient_of_variation": 1.1,
+        "fragile": true,
+        "best_value": 0.0,
+        "best_metric": 1.52,
+        "live_value": 3.0
+      },
+      "max_positions": {
+        "values": [
+          {
+            "value": 5,
+            "metric": -0.11,
+            "return_pct": -3.01,
+            "max_drawdown_pct": -14.41,
+            "trades": 96
+          },
+          {
+            "value": 8,
+            "metric": 0.1,
+            "return_pct": 2.83,
+            "max_drawdown_pct": -14.05,
+            "trades": 134
+          },
+          {
+            "value": 10,
+            "metric": 0.33,
+            "return_pct": 8.95,
+            "max_drawdown_pct": -13.87,
+            "trades": 137
+          },
+          {
+            "value": 15,
+            "metric": 0.56,
+            "return_pct": 15.46,
+            "max_drawdown_pct": -13.78,
+            "trades": 143
+          }
+        ],
+        "coefficient_of_variation": 1.139,
+        "fragile": true,
+        "best_value": 15,
+        "best_metric": 0.56,
+        "live_value": 10
+      },
+      "risk_per_trade_pct": {
+        "values": [
+          {
+            "value": 0.5,
+            "metric": 0.11,
+            "return_pct": 2.2,
+            "max_drawdown_pct": -10.44,
+            "trades": 190
+          },
+          {
+            "value": 1.0,
+            "metric": 0.33,
+            "return_pct": 8.95,
+            "max_drawdown_pct": -13.87,
+            "trades": 137
+          },
+          {
+            "value": 1.5,
+            "metric": 0.3,
+            "return_pct": 8.61,
+            "max_drawdown_pct": -14.65,
+            "trades": 131
+          },
+          {
+            "value": 2.0,
+            "metric": 0.29,
+            "return_pct": 8.4,
+            "max_drawdown_pct": -14.65,
+            "trades": 128
+          }
+        ],
+        "coefficient_of_variation": 0.336,
+        "fragile": false,
+        "best_value": 1.0,
+        "best_metric": 0.33,
+        "live_value": 1.0
+      },
+      "min_headroom_pct": {
+        "values": [
+          {
+            "value": 0.0,
+            "metric": 0.01,
+            "return_pct": 0.3,
+            "max_drawdown_pct": -14.83,
+            "trades": 131
+          },
+          {
+            "value": 5.0,
+            "metric": 0.13,
+            "return_pct": 3.6,
+            "max_drawdown_pct": -14.59,
+            "trades": 137
+          },
+          {
+            "value": 10.0,
+            "metric": 0.33,
+            "return_pct": 8.95,
+            "max_drawdown_pct": -13.87,
+            "trades": 137
+          },
+          {
+            "value": 15.0,
+            "metric": 0.46,
+            "return_pct": 11.98,
+            "max_drawdown_pct": -12.92,
+            "trades": 133
+          }
+        ],
+        "coefficient_of_variation": 0.749,
+        "fragile": true,
+        "best_value": 15.0,
+        "best_metric": 0.46,
+        "live_value": 10.0
+      },
+      "slippage_pct": {
+        "values": [
+          {
+            "value": 0.0,
+            "metric": 0.33,
+            "return_pct": 8.95,
+            "max_drawdown_pct": -13.87,
+            "trades": 137
+          },
+          {
+            "value": 0.25,
+            "metric": -0.02,
+            "return_pct": -0.67,
+            "max_drawdown_pct": -15.45,
+            "trades": 137
+          },
+          {
+            "value": 0.5,
+            "metric": -0.28,
+            "return_pct": -9.46,
+            "max_drawdown_pct": -18.06,
+            "trades": 137
+          }
+        ],
+        "coefficient_of_variation": 24.993,
+        "fragile": true,
+        "best_value": 0.0,
+        "best_metric": 0.33,
+        "live_value": 0.0
+      }
+    },
+    "fragile_parameters": [
+      "technical_gate",
+      "take_profit_atr_multiple",
+      "max_positions",
+      "min_headroom_pct",
+      "slippage_pct"
+    ],
+    "fragility_share": 0.71
+  },
+  "overfitting": {
+    "risk": "MEDIUM",
+    "score": 43.3,
+    "raw_points": 43.3,
+    "weight_measured": 1.0,
+    "findings": [
+      {
+        "test": "oos_degradation",
+        "points": 0.0,
+        "of": 30,
+        "detail": "out-of-sample kept 182% of in-sample CAGR"
+      },
+      {
+        "test": "parameter_fragility",
+        "points": 25.0,
+        "of": 25,
+        "detail": "5 of 7 swept parameters were fragile (cv > 0.60): technical_gate, take_profit_atr_multiple, max_positions, min_headroom_pct, slippage_pct"
+      },
+      {
+        "test": "trade_count",
+        "points": 0.0,
+        "of": 20,
+        "detail": "137 closed trades"
+      },
+      {
+        "test": "period_concentration",
+        "points": 15.0,
+        "of": 15,
+        "detail": "100% of net profit came from 2026-05 alone, across 22 months of which 10 lost money"
+      },
+      {
+        "test": "regime_failure",
+        "points": 3.3,
+        "of": 10,
+        "detail": "1 of 3 out-of-fold windows lost money"
+      }
+    ],
+    "note": "100% of the overfitting model could run on the evidence available"
+  },
+  "variants": [
+    {
+      "label": "Technical only",
+      "available": true,
+      "total_return_pct": 8.95,
+      "cagr_pct": 4.51,
+      "max_drawdown_pct": -13.87,
+      "sharpe": -1.69,
+      "sortino": -2.41,
+      "calmar": 0.33,
+      "win_rate_pct": 50.36,
+      "profit_factor": 1.14,
+      "trades": 137
+    },
+    {
+      "label": "Fundamental only",
+      "available": false,
+      "reason": "FUNDAMENTALS"
+    },
+    {
+      "label": "Technical + Fundamental",
+      "available": false,
+      "reason": "FUNDAMENTALS"
+    },
+    {
+      "label": "Technical + Fundamental + News",
+      "available": false,
+      "reason": "NEWS"
+    }
+  ],
+  "verdict": {
+    "verdict": "FAIL",
+    "checks": [
+      {
+        "name": "CAGR over risk-free",
+        "actual": -18.49,
+        "required": 5.0,
+        "compare": ">=",
+        "passed": false,
+        "note": "CAGR 4.51% against a 23% policy rate"
+      },
+      {
+        "name": "Profit factor",
+        "actual": 1.14,
+        "required": 1.2,
+        "compare": ">=",
+        "passed": false,
+        "note": "gross profit / gross loss, in rials"
+      },
+      {
+        "name": "Sharpe",
+        "actual": -1.69,
+        "required": 0.5,
+        "compare": ">=",
+        "passed": "False",
+        "note": "already excess of the 23% hurdle"
+      },
+      {
+        "name": "Max drawdown",
+        "actual": -13.87,
+        "required": -35.0,
+        "compare": ">=",
+        "passed": true,
+        "note": "deeper than this and the account stops being traded"
+      },
+      {
+        "name": "Closed trades",
+        "actual": 137,
+        "required": 30,
+        "compare": ">=",
+        "passed": true,
+        "note": "below this the statistics are not statistics"
+      },
+      {
+        "name": "Out-of-sample CAGR retained",
+        "actual": 1.82,
+        "required": 0.5,
+        "compare": ">=",
+        "passed": true,
+        "note": "share of in-sample CAGR that survived the hold-out"
+      },
+      {
+        "name": "Excess over شاخص کل",
+        "actual": -162.86,
+        "required": 0.0,
+        "compare": ">=",
+        "passed": false,
+        "note": "beating cash while losing to the index means the index was the better trade"
+      },
+      {
+        "name": "Overfitting risk",
+        "actual": "MEDIUM",
+        "required": "MEDIUM",
+        "compare": "at most",
+        "passed": true,
+        "note": "100% of the overfitting model could run on the evidence available"
+      }
+    ],
+    "failed": [
+      "CAGR over risk-free",
+      "Profit factor",
+      "Excess over شاخص کل"
+    ],
+    "unmeasured": []
+  }
+}

@@ -1,0 +1,121 @@
+{
+ "experiment": "EXP15 — EXECUTION-AWARE ALPHA VALIDATION",
+ "written": "2026-08-18",
+ "status": "LOCKED BEFORE ANY RESULT WAS COMPUTED",
+
+ "research_question": "Can an execution-aware filter, using only information available at decision time, convert the Alpha Core signal into a positive net edge after realistic costs?",
+
+ "prior_from_experiment_14": {
+  "note": "E14's ex_t1_unbuyable filter used FUTURE queue status. That is an oracle and no real filter can beat it. Its result is therefore an upper bound on this experiment.",
+  "oracle_h1_excess_pct": 0.3970,
+  "oracle_h20_ic": 0.00066,
+  "oracle_h20_t": 0.06,
+  "round_trip_pct": 1.039,
+  "implication": "The oracle bound at h=1 (0.397%) is already BELOW the round trip (1.039%). A decision-time filter is expected to fail. This is recorded before running so the outcome cannot be reinterpreted afterwards."
+ },
+
+ "data": {
+  "window_start": "2014-09-21",
+  "window_end": "2024-09-01",
+  "decision_dates": 120,
+  "panel": "backtest_output/factor_panel.csv",
+  "prices": "sirat_market.db price_history",
+  "post_2024_holdout_used": false
+ },
+
+ "alpha_core": {
+  "version": "v1, FROZEN",
+  "score": "0.5*pct_rank(f_momentum) + 0.5*pct_rank(bb_pct)",
+  "source": "backtesting/alpha_core.py:264 alpha_scores(), reproduced by research_alpha_ic.score_frame()",
+  "modifications_permitted": "NONE — factors, weights, formula, ranking method, universe definition and selection logic are all frozen"
+ },
+
+ "execution_filter": {
+  "placement": "AFTER Alpha Core ranking, BEFORE portfolio construction",
+  "must_not_use": ["future returns", "next-day prices", "future volume", "future queue status", "future fills"],
+  "fitted_parameters": "NONE — every threshold is a natural constant or an in-sample-free percentile",
+  "rules_exclude_a_name_if": [
+   "it was locked at the band on session t (locked_up == true)",
+   "it closed at its high on session t with a positive move (closed_at_high == true)",
+   "its session-t volume exceeded 3x its own trailing 60-session median (volume_spike)",
+   "its ADV sits in the bottom quintile of the date's cross-section",
+   "it did not trade on session t (stale)"
+  ],
+  "rationale": "Each rule is a decision-time proxy for the t+1 queue state Experiment 14 measured. None references any future bar."
+ },
+
+ "portfolio_construction": {
+  "basket": 10,
+  "weighting": "equal",
+  "exposure": "constant 100% of the sleeve — the retired exposure engine takes no part",
+  "rebalance": "at each tested horizon, not assumed to be 20"
+ },
+
+ "execution_model": {
+  "convention": "T+1 — a name selected at the close of t is bought at t+1",
+  "unbuyable_at_t1": "locked_up OR reopen OR extreme_gap on session t+1",
+  "unfilled_slots_earn": "the policy cash rate (23%/yr), pro-rated",
+  "round_trip_cost_pct": 1.039,
+  "slippage_pct": 0.0,
+  "slippage_note": "held at zero deliberately, so the result is optimistic; a failure at zero slippage is a failure at any slippage"
+ },
+
+ "arms": {
+  "A": "Alpha Core top-10, no execution filter",
+  "B": "Alpha Core top-10 drawn from the filtered universe",
+  "C": "Random top-10 from the identical filtered universe, 30 seeds"
+ },
+
+ "horizons_sessions": [1, 5, 10, 20],
+
+ "seed": 20260818,
+ "random_seeds": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+
+ "metrics": [
+  "rank IC", "ICIR", "top-minus-market excess", "turnover", "cost drag",
+  "net alpha per period", "net alpha annualised", "fill rate",
+  "queue exposure before and after the filter", "CAGR", "Sharpe", "max drawdown"
+ ],
+
+ "gates": {
+  "G1_artifact_removal": {
+   "criterion": "Arm B queue exposure (share of the selected book locked on t+1) must fall to <= 1.5x the universe rate, from Arm A's measured 3.03x",
+   "fail_if": "ratio remains above 1.5x"
+  },
+  "G2_net_alpha": {
+   "criterion": "Arm B net annualised alpha must exceed Arm A's at the same horizon",
+   "fail_if": "B <= A at every horizon"
+  },
+  "G3_random_separation": {
+   "criterion": "Arm B must sit above the 95th percentile of the 30-seed Arm C distribution on net annualised alpha",
+   "fail_if": "B <= C p95"
+  },
+  "G4_cost_survival": {
+   "criterion": "Arm B net alpha must be POSITIVE after the 1.039% round trip at at least one horizon",
+   "fail_if": "net alpha <= 0 at every horizon"
+  },
+  "G5_statistical": {
+   "criterion": "Paired per-period difference B - C must have a block-bootstrap 95% CI excluding zero",
+   "fail_if": "CI contains zero"
+  },
+  "G6_robustness": {
+   "criterion": "G2-G4 must hold at two or more horizons AND in at least 3 of 4 sub-periods (2014-2016, 2017-2019, 2020-2022, 2023-2024)",
+   "fail_if": "holds at fewer"
+  }
+ },
+
+ "decision_rule": {
+  "PASS": "all six gates",
+  "FAIL": "any gate fails -> ARCHIVE SIRAT-AI TRADING SPECIFICATION",
+  "INVALID": "any confirmed leakage, accounting error or exposure inequality between arms"
+ },
+
+ "prohibited": [
+  "modifying Alpha Core in any way",
+  "machine learning",
+  "tuning the filter thresholds after seeing results",
+  "adding filter rules after seeing results",
+  "changing the basket size or horizon set after seeing results",
+  "using the post-2024-09-01 holdout"
+ ]
+}

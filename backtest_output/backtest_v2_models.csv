@@ -1,0 +1,4 @@
+﻿label,model,variant,available,reason,total_return_pct,cagr_pct,sharpe,sortino,max_drawdown_pct,calmar,profit_factor,win_rate_pct,trades,average_holding_days,average_cash_pct,average_positions,benchmark_difference_pp,final_capital
+A — Technical only,A,technical,True,,8.95,4.51,-1.69,-2.41,-13.87,0.33,1.14,50.36,137,16.9,58.63,3.08,-162.86,1089486414.0
+B — Technical + Fundamental,B,technical+fundamental,True,,1.53,0.79,-1.9,-2.64,-14.7,0.05,1.02,48.91,137,17.3,59.64,3.23,-170.28,1015335094.0
+C — Technical + Fundamental + News,C,technical+fundamental+news,False,"NEWS: table 'news_items' does not exist -- no historical news store exists in this project: there is no news table, no archive, and no feed with per-article publication timestamps. A news-dependent result would have to invent both the articles and the hour they appeared, and the invented hour is what would decide the result",,,,,,,,,,,,,,

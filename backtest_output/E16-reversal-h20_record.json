@@ -1,0 +1,172 @@
+{
+  "experiment_id": "E16-reversal-h20",
+  "hypothesis": "Short-horizon reversal: names that fell hardest in the previous session bounce over the following month, because forced selling into the lower band overshoots and unwinds once the queue clears.",
+  "strategy_version": "v3.0-reversal",
+  "researcher": "quant research",
+  "notes": "Chosen because the mechanism is microstructural rather than informational, so it should survive the cost gate that killed Alpha Core. Tested at h=20 only; other horizons are measured for the decay curve and cannot pass the gate.",
+  "expected_failure": [
+    "IC at h=20 below 0.02, or ICIR below 0.30",
+    "the signal exists at h=1 and is gone at h=20 (Alpha Core's shape)",
+    "the edge does not clear a 1.04% round trip",
+    "the basket is limit-locked more than 1.5x the universe rate"
+  ],
+  "acceptance_criteria": {
+    "promotion": "all six stages pass AND the result is reproducible",
+    "stage2": "mean IC at h=20 >= 0.02 with ICIR >= 0.30",
+    "stage3": "net per period positive after cost and slippage",
+    "stage5": ">= 95th percentile against 30 random controls"
+  },
+  "registered_at": "2026-08-19T00:18:59.706922",
+  "status": "REJECT",
+  "provenance": {
+    "git_commit": "UNAVAILABLE",
+    "git_dirty": null,
+    "code_hash": "1d01ff973094ffbea1c2d47e1625ab9af67056122d8ac82f39d5157edd40885b",
+    "config_hash": "b5749afd85a75937465eff42d3b28ea0868c2ee2b51fdcd5ffcfda3823e536a7",
+    "dataset_snapshot": "d4456b84c53ab120",
+    "universe_snapshot": "u20260819-668658bb",
+    "prereg_hash": "c442002fd94b01730fb968fd09337c331b79dfd1edd6bc188fe8f0cee6f33ad5",
+    "reproducible": false
+  },
+  "preregistration": {
+    "experiment_id": "E16-reversal-h20",
+    "parameters": {
+      "basket": 10,
+      "holdout_window": [
+        "2022-09-12",
+        "2023-06-12"
+      ],
+      "round_trip_pct": 1.04,
+      "signal": "short-horizon reversal: -1 x the previous session's return, cross-sectionally ranked",
+      "traded_horizon_sessions": 20,
+      "universe": "TSE equities, decision-time eligible",
+      "window": [
+        "2020-01-06",
+        "2022-09-05"
+      ]
+    },
+    "validation_gates": {
+      "stage1": "no leaked forward returns; a universe snapshot exists; at least 50 scoreable names per date",
+      "stage2": "mean IC at h=20 >= 0.02, ICIR >= 0.30, beats a 200-permutation null, retains >= 50% of peak IC at the traded horizon",
+      "stage3": "net of a 1.04% round trip and 0.10% slippage per leg is positive; queue ratio <= 1.50",
+      "stage4": ">= 60% of walk-forward folds positive out of fold",
+      "stage5": ">= 95th percentile against 30 random controls, and a block-bootstrap CI strictly above zero",
+      "stage6": "risk limits, kill switch, monitoring and reconciliation each evidenced by a named artifact"
+    },
+    "expected_metrics": {
+      "mean_ic_h20": 0.03,
+      "net_per_period_pct": 0.4,
+      "queue_ratio": 1.1
+    },
+    "rejection_thresholds": {
+      "max_missing_pct": 5.0,
+      "max_oos_degradation": 0.5,
+      "max_participation_pct": 10.0,
+      "max_queue_ratio": 1.5,
+      "max_stale_pct": 30.0,
+      "min_control_percentile": 95.0,
+      "min_decay_retention": 0.5,
+      "min_fill_rate_pct": 90.0,
+      "min_ic": 0.02,
+      "min_icir": 0.3,
+      "min_liquid_share": 0.7,
+      "min_names_per_date": 50,
+      "min_paper_sessions": 60,
+      "min_pct_positive_ic": 55.0,
+      "min_positive_fold_share": 0.6,
+      "slippage_pct": 0.1
+    },
+    "seed": 20260819,
+    "frozen_at": "2026-08-19T00:18:59.712883",
+    "content_hash": "c442002fd94b01730fb968fd09337c331b79dfd1edd6bc188fe8f0cee6f33ad5"
+  },
+  "stages": [
+    {
+      "stage": 1,
+      "stage_name": "DATA INTEGRITY",
+      "status": "PASS",
+      "detail": "all checks passed",
+      "metrics": {
+        "checks": {
+          "missing_data": true,
+          "point_in_time": true,
+          "survivorship": true,
+          "universe_valid": true
+        },
+        "detail": {
+          "dates": 140,
+          "dates_below_minimum": 0,
+          "forward_columns": [
+            "fwd_1",
+            "fwd_5",
+            "fwd_10",
+            "fwd_20"
+          ],
+          "impossible_forward_pct": 0.0,
+          "impossible_forward_returns": 0,
+          "instruments": 240,
+          "max_missing_pct": 5.0,
+          "max_stale_pct": 30.0,
+          "min_names_per_date": 50,
+          "missing_label_pct": 0.0,
+          "missing_score_pct": 0.0,
+          "names_per_date_median": 240.0,
+          "names_per_date_min": 240,
+          "rows": 33600,
+          "rows_outside_window": 0,
+          "score_is_forward_return": false,
+          "stale_pct": 6.03,
+          "universe_snapshot": "u20260819-668658bb"
+        }
+      },
+      "recorded_at": "2026-08-19T00:19:00.051597"
+    },
+    {
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "status": "FAIL",
+      "detail": "failed: factor_decay",
+      "metrics": {
+        "checks": {
+          "factor_decay": false,
+          "ic": true,
+          "random_baseline": true,
+          "rank_correlation": true
+        },
+        "detail": {
+          "dates": 140,
+          "decay_curve": {
+            "1": 0.46579,
+            "5": 0.10895,
+            "10": 0.04873,
+            "20": 0.02225
+          },
+          "empirical_p": 0.0,
+          "horizon": 20,
+          "icir": 0.3383,
+          "mean_ic": 0.02225,
+          "min_decay_retention": 0.5,
+          "min_ic": 0.02,
+          "min_icir": 0.3,
+          "min_pct_positive_ic": 55.0,
+          "null_mean_ic": 0.00022,
+          "null_p95_ic": 0.00892,
+          "null_permutations": 200,
+          "pct_positive_ic": 60.71,
+          "peak_ic": 0.46579,
+          "retention_at_traded_horizon": 0.0478,
+          "t_ic": 4.002
+        }
+      },
+      "recorded_at": "2026-08-19T00:19:06.013697"
+    }
+  ],
+  "decision": {
+    "experiment_id": "E16-reversal-h20",
+    "decision": "REJECT",
+    "rationale": "Stage 2 (ECONOMIC SIGNAL VALIDATION) failed on factor_decay. Preregistered as an expected failure condition before the run.",
+    "rejected_at_stage": 2,
+    "decided_at": "2026-08-19T00:19:06.023878",
+    "decided_by": "quant research"
+  }
+}

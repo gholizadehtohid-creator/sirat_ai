@@ -1,0 +1,671 @@
+{
+ "funnel": {
+  "summary": {
+   "dates": 24,
+   "universe": 818,
+   "scored_total": 18485,
+   "scored_per_date": 770.2,
+   "gates_total": {
+    "below_buy_band": 2667,
+    "technical_gate": 9922,
+    "regime_entry_floor": 243,
+    "below_hold_band": 2426,
+    "other_AVOID": 1813,
+    "fundamental_critical": 1116,
+    "buy": 298
+   },
+   "buys_total": 298,
+   "buys_per_date": 12.4,
+   "accepted_total": 128,
+   "accepted_per_date": 5.3,
+   "mean_wanted_pct": 175.4,
+   "mean_taken_pct": 48.2,
+   "dates_with_no_buy": 5
+  },
+  "per_date": [
+   {
+    "date": "2024-09-01",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 782,
+    "gates": {
+     "below_buy_band": 196,
+     "technical_gate": 341,
+     "regime_entry_floor": 52,
+     "below_hold_band": 104,
+     "other_AVOID": 36,
+     "fundamental_critical": 45,
+     "buy": 8
+    },
+    "buys": 8,
+    "accepted": 0,
+    "rejected_by": {
+     "below_min_position": 8
+    },
+    "wanted_pct_of_equity": 70.5,
+    "taken_pct_of_equity": 0.0
+   },
+   {
+    "date": "2024-10-02",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 785,
+    "gates": {
+     "technical_gate": 437,
+     "below_buy_band": 150,
+     "below_hold_band": 76,
+     "other_AVOID": 70,
+     "fundamental_critical": 47,
+     "buy": 5
+    },
+    "buys": 5,
+    "accepted": 5,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 75.0,
+    "taken_pct_of_equity": 75.0
+   },
+   {
+    "date": "2024-10-30",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 785,
+    "gates": {
+     "below_hold_band": 57,
+     "technical_gate": 543,
+     "regime_entry_floor": 47,
+     "below_buy_band": 79,
+     "other_AVOID": 33,
+     "fundamental_critical": 25,
+     "buy": 1
+    },
+    "buys": 1,
+    "accepted": 1,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 7.0,
+    "taken_pct_of_equity": 7.0
+   },
+   {
+    "date": "2024-11-27",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 785,
+    "gates": {
+     "technical_gate": 358,
+     "below_buy_band": 131,
+     "below_hold_band": 65,
+     "other_AVOID": 169,
+     "fundamental_critical": 50,
+     "buy": 12
+    },
+    "buys": 12,
+    "accepted": 10,
+    "rejected_by": {
+     "sector_count": 1
+    },
+    "wanted_pct_of_equity": 177.5,
+    "taken_pct_of_equity": 90.0
+   },
+   {
+    "date": "2024-12-25",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 783,
+    "gates": {
+     "technical_gate": 493,
+     "below_hold_band": 64,
+     "other_AVOID": 89,
+     "fundamental_critical": 32,
+     "below_buy_band": 78,
+     "buy": 27
+    },
+    "buys": 27,
+    "accepted": 10,
+    "rejected_by": {
+     "portfolio_full": 2
+    },
+    "wanted_pct_of_equity": 389.2,
+    "taken_pct_of_equity": 90.0
+   },
+   {
+    "date": "2025-01-25",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 783,
+    "gates": {
+     "technical_gate": 571,
+     "buy": 15,
+     "below_hold_band": 61,
+     "other_AVOID": 62,
+     "fundamental_critical": 33,
+     "below_buy_band": 41
+    },
+    "buys": 15,
+    "accepted": 10,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 224.6,
+    "taken_pct_of_equity": 90.0
+   },
+   {
+    "date": "2025-02-25",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 781,
+    "gates": {
+     "technical_gate": 550,
+     "below_buy_band": 70,
+     "below_hold_band": 64,
+     "other_AVOID": 29,
+     "regime_entry_floor": 39,
+     "fundamental_critical": 24,
+     "buy": 5
+    },
+    "buys": 5,
+    "accepted": 5,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 29.7,
+    "taken_pct_of_equity": 14.0
+   },
+   {
+    "date": "2025-04-05",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 781,
+    "gates": {
+     "technical_gate": 498,
+     "below_buy_band": 115,
+     "below_hold_band": 61,
+     "other_AVOID": 37,
+     "fundamental_critical": 34,
+     "regime_entry_floor": 31,
+     "buy": 5
+    },
+    "buys": 5,
+    "accepted": 5,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 29.5,
+    "taken_pct_of_equity": 14.0
+   },
+   {
+    "date": "2025-05-03",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 781,
+    "gates": {
+     "other_AVOID": 186,
+     "below_buy_band": 172,
+     "buy": 17,
+     "below_hold_band": 68,
+     "technical_gate": 284,
+     "fundamental_critical": 54
+    },
+    "buys": 17,
+    "accepted": 10,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 253.1,
+    "taken_pct_of_equity": 90.0
+   },
+   {
+    "date": "2025-05-31",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 781,
+    "gates": {
+     "other_AVOID": 89,
+     "technical_gate": 527,
+     "below_hold_band": 59,
+     "below_buy_band": 73,
+     "fundamental_critical": 30,
+     "buy": 3
+    },
+    "buys": 3,
+    "accepted": 3,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 45.0,
+    "taken_pct_of_equity": 45.0
+   },
+   {
+    "date": "2025-07-01",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 778,
+    "gates": {
+     "technical_gate": 608,
+     "below_buy_band": 44,
+     "other_AVOID": 21,
+     "below_hold_band": 60,
+     "fundamental_critical": 43,
+     "regime_entry_floor": 2
+    },
+    "buys": 0,
+    "accepted": 0,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 0.0,
+    "taken_pct_of_equity": 0.0
+   },
+   {
+    "date": "2025-08-02",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 778,
+    "gates": {
+     "technical_gate": 550,
+     "below_hold_band": 74,
+     "below_buy_band": 74,
+     "other_AVOID": 25,
+     "regime_entry_floor": 11,
+     "fundamental_critical": 44
+    },
+    "buys": 0,
+    "accepted": 0,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 0.0,
+    "taken_pct_of_equity": 0.0
+   },
+   {
+    "date": "2025-08-31",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 776,
+    "gates": {
+     "technical_gate": 552,
+     "below_buy_band": 94,
+     "other_AVOID": 23,
+     "fundamental_critical": 36,
+     "below_hold_band": 41,
+     "regime_entry_floor": 30
+    },
+    "buys": 0,
+    "accepted": 0,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 0.0,
+    "taken_pct_of_equity": 0.0
+   },
+   {
+    "date": "2025-09-30",
+    "regime": "SIDEWAYS",
+    "trading_mode": "NORMAL",
+    "entry_floor": 0,
+    "scored": 776,
+    "gates": {
+     "technical_gate": 306,
+     "below_buy_band": 197,
+     "below_hold_band": 68,
+     "other_AVOID": 156,
+     "fundamental_critical": 45,
+     "buy": 4
+    },
+    "buys": 4,
+    "accepted": 4,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 52.1,
+    "taken_pct_of_equity": 50.0
+   },
+   {
+    "date": "2025-10-28",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 762,
+    "gates": {
+     "other_AVOID": 124,
+     "technical_gate": 375,
+     "below_buy_band": 121,
+     "below_hold_band": 67,
+     "fundamental_critical": 55,
+     "buy": 20
+    },
+    "buys": 20,
+    "accepted": 10,
+    "rejected_by": {
+     "portfolio_full": 1
+    },
+    "wanted_pct_of_equity": 291.0,
+    "taken_pct_of_equity": 90.0
+   },
+   {
+    "date": "2025-11-26",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 761,
+    "gates": {
+     "below_hold_band": 55,
+     "technical_gate": 457,
+     "below_buy_band": 112,
+     "other_AVOID": 92,
+     "fundamental_critical": 37,
+     "buy": 8
+    },
+    "buys": 8,
+    "accepted": 7,
+    "rejected_by": {
+     "sector_count": 1
+    },
+    "wanted_pct_of_equity": 116.9,
+    "taken_pct_of_equity": 78.7
+   },
+   {
+    "date": "2025-12-24",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 760,
+    "gates": {
+     "other_AVOID": 144,
+     "below_buy_band": 131,
+     "technical_gate": 345,
+     "below_hold_band": 50,
+     "fundamental_critical": 50,
+     "buy": 40
+    },
+    "buys": 40,
+    "accepted": 10,
+    "rejected_by": {
+     "portfolio_full": 17
+    },
+    "wanted_pct_of_equity": 595.2,
+    "taken_pct_of_equity": 90.0
+   },
+   {
+    "date": "2026-01-25",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 760,
+    "gates": {
+     "other_AVOID": 64,
+     "below_buy_band": 46,
+     "technical_gate": 558,
+     "below_hold_band": 60,
+     "fundamental_critical": 26,
+     "buy": 6
+    },
+    "buys": 6,
+    "accepted": 6,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 90.0,
+    "taken_pct_of_equity": 90.0
+   },
+   {
+    "date": "2026-02-24",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 754,
+    "gates": {
+     "technical_gate": 575,
+     "below_hold_band": 51,
+     "other_AVOID": 20,
+     "below_buy_band": 53,
+     "regime_entry_floor": 25,
+     "fundamental_critical": 28,
+     "buy": 2
+    },
+    "buys": 2,
+    "accepted": 2,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 10.7,
+    "taken_pct_of_equity": 10.7
+   },
+   {
+    "date": "2026-04-04",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 751,
+    "gates": {
+     "below_buy_band": 138,
+     "below_hold_band": 489,
+     "other_AVOID": 22,
+     "fundamental_critical": 97,
+     "regime_entry_floor": 5
+    },
+    "buys": 0,
+    "accepted": 0,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 0.0,
+    "taken_pct_of_equity": 0.0
+   },
+   {
+    "date": "2026-05-03",
+    "regime": "BEAR",
+    "trading_mode": "DEFENSIVE",
+    "entry_floor": 10,
+    "scored": 751,
+    "gates": {
+     "below_hold_band": 515,
+     "fundamental_critical": 101,
+     "below_buy_band": 113,
+     "other_AVOID": 21,
+     "regime_entry_floor": 1
+    },
+    "buys": 0,
+    "accepted": 0,
+    "rejected_by": {},
+    "wanted_pct_of_equity": 0.0,
+    "taken_pct_of_equity": 0.0
+   },
+   {
+    "date": "2026-06-01",
+    "regime": "SIDEWAYS",
+    "trading_mode": "NORMAL",
+    "entry_floor": 0,
+    "scored": 751,
+    "gates": {
+     "buy": 80,
+     "fundamental_critical": 89,
+     "below_buy_band": 261,
+     "below_hold_band": 103,
+     "other_AVOID": 134,
+     "technical_gate": 84
+    },
+    "buys": 80,
+    "accepted": 10,
+    "rejected_by": {
+     "portfolio_full": 30
+    },
+    "wanted_pct_of_equity": 1169.0,
+    "taken_pct_of_equity": 52.5
+   },
+   {
+    "date": "2026-06-30",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 751,
+    "gates": {
+     "technical_gate": 563,
+     "below_hold_band": 57,
+     "other_AVOID": 35,
+     "fundamental_critical": 29,
+     "below_buy_band": 50,
+     "buy": 17
+    },
+    "buys": 17,
+    "accepted": 10,
+    "rejected_by": {
+     "portfolio_full": 4
+    },
+    "wanted_pct_of_equity": 255.0,
+    "taken_pct_of_equity": 90.0
+   },
+   {
+    "date": "2026-08-02",
+    "regime": "BULL",
+    "trading_mode": "AGGRESSIVE",
+    "entry_floor": 0,
+    "scored": 749,
+    "gates": {
+     "other_AVOID": 132,
+     "below_buy_band": 128,
+     "below_hold_band": 57,
+     "technical_gate": 347,
+     "fundamental_critical": 62,
+     "buy": 23
+    },
+    "buys": 23,
+    "accepted": 10,
+    "rejected_by": {
+     "portfolio_full": 7
+    },
+    "wanted_pct_of_equity": 329.3,
+    "taken_pct_of_equity": 88.9
+   }
+  ]
+ },
+ "stress": {
+  "baseline": {
+   "available": true,
+   "total_return_pct": 0.04,
+   "cagr_pct": 0.02,
+   "volatility_pct": 5.67,
+   "max_drawdown_pct": -7.9,
+   "sharpe": -3.62,
+   "sortino": -4.32,
+   "calmar": 0.0,
+   "trades": 107,
+   "win_rate_pct": 38.32,
+   "profit_factor": 1.0,
+   "average_win_pct": 10.68,
+   "average_loss_pct": -5.51,
+   "turnover_per_year": 5.01,
+   "average_positions": 2.11,
+   "average_cash_pct": 80.69,
+   "average_exposure_pct": 19.31,
+   "sessions_fully_in_cash": 143,
+   "commission": 51791783.0,
+   "tax": 48477526.0,
+   "benchmark_pct": 171.81
+  },
+  "exposure_50": {
+   "available": true,
+   "total_return_pct": -4.69,
+   "cagr_pct": -2.44,
+   "volatility_pct": 6.85,
+   "max_drawdown_pct": -10.65,
+   "sharpe": -3.35,
+   "sortino": -3.98,
+   "calmar": -0.23,
+   "trades": 83,
+   "win_rate_pct": 34.94,
+   "profit_factor": 0.88,
+   "average_win_pct": 11.25,
+   "average_loss_pct": -5.41,
+   "turnover_per_year": 5.56,
+   "average_positions": 1.59,
+   "average_cash_pct": 80.31,
+   "average_exposure_pct": 19.69,
+   "sessions_fully_in_cash": 146,
+   "commission": 54752833.0,
+   "tax": 51044817.0,
+   "benchmark_pct": 171.81
+  },
+  "exposure_75": {
+   "available": true,
+   "total_return_pct": -4.83,
+   "cagr_pct": -2.51,
+   "volatility_pct": 6.89,
+   "max_drawdown_pct": -10.64,
+   "sharpe": -3.34,
+   "sortino": -3.97,
+   "calmar": -0.24,
+   "trades": 86,
+   "win_rate_pct": 34.88,
+   "profit_factor": 0.88,
+   "average_win_pct": 11.18,
+   "average_loss_pct": -5.39,
+   "turnover_per_year": 5.71,
+   "average_positions": 1.65,
+   "average_cash_pct": 79.76,
+   "average_exposure_pct": 20.24,
+   "sessions_fully_in_cash": 134,
+   "commission": 56315361.0,
+   "tax": 52501116.0,
+   "benchmark_pct": 171.81
+  },
+  "exposure_100": {
+   "available": true,
+   "total_return_pct": -4.49,
+   "cagr_pct": -2.33,
+   "volatility_pct": 7.42,
+   "max_drawdown_pct": -13.14,
+   "sharpe": -3.07,
+   "sortino": -3.72,
+   "calmar": -0.18,
+   "trades": 94,
+   "win_rate_pct": 36.17,
+   "profit_factor": 0.89,
+   "average_win_pct": 10.54,
+   "average_loss_pct": -5.46,
+   "turnover_per_year": 6.22,
+   "average_positions": 1.75,
+   "average_cash_pct": 78.31,
+   "average_exposure_pct": 21.69,
+   "sessions_fully_in_cash": 126,
+   "commission": 60419885.0,
+   "tax": 56357567.0,
+   "benchmark_pct": 171.81
+  }
+ },
+ "regime": {
+  "regime_on": {
+   "available": true,
+   "total_return_pct": 0.04,
+   "cagr_pct": 0.02,
+   "volatility_pct": 5.67,
+   "max_drawdown_pct": -7.9,
+   "sharpe": -3.62,
+   "sortino": -4.32,
+   "calmar": 0.0,
+   "trades": 107,
+   "win_rate_pct": 38.32,
+   "profit_factor": 1.0,
+   "average_win_pct": 10.68,
+   "average_loss_pct": -5.51,
+   "turnover_per_year": 5.01,
+   "average_positions": 2.11,
+   "average_cash_pct": 80.69,
+   "average_exposure_pct": 19.31,
+   "sessions_fully_in_cash": 143,
+   "commission": 51791783.0,
+   "tax": 48477526.0,
+   "benchmark_pct": 171.81
+  },
+  "regime_off": {
+   "available": true,
+   "total_return_pct": 12.02,
+   "cagr_pct": 6.01,
+   "volatility_pct": 7.52,
+   "max_drawdown_pct": -7.92,
+   "sharpe": -1.94,
+   "sortino": -2.56,
+   "calmar": 0.76,
+   "trades": 127,
+   "win_rate_pct": 38.58,
+   "profit_factor": 1.27,
+   "average_win_pct": 10.26,
+   "average_loss_pct": -5.49,
+   "turnover_per_year": 6.75,
+   "average_positions": 2.56,
+   "average_cash_pct": 71.65,
+   "average_exposure_pct": 28.35,
+   "sessions_fully_in_cash": 105,
+   "commission": 74449379.0,
+   "tax": 70202633.0,
+   "benchmark_pct": 171.81
+  }
+ }
+}

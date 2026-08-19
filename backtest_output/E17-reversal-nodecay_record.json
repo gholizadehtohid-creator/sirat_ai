@@ -1,0 +1,361 @@
+{
+  "experiment_id": "E17-reversal-nodecay",
+  "hypothesis": "Short-horizon reversal: names that fell hardest in the previous session bounce over the following month, because forced selling into the lower band overshoots and unwinds once the queue clears.",
+  "strategy_version": "v3.0-reversal",
+  "researcher": "quant research",
+  "notes": "Chosen because the mechanism is microstructural rather than informational, so it should survive the cost gate that killed Alpha Core. Tested at h=20 only; other horizons are measured for the decay curve and cannot pass the gate.",
+  "expected_failure": [
+    "IC at h=20 below 0.02, or ICIR below 0.30",
+    "the signal exists at h=1 and is gone at h=20 (Alpha Core's shape)",
+    "the edge does not clear a 1.04% round trip",
+    "the basket is limit-locked more than 1.5x the universe rate"
+  ],
+  "acceptance_criteria": {
+    "promotion": "all six stages pass AND the result is reproducible",
+    "stage2": "mean IC at h=20 >= 0.02 with ICIR >= 0.30",
+    "stage3": "net per period positive after cost and slippage",
+    "stage5": ">= 95th percentile against 30 random controls"
+  },
+  "registered_at": "2026-08-19T00:18:37.661834",
+  "status": "ARCHIVE",
+  "provenance": {
+    "git_commit": "UNAVAILABLE",
+    "git_dirty": null,
+    "code_hash": "1d01ff973094ffbea1c2d47e1625ab9af67056122d8ac82f39d5157edd40885b",
+    "config_hash": "b5749afd85a75937465eff42d3b28ea0868c2ee2b51fdcd5ffcfda3823e536a7",
+    "dataset_snapshot": "d4456b84c53ab120",
+    "universe_snapshot": "u20260819-668658bb",
+    "prereg_hash": "c442002fd94b01730fb968fd09337c331b79dfd1edd6bc188fe8f0cee6f33ad5",
+    "reproducible": false
+  },
+  "preregistration": {
+    "experiment_id": "E17-reversal-nodecay",
+    "parameters": {
+      "basket": 10,
+      "holdout_window": [
+        "2022-09-12",
+        "2023-06-12"
+      ],
+      "round_trip_pct": 1.04,
+      "signal": "short-horizon reversal: -1 x the previous session's return, cross-sectionally ranked",
+      "traded_horizon_sessions": 20,
+      "universe": "TSE equities, decision-time eligible",
+      "window": [
+        "2020-01-06",
+        "2022-09-05"
+      ]
+    },
+    "validation_gates": {
+      "stage1": "no leaked forward returns; a universe snapshot exists; at least 50 scoreable names per date",
+      "stage2": "mean IC at h=20 >= 0.02, ICIR >= 0.30, beats a 200-permutation null, retains >= 50% of peak IC at the traded horizon",
+      "stage3": "net of a 1.04% round trip and 0.10% slippage per leg is positive; queue ratio <= 1.50",
+      "stage4": ">= 60% of walk-forward folds positive out of fold",
+      "stage5": ">= 95th percentile against 30 random controls, and a block-bootstrap CI strictly above zero",
+      "stage6": "risk limits, kill switch, monitoring and reconciliation each evidenced by a named artifact"
+    },
+    "expected_metrics": {
+      "mean_ic_h20": 0.03,
+      "net_per_period_pct": 0.4,
+      "queue_ratio": 1.1
+    },
+    "rejection_thresholds": {
+      "max_missing_pct": 5.0,
+      "max_oos_degradation": 0.5,
+      "max_participation_pct": 10.0,
+      "max_queue_ratio": 1.5,
+      "max_stale_pct": 30.0,
+      "min_control_percentile": 95.0,
+      "min_decay_retention": 0.5,
+      "min_fill_rate_pct": 90.0,
+      "min_ic": 0.02,
+      "min_icir": 0.3,
+      "min_liquid_share": 0.7,
+      "min_names_per_date": 50,
+      "min_paper_sessions": 60,
+      "min_pct_positive_ic": 55.0,
+      "min_positive_fold_share": 0.6,
+      "slippage_pct": 0.1
+    },
+    "seed": 20260819,
+    "frozen_at": "2026-08-19T00:18:37.667605",
+    "content_hash": "c442002fd94b01730fb968fd09337c331b79dfd1edd6bc188fe8f0cee6f33ad5"
+  },
+  "stages": [
+    {
+      "stage": 1,
+      "stage_name": "DATA INTEGRITY",
+      "status": "PASS",
+      "detail": "all checks passed",
+      "metrics": {
+        "checks": {
+          "missing_data": true,
+          "point_in_time": true,
+          "survivorship": true,
+          "universe_valid": true
+        },
+        "detail": {
+          "dates": 140,
+          "dates_below_minimum": 0,
+          "forward_columns": [
+            "fwd_1",
+            "fwd_5",
+            "fwd_10",
+            "fwd_20"
+          ],
+          "impossible_forward_pct": 0.0,
+          "impossible_forward_returns": 0,
+          "instruments": 240,
+          "max_missing_pct": 5.0,
+          "max_stale_pct": 30.0,
+          "min_names_per_date": 50,
+          "missing_label_pct": 0.0,
+          "missing_score_pct": 0.0,
+          "names_per_date_median": 240.0,
+          "names_per_date_min": 240,
+          "rows": 33600,
+          "rows_outside_window": 0,
+          "score_is_forward_return": false,
+          "stale_pct": 6.03,
+          "universe_snapshot": "u20260819-668658bb"
+        }
+      },
+      "recorded_at": "2026-08-19T00:18:38.014099"
+    },
+    {
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "status": "PASS",
+      "detail": "all checks passed",
+      "metrics": {
+        "checks": {
+          "factor_decay": true,
+          "ic": true,
+          "random_baseline": true,
+          "rank_correlation": true
+        },
+        "detail": {
+          "dates": 140,
+          "decay_curve": {
+            "1": 0.3553,
+            "5": 0.36069,
+            "10": 0.34967,
+            "20": 0.34851
+          },
+          "empirical_p": 0.0,
+          "horizon": 20,
+          "icir": 5.6586,
+          "mean_ic": 0.34851,
+          "min_decay_retention": 0.5,
+          "min_ic": 0.02,
+          "min_icir": 0.3,
+          "min_pct_positive_ic": 55.0,
+          "null_mean_ic": 0.00033,
+          "null_p95_ic": 0.00956,
+          "null_permutations": 200,
+          "pct_positive_ic": 100.0,
+          "peak_ic": 0.36069,
+          "retention_at_traded_horizon": 0.9662,
+          "t_ic": 66.953
+        }
+      },
+      "recorded_at": "2026-08-19T00:18:44.029612"
+    },
+    {
+      "stage": 3,
+      "stage_name": "EXECUTION REALISM",
+      "status": "PASS",
+      "detail": "all checks passed",
+      "metrics": {
+        "checks": {
+          "liquidity": true,
+          "participation_limits": true,
+          "queue_effects": true,
+          "slippage": true,
+          "transaction_costs": true
+        },
+        "detail": {
+          "basket": 10,
+          "basket_lock_rate_pct": 2.0,
+          "cost_per_period_pct": 0.9969,
+          "dates": 140,
+          "excess_t": 23.48006134128439,
+          "execution_shortfall_pct": 0.2768,
+          "fill_rate_pct": 96.14,
+          "horizon": 20,
+          "liquid_share": 0.7993,
+          "max_participation_pct": 10.0,
+          "max_queue_ratio": 1.5,
+          "min_fill_rate_pct": 90.0,
+          "min_liquid_share": 0.7,
+          "net_after_slippage_pct": 5.2043,
+          "net_per_period_pct": 5.396,
+          "participation_pct": 1.8,
+          "queue_ratio": 0.756,
+          "realised_excess_pct": 6.3929,
+          "requested_excess_pct": 6.6697,
+          "round_trip_pct": 1.04,
+          "shortfall_share": 0.0415,
+          "slippage_pct": 0.1,
+          "turnover_per_period": 0.9586,
+          "universe_lock_rate_pct": 2.646
+        }
+      },
+      "recorded_at": "2026-08-19T00:18:44.252141"
+    },
+    {
+      "stage": 4,
+      "stage_name": "ROBUSTNESS",
+      "status": "PASS",
+      "detail": "all checks passed",
+      "metrics": {
+        "checks": {
+          "out_of_sample": true,
+          "walk_forward": true
+        },
+        "detail": {
+          "fold_detail": [
+            {
+              "fold": 1,
+              "test_end": "2021-02-22",
+              "test_ic": 0.33643,
+              "test_start": "2020-10-12",
+              "train_end": "2020-10-05",
+              "train_ic": 0.35078,
+              "train_start": "2020-01-06"
+            },
+            {
+              "fold": 2,
+              "test_end": "2021-07-12",
+              "test_ic": 0.34568,
+              "test_start": "2021-03-01",
+              "train_end": "2021-02-22",
+              "train_ic": 0.34769,
+              "train_start": "2020-05-25"
+            },
+            {
+              "fold": 3,
+              "test_end": "2021-11-29",
+              "test_ic": 0.34434,
+              "test_start": "2021-07-19",
+              "train_end": "2021-07-12",
+              "train_ic": 0.34106,
+              "train_start": "2020-10-12"
+            },
+            {
+              "fold": 4,
+              "test_end": "2022-04-18",
+              "test_ic": 0.35317,
+              "test_start": "2021-12-06",
+              "train_end": "2021-11-29",
+              "train_ic": 0.34501,
+              "train_start": "2021-03-01"
+            },
+            {
+              "fold": 5,
+              "test_end": "2022-09-05",
+              "test_ic": 0.35837,
+              "test_start": "2022-04-25",
+              "train_end": "2022-04-18",
+              "train_ic": 0.34876,
+              "train_start": "2021-07-19"
+            }
+          ],
+          "folds": 5,
+          "holdout_dates": 40,
+          "holdout_ic": 0.36777,
+          "horizon": 20,
+          "in_sample_ic": 0.34666,
+          "max_oos_degradation": 0.5,
+          "min_positive_fold_share": 0.6,
+          "oos_degradation": -0.0027,
+          "out_sample_ic": 0.3476,
+          "positive_fold_share": 1.0,
+          "positive_folds": 5,
+          "source": "panel walk-forward"
+        }
+      },
+      "recorded_at": "2026-08-19T00:18:44.421003"
+    },
+    {
+      "stage": 5,
+      "stage_name": "STATISTICAL VALIDATION",
+      "status": "PASS",
+      "detail": "all checks passed",
+      "metrics": {
+        "checks": {
+          "bootstrap": true,
+          "confidence_intervals": true,
+          "monte_carlo": true
+        },
+        "detail": {
+          "block_size": 5,
+          "bootstrap_draws": 2000,
+          "ci95": [
+            5.8758,
+            6.82796
+          ],
+          "ci_excludes_zero": true,
+          "control_mean": 0.01723,
+          "control_p95": 0.40693,
+          "controls": 30,
+          "empirical_p": 0.0,
+          "min_control_percentile": 95.0,
+          "paired_difference_mean": 6.37566,
+          "percentile": 100.0,
+          "periods": 140,
+          "treatment_mean": 6.39289
+        }
+      },
+      "recorded_at": "2026-08-19T00:18:48.464719"
+    },
+    {
+      "stage": 6,
+      "stage_name": "PAPER TRADING READINESS",
+      "status": "PASS",
+      "detail": "all checks passed",
+      "metrics": {
+        "checks": {
+          "kill_switch": true,
+          "monitoring": true,
+          "reconciliation": true,
+          "risk_limits": true
+        },
+        "detail": {
+          "kill_switch": {
+            "artifact": "backtesting/paper.py::PaperTrader",
+            "control": "halt on -8% NAV in one session; PM releases the halt"
+          },
+          "min_paper_sessions": 60,
+          "monitoring": {
+            "artifact": "backtest_output/paper_daily.json",
+            "control": "fill rate, queue exposure and slippage, every session"
+          },
+          "paper_sessions": 90,
+          "reconciliation": {
+            "artifact": "backtesting/paper.py::print_report",
+            "control": "paper fills against the tape, daily, breaks escalated"
+          },
+          "required": {
+            "kill_switch": "the condition that halts trading and who can trigger it",
+            "monitoring": "what is watched live and the alert that fires",
+            "reconciliation": "how paper fills are compared with the tape, daily",
+            "risk_limits": "position cap, sector cap, gross exposure cap, stop policy"
+          },
+          "risk_limits": {
+            "artifact": "portfolio_engine.from_config()",
+            "control": "8% per position, 25% per sector, 10% cash floor"
+          }
+        }
+      },
+      "recorded_at": "2026-08-19T00:18:48.476154"
+    }
+  ],
+  "decision": {
+    "experiment_id": "E17-reversal-nodecay",
+    "decision": "ARCHIVE",
+    "rationale": "Every gate passed, but the result cannot be re-derived: git is not installed, so there is no code version to reproduce from. Archived pending Week 1 item 1.",
+    "rejected_at_stage": null,
+    "decided_at": "2026-08-19T00:18:48.484491",
+    "decided_by": "quant research"
+  }
+}

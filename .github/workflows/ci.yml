@@ -1,0 +1,86 @@
+# SIRAT-AI build.
+#
+# WHAT THIS ENFORCES
+# ------------------
+# Two things, and the second is the one that matters:
+#
+#   1. the unit suite passes
+#   2. the platform can still rediscover Alpha Core's four documented failures
+#
+# A governance platform that cannot re-derive its own known negative has no
+# standing to judge a new idea, so (2) is a build failure rather than a report.
+#
+# The fixture runs at TIER 1: it recomputes every anchor through the live
+# analytics code from a frozen 1.8 MB panel committed under
+# sirat/fixtures/data/. Tier 2 rebuilds that panel from the 424 MB market
+# database, which is not in version control and cannot be, so it runs on the
+# schedule below against a self-hosted runner that has the data -- and is
+# allowed to fail without blocking a pull request, because a missing database
+# is an infrastructure fact rather than a code defect.
+
+name: build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  schedule:
+    # Weekly, Monday 06:00 UTC. Paired with the universe snapshot schedule:
+    # survivorship is the one defect only elapsed time can fix.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.14 is what this repository actually runs on. 3.11 is here so a
+        # 3.14-only construct cannot slip in unnoticed and strand anyone whose
+        # environment is older.
+        python-version: ["3.11", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Unit suite and Alpha Core fixture
+        run: python ci.py
+
+      - name: Report the governance state
+        # Always, including after a failure: the KPI and the reproducibility
+        # state are exactly what someone wants to see when the build is red.
+        if: always()
+        run: python -m sirat.experiments.cli status
+
+  # ------------------------------------------------------------------
+  # Tier 2. Needs sirat_market.db, so it only runs where the data lives.
+  # ------------------------------------------------------------------
+  fixture-full:
+    runs-on: [self-hosted, sirat-data]
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild the fixture panel from the market database
+        run: python -m sirat.fixtures.build_panel --verify
+
+      - name: Alpha Core fixture, tier 2
+        run: python ci.py --full
+
+      - name: Freeze this week's universe
+        run: python -m sirat.experiments.universe --if-due

@@ -1,0 +1,42 @@
+# SIRAT AI runtime dependencies.
+#
+# Deliberately short. Every entry below is imported by code that runs on a
+# normal path; nothing is here "in case it is useful later". Four libraries
+# that were considered and rejected, with the reason, so the decision does not
+# get re-litigated:
+#
+#   scipy          pulled in for one normal-distribution quantile. That is two
+#                  hard-coded constants in risk.py (1.645 / 2.326) against a
+#                  ~35 MB dependency with a compiled toolchain on Windows.
+#   scikit-learn   nothing here fits a model yet. It belongs in the same commit
+#                  as the first one, not before it.
+#   PyPortfolioOpt depends on cvxpy, whose solvers need a C++ build chain on
+#                  Windows. portfolio.py's sizing is risk-parity with explicit
+#                  caps -- closed-form, no optimiser, and auditable line by
+#                  line, which matters more here than mean-variance elegance.
+#   yfinance       the benchmark is شاخص کل, which comes from TSETMC. Yahoo has
+#                  no Tehran data, so it would fetch nothing this project uses.
+#
+# numpy is listed explicitly even though pandas requires it: risk.py and
+# performance.py import it directly, and a dependency you import is a
+# dependency you declare.
+
+flask>=3.0
+numpy>=1.26
+pandas>=2.0
+requests>=2.31
+ta>=0.11
+
+# The backtesting engine (backtesting/) adds NOTHING to this list. It was
+# written that way on purpose:
+#
+#   Jalali dates    jalali.py is forty lines of integer arithmetic tested
+#                   against fixed points, rather than jdatetime.
+#   charts          the HTML report draws its own inline SVG from the equity
+#                   curve. matplotlib is used ONLY if it is already installed,
+#                   and only to add PNGs beside a report that is complete
+#                   without them.
+#   statistics      Monte Carlo uses random.Random with a fixed seed; the
+#                   percentiles are index arithmetic on a sorted list.
+#
+# To get the optional PNG charts:  pip install matplotlib

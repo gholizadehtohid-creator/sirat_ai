@@ -1,0 +1,64 @@
+{
+  "_comment": [
+    "Frozen inputs for the Alpha Core regression fixture.",
+    "",
+    "This file holds DATA that has to come from the experiments (E11's arm",
+    "results, the panel's content hash, the frozen strategy's hash). It does",
+    "NOT hold the anchors or their tolerances -- those live in",
+    "sirat/fixtures/alpha_core.py as code, so a red build cannot be made",
+    "green by editing a JSON file."
+  ],
+  "alpha_core_sha256": "90024d86d7a5c268445f05487f691b70284be907b1417a448a45f119bc617099",
+  "panel_sha256": "618d194e5bc2d4afb1b9308f33c16fd92fd7e0f1602850e42350f93054551892",
+  "e11_distribution": {
+    "source": "backtest_output/experiment5b_production.json",
+    "experiment": "E11 -- Experiment 5B, production pipeline",
+    "arms": "arm B (Alpha Core through the real allocator and order book) against 30 random-ranking controls, identical in every other respect",
+    "metric": "cagr_pct",
+    "recorded_percentile": 3.3,
+    "recorded_empirical_p": 0.9667,
+    "treatment_cagr_pct": 17.84,
+    "control_cagr_pct": [
+      22.38,
+      24.11,
+      25.32,
+      27.97,
+      23.05,
+      27.6,
+      25.41,
+      28.49,
+      22.99,
+      25.86,
+      29.74,
+      26.65,
+      20.58,
+      28.45,
+      22.57,
+      26.1,
+      15.09,
+      23.73,
+      19.28,
+      27.49,
+      24.94,
+      22.92,
+      18.58,
+      18.79,
+      22.27,
+      30.19,
+      21.54,
+      18.37,
+      21.55,
+      24.9
+    ]
+  },
+  "provenance": {
+    "e11_artifact": "backtest_output/experiment5b_production.json",
+    "e13_artifact": "backtest_output/alpha_decay_analysis.json",
+    "e14_artifact": "backtest_output/experiment14_queue_artifact.json",
+    "e15_artifact": "backtest_output/experiment15_execution_aware.json",
+    "window": [
+      "2014-09-21",
+      "2024-09-01"
+    ]
+  }
+}
