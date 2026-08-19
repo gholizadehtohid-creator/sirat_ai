@@ -1,0 +1,290 @@
+{
+  "rows": [
+    {
+      "id": "E1-market-exposure-baseline",
+      "short": "E1",
+      "hypothesis": "A deterministic four-signal market-state engine decides when and how much to be invested better than fixed passive exposure.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "611d1f9ef110",
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "failed_checks": [
+        "ic",
+        "rank_correlation",
+        "random_baseline",
+        "factor_decay"
+      ],
+      "reason": "NEVER MEASURED IN PHASE 1",
+      "never_measured": true,
+      "sources": [
+        "exposure_experiment.json"
+      ],
+      "decision": "REJECT",
+      "note": "The experiment went straight to portfolio Sharpe. Whether the exposure signal predicted anything was never measured -- E4 eventually measured it out of sample at rho = -0.126."
+    },
+    {
+      "id": "E2-conditional-alpha-core",
+      "short": "E2",
+      "hypothesis": "Alpha Core selection adds value conditional on the exposure path.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "87db2bf17a2a",
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "failed_checks": [
+        "ic",
+        "rank_correlation",
+        "factor_decay"
+      ],
+      "reason": "0.01456 < 0.02 required",
+      "never_measured": false,
+      "sources": [
+        "alpha_decay_analysis.json / decay_curve",
+        "alpha_decay_analysis.json / decay_curve.h20.icir",
+        "alpha_decay_analysis.json / decay_curve.h20.mean_ic"
+      ],
+      "decision": "REJECT",
+      "note": "Dies at Stage 2 on the signal itself. Had it survived, Stage 3 would have refused it anyway: a close-fill book supplies no next-session state, and `execution_realism` raises rather than assuming a fill rate."
+    },
+    {
+      "id": "E3-execution-realism",
+      "short": "E3",
+      "hypothesis": "Alpha Core beats random selection under production execution.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "83798ce48bb3",
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "failed_checks": [
+        "ic",
+        "rank_correlation",
+        "factor_decay"
+      ],
+      "reason": "0.01456 < 0.02 required",
+      "never_measured": false,
+      "sources": [
+        "alpha_decay_analysis.json / decay_curve",
+        "alpha_decay_analysis.json / decay_curve.h20.icir",
+        "alpha_decay_analysis.json / decay_curve.h20.mean_ic"
+      ],
+      "decision": "REJECT",
+      "note": "Reached a 30-seed portfolio comparison -- days of compute -- without a Stage 2 measurement that costs an hour and answers it."
+    },
+    {
+      "id": "E4-exposure-holdout",
+      "short": "E4",
+      "hypothesis": "The exposure engine delivers incremental value on unseen data.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "006cfc575c83",
+      "stage": 4,
+      "stage_name": "ROBUSTNESS",
+      "failed_checks": [
+        "walk_forward",
+        "out_of_sample"
+      ],
+      "reason": "block capture upside 52.7% vs downside 64.0%: the defensive claim inverts out of fold",
+      "never_measured": false,
+      "sources": [
+        "holdout_report.md",
+        "holdout_report.md / G7"
+      ],
+      "decision": "REJECT",
+      "note": "The one Phase 1 rejection that genuinely required expensive validation. In sample the engine scored; only unseen data falsified it. Stage 4 is the correct and cheapest stage that could have caught this."
+    },
+    {
+      "id": "E5-experiment4-preflight",
+      "short": "E5",
+      "hypothesis": "Alpha Core's two factors generalise to an untouched forward window.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "d4a9978f9a25",
+      "stage": 1,
+      "stage_name": "DATA INTEGRITY",
+      "failed_checks": [
+        "point_in_time"
+      ],
+      "reason": "the proposed holdout 2024-09-01..2026-06-30 was already the fitted window: 17,695 observations over 23 dates",
+      "never_measured": false,
+      "sources": [
+        "experiment4_preflight_audit.md"
+      ],
+      "decision": "REJECT",
+      "note": "Phase 1's one genuinely cheap rejection, and it took a specially-written preflight audit to produce. Under this platform it is `windows_touched` -- arithmetic, automatic, and impossible to forget."
+    },
+    {
+      "id": "E6-alpha-core-rank-ic",
+      "short": "E6",
+      "hypothesis": "The Alpha Core score orders future returns.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "5442c7a26751",
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "failed_checks": [
+        "ic",
+        "rank_correlation",
+        "factor_decay"
+      ],
+      "reason": "0.01456 < 0.02 required",
+      "never_measured": false,
+      "sources": [
+        "alpha_decay_analysis.json / decay_curve",
+        "alpha_decay_analysis.json / decay_curve.h20.icir",
+        "alpha_decay_analysis.json / decay_curve.h20.mean_ic"
+      ],
+      "decision": "REJECT",
+      "note": "The measurement that should have ended the programme. It was run sixth, and its verdict at the traded horizon -- ICIR 0.219 against a required 0.30 -- did not stop anything."
+    },
+    {
+      "id": "E9-experiment5a-frictionless",
+      "short": "E9",
+      "hypothesis": "Alpha Core creates portfolio value before the allocator and order book are introduced.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "480beece095d",
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "failed_checks": [
+        "ic",
+        "rank_correlation",
+        "factor_decay"
+      ],
+      "reason": "0.01456 < 0.02 required",
+      "never_measured": false,
+      "sources": [
+        "alpha_decay_analysis.json / decay_curve",
+        "alpha_decay_analysis.json / decay_curve.h20.icir",
+        "alpha_decay_analysis.json / decay_curve.h20.mean_ic"
+      ],
+      "decision": "REJECT",
+      "note": "A 100th-percentile result that the platform rejects at Stage 2. That is the intended behaviour: a frictionless arm localises where value would come from and can never validate that it exists, because it has removed the costs that decide the question."
+    },
+    {
+      "id": "E11-experiment5b-production",
+      "short": "E11",
+      "hypothesis": "Alpha Core retains incremental value through the real allocator and order book.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "35f980d9446c",
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "failed_checks": [
+        "ic",
+        "rank_correlation",
+        "factor_decay"
+      ],
+      "reason": "0.01456 < 0.02 required",
+      "never_measured": false,
+      "sources": [
+        "alpha_decay_analysis.json / decay_curve",
+        "alpha_decay_analysis.json / decay_curve.h20.icir",
+        "alpha_decay_analysis.json / decay_curve.h20.mean_ic"
+      ],
+      "decision": "REJECT",
+      "note": "Thirty full portfolio backtests through the production pipeline to establish what one Stage 2 run says in an hour."
+    },
+    {
+      "id": "E13-alpha-decay",
+      "short": "E13",
+      "hypothesis": "The signal exists but decays faster than the trading system can harvest it.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "009ed04579ec",
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "failed_checks": [
+        "ic",
+        "rank_correlation",
+        "factor_decay"
+      ],
+      "reason": "0.01456 < 0.02 required",
+      "never_measured": false,
+      "sources": [
+        "alpha_decay_analysis.json / decay_curve",
+        "alpha_decay_analysis.json / decay_curve.h20.icir",
+        "alpha_decay_analysis.json / decay_curve.h20.mean_ic"
+      ],
+      "decision": "REJECT",
+      "note": "The experiment that produced the Stage 2 evidence. Run thirteenth. Every number it needed was computable from data that existed before experiment 1."
+    },
+    {
+      "id": "E14-queue-artifact",
+      "short": "E14",
+      "hypothesis": "The h=1 signal detects stocks entering or remaining in price-limit queues, not persistent alpha.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "b3c5328b8221",
+      "stage": 3,
+      "stage_name": "EXECUTION REALISM",
+      "failed_checks": [
+        "transaction_costs",
+        "liquidity",
+        "participation_limits",
+        "slippage",
+        "queue_effects"
+      ],
+      "reason": "top-decile h=1 excess 0.5496% against a 1.04% round trip: -0.49% per period, -69%/yr",
+      "never_measured": false,
+      "sources": [
+        "every Phase 1 artifact",
+        "experiment14_queue_artifact.json",
+        "experiment14_queue_artifact.json / decomposition",
+        "experiment14_queue_artifact.json / exclusion_tests",
+        "experiment14_queue_artifact.json / queue_exposure"
+      ],
+      "decision": "REJECT",
+      "note": "The signal passes Stage 2 at its declared horizon and dies at Stage 3. That is the platform working exactly as intended: real, and untradeable."
+    },
+    {
+      "id": "E15-execution-aware-rescue",
+      "short": "E15",
+      "hypothesis": "An execution-aware filter using only decision-time information converts the Alpha Core signal into a positive net edge after costs.",
+      "registered": true,
+      "preregistered": true,
+      "prereg_hash": "0fb5a5ff9ace",
+      "stage": 2,
+      "stage_name": "ECONOMIC SIGNAL VALIDATION",
+      "failed_checks": [
+        "ic",
+        "rank_correlation",
+        "random_baseline",
+        "factor_decay"
+      ],
+      "reason": "filtered IC at h=20 is -0.03245, below 0.02 and the wrong sign",
+      "never_measured": false,
+      "sources": [
+        "experiment15_execution_aware.json",
+        "experiment15_execution_aware.json / arms.B",
+        "experiment15_execution_aware.json / gates.G3"
+      ],
+      "decision": "REJECT",
+      "note": "The filter removed the artifact and the alpha together, which is what E14 predicted. Stage 2 catches it because the filtered signal has no information at the traded horizon."
+    }
+  ],
+  "kpi": {
+    "rejections": 11,
+    "cheap": 10,
+    "rate": 0.9091,
+    "target": 0.7,
+    "meets_target": true,
+    "by_stage": {
+      "1": 1,
+      "2": 8,
+      "3": 1,
+      "4": 1,
+      "5": 0,
+      "6": 0
+    },
+    "reproducibility": {
+      "reproducible": false,
+      "reason": "the working tree has uncommitted changes, so the code that ran cannot be recovered from the commit",
+      "remedy": "commit or stash before registering an experiment",
+      "blocks": [
+        "PROMOTE decisions"
+      ]
+    }
+  },
+  "universe_snapshot": "u20260819-668658bb"
+}
