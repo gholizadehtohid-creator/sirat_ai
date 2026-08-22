@@ -68,7 +68,7 @@ const DEFAULT_PERIODS = {};
 const state = {
   screen: null, indices: null, sectors: null,
   regime: null, portfolio: null, flow: null,
-  fundamentals: null, codal: null, technical: null
+  fundamentals: null, codal: null, technical: null, topTechnical: null
 };
 
 /* ---------- helpers ---------- */
@@ -703,6 +703,71 @@ async function loadTechnical(force = false) {
     console.error(err);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "▶ تحلیل"; }
+  }
+}
+
+/* ---------- top-N technical, over the liquid universe ---------- */
+
+const CALL_CLASS = { BUY: "good", SELL: "bad", HOLD: "neutral" };
+
+function renderTopTechnical(rep) {
+  state.topTechnical = rep;
+
+  const rows = rep.top || [];
+  const c = rep.counts || {};
+
+  if (!rows.length) {
+    banner("topTechnicalStatus", "topTechnicalStatusText", "is-warn",
+      "هیچ نمادی بالای کف نقدشوندگی امتیاز نگرفت.");
+    $("topTechnicalTable").innerHTML = "";
+    return;
+  }
+
+  banner("topTechnicalStatus", "topTechnicalStatusText", "is-live",
+    `<strong>${rows.length} نماد برتر</strong> از ${c.liquid_scored} نماد ` +
+    `نقدشونده (${c.illiquid_skipped} نماد زیر کف ${money(rep.min_turnover)} ` +
+    `ریال کنار گذاشته شد). ⚠ ${esc(rep.caveat || "")}`);
+
+  const callBadge = (call, fa) =>
+    `<span class="badge ${CALL_CLASS[call] || "neutral"}">` +
+    `<span class="dot"></span>${esc(fa)}</span>`;
+
+  const body = rows.map((r, i) => [
+    String(i + 1),
+    `<a href="?tech=${encodeURIComponent(r.symbol || "")}"
+        title="تحلیل تک‌نماد">${esc(r.symbol || "—")}</a>`,
+    esc((r.sector || "").slice(0, 22)),
+    num(r.score, 0),
+    esc(r.status || "—"),
+    callBadge(r.call, r.call_fa),
+    num(r.rsi, 1),
+    num(r.macd, 2),
+    money(r.turnover)
+  ]);
+
+  $("topTechnicalTable").innerHTML = table(
+    ["#", "نماد", "صنعت", "امتیاز", "وضعیت", "سیگنال", "RSI", "MACD",
+     "ارزش معاملات"], body);
+}
+
+async function loadTopTechnical(force = false) {
+  const btn = $("runTopTechnicalBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "در حال رتبه‌بندی…"; }
+  banner("topTechnicalStatus", "topTechnicalStatusText", "is-loading",
+    "اسکن کل بازار — چند ده ثانیه طول می‌کشد…");
+
+  try {
+    const rep = await getJSON(
+      `/api/technical/top?top=10&${query()}${force ? "&refresh=1" : ""}`);
+    renderTopTechnical(rep);
+  } catch (err) {
+    state.topTechnical = null;
+    banner("topTechnicalStatus", "topTechnicalStatusText", "is-error",
+      `<strong>رتبه‌بندی نشد.</strong> ${esc(err.message)}`);
+    $("topTechnicalTable").innerHTML = "";
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "▶ رتبه‌بندی بازار"; }
   }
 }
 
@@ -1927,6 +1992,7 @@ function rerender() {
   if (state.codal) renderRoutes(state.codal.routes, state.codal.coverage);
   if (state.flow) renderMoneyflow(state.flow);
   if (state.technical) renderTechnical(state.technical);
+  if (state.topTechnical) renderTopTechnical(state.topTechnical);
   if (state.screen) renderScreen(state.screen);
   if (state.portfolio) renderPortfolio(state.portfolio);
 }
@@ -2035,6 +2101,7 @@ on("runFlowBtn", "click", () => loadMoneyflow(true));
 on("runRegimeBtn", "click", () => loadRegime(true));
 on("runPortfolioBtn", "click", () => loadPortfolio(true));
 on("runTechnicalBtn", "click", () => loadTechnical(true));
+on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
 
 // Enter in the symbol box runs the analysis, so the button is optional.
 on("techSymbolInput", "keydown", (e) => {

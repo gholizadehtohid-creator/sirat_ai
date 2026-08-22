@@ -1809,6 +1809,52 @@ def load_client_type_tail(ins_codes, sessions):
     }
 
 
+def load_history_tail(ins_codes, sessions):
+    """The most recent `sessions` price bars for each of many instruments.
+
+    One query for a whole-market technical scan, mirroring
+    `load_client_type_tail`: the per-symbol cut is applied in SQL so a
+    long-listed name does not drag its entire history through pandas. Returns
+    {ins_code: DataFrame(oldest first)} -- the shape calculate_indicators wants.
+    """
+
+    create_database()
+
+    codes = [str(c) for c in ins_codes]
+
+    if not codes or sessions <= 0:
+        return {}
+
+    conn = _connect()
+
+    holes = ", ".join(["?"] * len(codes))
+
+    df = pd.read_sql(f"""
+        SELECT ins_code, date, open, high, low, close, volume, value, trades
+        FROM (
+            SELECT *, ROW_NUMBER() OVER (
+                PARTITION BY ins_code ORDER BY date DESC
+            ) AS rank
+            FROM price_history
+            WHERE ins_code IN ({holes})
+        ) WHERE rank <= ?
+        ORDER BY ins_code, date ASC
+    """, conn, params=codes + [sessions])
+
+    conn.close()
+
+    if df.empty:
+        return {}
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+    return {
+        str(code): group.drop(columns=["ins_code", "rank"], errors="ignore")
+                        .reset_index(drop=True)
+        for code, group in df.groupby("ins_code")
+    }
+
+
 def inscodes_with_client_type():
     create_database()
     conn = _connect()

@@ -441,9 +441,10 @@ def api_indices():
 def api_technical():
     """Technical reading for one instrument, by نماد.
 
-    Data only -- indicator values and a short series for charting. No signal,
-    no BUY/SELL; the panel renders, the reader decides. Missing indicators are
-    reported as null, never as zero.
+    Indicator values, support/resistance levels, and a transparent BUY/SELL
+    vote whose every component is shown -- a textbook reading, not a validated
+    edge, and it ships with that caveat. Missing indicators are reported as
+    null, never as zero.
     """
 
     symbol = request.args.get("symbol", type=str)
@@ -469,6 +470,30 @@ def api_technical():
         return jsonify(report), 404
 
     return jsonify(report)
+
+
+@app.route("/api/technical/top")
+def api_technical_top():
+    """The top-N names by the platform's technical score, over the liquid
+    universe.
+
+    A convenience ranking, memoised because it scores ~600 names through the
+    full indicator engine. Carries the same caveat as the per-symbol signal:
+    it ranks by textbook technicals, which this programme's research found no
+    tradable edge in.
+    """
+
+    top = request.args.get("top", type=int) or 10
+    top = max(1, min(top, 50))
+    params = wanted_params()
+    force = request.args.get("refresh") == "1"
+
+    key = cache_key("technical_top", data_version(), top, params_key(params))
+
+    def build():
+        return technical.top_technical(top=top, params=params)
+
+    return jsonify(memoise(key, build, force=force))
 
 
 @app.route("/api/sectors")

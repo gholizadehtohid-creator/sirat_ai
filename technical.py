@@ -35,9 +35,11 @@ through the PIT layer; keeping this separate is the point.
 
 import math
 
+import config
 import database
 import indicators
 import levels
+import ranking
 
 
 # The fields worth surfacing as "current reading" numbers, mapped to the
@@ -403,3 +405,113 @@ def _is_nat(value):
         return value != value          # NaT != NaT is True
     except Exception:                  # noqa: BLE001
         return False
+
+
+# ==============================
+# TOP-N TECHNICAL RANKING
+# ==============================
+
+# History depth loaded per name for the scan. rank_stocks needs its indicators
+# warmed; the pipeline uses 300 and this matches it so the ranking here and the
+# screener's cannot diverge on warm-up.
+SCAN_BARS = 300
+
+# The liquidity floor. Ranking names that cannot absorb a position is exactly
+# the failure this programme's own research (E20/E21) documented -- the signal
+# concentrates where trading is impossible. A whole-market technical ranking
+# that ignored this would put the least tradable names at the top, which is
+# worse than no ranking. Same floor the fundamental screen and money-flow use.
+MIN_TURNOVER = config.MIN_DAILY_VALUE
+
+
+def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
+    """The strongest names by the platform's own technical score.
+
+    Ranks the whole equity universe with `ranking.rank_stocks` -- the same
+    scorer the screener's Stage 3 uses -- after a liquidity floor, and returns
+    the top `top`. This is a convenience ranking for a human, NOT a validated
+    edge: it carries the same caveat as the per-symbol signal, because it is
+    built from the same indicators the research found no tradable edge in.
+    """
+
+    params = indicators.clean_params(params)
+
+    instruments = database.load_instruments(equities_only=True)
+    by_code = {str(r["ins_code"]): r for r in instruments}
+    codes = list(by_code)
+
+    frames = database.load_history_tail(codes, SCAN_BARS)
+
+    scored = []
+    considered = 0
+    illiquid = 0
+    no_data = 0
+
+    for code in codes:
+        frame = frames.get(code)
+        if frame is None or frame.empty:
+            no_data += 1
+            continue
+
+        # Liquidity floor on the most recent traded value -- the same figure
+        # the money-flow ranking gates on, so the two lists agree on what is
+        # tradable.
+        last_value = _finite(frame["value"].iloc[-1]) if "value" in frame \
+            else None
+        if last_value is None or last_value < min_turnover:
+            illiquid += 1
+            continue
+
+        considered += 1
+
+        enriched = indicators.calculate_indicators(frame, params)
+        if enriched.empty:
+            no_data += 1
+            continue
+
+        result = ranking.rank_stocks(enriched)
+        if not result.get("scored", False):
+            continue
+
+        instrument = by_code.get(code, {})
+
+        # The transparent buy/sell call, reusing the same vote engine as the
+        # single-symbol panel so a name's rank and its call cannot disagree.
+        last = enriched.iloc[-1]
+        latest = {}
+        for out_name, column in LATEST_FIELDS:
+            latest[out_name] = _finite(last[column]) \
+                if column in enriched.columns else None
+        sr = support_resistance(enriched, latest.get("close"))
+        signal = technical_signal(latest, sr)
+
+        scored.append({
+            "ins_code": code,
+            "symbol": instrument.get("symbol_fa"),
+            "name": instrument.get("name_fa"),
+            "sector": instrument.get("sector_name"),
+            "score": result["score"],
+            "status": result["status"],
+            "trend": result.get("trend"),
+            "rsi": result.get("rsi"),
+            "macd": result.get("macd"),
+            "momentum": result.get("momentum"),
+            "turnover": last_value,
+            "call": signal["call"],
+            "call_fa": signal["call_fa"],
+            "net": signal["net"],
+        })
+
+    ranked = sorted(scored, key=lambda r: r["score"], reverse=True)
+
+    return {
+        "top": ranked[:top],
+        "min_turnover": min_turnover,
+        "counts": {
+            "universe": len(codes),
+            "liquid_scored": len(scored),
+            "illiquid_skipped": illiquid,
+            "no_data": no_data,
+        },
+        "caveat": SIGNAL_CAVEAT,
+    }

@@ -191,5 +191,59 @@ class TechnicalSignalTests(unittest.TestCase):
         self.assertEqual(sig["bullish"], 1)
 
 
+class TopTechnicalTests(unittest.TestCase):
+    """The whole-market ranking: liquidity floor, ordering, and caveat."""
+
+    def test_shape_and_ordering(self):
+        import database
+        try:
+            n = len(database.load_instruments(equities_only=True))
+        except Exception:                                          # noqa: BLE001
+            self.skipTest("no database")
+        if not n:
+            self.skipTest("empty universe")
+
+        rep = technical.top_technical(top=5)
+
+        self.assertIn("top", rep)
+        self.assertLessEqual(len(rep["top"]), 5)
+        self.assertIn("caveat", rep)
+        self.assertIn("E19", rep["caveat"])
+
+        # scores descend
+        scores = [r["score"] for r in rep["top"]]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+        # every ranked name cleared the liquidity floor -- the whole point
+        for r in rep["top"]:
+            self.assertGreaterEqual(r["turnover"], rep["min_turnover"])
+
+        # strict JSON, no NaN reaches the browser
+        json.dumps(rep, ensure_ascii=False, allow_nan=False)
+
+    def test_the_floor_actually_excludes(self):
+        """A floor that excludes nothing is not a floor. On real TSE data many
+        names sit below MIN_DAILY_VALUE, so illiquid_skipped must be > 0 and
+        the parts must never over-count the universe."""
+        import database
+        try:
+            if not database.load_instruments(equities_only=True):
+                self.skipTest("empty universe")
+        except Exception:                                          # noqa: BLE001
+            self.skipTest("no database")
+
+        rep = technical.top_technical(top=10)
+        c = rep["counts"]
+
+        self.assertGreater(c["illiquid_skipped"], 0,
+                           "the liquidity floor excluded nothing")
+        self.assertGreaterEqual(c["liquid_scored"], len(rep["top"]))
+        # scored + skipped buckets can be <= universe (some liquid names may be
+        # refused by rank_stocks), but never more.
+        self.assertLessEqual(
+            c["liquid_scored"] + c["illiquid_skipped"] + c["no_data"],
+            c["universe"])
+
+
 if __name__ == "__main__":
     unittest.main()
