@@ -89,6 +89,31 @@ CALIBRATED_MAX_PARTICIPATION = 0.027
 # rather than to decorate a report with three points that all agree.
 SENSITIVITY_PREFACTORS = (0.17, 0.34, 0.51, 0.69)
 
+# ---- the volatility sanity bound, and why it is not a tuned number ---------
+#
+# E22 charged impact for the first time and read 56-76% of price across an
+# entire 550-name cross-section on five sessions in June 2022. The cause was
+# not the market: 252 rows in `price_history` carry returns above 200%, the
+# largest +19,976,600%, which is a prior close of 1 rial -- new listings,
+# post-suspension reopenings and unadjusted capital increases. One such row
+# sits inside a 20-session trailing window for twenty sessions and dominates
+# every basket drawn on those dates.
+#
+# The bound below is E14's LOCK_MAX_RETURN, cited rather than reinvented.
+# `annotate` has classified bars beyond it as `extreme_gap` -- reopenings, not
+# band moves -- since it was written, so the platform already held the
+# knowledge this estimator was failing to use. It is a physical ceiling on a
+# band-limited market rather than a threshold chosen to make a result pass: a
+# name moving the full band in alternating directions every session is the
+# theoretical maximum, and it lands here.
+#
+# It was added AFTER E22 rejected. E22 is not re-run under it -- repairing
+# data after seeing a verdict and re-measuring is the move this platform
+# exists to refuse, and it stays refused when the repair is obviously correct.
+EXTREME_MOVE_PCT = 12.0
+
+MAX_PLAUSIBLE_DAILY_VOLATILITY_PCT = 12.0
+
 
 class ImpactEstimate(object):
     """One estimate, carrying why it is or is not usable.
@@ -183,6 +208,20 @@ def estimate(order_value, adv_value, daily_volatility_pct, locked=False,
         return ImpactEstimate(executable=False,
                               reason="no decision-time daily volatility")
 
+    if sigma > MAX_PLAUSIBLE_DAILY_VOLATILITY_PCT:
+        # Not a volatile name -- a contaminated one. On a band-limited market
+        # the theoretical maximum daily volatility is the band itself, so a
+        # reading above it means the return series contains a bar the market
+        # never printed. See the constant's note: E22 found 252 such rows.
+        return ImpactEstimate(
+            executable=False,
+            reason="daily volatility %.1f%% exceeds the %.1f%% band ceiling: "
+                   "the return series contains a reopening, an unadjusted "
+                   "capital increase or a placeholder price, not a volatile "
+                   "name. Refusing rather than charging an impact no market "
+                   "could produce."
+                   % (sigma, MAX_PLAUSIBLE_DAILY_VOLATILITY_PCT))
+
     if c is None:
         return ImpactEstimate(executable=False,
                               reason="prefactor missing or non-positive")
@@ -257,13 +296,21 @@ def sensitivity(order_value, adv_value, daily_volatility_pct,
     return out
 
 
-def daily_volatility_pct(closes, window=20, min_periods=10):
+def daily_volatility_pct(closes, window=20, min_periods=10,
+                         max_move_pct=EXTREME_MOVE_PCT):
     """Trailing daily volatility in percent, from a name's own closes.
 
     The series must END at the decision session -- this function does not shift
     for the caller, because a shift applied in two places cancels and a shift
     applied in neither is lookahead. The caller owns the alignment and this
     docstring is where that is stated.
+
+    Returns beyond `max_move_pct` are DROPPED rather than winsorised. E14 calls
+    them `extreme_gap` and treats them as reopenings rather than band moves;
+    they describe a corporate action or a placeholder price, so they are not
+    observations of this name's volatility at all. Winsorising would keep them
+    at the boundary and still bias the estimate upward; dropping says what is
+    true, which is that there was no usable observation that session.
 
     Returns None rather than 0.0 when there is not enough history. A name with
     nine observations has no volatility estimate; reporting zero for it would
@@ -281,6 +328,9 @@ def daily_volatility_pct(closes, window=20, min_periods=10):
 
     returns = [(values[i] / values[i - 1] - 1.0) * 100.0
                for i in range(1, len(values))]
+
+    if max_move_pct is not None:
+        returns = [r for r in returns if abs(r) <= max_move_pct]
 
     if len(returns) < min_periods:
         return None

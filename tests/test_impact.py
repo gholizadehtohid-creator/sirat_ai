@@ -241,42 +241,137 @@ class VolatilityTests(unittest.TestCase):
 
 
 class ImportSafetyTests(unittest.TestCase):
+    """Impact may be charged by an EXPERIMENT and never by the engine.
 
-    def test_importing_changes_no_existing_behaviour(self):
-        """Nothing calls this yet, on purpose.
+    The first version of this test asserted that nothing anywhere imported the
+    module, and it went red the moment E22 used it as designed. That was the
+    contract stated too loosely, not a real violation, so the contract is
+    stated properly here rather than the control being dropped.
 
-        Switching slippage on must be a measured delta inside a registered
-        experiment, not a silent revision of every result in the ledger. If
-        this test ever fails, someone has wired it in without an experiment.
-        """
+    The line that matters: switching slippage on must be a measured delta
+    inside a registered, preregistered experiment. If the engine imports it,
+    every result in the ledger silently changes meaning and no experiment
+    records that it happened.
+    """
 
-        import subprocess
+    # Registered experiments live here. They are the sanctioned caller.
+    ALLOWED_PREFIXES = ("examples",)
 
-        out = subprocess.run(
-            [sys.executable, "-c",
-             "import ast,os,sys;"
-             "root=sys.argv[1];"
-             "hits=[];"
-             "[hits.append(p) for p in "
-             " [os.path.join(d,f) for d,_,fs in os.walk(root) for f in fs "
-             "  if f.endswith('.py')] "
-             " if 'impact' in open(p,encoding='utf-8',errors='ignore').read()"
-             " and 'test_impact' not in p and 'backtesting\\\\impact' not in p"
-             " and 'backtesting/impact' not in p];"
-             "print('\\n'.join(h for h in hits if 'import impact' in "
-             "open(h,encoding='utf-8',errors='ignore').read() or "
-             "'from backtesting import impact' in "
-             "open(h,encoding='utf-8',errors='ignore').read()))",
-             ROOT],
-            capture_output=True, text=True)
+    EXEMPT = ("backtesting/impact.py", "tests/test_impact.py")
 
-        importers = [line for line in out.stdout.splitlines() if line.strip()]
+    def _importers(self):
+        needles = ("from backtesting import impact", "import backtesting.impact")
 
-        self.assertEqual(importers, [],
-                         "impact.py is imported by %s -- wiring it in changes "
-                         "existing results and belongs in a registered "
-                         "experiment" % importers)
+        found = []
+
+        for directory, _, files in os.walk(ROOT):
+            if any(part in directory for part in
+                   (".git", "__pycache__", "backtest_output", ".venv")):
+                continue
+
+            for name in files:
+                if not name.endswith(".py"):
+                    continue
+
+                path = os.path.join(directory, name)
+                rel = os.path.relpath(path, ROOT).replace("\\", "/")
+
+                if rel in self.EXEMPT:
+                    continue
+
+                with open(path, encoding="utf-8", errors="ignore") as handle:
+                    source = handle.read()
+
+                if any(needle in source for needle in needles):
+                    found.append(rel)
+
+        return found
+
+    def test_the_engine_never_charges_impact_on_its_own(self):
+        offenders = [rel for rel in self._importers()
+                     if not rel.startswith(self.ALLOWED_PREFIXES)]
+
+        self.assertEqual(
+            offenders, [],
+            "impact.py is imported outside examples/ by %s. Wiring it into the "
+            "engine changes every existing result without any experiment "
+            "recording that it changed." % offenders)
+
+    def test_the_control_is_actually_looking_at_something(self):
+        """A scanner that finds nothing anywhere is a scanner that is broken."""
+
+        self.assertTrue(self._importers(),
+                        "no importer found at all -- the scan is not working")
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContaminationTests(unittest.TestCase):
+    """The defect E22 exposed on the model's first real use.
+
+    E22 charged impact for the first time and read 56-76% of price across a
+    550-name cross-section on five sessions. The cause was 252 rows in
+    price_history carrying returns above 200% -- the largest +19,976,600%,
+    a prior close of 1 rial. These tests pin the fix.
+    """
+
+    def test_an_impossible_volatility_is_refused_not_charged(self):
+        result = impact.estimate(2_000_000, 100_000_000,
+                                 daily_volatility_pct=400.0)
+
+        self.assertFalse(result.executable)
+        self.assertIsNone(result.cost_pct)
+        self.assertIn("band ceiling", result.reason)
+
+    def test_the_ceiling_is_e14s_constant_not_a_new_one(self):
+        """Reusing a validated threshold, rather than picking one that passes."""
+
+        import experiment_14_queue_artifact as e14
+
+        self.assertEqual(impact.EXTREME_MOVE_PCT, e14.LOCK_MAX_RETURN)
+        self.assertEqual(impact.MAX_PLAUSIBLE_DAILY_VOLATILITY_PCT,
+                         e14.LOCK_MAX_RETURN)
+
+    def test_a_genuinely_volatile_name_still_gets_a_number(self):
+        """The bound must not refuse the wild-but-real end of the market."""
+
+        result = impact.estimate(2_000_000, 100_000_000,
+                                 daily_volatility_pct=11.5)
+
+        self.assertTrue(result.executable)
+        self.assertGreater(result.cost_pct, 0.0)
+
+    def test_a_capital_increase_does_not_inflate_the_estimate(self):
+        """One 1-rial prior close used to carry a name for twenty sessions."""
+
+        clean = [100.0 + (1.0 if i % 2 else -1.0) for i in range(30)]
+
+        contaminated = list(clean)
+        contaminated[15] = 1.0          # placeholder price, then it recovers
+
+        honest = impact.daily_volatility_pct(clean)
+        repaired = impact.daily_volatility_pct(contaminated)
+
+        self.assertIsNotNone(repaired)
+        self.assertLess(repaired, 2.0 * honest,
+                        "one placeholder price still dominates the estimate")
+
+    def test_extreme_returns_are_dropped_not_winsorised(self):
+        """Winsorising keeps the bar at the boundary and still biases upward."""
+
+        clean = [100.0] * 30
+
+        spiked = list(clean)
+        spiked[15] = 500.0
+
+        self.assertAlmostEqual(impact.daily_volatility_pct(spiked), 0.0,
+                               places=6)
+
+    def test_dropping_can_leave_too_little_history_and_that_returns_none(self):
+        """A name that is nothing but gaps has no volatility, not a small one."""
+
+        gappy = [100.0 * (5.0 ** (i % 2)) for i in range(30)]
+
+        self.assertIsNone(impact.daily_volatility_pct(gappy))

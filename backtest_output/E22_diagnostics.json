@@ -1,0 +1,76 @@
+{
+  "admitted": {
+    "rows": 927517,
+    "fail_pct": 3.8906025442121273,
+    "impact_all": 0.3134984234568051,
+    "impact_filled": 0.3232891881898028
+  },
+  "excluded": {
+    "rows": 104842,
+    "fail_pct": 9.743232673928388,
+    "impact_all": 0.37081765452681653,
+    "impact_filled": 0.3684878663159642
+  },
+  "per_session": {
+    "sessions": 2809,
+    "baseline_median": 0.08237223560366634,
+    "filtered_median": 0.06970229908009905,
+    "delta_median": -0.0010685582803713276,
+    "delta_mean": -0.006442750691454918,
+    "sessions_worse_pct": 26.130295478818084,
+    "worst_1pct_share_of_delta": -254.57891425977348,
+    "worst_sessions": [
+      {
+        "date": "2022-06-06",
+        "names": 555,
+        "baseline": 68.68015714933844,
+        "filtered": 76.26692585026865,
+        "delta": 7.586768700930207
+      },
+      {
+        "date": "2022-06-11",
+        "names": 552,
+        "baseline": 56.49883334383872,
+        "filtered": 63.05529531113106,
+        "delta": 6.556461967292343
+      },
+      {
+        "date": "2022-06-12",
+        "names": 552,
+        "baseline": 55.93610343058302,
+        "filtered": 61.98459654280689,
+        "delta": 6.048493112223873
+      },
+      {
+        "date": "2022-06-07",
+        "names": 559,
+        "baseline": 56.19585405423385,
+        "filtered": 62.04223255747859,
+        "delta": 5.846378503244743
+      },
+      {
+        "date": "2022-06-08",
+        "names": 550,
+        "baseline": 56.91724170565754,
+        "filtered": 62.67345356410048,
+        "delta": 5.7562118584429385
+      }
+    ]
+  },
+  "contamination": {
+    "rows_over_200pct": 252,
+    "rows_over_extreme_gap": 7388,
+    "extreme_gap_share_pct": 0.38995367848562007,
+    "max_return_pct": 29966500.0,
+    "sigma_mean": 175.38722335876068,
+    "sigma_median": 2.15670758397537,
+    "already_flagged_by": "E14 annotate(): extreme_gap = |ret| > 12%"
+  },
+  "economics": {
+    "failed_fills_avoided_pp": 0.5247999999999999,
+    "cost_added_pp": 0.1504,
+    "break_even_pp_per_converted_slot": 28.65853658536586,
+    "cash_per_session_pct": 0.08629311501309189,
+    "note": "the reference basket is random, so the expected excess of a converted fill is zero. This bounds what the filter is worth in THIS experiment; it does not bound what it could be worth in front of a validated signal."
+  }
+}

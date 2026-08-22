@@ -1,0 +1,123 @@
+{
+  "experiment_id": "E22-flow-filter-execution",
+  "thresholds": {
+    "max_filtered_over_baseline_fill_failure": 0.7,
+    "max_impact_delta_pp": 0.05,
+    "max_round_trip_delta_pp": 0.05,
+    "min_admitted_excluded_adv_ratio": 1.0,
+    "min_decile_lift_h1": 2.0,
+    "min_eligible_names": 50,
+    "min_flow_coverage_pct": 60.0,
+    "min_ic_t_stat": 3.0,
+    "min_impact_computed_pct": 95.0,
+    "min_lift_retention_h3": 0.3,
+    "min_mean_ic": 0.05,
+    "min_median_names_discovery": 50.0,
+    "min_null_percentile": 95.0
+  },
+  "seed": 20260823,
+  "stage_1": {
+    "status": "PASS",
+    "detail": {
+      "alignment": {
+        "sampled": 2000,
+        "checked": 2000,
+        "resolved": 1997,
+        "agree": 1997,
+        "agreement_pct": 100.0,
+        "missing_left_unknown": 3
+      },
+      "coverage_pct": 75.72659750108731,
+      "median_eligible": 415.0
+    }
+  },
+  "stage_2": {
+    "status": "PASS",
+    "detail": {
+      "primary": {
+        "mean_ic": 0.13557868033686557,
+        "t_stat": 89.22711381526652,
+        "dates": 2859,
+        "rows": 1432534,
+        "base_rate_pct": 4.49629816814121,
+        "null_p95": 0.0015066961244045748,
+        "null_percentile": 100.0
+      },
+      "lift_h1": {
+        "lift": 2.4493203331152267,
+        "top_rate_pct": 11.012874526977011,
+        "universe_rate_pct": 4.49629816814121,
+        "rows": 144549
+      },
+      "lift_h3": {
+        "lift": 1.7569900968244048,
+        "top_rate_pct": 10.4379016175493,
+        "universe_rate_pct": 5.940785685938033,
+        "rows": 144416
+      },
+      "retention_h3": 0.5223069597024835,
+      "status_note": "RE-MEASUREMENT of E21's archived result on E21's window. Carries no independent information and must not be counted as a second confirmation."
+    }
+  },
+  "stage_3": {
+    "status": "FAIL",
+    "failed": [
+      "queue_effects",
+      "slippage",
+      "transaction_costs"
+    ],
+    "detail": {
+      "summary": {
+        "baseline": {
+          "baskets": 56200,
+          "positions": 562000,
+          "filled": 541681,
+          "failed_fill_pct": 3.6154804270462635,
+          "impact_computed_pct": 99.98246200254393,
+          "mean_impact_pct": 0.1759436608214455,
+          "round_trip_pct": 1.391887321642891
+        },
+        "filtered": {
+          "baskets": 56200,
+          "positions": 562000,
+          "filled": 544630,
+          "failed_fill_pct": 3.090747330960854,
+          "impact_computed_pct": 99.98604557222335,
+          "mean_impact_pct": 0.25115618350225977,
+          "round_trip_pct": 1.5423123670045196
+        }
+      },
+      "failed_fill_ratio": 0.8548649047689355,
+      "impact_delta_pp": 0.07521252268081427,
+      "round_trip_delta_pp": 0.15042504536162848,
+      "median_eligible_after_filter": 404.5,
+      "admitted_excluded_adv_ratio": 1.1151251711577035,
+      "impact_computed_pct": 99.98246200254393,
+      "sessions": 2810,
+      "commission_pct": 1.04,
+      "prefactor": 0.34,
+      "prefactor_sweep": {
+        "0.17": {
+          "baseline_round_trip_pct": 1.2159436608214456,
+          "filtered_round_trip_pct": 1.2911561835022598,
+          "delta_pp": 0.07521252268081424
+        },
+        "0.34": {
+          "baseline_round_trip_pct": 1.391887321642891,
+          "filtered_round_trip_pct": 1.5423123670045196,
+          "delta_pp": 0.15042504536162848
+        },
+        "0.51": {
+          "baseline_round_trip_pct": 1.5678309824643364,
+          "filtered_round_trip_pct": 1.7934685505067793,
+          "delta_pp": 0.22563756804244273
+        },
+        "0.69": {
+          "baseline_round_trip_pct": 1.7541242703929258,
+          "filtered_round_trip_pct": 2.059398627156231,
+          "delta_pp": 0.30527435676330483
+        }
+      }
+    }
+  }
+}
