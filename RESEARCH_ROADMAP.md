@@ -51,9 +51,32 @@ first would be choosing the comfortable work.
 | 1405 | 644 |
 
 **96% of all parsed financials are from 1402–1405.** The parser is not the
-problem — 3 extraction failures in 2,231 (0.13%), 0 fetch errors. The crawl
-stopped: `pages` is 1 or 2 for every one of 818 companies, and `searched_to`
-clusters at 1402/04. This is a pagination fix, not a rewrite.
+problem — 3 extraction failures in 2,231 (0.13%), 0 fetch errors.
+
+> **⚠ CORRECTED 2026-08-22. The diagnosis below this line was wrong.**
+>
+> This section said "the crawl stopped: `pages` is 1 or 2 for every one of 818
+> companies". The observation was right and the inference was not. `MAX_PAGES`
+> is **8**, and `pages = 2` means the search reached the edge of its window and
+> stopped — not that it hit a cap. `searched_to` reads 1399–1400 for the
+> companies checked, not 1402/04.
+>
+> **The search was never the constraint.** `codal_letters` holds **23,827**
+> ن-10 financial statements across **790** companies, every one with an Excel
+> link, at a **median of 40 per company** — and 775 of 790 (98%) already clear
+> the median-16 criterion below. **20,917 of them have never been downloaded.**
+>
+> The real constraint is `codal_backfill.py --from`, whose default is
+> `1402/06/01`. Everything published earlier was discovered and then never
+> fetched. The fix is a parse backlog, not a pagination rewrite, and it needs
+> no new search at all.
+>
+> **Why this went unseen:** an empty column has two readings — "the data does
+> not exist" and "the code never reached it" — and they look identical. One
+> `GROUP BY letter_code` would have closed it. The same confusion produced
+> `market_snapshot.state` (587 of 587 NULL, read from a key the endpoint never
+> returned) and, in this session, a depth reader that silently returned None
+> for every level because a field name was guessed.
 
 ### The gate — all four must hold
 
@@ -71,8 +94,11 @@ there is not enough data for any test to fail.
 
 ### Work order
 
-1. **Pagination depth** — remove the 1–2 page cap, crawl back to 1394. The
-   binding constraint. ~1 week plus crawl time.
+1. ~~**Pagination depth** — remove the 1–2 page cap, crawl back to 1394.~~
+   **Superseded.** There is no page cap to remove. Run the existing fetcher
+   over the letters already discovered: `codal_backfill.py --fetch-only --from
+   1399/01/01`. No new search, no rewrite — a download queue of 20,917 filings
+   against codal's rate limit.
 2. **Letter-type filter** — target financial statements; skip clarifications
    (1,196) and monthly activity reports (681/644/498). 37,383 letters contain
    perhaps 4–5k statements, and crawling blind wastes the rate budget. ~2 days.

@@ -81,9 +81,18 @@ count columns**. Usable start date is **2014-01-01** — and that boundary must
 be declared in a preregistration before anyone looks at a result, or the start
 date silently becomes a tuned parameter.
 
-**The fundamental panel is worse than recorded.** Of 764 companies with parsed
-financials the median is 3 filings and **zero companies reach 16**. Criterion 3
-of the fundamental gate cannot be rescued by universe selection.
+**~~The fundamental panel is worse than recorded.~~ CORRECTED 2026-08-22 — I
+had this backwards.** Of 764 companies with *parsed* financials the median is 3
+filings and zero reach 16, which is what I reported. But the gate asks about
+**available** filings, and `codal_letters` holds **23,827** ن-10 financial
+statements across **790** companies at a median of **40 each**, every one
+carrying an Excel link. **775 of 790 (98%) already clear the median-16
+criterion.** Only 2,910 have been parsed; **20,917 have never been
+downloaded**, because `codal_backfill.py --from` defaults to `1402/06/01`.
+
+The mistake is worth naming because it recurs: an empty column reads the same
+whether the data is absent or the code never reached it. I counted the output
+of a pipeline and reported it as the size of the input.
 
 ---
 
@@ -287,7 +296,16 @@ If those three cannot be held, this option should not be taken at all.
 | Evidence | U2, U3 — only profitability and cash flow associate with TSE returns, and both need PIT depth |
 | What | codal pagination fix + letter-type filter, crawl back to 1394 |
 | Cost | ~1 week of work plus crawl time |
-| Blocked until | 24 quarters, 150 companies/date, median 16 filings — currently ~4, ~100, **3** |
+| Blocked until | 24 quarters, 150 companies/date, median 16 filings |
+
+> **⚠ CORRECTED 2026-08-22 — this option was misdiagnosed.** The blockage is
+> not a crawl. `codal_letters` already holds **23,827** ن-10 financial
+> statements across 790 companies, **100% with an Excel link**, at a median of
+> **40 per company** against a gate threshold of 16 — and **775 of 790 (98%)**
+> already clear it. Only **2,910 (12.2%)** have been parsed; **20,917 sit
+> undownloaded**. The "median 3 filings" that closed this gate counted PARSED
+> financials, not DISCOVERED letters. The real constraint was
+> `codal_backfill.py --from`, whose default is `1402/06/01`. See §7.
 
 **Forbidden:** constructing any fundamental factor on 1402–1405 data. Including
 "just to see". Including marked provisional. A provisional finding is a finding
