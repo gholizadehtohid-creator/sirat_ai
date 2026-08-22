@@ -269,10 +269,21 @@
 
     <div class="kpi-row" id="technicalKpis"></div>
 
+    <!-- signal: a transparent vote, with its standing caveat -->
+    <div class="card" id="technicalSignalCard"
+         style="border:none;padding:0;margin-top:16px;display:none">
+      <div class="card-head"><h2>سیگنال تکنیکال</h2></div>
+      <div id="technicalSignalHead" style="margin-top:4px"></div>
+      <p class="hint" id="technicalSignalCaveat"
+         style="margin-top:8px;font-style:italic"></p>
+      <div class="table-wrap" id="technicalVotes" style="margin-top:10px"></div>
+    </div>
+
     <div class="grid-2" style="margin-top:16px">
       <div class="card" style="border:none;padding:0">
         <div class="card-head"><h2>قیمت و میانگین‌های متحرک</h2></div>
-        <p class="hint">بسته در برابر دو میانگین متحرک و باندهای بولینگر.</p>
+        <p class="hint">بسته در برابر دو میانگین متحرک و باندهای بولینگر.
+          خطوط چین: حمایت‌ها و مقاومت‌ها.</p>
         <div class="chart" id="technicalPriceChart"></div>
       </div>
       <div class="card" style="border:none;padding:0">
@@ -282,7 +293,18 @@
       </div>
     </div>
 
-    <div class="table-wrap" id="technicalTable" style="margin-top:16px"></div>
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>مقاومت‌ها و حمایت‌ها</h2></div>
+        <p class="hint">از پیوت‌های تأییدشده — سقف/کف‌هایی که بازار واقعاً روی
+          آن‌ها معامله کرده، نه سطوح مشتق از نوسان.</p>
+        <div class="table-wrap" id="technicalLevels"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>خوانش اندیکاتورها</h2></div>
+        <div class="table-wrap" id="technicalTable"></div>
+      </div>
+    </div>
   </div>
 
   </details>

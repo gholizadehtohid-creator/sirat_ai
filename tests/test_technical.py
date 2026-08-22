@@ -97,5 +97,99 @@ class AnalyseContractTests(unittest.TestCase):
                 self.assertTrue(math.isfinite(value), key)
 
 
+class SupportResistanceTests(unittest.TestCase):
+    """Levels come from confirmed pivots; each carries a signed distance."""
+
+    def _frame(self, closes):
+        import pandas as pd
+        n = len(closes)
+        dates = pd.date_range("2025-01-01", periods=n, freq="D")
+        return pd.DataFrame({
+            "date": dates, "open": closes, "high": [c * 1.01 for c in closes],
+            "low": [c * 0.99 for c in closes], "close": closes,
+            "volume": [1000] * n,
+        })
+
+    def test_resistance_above_support_below(self):
+        # a clear peak in the middle, price ends lower -> that peak is resistance
+        closes = [10, 11, 12, 15, 20, 15, 12, 11, 13, 14, 13, 12, 11, 13]
+        sr = technical.support_resistance(self._frame(closes), price=13.0)
+
+        for r in sr["resistances"]:
+            self.assertGreater(r["price"], 13.0)
+            self.assertGreater(r["distance_pct"], 0)
+        for s in sr["supports"]:
+            self.assertLess(s["price"], 13.0)
+            self.assertLess(s["distance_pct"], 0)
+
+    def test_empty_frame_returns_empty_levels(self):
+        import pandas as pd
+        sr = technical.support_resistance(pd.DataFrame(), price=100.0)
+        self.assertEqual(sr["resistances"], [])
+        self.assertEqual(sr["supports"], [])
+
+    def test_none_price_does_not_crash(self):
+        sr = technical.support_resistance(self._frame([10, 11, 12]), price=None)
+        self.assertEqual(sr["resistances"], [])
+
+
+class TechnicalSignalTests(unittest.TestCase):
+    """A transparent vote: the call must follow the shown votes, never lead."""
+
+    EMPTY_SR = {"resistances": [], "supports": []}
+
+    def test_all_bullish_gives_buy(self):
+        latest = {"close": 110, "ma_fast": 105, "ma_slow": 100,
+                  "macd": 2.0, "macd_signal": 1.0, "rsi": 58,
+                  "bb_pct": 0.2, "trend": "Strong Uptrend", "adx": 30}
+        sig = technical.technical_signal(latest, self.EMPTY_SR)
+        self.assertEqual(sig["call"], "BUY")
+        self.assertGreaterEqual(sig["net"], 2)
+
+    def test_all_bearish_gives_sell(self):
+        latest = {"close": 90, "ma_fast": 95, "ma_slow": 100,
+                  "macd": 1.0, "macd_signal": 2.0, "rsi": 42,
+                  "bb_pct": 0.85, "trend": "Downtrend", "adx": 30}
+        sig = technical.technical_signal(latest, self.EMPTY_SR)
+        self.assertEqual(sig["call"], "SELL")
+        self.assertLessEqual(sig["net"], -2)
+
+    def test_mixed_gives_hold(self):
+        latest = {"close": 100, "ma_fast": 100, "ma_slow": 100,
+                  "macd": 1.0, "macd_signal": 1.0, "rsi": 50,
+                  "bb_pct": 0.5, "trend": "Unknown", "adx": 18}
+        sig = technical.technical_signal(latest, self.EMPTY_SR)
+        self.assertEqual(sig["call"], "HOLD")
+
+    def test_the_call_matches_the_votes_shown(self):
+        """The number of net votes must equal the sum of the shown votes.
+
+        This is the anti-black-box guarantee: the badge cannot disagree with
+        the reasons under it.
+        """
+        latest = {"close": 110, "ma_fast": 105, "ma_slow": 100,
+                  "macd": 2.0, "macd_signal": 1.0, "rsi": 58,
+                  "bb_pct": 0.5, "trend": "Uptrend", "adx": 22}
+        sig = technical.technical_signal(latest, self.EMPTY_SR)
+        self.assertEqual(sig["net"], sum(v["vote"] for v in sig["votes"]))
+        self.assertEqual(sig["bullish"],
+                         sum(1 for v in sig["votes"] if v["vote"] > 0))
+
+    def test_the_caveat_is_always_present(self):
+        """The signal must never ship without its 'not a validated edge' note."""
+        sig = technical.technical_signal(
+            {"close": 100, "ma_fast": 100, "ma_slow": 100}, self.EMPTY_SR)
+        self.assertTrue(sig["caveat"])
+        self.assertIn("E19", sig["caveat"])
+
+    def test_a_single_indicator_never_decides(self):
+        """One bullish vote is not enough to say BUY -- needs a margin of 2."""
+        latest = {"close": 100, "ma_fast": 100, "ma_slow": 100,
+                  "macd": 2.0, "macd_signal": 1.0, "rsi": 50, "bb_pct": 0.5}
+        sig = technical.technical_signal(latest, self.EMPTY_SR)
+        self.assertEqual(sig["call"], "HOLD")
+        self.assertEqual(sig["bullish"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -494,6 +494,10 @@ function renderTechnical(rep) {
       if (n) n.innerHTML = '<div class="empty">داده‌ای نیست</div>';
     });
     $("technicalTable").innerHTML = "";
+    const lvNode = $("technicalLevels");
+    if (lvNode) lvNode.innerHTML = "";
+    const card = $("technicalSignalCard");
+    if (card) card.style.display = "none";
     tiles("technicalKpis", []);
   };
 
@@ -534,18 +538,38 @@ function renderTechnical(rep) {
   ]);
 
   const series = rep.series || [];
+  const lv = rep.levels || { resistances: [], supports: [] };
 
   const priceNode = $("technicalPriceChart");
   if (priceNode) {
     if (series.length) {
+      // Draw each support/resistance as a flat line across the window, using
+      // the chart's own series mechanism -- lineChart has no ref-line option
+      // and the shared module should not be forked for one panel. The nearest
+      // level of each kind is labelled; farther ones ride along unlabelled to
+      // avoid crowding the axis.
+      const withLevels = series.map(pt => ({ ...pt }));
+      const extra = [];
+      (lv.resistances || []).slice(0, 2).forEach((r, i) => {
+        const key = `res${i}`;
+        withLevels.forEach(pt => { pt[key] = r.price; });
+        extra.push({ key, label: i === 0 ? "مقاومت" : "" });
+      });
+      (lv.supports || []).slice(0, 2).forEach((s, i) => {
+        const key = `sup${i}`;
+        withLevels.forEach(pt => { pt[key] = s.price; });
+        extra.push({ key, label: i === 0 ? "حمایت" : "" });
+      });
+
       lineChart(priceNode, {
-        data: series, xKey: "date",
+        data: withLevels, xKey: "date",
         series: [
           { key: "close", label: "بسته" },
           { key: "ma_fast", label: "کوتاه" },
           { key: "ma_slow", label: "بلند" },
           { key: "bb_upper", label: "باند بالا" },
-          { key: "bb_lower", label: "باند پایین" }
+          { key: "bb_lower", label: "باند پایین" },
+          ...extra
         ]
       });
     } else {
@@ -591,6 +615,57 @@ function renderTechnical(rep) {
 
   $("technicalTable").innerHTML = table(
     ["اندیکاتور", "مقدار"], rows.map(r => [r[0], r[1]]));
+
+  // ---- support / resistance table ----
+  const levelRows = [];
+  (lv.resistances || []).forEach(r =>
+    levelRows.push([`<span class="badge bad"><span class="dot"></span>مقاومت</span>`,
+                    n(r.price, 0), signed(r.distance_pct, 1), esc(r.date || "—")]));
+  (lv.supports || []).forEach(s =>
+    levelRows.push([`<span class="badge good"><span class="dot"></span>حمایت</span>`,
+                    n(s.price, 0), signed(s.distance_pct, 1), esc(s.date || "—")]));
+
+  $("technicalLevels").innerHTML = levelRows.length
+    ? table(["نوع", "قیمت", "فاصله", "تاریخ پیوت"], levelRows)
+    : '<div class="empty">پیوت تأییدشده‌ای یافت نشد</div>';
+
+  // ---- signal card ----
+  const sig = rep.signal;
+  const card = $("technicalSignalCard");
+
+  if (sig && sig.call) {
+    if (card) card.style.display = "";
+
+    const cls = sig.call === "BUY" ? "good"
+      : sig.call === "SELL" ? "bad" : "neutral";
+    const conv = sig.conviction === "trending" ? "روند‌دار (ADX بالا)"
+      : sig.conviction === "weak" ? "ضعیف (ADX پایین، بازار بی‌روند)"
+      : "معمولی";
+
+    $("technicalSignalHead").innerHTML =
+      `<span class="badge ${cls}" style="font-size:1.05em">` +
+      `<span class="dot"></span>${esc(sig.call_fa)}</span> ` +
+      `<span class="hint" style="margin-inline-start:8px">` +
+      `${sig.bullish} رأی مثبت · ${sig.bearish} منفی · ${sig.neutral} خنثی ` +
+      `(خالص ${signed(sig.net, 0, "")}) · قوت: ${conv}</span>`;
+
+    $("technicalSignalCaveat").textContent = "⚠ " + (sig.caveat || "");
+
+    const voteRows = (sig.votes || []).map(v => {
+      const vb = v.vote > 0
+        ? `<span class="badge good"><span class="dot"></span>مثبت</span>`
+        : v.vote < 0
+          ? `<span class="badge bad"><span class="dot"></span>منفی</span>`
+          : `<span class="badge neutral"><span class="dot"></span>خنثی</span>`;
+      return [esc(v.name), vb, esc(v.reason)];
+    });
+
+    $("technicalVotes").innerHTML = voteRows.length
+      ? table(["اندیکاتور", "رأی", "دلیل"], voteRows)
+      : '<div class="empty">رأیی ثبت نشد</div>';
+  } else if (card) {
+    card.style.display = "none";
+  }
 }
 
 async function loadTechnical(force = false) {
@@ -620,6 +695,10 @@ async function loadTechnical(force = false) {
       if (node) node.innerHTML = '<div class="empty">داده‌ای نیست</div>';
     });
     $("technicalTable").innerHTML = "";
+    const lvNode = $("technicalLevels");
+    if (lvNode) lvNode.innerHTML = "";
+    const card = $("technicalSignalCard");
+    if (card) card.style.display = "none";
     tiles("technicalKpis", []);
     console.error(err);
   } finally {
