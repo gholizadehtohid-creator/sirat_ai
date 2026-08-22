@@ -245,5 +245,57 @@ class TopTechnicalTests(unittest.TestCase):
             c["universe"])
 
 
+class BestTechnicalInflowTests(unittest.TestCase):
+    """The intersection: technically strong AND taking money in."""
+
+    def _has_db(self):
+        import database
+        try:
+            return bool(database.load_instruments(equities_only=True))
+        except Exception:                                          # noqa: BLE001
+            return False
+
+    def test_every_row_meets_both_conditions(self):
+        if not self._has_db():
+            self.skipTest("no database")
+
+        rep = technical.best_technical_inflow(top=15)
+
+        for r in rep["top"]:
+            # strong technical
+            self.assertGreaterEqual(r["score"], rep["min_score"])
+            # positive net individual inflow -- the AND half
+            self.assertGreater(r["net_pct"], 0)
+            # liquid
+            self.assertGreaterEqual(r["turnover"], rep["min_turnover"])
+
+    def test_counts_are_a_shrinking_funnel(self):
+        """liquid >= strong_technical >= strong_and_inflow: each condition can
+        only remove names, never add them."""
+        if not self._has_db():
+            self.skipTest("no database")
+
+        c = technical.best_technical_inflow(top=15)["counts"]
+        self.assertGreaterEqual(c["liquid"], c["strong_technical"])
+        self.assertGreaterEqual(c["strong_technical"], c["strong_and_inflow"])
+
+    def test_json_safe_and_caveated(self):
+        if not self._has_db():
+            self.skipTest("no database")
+
+        rep = technical.best_technical_inflow(top=15)
+        json.dumps(rep, ensure_ascii=False, allow_nan=False)
+        self.assertIn("caveat", rep)
+        # the doubled caveat names the flow research specifically
+        self.assertIn("E21", rep["caveat"])
+
+    def test_ranked_by_score_descending(self):
+        if not self._has_db():
+            self.skipTest("no database")
+        top = technical.best_technical_inflow(top=15)["top"]
+        scores = [r["score"] for r in top]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+
 if __name__ == "__main__":
     unittest.main()

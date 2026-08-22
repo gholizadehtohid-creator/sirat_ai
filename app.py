@@ -496,6 +496,29 @@ def api_technical_top():
     return jsonify(memoise(key, build, force=force))
 
 
+@app.route("/api/technical/inflow")
+def api_technical_inflow():
+    """Names that are both technically strong AND taking money in.
+
+    The intersection of the technical scan and حقیقی/حقوقی flow, over the
+    liquid universe. Memoised (it scores ~600 names), triggered by a button.
+    Same caveat as the other technical views, doubled: two readings with no
+    proven return edge do not make one by being intersected.
+    """
+
+    top = request.args.get("top", type=int) or 15
+    top = max(1, min(top, 50))
+    params = wanted_params()
+    force = request.args.get("refresh") == "1"
+
+    key = cache_key("technical_inflow", data_version(), top, params_key(params))
+
+    def build():
+        return technical.best_technical_inflow(top=top, params=params)
+
+    return jsonify(memoise(key, build, force=force))
+
+
 @app.route("/api/gold")
 def api_gold():
     """Gold funds (صندوق‌های طلا) with a technical read each.

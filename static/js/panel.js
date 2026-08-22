@@ -69,7 +69,7 @@ const state = {
   screen: null, indices: null, sectors: null,
   regime: null, portfolio: null, flow: null,
   fundamentals: null, codal: null, technical: null, topTechnical: null,
-  gold: null
+  gold: null, inflow: null
 };
 
 /* ---------- helpers ---------- */
@@ -769,6 +769,70 @@ async function loadTopTechnical(force = false) {
     console.error(err);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "▶ رتبه‌بندی بازار"; }
+  }
+}
+
+/* ---------- technical strength + money inflow ---------- */
+
+function renderInflow(rep) {
+  state.inflow = rep;
+
+  const rows = rep.top || [];
+  const c = rep.counts || {};
+
+  if (!rows.length) {
+    banner("inflowStatus", "inflowStatusText", "is-warn",
+      `<strong>هیچ سهمی هر دو شرط را ندارد.</strong> ` +
+      `${c.strong_technical || 0} نماد تکنیکال قوی بودند، اما هیچ‌کدام همزمان ` +
+      `ورود پول حقیقی نداشتند. ⚠ ${esc(rep.caveat || "")}`);
+    $("inflowTable").innerHTML = "";
+    return;
+  }
+
+  banner("inflowStatus", "inflowStatusText", "is-live",
+    `<strong>${rows.length} سهم</strong> با تکنیکال قوی و ورود پول، از ` +
+    `${c.strong_and_inflow} واجد شرط (${c.strong_technical} تکنیکال قوی از ` +
+    `${c.liquid} نقدشونده). ⚠ ${esc(rep.caveat || "")}`);
+
+  const callBadge = (call, fa) =>
+    `<span class="badge ${CALL_CLASS[call] || "neutral"}">` +
+    `<span class="dot"></span>${esc(fa)}</span>`;
+
+  const body = rows.map((r, i) => [
+    String(i + 1),
+    `<a href="?tech=${encodeURIComponent(r.symbol || "")}"
+        title="تحلیل تک‌نماد">${esc(r.symbol || "—")}</a>`,
+    esc((r.sector || "").slice(0, 20)),
+    num(r.score, 0),
+    signed(r.net_pct, 1),
+    r.power_ratio == null ? "—" : num(r.power_ratio, 2),
+    esc(r.flow_label || "—"),
+    callBadge(r.call, r.call_fa)
+  ]);
+
+  $("inflowTable").innerHTML = table(
+    ["#", "نماد", "صنعت", "امتیاز تکنیکال", "خالص پول٪", "قدرت خریدار",
+     "جریان", "سیگنال"], body);
+}
+
+async function loadInflow(force = false) {
+  const btn = $("runInflowBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "در حال یافتن…"; }
+  banner("inflowStatus", "inflowStatusText", "is-loading",
+    "اسکن کل بازار — چند ده ثانیه طول می‌کشد…");
+
+  try {
+    const rep = await getJSON(
+      `/api/technical/inflow?top=15&${query()}${force ? "&refresh=1" : ""}`);
+    renderInflow(rep);
+  } catch (err) {
+    state.inflow = null;
+    banner("inflowStatus", "inflowStatusText", "is-error",
+      `<strong>یافتن نشد.</strong> ${esc(err.message)}`);
+    $("inflowTable").innerHTML = "";
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "▶ یافتن سهم‌ها"; }
   }
 }
 
@@ -2076,6 +2140,7 @@ function rerender() {
   if (state.flow) renderMoneyflow(state.flow);
   if (state.technical) renderTechnical(state.technical);
   if (state.topTechnical) renderTopTechnical(state.topTechnical);
+  if (state.inflow) renderInflow(state.inflow);
   if (state.gold) renderGold(state.gold);
   if (state.screen) renderScreen(state.screen);
   if (state.portfolio) renderPortfolio(state.portfolio);
@@ -2186,6 +2251,7 @@ on("runRegimeBtn", "click", () => loadRegime(true));
 on("runPortfolioBtn", "click", () => loadPortfolio(true));
 on("runTechnicalBtn", "click", () => loadTechnical(true));
 on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
+on("runInflowBtn", "click", () => loadInflow(true));
 on("runGoldBtn", "click", () => loadGold(true));
 on("importGoldBtn", "click", importGold);
 

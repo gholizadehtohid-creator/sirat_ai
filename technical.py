@@ -576,3 +576,143 @@ def gold_list(params=None):
                    "missing": len(missing)},
         "caveat": SIGNAL_CAVEAT,
     }
+
+
+# ==============================
+# TECHNICAL STRENGTH + MONEY INFLOW
+# ==============================
+
+# A name must clear this technical score to count as "good technicals". It is
+# the scorer's own STRONG band floor, not a number tuned here -- so this list
+# agrees with what rank_stocks already calls strong.
+MIN_TECHNICAL_SCORE = 70
+
+# The combined caveat. Both halves are textbook, and the programme's research
+# is specifically why the combination is not sold as an edge: E21 found flow
+# predicts TRADABILITY (queue locks), not returns, and technical signals showed
+# no edge net of cost. Two things with no proven return edge do not make one by
+# being intersected.
+COMBINED_CAVEAT = (
+    "تلاقی «تکنیکال قوی» و «ورود پول» است — هر دو خوانش کتاب‌درسی، نه لبه‌ی "
+    "اعتبارسنجی‌شده. تحقیق این پلتفرم نشان داد جریان پول (E21) تشخیص‌پذیری صف "
+    "را پیش‌بینی می‌کند نه بازده را، و سیگنال تکنیکال (E19–E23) خالص از هزینه "
+    "لبه‌ای نداشت. تقاطع دو چیزِ بدون لبه، لبه نمی‌سازد."
+)
+
+
+def best_technical_inflow(top=15, params=None, min_turnover=MIN_TURNOVER,
+                          min_score=MIN_TECHNICAL_SCORE):
+    """Names that are BOTH technically strong AND taking money in.
+
+    One pass over the liquid universe: technical score from rank_stocks (the
+    screener's own scorer) and money flow from moneyflow.analyse (net حقیقی
+    inflow). A name qualifies only when its technical score clears the strong
+    band AND its net individual flow is positive -- the intersection the user
+    asked for. Ranked by technical score, flow shown alongside so the reader
+    sees both reasons, never a blended single number that hides a disagreement.
+    """
+
+    import moneyflow
+
+    params = indicators.clean_params(params)
+
+    instruments = database.load_instruments(equities_only=True)
+    by_code = {str(r["ins_code"]): r for r in instruments}
+    codes = list(by_code)
+
+    frames = database.load_history_tail(codes, SCAN_BARS)
+    # Load the BASELINE window, not the (shorter) flow window: moneyflow.analyse
+    # returns INSUFFICIENT below FLOW_MIN_SESSIONS and also measures a baseline
+    # over FLOW_BASELINE_WINDOW. Loading only FLOW_WINDOW sessions made every
+    # name INSUFFICIENT -- the bug this line's comment exists to prevent
+    # recurring.
+    flow_frames = database.load_client_type_tail(
+        codes, config.FLOW_BASELINE_WINDOW)
+
+    qualified = []
+    liquid = 0
+    strong = 0
+    strong_and_inflow = 0
+
+    for code in codes:
+        frame = frames.get(code)
+        if frame is None or frame.empty:
+            continue
+
+        last_value = _finite(frame["value"].iloc[-1]) if "value" in frame \
+            else None
+        if last_value is None or last_value < min_turnover:
+            continue
+
+        liquid += 1
+
+        enriched = indicators.calculate_indicators(frame, params)
+        if enriched.empty:
+            continue
+
+        tech = ranking.rank_stocks(enriched)
+        if not tech.get("scored", False):
+            continue
+
+        if tech["score"] < min_score:
+            continue
+
+        strong += 1
+
+        # Money flow. A name with no flow data, or with outflow, does not
+        # qualify -- the question was "AND money inflow", so absence is a no,
+        # not a maybe.
+        flow = moneyflow.analyse(flow_frames.get(code))
+        reading = flow.get("reading") or {}
+        net_pct = reading.get("net_pct")
+
+        if net_pct is None or net_pct <= 0:
+            continue
+
+        strong_and_inflow += 1
+
+        instrument = by_code.get(code, {})
+
+        last = enriched.iloc[-1]
+        latest = {}
+        for out_name, column in LATEST_FIELDS:
+            latest[out_name] = _finite(last[column]) \
+                if column in enriched.columns else None
+        sr = support_resistance(enriched, latest.get("close"))
+        signal = technical_signal(latest, sr)
+
+        qualified.append({
+            "ins_code": code,
+            "symbol": instrument.get("symbol_fa"),
+            "name": instrument.get("name_fa"),
+            "sector": instrument.get("sector_name"),
+            "score": tech["score"],
+            "status": tech["status"],
+            "trend": tech.get("trend"),
+            "rsi": tech.get("rsi"),
+            "macd": tech.get("macd"),
+            "turnover": last_value,
+            "flow_score": flow.get("score"),
+            "flow_label": flow.get("label"),
+            "net_pct": round(net_pct, 2),
+            "power_ratio": (round(reading["power_ratio"], 2)
+                            if reading.get("power_ratio") is not None else None),
+            "call": signal["call"],
+            "call_fa": signal["call_fa"],
+        })
+
+    ranked = sorted(qualified, key=lambda r: (r["score"], r["net_pct"]),
+                    reverse=True)
+
+    return {
+        "top": ranked[:top],
+        "min_turnover": min_turnover,
+        "min_score": min_score,
+        "counts": {
+            "universe": len(codes),
+            "liquid": liquid,
+            "strong_technical": strong,
+            "strong_and_inflow": strong_and_inflow,
+        },
+        "caveat": COMBINED_CAVEAT,
+    }
