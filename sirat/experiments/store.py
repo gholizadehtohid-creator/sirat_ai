@@ -103,6 +103,30 @@ CREATE TABLE IF NOT EXISTS windows_touched (
     touched_at              TEXT NOT NULL
 );
 
+-- WINDOWS SET ASIDE BEFORE ANYONE REACHES THEM.
+--
+-- `windows_touched` records what has been SPENT. It cannot record what must
+-- not be. E19 and E21 between them consumed every holdout in the archive and
+-- nothing objected, because spending was permitted -- there was simply nothing
+-- left afterwards. The next out-of-sample claim has to be earned by waiting,
+-- and a window that only becomes protected once somebody remembers it is not
+-- protected.
+--
+-- A reservation is claimed by name at spend time. Naming it is the point: it
+-- converts "I did not realise this was the holdout" into a deliberate act with
+-- an author.
+CREATE TABLE IF NOT EXISTS windows_reserved (
+    reservation_id          TEXT PRIMARY KEY,
+    window_start            TEXT NOT NULL,
+    window_end              TEXT NOT NULL,
+    purpose                 TEXT NOT NULL,
+    reserved_by             TEXT NOT NULL,
+    reason                  TEXT NOT NULL,
+    reserved_at             TEXT NOT NULL,
+    claimed_by              TEXT,
+    claimed_at              TEXT
+);
+
 -- THE LEDGER: one row per closed experiment, chained.
 --
 -- The triggers below make a row unwritable. The chain makes a row
@@ -332,21 +356,90 @@ def record_window(experiment_id, start, end, purpose, path=None):
 
 
 def window_touched_by(start, end, purpose, path=None):
-    """Which experiments already evaluated this window for this purpose.
+    """Which experiments already evaluated a window OVERLAPPING this one.
 
     The control that keeps a holdout spendable exactly once.
+
+    Overlap, not equality. The first version of this compared start, end and
+    purpose exactly, which meant a window shifted by a single day read as a
+    fresh one -- an experiment could re-evaluate 99.9% of a spent holdout by
+    moving its boundary, and the platform would have called that a new test.
+    Nobody did it. The control was still decorative.
     """
 
     conn = connect(path)
     try:
         rows = conn.execute(
-            "SELECT experiment_id FROM windows_touched WHERE window_start = ? "
-            "AND window_end = ? AND purpose = ?",
-            (str(start), str(end), purpose)).fetchall()
+            # Two ranges overlap unless one ends before the other begins.
+            "SELECT DISTINCT experiment_id FROM windows_touched "
+            "WHERE purpose = ? AND window_start <= ? AND window_end >= ?",
+            (purpose, str(end), str(start))).fetchall()
     finally:
         conn.close()
 
     return [r["experiment_id"] for r in rows]
+
+
+def reserve_window(reservation_id, start, end, purpose, reserved_by, reason,
+                   path=None):
+    """Set a window aside before anyone reaches it."""
+
+    conn = connect(path)
+    try:
+        conn.execute(
+            "INSERT INTO windows_reserved (reservation_id, window_start, "
+            "window_end, purpose, reserved_by, reason, reserved_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (reservation_id, str(start), str(end), purpose, reserved_by,
+             reason, pd.Timestamp.now().isoformat()))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def reservations_covering(start, end, purpose, path=None):
+    """Unclaimed reservations overlapping this window."""
+
+    initialise(path)
+
+    conn = connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM windows_reserved WHERE purpose = ? "
+            "AND window_start <= ? AND window_end >= ? AND claimed_by IS NULL",
+            (purpose, str(end), str(start))).fetchall()
+    finally:
+        conn.close()
+
+    return [dict(r) for r in rows]
+
+
+def claim_reservation(reservation_id, experiment_id, path=None):
+    """Spend a reserved window, on the record, by name."""
+
+    conn = connect(path)
+    try:
+        cursor = conn.execute(
+            "UPDATE windows_reserved SET claimed_by = ?, claimed_at = ? "
+            "WHERE reservation_id = ? AND claimed_by IS NULL",
+            (experiment_id, pd.Timestamp.now().isoformat(), reservation_id))
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
+
+
+def reservations(path=None):
+    initialise(path)
+
+    conn = connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM windows_reserved ORDER BY window_start").fetchall()
+    finally:
+        conn.close()
+
+    return [dict(r) for r in rows]
 
 
 def insert_universe_snapshot(snapshot_id, count, content, payload, path=None,

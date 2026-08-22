@@ -88,6 +88,15 @@ class NotReproducible(GovernanceError):
     """PROMOTE was attempted on a result that cannot be re-derived."""
 
 
+class WindowReserved(GovernanceError):
+    """The window was set aside before anyone reached it.
+
+    Distinct from WindowAlreadySpent: nothing has been spent yet. This refuses
+    a spend that nobody has taken responsibility for, and it stops as soon as
+    somebody does.
+    """
+
+
 class WindowAlreadySpent(GovernanceError):
     """A holdout window was about to be evaluated a second time."""
 
@@ -491,12 +500,16 @@ class Manager(object):
     # HOLDOUT LEDGER
     # ==============================
 
-    def touch_window(self, start, end, purpose):
+    def touch_window(self, start, end, purpose, claim=None):
         """Record that this experiment evaluated a window -- and refuse a repeat.
 
         A holdout is a quantity that is spent, not a dataset that is used. E5
         stopped an experiment by noticing this by hand, in a preflight audit
         that had to be written specially. It is now arithmetic.
+
+        `claim` names a reservation. A window set aside by `reserve_window` can
+        only be spent by an experiment that names it, which turns "I did not
+        realise this was the holdout" into a deliberate act with an author.
         """
 
         self._assert_open()
@@ -508,12 +521,69 @@ class Manager(object):
 
             if already:
                 raise WindowAlreadySpent(
-                    "holdout %s..%s was already evaluated by %s. A window "
-                    "evaluated twice is not a holdout; it is a training set "
-                    "with extra steps." % (start, end, ", ".join(already)))
+                    "holdout %s..%s OVERLAPS one already evaluated by %s. A "
+                    "window evaluated twice is not a holdout; it is a training "
+                    "set with extra steps. Shifting the boundary does not make "
+                    "it a new window -- that is why this compares overlap "
+                    "rather than equality."
+                    % (start, end, ", ".join(already)))
+
+            # A reservation is not a lock on a filing cabinet. It is a
+            # requirement to say out loud that you are spending the one thing
+            # this programme cannot manufacture more of.
+            reserved = store.reservations_covering(start, end, purpose,
+                                                   path=self.path)
+
+            if reserved and claim is None:
+                held = reserved[0]
+                raise WindowReserved(
+                    "holdout %s..%s overlaps reservation %r, set aside by %s "
+                    "on %s: %s.\n"
+                    "\n"
+                    "It can be spent -- that is what it is for -- but only by "
+                    "an experiment that names it: touch_window(..., claim=%r). "
+                    "E19 and E21 between them consumed every holdout in the "
+                    "archive and nothing objected, because spending was "
+                    "permitted and there was simply nothing left afterwards."
+                    % (start, end, held["reservation_id"],
+                       held["reserved_by"], held["reserved_at"][:10],
+                       held["reason"], held["reservation_id"]))
+
+            if claim is not None:
+                claimed = store.claim_reservation(claim, self.experiment_id,
+                                                  path=self.path)
+                if not claimed:
+                    raise WindowReserved(
+                        "no unclaimed reservation %r. A claim that names "
+                        "nothing is not a claim." % claim)
 
         store.record_window(self.experiment_id, start, end, purpose,
                             path=self.path)
+
+    @staticmethod
+    def reserve_window(reservation_id, start, end, purpose, reserved_by,
+                       reason, path=None):
+        """Set a window aside before any experiment reaches it.
+
+        Deliberately a static method: reserving is not something an experiment
+        does to its own holdout, it is something the programme does to protect
+        a window from whoever comes next.
+        """
+
+        for name, value in (("reservation_id", reservation_id),
+                            ("reserved_by", reserved_by), ("reason", reason)):
+            if not _nonempty(value):
+                raise GovernanceError(
+                    "a reservation needs %s. An anonymous reservation with no "
+                    "stated reason is a comment." % name)
+
+        store.initialise(path)
+
+        store.reserve_window(reservation_id, start, end, purpose, reserved_by,
+                             reason, path=path)
+
+        return {"reservation_id": reservation_id, "window": [start, end],
+                "purpose": purpose}
 
     # ==============================
     # DECISION

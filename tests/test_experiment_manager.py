@@ -778,3 +778,106 @@ class MeasurementProvenance(ManagerTestCase):
 
         self.assertEqual(handle.run_stage(1, dict(PASSING[1]))["status"],
                          stages.PASS)
+
+
+class WindowReservation(ManagerTestCase):
+    """Setting a window aside BEFORE anyone reaches it.
+
+    `windows_touched` records what has been spent. It could not record what
+    must not be. E19 and E21 between them consumed every holdout in the
+    archive and nothing objected -- spending was permitted, and afterwards
+    there was simply nothing left.
+    """
+
+    def test_overlap_is_what_is_checked_not_equality(self):
+        """A window shifted by one day used to read as a fresh one."""
+
+        first = register(self.path, experiment_id="E-A")
+        first.touch_window("2024-01-01", "2024-06-30", "holdout")
+
+        second = register(self.path, experiment_id="E-B")
+
+        with self.assertRaises(mgr.WindowAlreadySpent):
+            second.touch_window("2024-01-02", "2024-06-29", "holdout")
+
+    def test_a_window_that_merely_abuts_is_not_an_overlap(self):
+        first = register(self.path, experiment_id="E-A")
+        first.touch_window("2024-01-01", "2024-06-30", "holdout")
+
+        second = register(self.path, experiment_id="E-B")
+
+        second.touch_window("2024-07-01", "2024-12-31", "holdout")
+
+    def test_a_reserved_window_refuses_an_unclaimed_spend(self):
+        mgr.Manager.reserve_window(
+            "R-2027", "2026-08-23", "2027-08-23", "holdout",
+            reserved_by="tester", reason="the next out-of-sample claim",
+            path=self.path)
+
+        handle = register(self.path)
+
+        with self.assertRaises(mgr.WindowReserved) as caught:
+            handle.touch_window("2026-09-01", "2027-01-01", "holdout")
+
+        self.assertIn("R-2027", str(caught.exception))
+
+    def test_naming_the_reservation_permits_the_spend(self):
+        """A reservation is not a lock. It is a requirement to say so."""
+
+        mgr.Manager.reserve_window(
+            "R-2027", "2026-08-23", "2027-08-23", "holdout",
+            reserved_by="tester", reason="the next out-of-sample claim",
+            path=self.path)
+
+        handle = register(self.path)
+
+        handle.touch_window("2026-09-01", "2027-01-01", "holdout",
+                            claim="R-2027")
+
+        held = store.reservations(path=self.path)[0]
+
+        self.assertEqual(held["claimed_by"], handle.experiment_id)
+
+    def test_a_reservation_can_only_be_claimed_once(self):
+        mgr.Manager.reserve_window(
+            "R-2027", "2026-08-23", "2027-08-23", "holdout",
+            reserved_by="tester", reason="the next out-of-sample claim",
+            path=self.path)
+
+        first = register(self.path, experiment_id="E-A")
+        first.touch_window("2026-09-01", "2027-01-01", "holdout",
+                           claim="R-2027")
+
+        second = register(self.path, experiment_id="E-B")
+
+        # Now spent as well as claimed -- either control alone would stop it.
+        with self.assertRaises(mgr.GovernanceError):
+            second.touch_window("2026-09-01", "2027-01-01", "holdout",
+                                claim="R-2027")
+
+    def test_claiming_a_reservation_that_does_not_exist_raises(self):
+        handle = register(self.path)
+
+        with self.assertRaises(mgr.WindowReserved):
+            handle.touch_window("2030-01-01", "2030-06-30", "holdout",
+                                claim="R-imaginary")
+
+    def test_a_reservation_needs_an_author_and_a_reason(self):
+        for missing in ({"reserved_by": ""}, {"reason": ""},
+                        {"reservation_id": ""}):
+            kwargs = {"reservation_id": "R", "start": "2030-01-01",
+                      "end": "2030-06-30", "purpose": "holdout",
+                      "reserved_by": "tester", "reason": "because",
+                      "path": self.path}
+            kwargs.update(missing)
+
+            with self.assertRaises(mgr.GovernanceError):
+                mgr.Manager.reserve_window(**kwargs)
+
+    def test_non_holdout_purposes_are_unaffected(self):
+        """Only a holdout is spent once. Diagnostics may repeat."""
+
+        handle = register(self.path)
+
+        handle.touch_window("2024-01-01", "2024-06-30", "diagnostic")
+        handle.touch_window("2024-01-01", "2024-06-30", "diagnostic")
