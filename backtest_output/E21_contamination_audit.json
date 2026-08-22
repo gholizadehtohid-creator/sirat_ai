@@ -1,0 +1,56 @@
+{
+  "note": "post-hoc audit; E21 remains ARCHIVED on its preregistered target and this changes no verdict",
+  "discovery_rows": 942022,
+  "positive_class_composition": {
+    "n_locked": {
+      "count": 37210,
+      "share_pct": 97.36249934585797
+    },
+    "n_reopen": {
+      "count": 141,
+      "share_pct": 0.3689361034067717
+    },
+    "n_extreme": {
+      "count": 869,
+      "share_pct": 2.2737976869537913
+    },
+    "n_impossible": {
+      "count": 1,
+      "share_pct": 0.0026165681092678843
+    }
+  },
+  "by_target": {
+    "next_unbuyable_h1": {
+      "mean_ic": 0.13650264323267333,
+      "t_stat": 80.5190038348537,
+      "lift": 2.6251893419120096,
+      "base_rate_pct": 4.057017776654898,
+      "dates": 2128
+    },
+    "next_locked_up_h1": {
+      "mean_ic": 0.13580262573805485,
+      "t_stat": 81.29385831685661,
+      "lift": 2.6385682468509417,
+      "base_rate_pct": 3.950013906256966,
+      "dates": 2122
+    },
+    "pure_lock": {
+      "mean_ic": 0.13580262573805485,
+      "t_stat": 81.29385831685661,
+      "lift": 2.6385682468509417,
+      "base_rate_pct": 3.950013906256966,
+      "dates": 2122
+    },
+    "clean_unbuyable": {
+      "mean_ic": 0.13518942763090674,
+      "t_stat": 79.42673466429554,
+      "lift": 2.628748412683701,
+      "base_rate_pct": 3.9647694002900145,
+      "dates": 2122
+    }
+  },
+  "ic_retained_clean": 0.9903795591743365,
+  "ic_retained_pure_lock": 0.9948717660109682,
+  "retention_threshold": 0.5,
+  "survives": true
+}

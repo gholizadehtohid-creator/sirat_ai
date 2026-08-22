@@ -720,3 +720,60 @@ class RecordFile(ManagerTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeasurementProvenance(ManagerTestCase):
+    """Whether a stage's verdict came from the platform's gate or by hand.
+
+    The Manager has always validated that a stage reports every check it owes.
+    It could not tell whether those booleans came from `gates.data_integrity`
+    or from arithmetic the researcher wrote inline -- and the two are not
+    equally trustworthy, because completeness is measured against the NAMES of
+    the checks rather than their derivation.
+
+    E21 and E22 both hand-rolled Stage 1 and never called the gate, so the 12%
+    session-move ceiling it applies never ran on either. Nothing refused them,
+    which is defensible; nothing recorded it, which was not.
+    """
+
+    def test_hand_rolled_metrics_are_recorded_as_caller_measured(self):
+        handle = register(self.path)
+
+        result = handle.run_stage(1, dict(PASSING[1]))
+
+        self.assertEqual(result["measured_by"], "caller")
+
+    def test_a_gate_result_is_recorded_as_platform_measured(self):
+        handle = register(self.path)
+
+        class FakeGateResult(object):
+            metrics = dict(PASSING[1])
+            detail = {"rows": 10}
+
+        result = handle.run_stage(1, FakeGateResult())
+
+        self.assertEqual(result["measured_by"], "platform gate")
+
+    def test_the_provenance_survives_into_the_stored_record(self):
+        """A field only in the return value would be lost to the ledger."""
+
+        handle = register(self.path)
+
+        handle.run_stage(1, dict(PASSING[1]))
+
+        stored = json.dumps(handle.stage_results()[0], default=str)
+
+        self.assertIn("caller", stored,
+                      "measured_by did not reach the stored stage record")
+
+    def test_hand_rolled_stages_are_still_allowed(self):
+        """Refusing them would be worked around, not obeyed.
+
+        Some stages have no gate function at all. The control is visibility,
+        not prohibition.
+        """
+
+        handle = register(self.path)
+
+        self.assertEqual(handle.run_stage(1, dict(PASSING[1]))["status"],
+                         stages.PASS)

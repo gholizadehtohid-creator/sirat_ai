@@ -184,3 +184,94 @@ Two independent bars, both recorded before the result:
 | diagnostics | `backtest_output/E21_diagnostics.json` |
 | holdout | spent once, recorded in `windows_touched` |
 | Alpha Core | untouched, `90024d86d7a5c268`. E19 and E20 remain adjudicated |
+
+---
+
+# ADDENDUM — CONTAMINATION AUDIT, 2026-08-22
+
+**E22 found 252 rows in `price_history` carrying returns above 200%** — the
+largest **+19,976,600%**, a prior close of 1 rial — and 7,388 rows (0.39%)
+beyond E14's 12% band ceiling. That was diagnosed as a cost-model problem.
+
+It is not only a cost-model problem, because of what E21's target is:
+
+    unbuyable = locked_up | reopen | extreme_gap
+                                     ^^^^^^^^^^^  |ret| > 12%
+
+**Every contaminated bar is a member of E21's positive class.** And two of the
+four score components see exactly the pattern a new listing or an unadjusted
+capital increase produces: `vol_ratio` spikes on a first trade, and
+`closed_at_high` is true when a price jump is an adjustment rather than a move.
+
+If E21's IC came substantially from predicting database artifacts, the result
+would be a measurement of the database rather than of the market.
+
+## The audit
+
+The **same frozen score**, against narrower targets. `next_locked_up` was E21's
+**preregistered secondary target** and was already built into the panel — so
+this reads a column committed to in advance rather than hunting for one that
+flatters the answer. Retention floor of 50% was set before the numbers.
+
+### Composition of the positive class
+
+| | count | share |
+|---|---:|---:|
+| `locked_up` — genuine صف خرید | 37,210 | **97.36%** |
+| `reopen` | 141 | 0.37% |
+| `extreme_gap` | 869 | 2.27% |
+| *of which impossible (>200%)* | **1** | 0.00% |
+
+### The same score, four targets
+
+| Target | base rate | IC | t | lift |
+|---|---:|---:|---:|---:|
+| `next_unbuyable_h1` — declared | 4.057% | 0.13650 | 80.52 | 2.625× |
+| `next_locked_up_h1` — preregistered secondary | 3.950% | **0.13580** | 81.29 | **2.639×** |
+| pure lock, gaps removed | 3.950% | 0.13580 | 81.29 | 2.639× |
+| unbuyable minus every `extreme_gap` | 3.965% | 0.13519 | 79.43 | 2.629× |
+
+## Verdict: E21 survives
+
+**99.0%** of the IC is retained with every `extreme_gap` removed; **99.5%**
+against pure queue locks. The score predicts genuine صف خرید formation, not a
+database artifact. **The archived verdict stands as recorded.**
+
+### Why E22 broke and E21 did not, on the same contaminated data
+
+E21 measures a **rank correlation against a binary class**. 869 contaminated
+rows inside 38,218 positives cannot move a rank statistic.
+
+E22 measured the **mean of a heavy-tailed cost**. One row with a volatility in
+the millions dominates a mean outright — five sessions inverted the sign of a
+2,809-session result.
+
+**Rank statistics are robust to exactly the contamination that destroys mean
+statistics.** That is worth carrying forward as a design rule, not a one-off
+observation: where a metric can be expressed as a rank, contaminated data costs
+almost nothing; where it must be a mean, contamination must be excluded before
+the mean is taken, not after it is questioned.
+
+## A governance finding this audit turned up
+
+`gates.data_integrity` **already carries** the 12% ceiling —
+`MAX_SESSION_MOVE_PCT = 12.0`, applied to forward *returns*. E21's target is a
+boolean state rather than a return, so there was no `fwd_*` column for it to
+test and the check had nothing to bite on.
+
+Worse: **E21's and E22's Stage 1 were hand-rolled and never called
+`gates.data_integrity` at all.** `run_stage` validated that all four checks were
+*reported* — it could not know they were computed inline rather than by the
+platform's own gate, because completeness is measured against the names of the
+checks, not their derivation.
+
+`run_stage` now records `measured_by` — `"platform gate"` or `"caller"` — in the
+stage record and the ledger. It does not refuse a hand-rolled stage: some
+stages have no gate function, and a control that blocked them would be worked
+around rather than obeyed. It makes the distinction visible to a third party
+weighing the result, which is what was missing.
+
+| | |
+|---|---|
+| audit output | `backtest_output/E21_contamination_audit.json` |
+| E21's verdict | **unchanged** — ARCHIVE, on its preregistered target |

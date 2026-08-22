@@ -418,11 +418,32 @@ class Manager(object):
         if stage not in stages.NAMES:
             raise GovernanceError("no stage %d; stages are 1-6" % stage)
 
+        # WHO MEASURED THIS, recorded rather than assumed.
+        #
+        # `run_stage` has always validated that a stage reports every check it
+        # owes. It has never known whether those booleans came from the
+        # platform's own gate or from arithmetic the caller wrote by hand, and
+        # the two are not equally trustworthy: a hand-rolled Stage 1 can omit a
+        # test the gate performs and still look complete, because completeness
+        # is measured against the NAMES of the checks, not their derivation.
+        #
+        # E21 and E22 both did exactly that -- their Stage 1 was written inline
+        # and never called `gates.data_integrity`, so the 12% session-move
+        # ceiling that gate applies never ran. Nothing refused them, and
+        # nothing in the record said so afterwards.
+        #
+        # This does not refuse a hand-rolled stage. Some stages legitimately
+        # have no gate function, and a control that blocked them would simply
+        # be worked around. It makes the distinction VISIBLE in the ledger,
+        # which is what a third party needs to weigh the result.
+        measured_by = "caller"
+
         if hasattr(metrics, "metrics"):
             # A GateResult from sirat.experiments.gates. Accepting the object
             # directly keeps the caller from unpacking it wrongly.
             detail = detail if detail is not None else metrics.detail
             metrics = metrics.metrics
+            measured_by = "platform gate"
 
         done = {r["stage"]: r for r in self.stage_results()}
 
@@ -458,11 +479,13 @@ class Manager(object):
 
         store.insert_stage(self.experiment_id, stage, stages.NAMES[stage],
                            status, text, {"checks": dict(metrics),
+                                          "measured_by": measured_by,
                                           "detail": detail or {}},
                            path=self.path)
 
         return {"stage": stage, "stage_name": stages.NAMES[stage],
-                "status": status, "failed": failed, "detail": detail or {}}
+                "status": status, "failed": failed, "measured_by": measured_by,
+                "detail": detail or {}}
 
     # ==============================
     # HOLDOUT LEDGER
