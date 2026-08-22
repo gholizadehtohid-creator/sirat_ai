@@ -330,15 +330,107 @@ def status(db=DB):
         conn.close()
 
 
+TASK_NAME = "SIRAT-AI depth capture"
+
+# A daily job that fires 20 hours after the last capture will not double up,
+# and a job that missed yesterday still catches up today rather than waiting a
+# full cycle to forgive itself.
+MAX_AGE_HOURS = 20.0
+
+
+def last_capture(db=DB):
+    if not os.path.exists(db):
+        return None
+
+    conn = sqlite3.connect("file:%s?mode=ro" % db.replace("\\", "/"), uri=True)
+
+    try:
+        row = conn.execute(
+            "SELECT MAX(captured_at) FROM depth_snapshot").fetchone()
+    except sqlite3.OperationalError:
+        return None
+    finally:
+        conn.close()
+
+    return row[0] if row else None
+
+
+def due(db=DB, max_age_hours=MAX_AGE_HOURS, now=None):
+    """Is a capture owed? Absence of history means yes, not no."""
+
+    stamp = last_capture(db=db)
+
+    if not stamp:
+        return True, "no capture has ever been taken"
+
+    now = now or datetime.now(timezone.utc)
+
+    try:
+        age = (now - datetime.fromisoformat(stamp)).total_seconds() / 3600.0
+    except ValueError:
+        return True, "last capture timestamp %r is unreadable" % stamp
+
+    if age >= max_age_hours:
+        return True, "last capture was %.1f hours ago" % age
+
+    return False, "last capture was %.1f hours ago, under the %.0f-hour floor" \
+                  % (age, max_age_hours)
+
+
+def schedule_command(python=None, at="13:00"):
+    """The Windows Task Scheduler command that installs the daily job.
+
+    Emitted, never executed. Registering a scheduled task changes the machine
+    and this module does not get to do that unasked -- but leaving the operator
+    to compose it by hand is how the job ends up never installed, and an
+    uninstalled collector is the state this file was written to end.
+
+    Saturday through Wednesday because that is the Tehran trading week, and
+    13:00 because the market closes at 12:30: the capture then holds the
+    closing book, including whatever queue survived the session. The schema is
+    keyed on `captured_at`, so adding intraday captures later needs no change
+    here beyond a second scheduled entry.
+    """
+
+    python = python or sys.executable
+
+    return (
+        'schtasks /Create /TN "%s" /SC WEEKLY /D SAT,SUN,MON,TUE,WED '
+        '/ST %s /F /TR "\\"%s\\" \\"%s\\" --if-due"'
+        % (TASK_NAME, at, python, os.path.abspath(__file__))
+    )
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--status", action="store_true")
+    parser.add_argument("--if-due", action="store_true", dest="if_due",
+                        help="capture only if the last one is older than "
+                             "--max-age-hours; what the scheduled job runs")
+    parser.add_argument("--max-age-hours", type=float, default=MAX_AGE_HOURS)
+    parser.add_argument("--install-schedule", action="store_true",
+                        help="print the schtasks command; installs nothing")
     parser.add_argument("--db", default=DB)
 
     args = parser.parse_args(argv)
 
+    if args.install_schedule:
+        print("Run this in an elevated prompt to install the daily job:\n")
+        print("  " + schedule_command())
+        print("\nNothing has been installed. Until it is, this collector runs")
+        print("only when someone remembers -- and every session it misses is")
+        print("order-book state that cannot be recovered later.")
+        return 0
+
     if args.status:
         return status(db=args.db)
+
+    if args.if_due:
+        owed, why = due(db=args.db, max_age_hours=args.max_age_hours)
+        if not owed:
+            print("skipping: %s" % why)
+            return 0
+        print("capturing: %s" % why)
 
     try:
         collect(db=args.db)

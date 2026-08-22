@@ -191,5 +191,89 @@ class SchemaTests(unittest.TestCase):
         self.assertIn("last_trade_hhmmss", columns)
 
 
+
+class SchedulingTests(unittest.TestCase):
+    """A collector that runs once is not a collector.
+
+    depth.py was written because every session without it loses order-book
+    state permanently. That argument is only true if the thing actually runs
+    again tomorrow, so `--if-due` and the emitted schtasks line are part of the
+    feature rather than convenience around it.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="sirat_sched_")
+        self.db = os.path.join(self.dir, "market.db")
+
+    def test_an_empty_database_is_due(self):
+        """Absence of history means a capture is owed, not that it is not."""
+
+        owed, why = depth.due(db=self.db)
+
+        self.assertTrue(owed)
+        self.assertIn("has ever been taken", why)
+
+    def test_a_missing_file_is_due(self):
+        owed, _ = depth.due(db=os.path.join(self.dir, "nothing.db"))
+
+        self.assertTrue(owed)
+
+    def test_a_fresh_capture_is_not_due(self):
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        snapshots, levels = depth.parse(
+            [row()], now.isoformat(timespec="seconds"))
+        depth.store(snapshots, levels, db=self.db)
+
+        owed, why = depth.due(db=self.db, now=now + timedelta(hours=3))
+
+        self.assertFalse(owed)
+        self.assertIn("floor", why)
+
+    def test_a_missed_day_catches_up_rather_than_waiting_a_cycle(self):
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        snapshots, levels = depth.parse(
+            [row()], now.isoformat(timespec="seconds"))
+        depth.store(snapshots, levels, db=self.db)
+
+        owed, _ = depth.due(db=self.db, now=now + timedelta(hours=25))
+
+        self.assertTrue(owed)
+
+    def test_an_unreadable_timestamp_is_due_not_silently_skipped(self):
+        snapshots, levels = depth.parse([row()], "not-a-timestamp")
+        depth.store(snapshots, levels, db=self.db)
+
+        owed, why = depth.due(db=self.db)
+
+        self.assertTrue(owed)
+        self.assertIn("unreadable", why)
+
+    def test_the_schedule_covers_the_tehran_trading_week(self):
+        command = depth.schedule_command()
+
+        for day in ("SAT", "SUN", "MON", "TUE", "WED"):
+            self.assertIn(day, command)
+
+        self.assertNotIn("THU", command)
+        self.assertNotIn("FRI", command)
+
+    def test_the_scheduled_job_runs_if_due_not_a_bare_capture(self):
+        """A daily task that captures unconditionally double-counts a day."""
+
+        self.assertIn("--if-due", depth.schedule_command())
+
+    def test_installing_is_not_something_this_module_does(self):
+        """It prints the command. Registering a task changes the machine."""
+
+        source = open(os.path.join(ROOT, "depth.py"), encoding="utf-8").read()
+
+        self.assertNotIn("subprocess", source)
+        self.assertNotIn("os.system", source)
+
+
 if __name__ == "__main__":
     unittest.main()
