@@ -159,10 +159,10 @@ class HistoryIsNeverDestroyed(unittest.TestCase):
         """market_snapshot's DELETE-then-INSERT is why there is no history."""
 
         with open(os.path.join(ROOT, "depth.py"), encoding="utf-8") as handle:
-            source = handle.read()
+            source = handle.read().upper().replace("`", "")
 
         for statement in ("DELETE FROM", "DROP TABLE", "INSERT OR REPLACE"):
-            self.assertNotIn(statement, source.upper().replace("`", ""),
+            self.assertNotIn(statement, source,
                              "%s in a module whose only job is to accumulate"
                              % statement)
 
@@ -277,3 +277,69 @@ class SchedulingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ManifestTests(unittest.TestCase):
+    """Every capture must be provable-unaltered later. Brief section 16.
+
+    A raw snapshot with no fingerprint cannot be shown to be the same data that
+    was acquired. The manifest is that fingerprint, one row per capture.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="sirat_manifest_")
+        self.db = os.path.join(self.dir, "market.db")
+
+    def test_a_capture_writes_a_manifest_row(self):
+        snaps, levels = depth.parse([row()], "t0")
+        depth.store(snaps, levels, db=self.db, captured_at="t0")
+
+        conn = sqlite3.connect(self.db)
+        try:
+            m = conn.execute(
+                "SELECT captured_at, instruments, levels, content_hash, "
+                "source, collector_version FROM depth_manifest").fetchall()
+        finally:
+            conn.close()
+
+        self.assertEqual(len(m), 1)
+        self.assertEqual(m[0][0], "t0")
+        self.assertEqual(m[0][1], 1)
+        self.assertEqual(m[0][2], 5)
+        self.assertEqual(len(m[0][3]), 64)          # sha256 hex
+        self.assertIn("tsetmc", m[0][4])
+
+    def test_the_hash_is_deterministic_for_the_same_data(self):
+        snaps, levels = depth.parse([row()], "t0")
+        again_s, again_l = depth.parse([row()], "t0")
+
+        self.assertEqual(depth.content_hash(snaps, levels),
+                         depth.content_hash(again_s, again_l))
+
+    def test_the_hash_changes_when_a_value_changes(self):
+        a_s, a_l = depth.parse([row(qtj=1.0)], "t0")
+        b_s, b_l = depth.parse([row(qtj=2.0)], "t0")
+
+        self.assertNotEqual(depth.content_hash(a_s, a_l),
+                            depth.content_hash(b_s, b_l))
+
+    def test_the_hash_is_order_independent(self):
+        s1, l1 = depth.parse([row("A"), row("B")], "t0")
+        s2, l2 = depth.parse([row("B"), row("A")], "t0")
+
+        self.assertEqual(depth.content_hash(s1, l1),
+                         depth.content_hash(s2, l2))
+
+    def test_a_repeat_capture_does_not_duplicate_the_manifest(self):
+        snaps, levels = depth.parse([row()], "t0")
+        depth.store(snaps, levels, db=self.db, captured_at="t0")
+        depth.store(snaps, levels, db=self.db, captured_at="t0")
+
+        conn = sqlite3.connect(self.db)
+        try:
+            n = conn.execute(
+                "SELECT COUNT(*) FROM depth_manifest").fetchone()[0]
+        finally:
+            conn.close()
+
+        self.assertEqual(n, 1)

@@ -51,6 +51,7 @@ USAGE
 """
 
 import argparse
+import hashlib
 import os
 import sqlite3
 import sys
@@ -66,6 +67,10 @@ URL = ("https://cdn.tsetmc.com/api/ClosingPrice/GetMarketWatch"
 LEVELS = 5
 
 TIMEOUT = 60
+
+SOURCE = "tsetmc:GetMarketWatch?withBestLimits=true"
+
+COLLECTOR_VERSION = "depth-v1"
 
 
 class PayloadChanged(Exception):
@@ -153,6 +158,22 @@ def ensure_tables(conn):
         ON depth_snapshot (captured_at)
     """)
 
+    # One provenance row per capture. The hash lets a third party prove a
+    # capture's rows have not been altered since acquisition -- required by the
+    # vendor-due-diligence brief, and cheap: it is computed from the same rows
+    # that are being stored, not a second fetch.
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS depth_manifest (
+        captured_at      TEXT NOT NULL PRIMARY KEY,
+        instruments      INTEGER NOT NULL,
+        levels           INTEGER NOT NULL,
+        content_hash     TEXT NOT NULL,
+        source           TEXT NOT NULL,
+        collector_version TEXT NOT NULL,
+        recorded_at      TEXT NOT NULL
+    )
+    """)
+
     conn.commit()
 
 
@@ -233,7 +254,28 @@ def parse(rows, captured_at):
 # STORE
 # ==============================
 
-def store(snapshots, levels, db=DB):
+def content_hash(snapshots, levels):
+    """A deterministic fingerprint of exactly the rows being stored.
+
+    Order-independent within each table (rows are sorted first) so that a
+    re-run producing the same data hashes the same, and computed from the
+    stored tuples themselves so the hash cannot drift from what was written.
+    """
+
+    digest = hashlib.sha256()
+
+    for row in sorted(repr(r) for r in snapshots):
+        digest.update(row.encode("utf-8"))
+
+    digest.update(b"|levels|")
+
+    for row in sorted(repr(r) for r in levels):
+        digest.update(row.encode("utf-8"))
+
+    return digest.hexdigest()
+
+
+def store(snapshots, levels, db=DB, captured_at=None):
     conn = sqlite3.connect(db)
 
     try:
@@ -249,6 +291,15 @@ def store(snapshots, levels, db=DB):
             "INSERT OR IGNORE INTO depth_levels VALUES (%s)"
             % ",".join("?" * 9), levels)
 
+        # The manifest row proves this capture's contents later. Written with
+        # the same INSERT OR IGNORE discipline: a recorded manifest is history.
+        if captured_at is not None:
+            conn.execute(
+                "INSERT OR IGNORE INTO depth_manifest VALUES (?,?,?,?,?,?,?)",
+                (captured_at, len(snapshots), len(levels),
+                 content_hash(snapshots, levels), SOURCE, COLLECTOR_VERSION,
+                 datetime.now(timezone.utc).isoformat(timespec="seconds")))
+
         conn.commit()
 
         return conn.total_changes
@@ -263,16 +314,19 @@ def collect(db=DB, session=None, verbose=True):
 
     snapshots, levels = parse(rows, captured_at)
 
-    written = store(snapshots, levels, db=db)
+    written = store(snapshots, levels, db=db, captured_at=captured_at)
+
+    chash = content_hash(snapshots, levels)
 
     if verbose:
         print("captured %s" % captured_at)
         print("  instruments : %d" % len(snapshots))
         print("  depth levels: %d" % len(levels))
         print("  rows written: %d" % written)
+        print("  content hash: %s" % chash[:16])
 
     return {"captured_at": captured_at, "instruments": len(snapshots),
-            "levels": len(levels), "written": written}
+            "levels": len(levels), "written": written, "content_hash": chash}
 
 
 # ==============================

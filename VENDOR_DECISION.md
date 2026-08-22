@@ -1,5 +1,12 @@
 # VENDOR DECISION — وب سرویس پویا / Pooya API
 
+> **UPDATED 2026-08-22 (same day), after a real authentication attempt.** Two
+> findings change the picture below and are recorded in the "Post-discovery
+> update" section at the end: (1) historical order-book depth **does not exist**
+> as a machine endpoint — settled from the client, `FAIL`; (2) automated login
+> is **blocked by a WAF**. The decision **stays TRIAL ONLY**, but the trial's
+> purpose narrows sharply. Read the update before acting.
+
 # DECISION: **TRIAL ONLY**
 
 **2026-08-22.** Not `BUY`. Not `DO NOT BUY`.
@@ -99,3 +106,73 @@ Current state: **one capture.**
 unknown.
 
 **LOW** on every capability claim — by construction, since none is verified.
+
+---
+
+# POST-DISCOVERY UPDATE — 2026-08-22
+
+An authenticated discovery pass (credentials read from env, never printed, one
+login attempt only) produced two decisive findings. Full detail in
+`BORSVIEW_API_INVENTORY.md` and `BORSVIEW_DEPTH_AUDIT.md`.
+
+## Finding 1 — historical depth does NOT exist. Settled.
+
+The full application (6.6 MB of AngularJS, `PooyaBiNewApplication`) was read.
+It calls REST endpoints for price, fundamentals, technicals, filings and
+حقیقی/حقوقی flow — and **no order-book/depth/queue endpoint of any kind**.
+Depth is served **live over a WebSocket only** (`/socket/market-data`,
+Lightstreamer) and is not retained or queryable.
+
+An app cannot show history it has no endpoint to fetch, so this does not depend
+on getting past the WAF:
+
+> **`HISTORICAL_DEPTH = FAIL`. The vendor does not solve SIRAT-AI's historical
+> market-depth bottleneck.** The "10+ years" seen in the UI is `/historicalPrice`
+> — a decade of price, which is not order-book depth.
+
+## Finding 2 — automated access is blocked by a WAF.
+
+The login POST — correct JSON body, browser headers, warmed session — returned
+an HTML page titled `WAF`, no cookie, no JSON. **The credential was never
+evaluated**; a firewall rejected the automated request itself.
+
+Getting past a WAF is anti-bot circumvention, which the brief prohibits and
+lists as a stop condition. A valid subscription does not change that: the WAF is
+a deliberate control against machine access. So `AUTHENTICATION = BLOCKED_BY_WAF`,
+and no endpoint content could be sampled.
+
+## What the decision becomes
+
+Still **TRIAL ONLY** — but the two things a trial could have proven have
+changed:
+
+- **Depth** is off the table regardless of any trial. Nothing the vendor could
+  demonstrate brings back a history it never recorded.
+- **Fundamentals / flow** remain the only reason to trial, and even that
+  requires the vendor to provide a **sanctioned machine path** — a documented
+  API key or an Excel/CSV export — because the WAF blocks scripted login. If the
+  only access is the interactive browser UI, then for automation purposes this
+  is effectively **`DO NOT BUY`**: a data feed you cannot reach from code is not
+  a data feed.
+
+## The single question that now decides everything
+
+Put to the vendor (`info@pouyafinance.com`, 021-81903000, `t.me/bvhelp`):
+
+> **"وب سرویس پویا"** — is there a **documented API with a key or token**, or a
+> **bulk export**, that a program may use **without** driving the browser UI and
+> **without** tripping the WAF? And does it include `published_at` on financial
+> statements?
+
+- **Yes, with a key** → run a real trial against fundamentals/flow; depth stays FAIL.
+- **No, browser only** → `DO NOT BUY` for SIRAT-AI's purposes.
+
+## Unchanged, and now the only forward path for depth
+
+`depth.py` is SIRAT-AI's sole route to the one dataset that matters most, and
+this discovery removes the last hope that a vendor could substitute for it. It
+now also writes a per-capture provenance manifest (sha256 content hash, source,
+collector version, timestamp) — closing the reproducibility requirement.
+Second real capture recorded today: 920 instruments, 4,372 depth levels.
+
+    python depth.py --install-schedule
