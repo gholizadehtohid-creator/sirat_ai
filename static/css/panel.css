@@ -20,6 +20,21 @@
      kept for the recessive chrome inside them. */
   --silver:          #b3b4b8;
 
+  /* ---- chrome-only refinement tokens (no data hue repurposed) ----
+     --accent is series-1, which the panel already uses as its chrome accent
+     (primary button, progress bar, input accent-color). Aliases resolve the
+     --card / --text / --hover names the evidence-group referenced but the
+     palette never defined. */
+  --accent:          var(--series-1);
+  --card:            var(--surface-1);
+  --text:            var(--text-primary);
+  --hover:           rgba(11, 11, 11, 0.045);
+  --shadow-sm:       0 1px 2px rgba(11, 11, 11, 0.05),
+                     0 2px 8px rgba(11, 11, 11, 0.05);
+  --shadow-md:       0 2px 6px rgba(11, 11, 11, 0.07),
+                     0 8px 24px rgba(11, 11, 11, 0.08);
+  --edge-top:        inset 0 1px 0 rgba(255, 255, 255, 0.55);
+
   --series-1:        #2a78d6;
   --series-2:        #eb6834;
   --series-3:        #1baf7a;
@@ -39,7 +54,7 @@
   --success-text:    #006300;
   --danger-text:     #b52a2a;
 
-  --radius: 10px;
+  --radius: 12px;
   --font: system-ui, -apple-system, "Segoe UI", sans-serif;
   /* B Nazanin for tables, per request. It is a common Persian font on Iranian
      Windows; referenced by name so the browser uses it when installed, and it
@@ -64,6 +79,16 @@
     --axis:           #383835;
     --border:         rgba(255, 255, 255, 0.10);
     --silver:         #8d8f97;
+
+    --accent:         var(--series-1);
+    --card:           var(--surface-1);
+    --text:           var(--text-primary);
+    --hover:          rgba(255, 255, 255, 0.055);
+    --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.30),
+                      0 2px 8px rgba(0, 0, 0, 0.28);
+    --shadow-md:      0 2px 8px rgba(0, 0, 0, 0.38),
+                      0 12px 30px rgba(0, 0, 0, 0.42);
+    --edge-top:       inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
     --series-1:       #3987e5;
     --series-2:       #d95926;
@@ -96,6 +121,16 @@
   --axis:           #383835;
   --border:         rgba(255, 255, 255, 0.10);
   --silver:         #8d8f97;
+
+  --accent:         var(--series-1);
+  --card:           var(--surface-1);
+  --text:           var(--text-primary);
+  --hover:          rgba(255, 255, 255, 0.055);
+  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.30),
+                    0 2px 8px rgba(0, 0, 0, 0.28);
+  --shadow-md:      0 2px 8px rgba(0, 0, 0, 0.38),
+                    0 12px 30px rgba(0, 0, 0, 0.42);
+  --edge-top:       inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
   --series-1:       #3987e5;
   --series-2:       #d95926;
@@ -137,20 +172,28 @@ header.top {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 4px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
 }
 
 .brand {
-  font-size: 20px;
-  font-weight: 650;
+  font-size: 21px;
+  font-weight: 700;
   letter-spacing: -0.01em;
+  /* A quiet accent on the wordmark -- an inline-start rule the same blue the
+     panel already uses for its primary chrome. */
+  padding-inline-start: 12px;
+  border-inline-start: 3px solid var(--accent);
+  line-height: 1.1;
 }
 
 .brand span {
   color: var(--text-muted);
   font-weight: 400;
-  margin-left: 8px;
+  margin-inline-start: 8px;
   font-size: 13px;
+  letter-spacing: 0;
 }
 
 .top-actions {
@@ -173,6 +216,7 @@ header.top {
   margin: 16px 0;
   font-size: 13px;
   color: var(--text-secondary);
+  box-shadow: var(--shadow-sm), var(--edge-top);
 }
 
 .banner.is-live { border-left-color: var(--status-good); }
@@ -190,6 +234,7 @@ header.top {
   background: var(--surface-1);
   padding: 14px 16px 16px;
   margin: 16px 0 20px;
+  box-shadow: var(--shadow-sm), var(--edge-top);
 }
 
 .load-panel.is-idle { opacity: 0.82; }
@@ -374,6 +419,7 @@ header.top {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   margin-bottom: 20px;
+  box-shadow: var(--shadow-sm), var(--edge-top);
 }
 
 .filters.advanced {
@@ -392,15 +438,16 @@ header.top {
   font-weight: 600;
 }
 
-select, input[type="number"] {
+select, input[type="number"], input[type="text"] {
   font: inherit;
   font-size: 13px;
   padding: 7px 10px;
-  border-radius: 7px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-primary);
   min-width: 130px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 button {
@@ -408,23 +455,40 @@ button {
   font-size: 13px;
   font-weight: 550;
   padding: 8px 14px;
-  border-radius: 7px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-primary);
   cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease,
+              filter 0.15s ease, transform 0.1s ease;
 }
 
 button:hover { background: var(--grid); }
+button:active { transform: translateY(1px); }
 button:disabled { opacity: 0.5; cursor: progress; }
 
-button.primary {
-  background: var(--series-1);
-  border-color: transparent;
-  color: #fff;
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
 }
 
-button.primary:hover { filter: brightness(1.08); }
+button.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15),
+              0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+button.primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18),
+              0 4px 14px color-mix(in srgb, var(--accent) 40%, transparent);
+}
 
 /* ---------- symbol chips ---------- */
 
@@ -499,7 +563,16 @@ button.link:hover { background: none; text-decoration: underline; }
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 14px 16px 14px 18px;
+  box-shadow: var(--shadow-sm), var(--edge-top);
+  /* a quiet accent rail on the leading edge, and a lift on hover */
+  border-inline-start: 3px solid var(--accent);
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.tile:hover {
+  box-shadow: var(--shadow-md), var(--edge-top);
+  transform: translateY(-1px);
 }
 
 .tile .k {
@@ -542,10 +615,17 @@ button.link:hover { background: none; text-decoration: underline; }
   border-radius: var(--radius);
   padding: 16px 18px 18px;
   min-width: 0;
+  box-shadow: var(--shadow-md), var(--edge-top);
 }
 
 /* Nested cards (charts inside a card) opt out of the silver frame with an
-   inline border:none; this keeps the silver line on the outer windows only. */
+   inline border:none; this keeps the silver line -- and now the elevation --
+   on the outer windows only. A sub-card with border:none also drops the
+   shadow so it sits flat inside its parent. */
+.card [style*="border:none"],
+.card [style*="border: none"] {
+  box-shadow: none;
+}
 
 .card-head {
   display: flex;
@@ -771,24 +851,31 @@ tbody tr:hover { background: var(--surface-2); }
    than removed: available in one click, never in the way. */
 
 .evidence-group {
+  /* A faint structural wrapper -- the inner .card carries the silver frame and
+     the elevation, so an open group reads as "group > content", not two
+     stacked silver boxes. The small shadow gives the closed summary bar a
+     clickable affordance. */
   border: 1px solid var(--border);
-  border-radius: 10px;
-  margin-bottom: 10px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
   background: var(--card);
+  box-shadow: var(--shadow-sm);
 }
 
 .evidence-group > summary {
   cursor: pointer;
-  padding: 13px 16px;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 15px 18px;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
   color: var(--text);
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   user-select: none;
-  border-radius: 10px;
+  border-radius: var(--radius);
+  transition: background 0.15s ease;
 }
 
 .evidence-group > summary::-webkit-details-marker { display: none; }
@@ -814,11 +901,11 @@ tbody tr:hover { background: var(--surface-2); }
 
 .evidence-group[open] > summary {
   border-bottom: 1px solid var(--border);
-  border-radius: 10px 10px 0 0;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 
 .evidence-group > *:not(summary) {
-  margin-inline: 14px;
+  margin: 14px;
 }
 
 .evidence-group > *:not(summary):last-child {
@@ -826,3 +913,27 @@ tbody tr:hover { background: var(--surface-2); }
 }
 
 .evidence-group > .card:first-of-type { margin-top: 14px; }
+
+/* ---------- global polish (chrome only) ---------- */
+
+/* Smooth theme swaps and hover transitions on the big surfaces. */
+.card, .tile, .filters, .evidence-group, .banner, .load-panel {
+  transition: background 0.2s ease, border-color 0.2s ease,
+              box-shadow 0.2s ease;
+}
+
+/* Text selection in the panel's own accent, not the browser default blue. */
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* A slim, recessive scrollbar for the page and the horizontal table scrollers,
+   so a wide table's scrollbar does not read louder than the data. */
+.table-wrap { scrollbar-width: thin; scrollbar-color: var(--axis) transparent; }
+
+.table-wrap::-webkit-scrollbar { height: 8px; }
+.table-wrap::-webkit-scrollbar-thumb {
+  background: var(--axis);
+  border-radius: 999px;
+}
+.table-wrap::-webkit-scrollbar-track { background: transparent; }
