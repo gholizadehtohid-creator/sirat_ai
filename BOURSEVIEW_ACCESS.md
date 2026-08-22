@@ -1,5 +1,11 @@
 # BOURSEVIEW — ACCESS AUDIT
 
+> **SUPERSEDED IN PART, 2026-08-22 (later the same day).** A second pass found
+> three things this document got wrong or missed. They are corrected in
+> §9 "Second pass" at the end, and the headline changes: **BourseView sells an
+> official web-service product ("وب سرویس پویا" / Pooya API), and there is no
+> CAPTCHA or MFA.** Read §9 before acting on anything above it.
+
 **2026-08-22. Phases 1–2 of the BourseView data-source evaluation. STOPPED at
 Phase 2 by design, before any authenticated request was attempted.**
 
@@ -165,3 +171,113 @@ evaluation closes cleanly.
 | credentials involved | **none** |
 | code written | **none** |
 | files added to the repository | this document only |
+
+---
+
+# 9. SECOND PASS — what the first pass got wrong
+
+The first pass concluded "permission cannot be established" and stopped. That
+conclusion was correct about the *scraping* path and **wrong about the
+product**, because it never found the product. Three corrections.
+
+## 9.1 There is no CAPTCHA and no MFA
+
+The first pass flagged seven occurrences of `otp` in the client bundle as the
+thing most likely to stop the project. **All seven are false positives** — they
+are substrings of React's internal event names `gotpointercapture` and
+`lostpointercapture`. A word-boundary check would have caught it; a substring
+search did not.
+
+No reCAPTCHA, hCaptcha, Turnstile, Arcaptcha or Cloudflare marker appears
+anywhere in 1.48 MB of client code.
+
+## 9.2 The API is on a different host
+
+The first pass probed `/api/*` on `www.bourseview.com` and read the resulting
+404s as "an undocumented backend exists here". The `www` host serves only the
+static SPA. The real base URL is declared in the bundle:
+
+    REACT_APP_Bourseview_Api: "https://api.bourseview.com"
+
+`api.bourseview.com` runs FastAPI and serves `/openapi.json` — but that spec is
+the framework's **empty default**, 75 bytes with zero declared paths, and no
+sub-application is mounted at any conventional prefix. So the first pass's
+"no published route documentation" holds; only its location was wrong.
+
+## 9.3 THE FINDING: there is an official, purchasable web service
+
+BourseView's own client bundle advertises a product the audit had no idea
+existed: **وب سرویس پویا / Pooya API**.
+
+| | |
+|---|---|
+| Vendor | شرکت پردازش اطلاعات مالی مفید — part of کارگزاری مفید |
+| Regulator | operates under سازمان بورس و اوراق بهادار |
+| Protocol | **REST, JSON** — stated explicitly |
+| Trial | **yes** — "امکان استفاده از سرویس آزمایشی" |
+| Onboarding | stated as deliberately low-friction — "عدم پیچیدگی مکاتبات اداری" |
+| Support | in person, phone, and online |
+
+**Stated coverage**, in the vendor's own words:
+
+> وب سرویس پویا، کلیه اطلاعات معاملاتی لحظه‌ای بازار **و تاریخچه آن**،
+> اطلاعیه‌ها، صورت‌های مالی و مجامع را به همراه اقلام محاسباتی همچون نسبت‌ها،
+> نرخ‌های رشد و ضرایب را در اختیار کاربران خود قرار می‌دهد.
+
+and on the Codal question specifically:
+
+> همزمان با انتشار اطلاعیه‌های شرکت‌ها در سامانه کدال، کلیه اطلاعات صورت‌های
+> مالی و اقلام محاسباتی بصورت لحظه‌ای قابل دسترس … **ضمن بی‌نیاز کردن از سامانه
+> کدال**
+
+**Pricing — metered per record, not per subscription:**
+
+> مبلغ … با معیار hits تعیین می‌گردد … به ازای هر hit **دویست ریال** (برای
+> اطلاعات قیمتی به ازای هر hit **صد ریال**) … Hits تعداد رکوردهای برگشت داده
+> شده (نماد، روز، قلم مالی) در خروجی هر API است.
+
+- **100 rials** per price record
+- **200 rials** per other record
+- a *hit* = one returned (symbol, day, item) tuple
+
+**Contact, from the public bundle:**
+
+| | |
+|---|---|
+| email | `info@pouyafinance.com` |
+| phone | `021-81903000` |
+| Telegram | `t.me/bvhelp` |
+| web | `www.pouyafinance.com` |
+
+## 9.4 What this changes
+
+The governance impasse dissolves. The question was never "may we imitate the
+web client" — it was "does the vendor sell machine access", and the answer is
+yes, with a trial, a published price and a support line.
+
+This is `Official API`, the top rung of the brief's own priority ladder. The
+audit started at the bottom rung because it did not know the top one existed.
+
+**Access classification: A — LEGITIMATE OFFICIAL API AVAILABLE, subject to a
+commercial agreement.** The data-suitability classification (A/B/C/D on
+research value) remains open and cannot be settled until the trial runs.
+
+### What must be asked before any code is written
+
+1. Does the service expose **historical order-book depth**? SIRAT-AI's one
+   irreplaceable gap. Depth cannot be backfilled from anywhere else, and
+   `depth.py` currently holds a single capture.
+2. How far back does **price history** go, and is it **adjusted or raw**?
+3. Are financial statements served with **both** report date and publication
+   date? Point-in-time research is impossible without the second.
+4. Is حقیقی/حقوقی flow included, and from what date?
+
+Question 3 decides whether this can replace the Codal crawl or only supplement
+it. Question 1 decides whether it is worth far more than its price.
+
+### Cost, roughly
+
+At 100 rials per price record, one day of daily bars across ~800 symbols is
+about **80,000 rials**. The expensive item would be a historical backfill —
+`price_history` alone holds 1.9M rows — so the sane sequence is trial first,
+scope second, backfill last if at all.

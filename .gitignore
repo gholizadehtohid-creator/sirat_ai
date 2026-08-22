@@ -59,3 +59,32 @@ logs/
 # pins the result is its sha256, recorded beside it and in E21_REPORT.md --
 # committing the bytes would trade a verifiable hash for an unusable history.
 backtest_output/E21_flow_lock_panel.csv.gz
+
+# ---- credentials and session material -------------------------------------
+# Nothing here has ever been committed and this list exists so that stays true.
+# The project's contract is that credentials live in the environment and are
+# read only by settings.py; these patterns catch the files people reach for
+# when that contract feels inconvenient.
+.env
+.env.*
+*.env
+secrets.json
+secrets.yaml
+credentials.json
+credentials.ini
+*_credentials.*
+*.secret
+*.secrets
+config.local.*
+settings.local.*
+local_settings.py
+
+# Session material. A cookie jar is a credential with a shorter life.
+cookies.txt
+cookies.json
+*.cookies
+session.json
+*_session.json
+.session_cache/
+token.json
+*.token
