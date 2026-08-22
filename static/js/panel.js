@@ -68,7 +68,8 @@ const DEFAULT_PERIODS = {};
 const state = {
   screen: null, indices: null, sectors: null,
   regime: null, portfolio: null, flow: null,
-  fundamentals: null, codal: null, technical: null, topTechnical: null
+  fundamentals: null, codal: null, technical: null, topTechnical: null,
+  gold: null
 };
 
 /* ---------- helpers ---------- */
@@ -768,6 +769,88 @@ async function loadTopTechnical(force = false) {
     console.error(err);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "▶ رتبه‌بندی بازار"; }
+  }
+}
+
+/* ---------- gold funds (صندوق‌های طلا) ---------- */
+
+function renderGold(rep) {
+  state.gold = rep;
+
+  const rows = rep.funds || [];
+  const c = rep.counts || {};
+
+  if (!rows.length) {
+    banner("goldStatus", "goldStatusText",
+      c.missing ? "is-warn" : "is-error",
+      c.missing
+        ? `<strong>هیچ صندوقی داده ندارد.</strong> ${c.missing} صندوق منتظر ` +
+          `دریافت‌اند — دکمه‌ی «دریافت تاریخچه» را بزنید.`
+        : "<strong>هیچ صندوق طلایی یافت نشد.</strong>");
+    $("goldTable").innerHTML = "";
+    return;
+  }
+
+  banner("goldStatus", "goldStatusText", "is-live",
+    `<strong>${c.with_data} صندوق طلا</strong> با داده` +
+    (c.missing ? ` (${c.missing} منتظر دریافت)` : "") +
+    `. ⚠ ${esc(rep.caveat || "")}`);
+
+  const callBadge = (call, fa) =>
+    `<span class="badge ${CALL_CLASS[call] || "neutral"}">` +
+    `<span class="dot"></span>${esc(fa)}</span>`;
+
+  const body = rows.map(r => [
+    `<a href="?tech=${encodeURIComponent(r.symbol || "")}"
+        title="تحلیل تک‌نماد">${esc(r.symbol || "—")}</a>`,
+    esc((r.name || "").slice(0, 30)),
+    num(r.close, 0),
+    num(r.rsi, 1),
+    num(r.macd, 2),
+    esc(r.trend || "—"),
+    callBadge(r.call, r.call_fa),
+    esc(r.as_of || "—")
+  ]);
+
+  $("goldTable").innerHTML = table(
+    ["نماد", "نام", "قیمت", "RSI", "MACD", "روند", "سیگنال", "تا تاریخ"], body);
+}
+
+async function loadGold(force = false) {
+  const btn = $("runGoldBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "در حال تحلیل…"; }
+
+  try {
+    const rep = await getJSON(`/api/gold?${query()}${force ? "&refresh=1" : ""}`);
+    renderGold(rep);
+  } catch (err) {
+    state.gold = null;
+    banner("goldStatus", "goldStatusText", "is-error",
+      `<strong>تحلیل نشد.</strong> ${esc(err.message)}`);
+    $("goldTable").innerHTML = "";
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "▶ تحلیل"; }
+  }
+}
+
+async function importGold() {
+  const btn = $("importGoldBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "در حال دریافت…"; }
+  banner("goldStatus", "goldStatusText", "is-loading",
+    "دریافت تاریخچه‌ی صندوق‌های طلا …");
+
+  try {
+    const res = await getJSON("/api/import/gold", { method: "POST" });
+    banner("goldStatus", "goldStatusText", "is-live",
+      `<strong>${res.stored} صندوق دریافت شد.</strong> در حال تحلیل…`);
+    await loadGold(true);
+  } catch (err) {
+    banner("goldStatus", "goldStatusText", "is-error",
+      `<strong>دریافت نشد.</strong> ${esc(err.message)}`);
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↓ دریافت تاریخچه"; }
   }
 }
 
@@ -1993,6 +2076,7 @@ function rerender() {
   if (state.flow) renderMoneyflow(state.flow);
   if (state.technical) renderTechnical(state.technical);
   if (state.topTechnical) renderTopTechnical(state.topTechnical);
+  if (state.gold) renderGold(state.gold);
   if (state.screen) renderScreen(state.screen);
   if (state.portfolio) renderPortfolio(state.portfolio);
 }
@@ -2102,6 +2186,8 @@ on("runRegimeBtn", "click", () => loadRegime(true));
 on("runPortfolioBtn", "click", () => loadPortfolio(true));
 on("runTechnicalBtn", "click", () => loadTechnical(true));
 on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
+on("runGoldBtn", "click", () => loadGold(true));
+on("importGoldBtn", "click", importGold);
 
 // Enter in the symbol box runs the analysis, so the button is optional.
 on("techSymbolInput", "keydown", (e) => {

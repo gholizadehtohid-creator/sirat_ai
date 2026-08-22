@@ -496,6 +496,42 @@ def api_technical_top():
     return jsonify(memoise(key, build, force=force))
 
 
+@app.route("/api/gold")
+def api_gold():
+    """Gold funds (صندوق‌های طلا) with a technical read each.
+
+    ETFs tracking bullion, not stocks -- shown apart from the equity views,
+    with no fundamental scoring. Missing history is reported so the panel can
+    offer a fetch, never silently hidden.
+    """
+
+    params = wanted_params()
+    force = request.args.get("refresh") == "1"
+
+    key = cache_key("gold", data_version(), params_key(params))
+
+    def build():
+        return technical.gold_list(params=params)
+
+    return jsonify(memoise(key, build, force=force))
+
+
+@app.route("/api/import/gold", methods=["POST"])
+def api_import_gold():
+    """Fetch and store price history for the gold funds. User-triggered."""
+
+    def build():
+        import gold
+        stored = gold.fetch_history(verbose=False)
+        invalidate()
+        return {"stored": stored, "coverage": gold.coverage()}
+
+    try:
+        return jsonify(build())
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 @app.route("/api/sectors")
 def api_sectors():
     """Per-sector fundamental distribution and derived technical read."""

@@ -515,3 +515,64 @@ def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
         },
         "caveat": SIGNAL_CAVEAT,
     }
+
+
+# ==============================
+# GOLD FUNDS
+# ==============================
+
+def gold_list(params=None):
+    """A technical read for every gold fund that has price history.
+
+    No liquidity floor and no fundamental scoring -- these are ETFs tracking
+    bullion, not stocks. Technical analysis applies (they have a price series);
+    the six-factor model and the fundamental screen do not, which is exactly
+    why they live in their own list rather than the equity ranking. Sorted by
+    technical score so the list has an order, with the same standing caveat.
+    """
+
+    import gold
+
+    funds = gold.gold_funds()
+
+    rows = []
+    missing = []
+
+    for fund in funds:
+        symbol = fund.get("symbol_fa")
+        rep = analyse(symbol, params=params)
+
+        if rep.get("error"):
+            # A fund with no stored history yet -- reported, not silently
+            # dropped, so the panel can say "press fetch" honestly.
+            missing.append({"symbol": symbol, "name": fund.get("name_fa"),
+                            "reason": rep["error"]})
+            continue
+
+        L = rep["latest"]
+        sig = rep["signal"]
+
+        rows.append({
+            "symbol": symbol,
+            "name": fund.get("name_fa"),
+            "ins_code": fund.get("ins_code"),
+            "as_of": rep.get("as_of"),
+            "close": L.get("close"),
+            "rsi": L.get("rsi"),
+            "macd": L.get("macd"),
+            "trend": L.get("trend"),
+            "call": sig["call"],
+            "call_fa": sig["call_fa"],
+            "net": sig["net"],
+        })
+
+    rows.sort(key=lambda r: (r["call"] != "BUY", -(r["net"] or 0),
+                             r["symbol"] or ""))
+
+    return {
+        "funds": rows,
+        "missing": missing,
+        "counts": {"total": len(funds), "with_data": len(rows),
+                   "missing": len(missing)},
+        "caveat": SIGNAL_CAVEAT,
+    }
