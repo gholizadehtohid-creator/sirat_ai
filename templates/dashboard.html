@@ -240,6 +240,53 @@
 
   </details>
 
+  <!-- ================= TECHNICAL: تک‌نماد ================= -->
+
+  <details class="evidence-group" id="evidenceTechnical">
+  <summary>تحلیل تکنیکال یک نماد</summary>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>تحلیل تکنیکال نماد</h2>
+      <div class="top-actions">
+        <input id="techSymbolInput" type="text" inputmode="text"
+               placeholder="نماد، مثل وبملت" style="min-width:160px" list="techSymbolList">
+        <datalist id="techSymbolList"></datalist>
+        <button id="runTechnicalBtn" class="primary">▶ تحلیل</button>
+      </div>
+    </div>
+    <p class="hint">
+      خواندنِ اندیکاتورهای همان موتور سهام روی یک نماد — میانگین‌های متحرک،
+      RSI، MACD، باند بولینگر و %B، ATR و ADX، و برچسب روند. این بخش فقط
+      <strong>داده</strong> است، نه سیگنال: هیچ خرید/فروش تولید نمی‌کند. یک نماد
+      وارد کنید تا آخرین وضعیتش نمایش داده شود؛ صفحه با هیچ نماد پیش‌فرضی باز
+      نمی‌شود.
+    </p>
+
+    <div id="technicalStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="technicalStatusText">یک نماد وارد کنید.</div>
+    </div>
+
+    <div class="kpi-row" id="technicalKpis"></div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>قیمت و میانگین‌های متحرک</h2></div>
+        <p class="hint">بسته در برابر دو میانگین متحرک و باندهای بولینگر.</p>
+        <div class="chart" id="technicalPriceChart"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>MACD و RSI</h2></div>
+        <p class="hint">خط MACD در برابر خط سیگنال؛ RSI روی همان محور زمان.</p>
+        <div class="chart" id="technicalMomentumChart"></div>
+      </div>
+    </div>
+
+    <div class="table-wrap" id="technicalTable" style="margin-top:16px"></div>
+  </div>
+
+  </details>
+
   <!-- ================= INDEX: شاخص کل ================= -->
 
   <details class="evidence-group" id="evidenceIndices">

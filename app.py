@@ -37,6 +37,7 @@ import pipeline
 import regime as regime_module
 import sectors
 import settings
+import technical
 from providers import transport
 from config import (
     ACCOUNT_EQUITY,
@@ -434,6 +435,40 @@ def api_indices():
     report = memoise(key, build, force=force)
 
     return jsonify(_with_autofetch(report, "indices"))
+
+
+@app.route("/api/technical")
+def api_technical():
+    """Technical reading for one instrument, by نماد.
+
+    Data only -- indicator values and a short series for charting. No signal,
+    no BUY/SELL; the panel renders, the reader decides. Missing indicators are
+    reported as null, never as zero.
+    """
+
+    symbol = request.args.get("symbol", type=str)
+
+    if not symbol or not symbol.strip():
+        return jsonify({"error": "a symbol (نماد) is required"}), 400
+
+    params = wanted_params()
+    bars = request.args.get("bars", type=int) or technical.SERIES_BARS
+    force = request.args.get("refresh") == "1"
+
+    key = cache_key("technical", data_version(), symbol.strip(), bars,
+                    params_key(params))
+
+    def build():
+        return technical.analyse(symbol.strip(), params=params, bars=bars)
+
+    report = memoise(key, build, force=force)
+
+    # An unknown symbol or absent history is a 404, not a 200 with an error
+    # body -- the panel distinguishes "not found" from "found, here it is".
+    if isinstance(report, dict) and report.get("error"):
+        return jsonify(report), 404
+
+    return jsonify(report)
 
 
 @app.route("/api/sectors")

@@ -68,7 +68,7 @@ const DEFAULT_PERIODS = {};
 const state = {
   screen: null, indices: null, sectors: null,
   regime: null, portfolio: null, flow: null,
-  fundamentals: null, codal: null
+  fundamentals: null, codal: null, technical: null
 };
 
 /* ---------- helpers ---------- */
@@ -463,6 +463,164 @@ async function loadIndices(force = false) {
     banner("capIndexStatus", "capIndexStatusText", "is-error",
       `<strong>تحلیل شاخص شکست خورد.</strong> ${esc(err.message)}`);
     setTask("indices", "failed", err.message);
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "▶ تحلیل"; }
+  }
+}
+
+/* ---------- technical: one instrument, on demand ---------- */
+
+// Persian labels for the trend classifier's English states.
+const TREND_FA = {
+  "Strong Uptrend": "روند صعودی قوی",
+  "Uptrend": "روند صعودی",
+  "Weak Downtrend": "روند نزولی ضعیف",
+  "Downtrend": "روند نزولی",
+  "Unknown": "نامشخص"
+};
+
+const TREND_CLASS = {
+  "Strong Uptrend": "good", "Uptrend": "good",
+  "Weak Downtrend": "warn", "Downtrend": "bad", "Unknown": "neutral"
+};
+
+function renderTechnical(rep) {
+  state.technical = rep;
+
+  const clear = () => {
+    ["technicalPriceChart", "technicalMomentumChart"].forEach(id => {
+      const n = $(id);
+      if (n) n.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    });
+    $("technicalTable").innerHTML = "";
+    tiles("technicalKpis", []);
+  };
+
+  if (!rep || rep.error || !rep.latest) {
+    clear();
+    return;
+  }
+
+  const L = rep.latest;
+  const trend = L.trend || "Unknown";
+
+  banner("technicalStatus", "technicalStatusText", "is-live",
+    `<strong>${esc(rep.symbol || "—")}</strong>` +
+    (rep.name ? ` — ${esc(rep.name)}` : "") +
+    ` · ${esc(rep.sector || "بدون صنعت")} · ` +
+    `${rep.bars_used} کندل تا ${esc(rep.as_of || "—")}. ` +
+    `این بخش داده است، نه سیگنال.`);
+
+  // Reading tiles. A null indicator shows "—", never a fabricated zero.
+  const n = (v, d = 2) => (v === null || v === undefined ? "—" : num(v, d));
+
+  tiles("technicalKpis", [
+    { k: "بسته", v: n(L.close, 0),
+      sub: `میانگین کوتاه ${n(L.ma_fast, 0)} · بلند ${n(L.ma_slow, 0)}` },
+    { k: "روند",
+      v: `<span class="badge ${TREND_CLASS[trend] || "neutral"}">` +
+         `<span class="dot"></span>${TREND_FA[trend] || esc(trend)}</span>`,
+      sub: "در برابر دو میانگین متحرک" },
+    { k: "RSI", v: n(L.rsi, 1),
+      sub: L.rsi === null ? "بدون داده"
+        : L.rsi >= 70 ? "اشباع خرید" : L.rsi <= 30 ? "اشباع فروش" : "میانه" },
+    { k: "MACD", v: n(L.macd, 2),
+      sub: `سیگنال ${n(L.macd_signal, 2)} · هیستوگرام ${n(L.macd_hist, 2)}` },
+    { k: "%B بولینگر", v: n(L.bb_pct, 2),
+      sub: `پهنای باند ${n(L.bb_width, 1)}%` },
+    { k: "ATR%", v: n(L.atr_pct, 2),
+      sub: `ADX ${n(L.adx, 1)}` }
+  ]);
+
+  const series = rep.series || [];
+
+  const priceNode = $("technicalPriceChart");
+  if (priceNode) {
+    if (series.length) {
+      lineChart(priceNode, {
+        data: series, xKey: "date",
+        series: [
+          { key: "close", label: "بسته" },
+          { key: "ma_fast", label: "کوتاه" },
+          { key: "ma_slow", label: "بلند" },
+          { key: "bb_upper", label: "باند بالا" },
+          { key: "bb_lower", label: "باند پایین" }
+        ]
+      });
+    } else {
+      priceNode.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    }
+  }
+
+  const momNode = $("technicalMomentumChart");
+  if (momNode) {
+    if (series.length) {
+      lineChart(momNode, {
+        data: series, xKey: "date",
+        series: [
+          { key: "macd", label: "MACD" },
+          { key: "macd_signal", label: "سیگنال" },
+          { key: "rsi", label: "RSI" }
+        ]
+      });
+    } else {
+      momNode.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    }
+  }
+
+  // A compact current-reading table beneath the charts.
+  const rows = [
+    ["بسته", n(L.close, 0)],
+    ["میانگین متحرک کوتاه", n(L.ma_fast, 0)],
+    ["میانگین متحرک بلند", n(L.ma_slow, 0)],
+    ["RSI", n(L.rsi, 1)],
+    ["MACD", n(L.macd, 2)],
+    ["خط سیگنال MACD", n(L.macd_signal, 2)],
+    ["هیستوگرام MACD", n(L.macd_hist, 2)],
+    ["باند بالای بولینگر", n(L.bb_upper, 0)],
+    ["باند پایین بولینگر", n(L.bb_lower, 0)],
+    ["%B بولینگر", n(L.bb_pct, 3)],
+    ["پهنای باند بولینگر %", n(L.bb_width, 1)],
+    ["ATR", n(L.atr, 0)],
+    ["ATR %", n(L.atr_pct, 2)],
+    ["ADX", n(L.adx, 1)],
+    ["حجم", L.volume === null ? "—" : money(L.volume)],
+    ["میانگین حجم", L.volume_ma === null ? "—" : money(L.volume_ma)]
+  ];
+
+  $("technicalTable").innerHTML = table(
+    ["اندیکاتور", "مقدار"], rows.map(r => [r[0], r[1]]));
+}
+
+async function loadTechnical(force = false) {
+  const input = $("techSymbolInput");
+  const symbol = (input && input.value || "").trim();
+
+  if (!symbol) {
+    banner("technicalStatus", "technicalStatusText", "is-warn",
+      "یک نماد وارد کنید، مثل وبملت.");
+    return;
+  }
+
+  const btn = $("runTechnicalBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "در حال تحلیل…"; }
+
+  try {
+    const rep = await getJSON(
+      `/api/technical?symbol=${encodeURIComponent(symbol)}&${query()}` +
+      `${force ? "&refresh=1" : ""}`);
+    renderTechnical(rep);
+  } catch (err) {
+    state.technical = null;
+    banner("technicalStatus", "technicalStatusText", "is-error",
+      `<strong>تحلیل نشد.</strong> ${esc(err.message)}`);
+    ["technicalPriceChart", "technicalMomentumChart"].forEach(id => {
+      const node = $(id);
+      if (node) node.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    });
+    $("technicalTable").innerHTML = "";
+    tiles("technicalKpis", []);
     console.error(err);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "▶ تحلیل"; }
@@ -1689,6 +1847,7 @@ function rerender() {
   if (state.fundamentals) renderFundamentals(state.fundamentals);
   if (state.codal) renderRoutes(state.codal.routes, state.codal.coverage);
   if (state.flow) renderMoneyflow(state.flow);
+  if (state.technical) renderTechnical(state.technical);
   if (state.screen) renderScreen(state.screen);
   if (state.portfolio) renderPortfolio(state.portfolio);
 }
@@ -1796,6 +1955,12 @@ on("runFundBtn", "click", () => loadFundamentals(true));
 on("runFlowBtn", "click", () => loadMoneyflow(true));
 on("runRegimeBtn", "click", () => loadRegime(true));
 on("runPortfolioBtn", "click", () => loadPortfolio(true));
+on("runTechnicalBtn", "click", () => loadTechnical(true));
+
+// Enter in the symbol box runs the analysis, so the button is optional.
+on("techSymbolInput", "keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); loadTechnical(true); }
+});
 
 /* ---------- events ---------- */
 
@@ -1886,6 +2051,27 @@ for (const id of Object.values(PERIOD_FIELDS)) {
 // says what is about to happen rather than showing an empty panel.
 renderTasks();
 pollBootstrap();
+
+// Fill the technical panel's symbol autocomplete once, quietly. A failure here
+// costs only the suggestions -- the field still accepts a typed نماد.
+getJSON("/api/universe?list=1&limit=2000").then(rep => {
+  const list = $("techSymbolList");
+  if (!list || !rep.instruments) return;
+  list.innerHTML = rep.instruments
+    .map(r => `<option value="${esc((r.symbol_fa || "").trim())}">`)
+    .join("");
+}).catch(() => {});
+
+// ?tech=<symbol> deep-links straight to one instrument's technical read:
+// opens the panel and runs it, so a view can be bookmarked or shared.
+const techParam = new URLSearchParams(location.search).get("tech");
+if (techParam) {
+  const group = $("evidenceTechnical");
+  if (group) group.open = true;
+  const input = $("techSymbolInput");
+  if (input) input.value = techParam;
+  loadTechnical(true);
+}
 
 getJSON("/api/status").then(status => {
   $("footnote").textContent =
