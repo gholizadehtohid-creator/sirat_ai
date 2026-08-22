@@ -54,8 +54,14 @@ ORDER = (DATA_INTEGRITY, ECONOMIC_SIGNAL, EXECUTION_REALISM,
 # missing one of these is incomplete, not passing -- the platform refuses it
 # rather than accepting a partial answer as a green light.
 REQUIRED_CHECKS = {
+    # price_sanity was added 2026-08-22, after E22. Its absence is the reason
+    # 252 rows carrying returns above 200% -- the largest +19,976,600%, a prior
+    # close of 1 rial -- passed Stage 1 unremarked and then inverted the sign
+    # of a 2,809-session cost measurement. Stage 1's other four checks cover
+    # forward alignment, universe restoration, cross-section width and
+    # coverage; not one of them asks whether a price is possible.
     DATA_INTEGRITY: ("point_in_time", "survivorship", "universe_valid",
-                     "missing_data"),
+                     "missing_data", "price_sanity"),
     ECONOMIC_SIGNAL: ("ic", "rank_correlation", "random_baseline",
                       "factor_decay"),
     EXECUTION_REALISM: ("transaction_costs", "liquidity",

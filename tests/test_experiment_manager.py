@@ -109,7 +109,8 @@ def _tiny_market(directory):
 
 PASSING = {
     stages.DATA_INTEGRITY: {"point_in_time": True, "survivorship": True,
-                            "universe_valid": True, "missing_data": True},
+                            "universe_valid": True, "missing_data": True,
+                            "price_sanity": True},
     stages.ECONOMIC_SIGNAL: {"ic": True, "rank_correlation": True,
                              "random_baseline": True, "factor_decay": True},
     stages.EXECUTION_REALISM: {"transaction_costs": True, "liquidity": True,

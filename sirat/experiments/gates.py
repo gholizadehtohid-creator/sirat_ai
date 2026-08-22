@@ -207,6 +207,19 @@ def _t_stat(values):
 # defect that produced a -579% top-decile excess in E14's first pass.
 MAX_SESSION_MOVE_PCT = 12.0
 
+# Above THIS, a session return is not a large move -- it is not a move at all.
+#
+# On a band-limited market no sequence of legitimate trading doubles a price in
+# one session. A reading beyond it is a corporate action, a reopening after a
+# long suspension, or a placeholder price; E22 found 252 such rows in
+# price_history, the largest +19,976,600%, which is a prior close of 1 rial.
+#
+# It is deliberately far above MAX_SESSION_MOVE_PCT. Legitimate reopenings DO
+# exceed the band -- 7,388 bars (0.39%) clear 12% -- so failing on those would
+# fail every real panel and the check would be switched off within a week. The
+# two tiers are counted separately: `extreme` is reported, `impossible` fails.
+IMPOSSIBLE_SESSION_MOVE_PCT = 100.0
+
 
 def data_integrity(panel, thresholds, window=None, universe_snapshot=None,
                    horizons=(1,), score="score"):
@@ -281,6 +294,59 @@ def data_integrity(panel, thresholds, window=None, universe_snapshot=None,
         detail["rows_outside_window"] = int(len(outside))
         point_in_time = bool(point_in_time and len(outside) == 0)
 
+    # ---- price sanity ----------------------------------------------------
+    #
+    # Added after E22, where 252 contaminated rows inverted the sign of a
+    # 2,809-session cost measurement while every other Stage 1 check passed.
+    # The other four ask whether the panel is ALIGNED, RESTORABLE, WIDE and
+    # POPULATED. None of them asks whether a number in it is possible.
+    #
+    # Every source of return evidence the panel carries is examined, because
+    # the contamination enters through whichever one a downstream calculation
+    # happens to read: E21's panel had no `fwd_*` columns at all, so the
+    # forward-return ceiling above had nothing to test, and `close` -- the
+    # column volatility was later derived from -- went unexamined.
+
+    evidence = {}
+
+    impossible_prices = 0
+
+    if "close" in panel.columns and "ins_code" in panel.columns:
+        ordered = panel.sort_values(["ins_code", "date"])
+        session = (ordered.groupby("ins_code", sort=False)["close"]
+                   .pct_change() * 100.0).to_numpy(float)
+        session = session[np.isfinite(session)]
+        evidence["close_session_returns"] = int(len(session))
+        evidence["extreme_sessions"] = int(
+            (np.abs(session) > MAX_SESSION_MOVE_PCT).sum())
+        evidence["impossible_sessions"] = int(
+            (np.abs(session) > IMPOSSIBLE_SESSION_MOVE_PCT).sum())
+        impossible_prices += evidence["impossible_sessions"]
+        if len(session):
+            evidence["largest_session_move_pct"] = float(
+                np.max(np.abs(session)))
+
+    for column in forward_columns:
+        values = panel[column].to_numpy(float)
+        values = values[np.isfinite(values)]
+        count = int((np.abs(values) > IMPOSSIBLE_SESSION_MOVE_PCT).sum())
+        if count:
+            evidence["impossible_%s" % column] = count
+        impossible_prices += count
+
+    # A panel showing no return evidence at all cannot have its prices
+    # certified, and silence is not a certificate. This is the same rule the
+    # rest of the platform applies -- four null execution counters were once
+    # read as "no queues were ever hit" -- turned on the one input nobody was
+    # checking.
+    saw_evidence = bool(evidence or forward_columns)
+
+    evidence["evidence_seen"] = saw_evidence
+
+    price_sanity = bool(saw_evidence and impossible_prices == 0)
+
+    detail["price_evidence"] = evidence
+
     # ---- survivorship ----------------------------------------------------
     #
     # There is exactly one honest check here and it is not a statistic. The
@@ -340,6 +406,7 @@ def data_integrity(panel, thresholds, window=None, universe_snapshot=None,
         "survivorship": survivorship,
         "universe_valid": universe_valid,
         "missing_data": missing_data,
+        "price_sanity": price_sanity,
     }, detail)
 
 

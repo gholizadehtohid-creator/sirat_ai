@@ -657,3 +657,103 @@ class GateContract(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PriceSanity(unittest.TestCase):
+    """The check that was missing when E22 measured a contaminated panel.
+
+    252 rows in price_history carry returns above 200% -- the largest
+    +19,976,600%, which is a prior close of 1 rial. Every other Stage 1 check
+    passed that panel, because the other four ask whether it is ALIGNED,
+    RESTORABLE, WIDE and POPULATED, and none asks whether a number in it is
+    possible.
+    """
+
+    def _with_prices(self, closes):
+        """A panel carrying a raw price series, as E21's did."""
+
+        rows = []
+
+        for index, date in enumerate(DATES):
+            for name in range(NAMES):
+                rows.append({"date": date, "ins_code": "S%03d" % name,
+                             "score": float(name),
+                             "close": closes[index % len(closes)],
+                             "fwd_1": 0.5, "adv": 1e9})
+
+        return pd.DataFrame(rows)
+
+    def test_a_clean_price_series_passes(self):
+        frame = self._with_prices([100.0, 101.0, 102.0, 101.5])
+
+        result = gates.data_integrity(frame, THRESHOLDS,
+                                      universe_snapshot="u1")
+
+        self.assertTrue(result.metrics["price_sanity"])
+
+    def test_a_placeholder_price_fails(self):
+        """The exact E22 signature: a prior close of 1 rial."""
+
+        frame = self._with_prices([100.0, 1.0, 199767.0, 101.0])
+
+        result = gates.data_integrity(frame, THRESHOLDS,
+                                      universe_snapshot="u1")
+
+        self.assertFalse(result.metrics["price_sanity"])
+        self.assertGreater(
+            result.detail["price_evidence"]["impossible_sessions"], 0)
+
+    def test_a_legitimate_reopening_does_not_fail(self):
+        """7,388 real bars clear the 12% band. Failing those switches the
+        check off within a week, which is worse than not having it."""
+
+        frame = self._with_prices([100.0, 130.0, 128.0, 131.0])
+
+        result = gates.data_integrity(frame, THRESHOLDS,
+                                      universe_snapshot="u1")
+
+        self.assertTrue(result.metrics["price_sanity"])
+        self.assertGreater(
+            result.detail["price_evidence"]["extreme_sessions"], 0)
+        self.assertEqual(
+            result.detail["price_evidence"]["impossible_sessions"], 0)
+
+    def test_the_two_tiers_are_counted_separately(self):
+        frame = self._with_prices([100.0, 130.0, 1.0, 500.0])
+
+        evidence = gates.data_integrity(
+            frame, THRESHOLDS, universe_snapshot="u1"
+        ).detail["price_evidence"]
+
+        self.assertGreater(evidence["extreme_sessions"],
+                           evidence["impossible_sessions"])
+        self.assertGreater(evidence["impossible_sessions"], 0)
+
+    def test_a_panel_showing_no_return_evidence_cannot_be_certified(self):
+        """Silence is not a certificate -- the platform's own rule, applied
+        to the one input nobody was checking."""
+
+        frame = pd.DataFrame([{"date": d, "ins_code": "S%03d" % n,
+                               "score": float(n), "adv": 1e9}
+                              for d in DATES for n in range(NAMES)])
+
+        result = gates.data_integrity(frame, THRESHOLDS,
+                                      universe_snapshot="u1")
+
+        self.assertFalse(result.metrics["price_sanity"])
+        self.assertFalse(result.detail["price_evidence"]["evidence_seen"])
+
+    def test_a_forward_only_panel_is_still_certifiable(self):
+        """The synthetic factor panels carry fwd_* and no close. They are
+        evidence, so they are checked rather than refused."""
+
+        result = gates.data_integrity(panel(), THRESHOLDS,
+                                      universe_snapshot="u1")
+
+        self.assertTrue(result.metrics["price_sanity"])
+
+    def test_the_impossible_tier_sits_far_above_the_band(self):
+        """Not a tuned number: no legitimate session doubles a price."""
+
+        self.assertGreater(gates.IMPOSSIBLE_SESSION_MOVE_PCT,
+                           gates.MAX_SESSION_MOVE_PCT * 5)

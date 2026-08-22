@@ -554,6 +554,7 @@ def stage_metrics(stage, gates, audit, exposure):
             "point_in_time": ok("G1_data_integrity"),
             "survivorship": ok("G1_data_integrity"),
             "universe_valid": ok("G1_data_integrity"),
+            "price_sanity": ok("G1_data_integrity"),
             "missing_data": ok("G2_reproducibility"),
         }
 
