@@ -41,6 +41,11 @@
 
   --radius: 10px;
   --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* B Nazanin for tables, per request. It is a common Persian font on Iranian
+     Windows; referenced by name so the browser uses it when installed, and it
+     falls back to the system stack (var(--font)) when it is not. Both English
+     and Persian names are listed because installs vary. */
+  --font-fa: "B Nazanin", "BNazanin", "B Nazanin FD", var(--font);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -638,7 +643,11 @@ button.link:hover { background: none; text-decoration: underline; }
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  /* B Nazanin for the tables. It runs small at a given px, so the table size
+     is nudged from 13px to 15px to keep it as readable as the rest of the
+     panel; falls back cleanly to the system font where B Nazanin is absent. */
+  font-family: var(--font-fa);
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 
