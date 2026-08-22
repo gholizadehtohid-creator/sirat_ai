@@ -1,0 +1,103 @@
+{
+  "experiment_id": "E21-flow-lock-feasibility",
+  "thresholds": {
+    "min_decile_lift_h1": 2.0,
+    "min_flow_coverage_pct": 60.0,
+    "min_ic_t_stat": 3.0,
+    "min_lift_retention_h3": 0.3,
+    "min_mean_ic": 0.05,
+    "min_median_names_discovery": 100.0,
+    "min_names_per_date": 100,
+    "min_null_percentile": 95.0
+  },
+  "seed": 20260822,
+  "stage_1": {
+    "status": "PASS",
+    "failed": [],
+    "detail": {
+      "forward_alignment": {
+        "sampled": 2000,
+        "checked": 2000,
+        "resolved": 1997,
+        "agree": 1997,
+        "agreement_pct": 100.0,
+        "missing_left_unknown": 3
+      },
+      "universe_snapshot": {
+        "snapshot_id": "u20260819-668658bb",
+        "instruments": 1394,
+        "restored": true
+      },
+      "discovery_width": {
+        "dates": 2187,
+        "median_names_per_date": 425.0,
+        "min_names_per_date": 1,
+        "max_names_per_date": 638
+      },
+      "flow_coverage_pct": 75.72659750108731
+    }
+  },
+  "stage_2": {
+    "status": "PASS",
+    "failed": [],
+    "detail": {
+      "primary": {
+        "mean_ic": 0.13650264323267333,
+        "t_stat": 80.51900383485369,
+        "dates": 2128,
+        "rows": 942022,
+        "base_rate_pct": 4.057017776654898,
+        "null_p95": 0.002044806571743609,
+        "null_percentile": 100.0
+      },
+      "decay": {
+        "lift_h1": 2.6251893419120096,
+        "lift_h3": 1.8229915887991814,
+        "excess_h1": 1.6251893419120096,
+        "excess_h3": 0.8229915887991814,
+        "retention_h3": 0.5063973578801254
+      },
+      "lift": {
+        "h1": {
+          "lift": 2.6251893419120096,
+          "top_rate_pct": 10.650439827221994,
+          "universe_rate_pct": 4.057017776654898,
+          "rows": 95151
+        },
+        "h2": {
+          "lift": 2.0922954152262974,
+          "top_rate_pct": 11.854965843405148,
+          "universe_rate_pct": 5.666009568788806,
+          "rows": 95150
+        },
+        "h3": {
+          "lift": 1.8229915887991814,
+          "top_rate_pct": 10.651490788325923,
+          "universe_rate_pct": 5.84286337565723,
+          "rows": 95151
+        },
+        "h5": {
+          "lift": 1.6740246345427874,
+          "top_rate_pct": 10.29626593519774,
+          "universe_rate_pct": 6.150605984367652,
+          "rows": 95151
+        }
+      }
+    }
+  },
+  "holdout": {
+    "mean_ic": 0.1528023670086532,
+    "t_stat": 29.239643678769866,
+    "dates": 395,
+    "rows": 263495,
+    "base_rate_pct": 8.119319152166076,
+    "null_p95": 0.002761264643212131,
+    "null_percentile": 100.0,
+    "lift_h1": {
+      "lift": 2.0492361241867676,
+      "top_rate_pct": 16.6384021104202,
+      "universe_rate_pct": 8.119319152166076,
+      "rows": 26535
+    }
+  }
+}

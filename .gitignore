@@ -53,3 +53,9 @@ logs/
 # backtest_output/*.json   the experiment artifacts ARE the record of Phase 1
 # backtest_output/*.md     the reports that interpret them
 # sirat/fixtures/data/     the frozen regression panel; the build depends on it
+
+# E21's flow/lock panel: 65.8 MB, twenty times the E19/E20 evidence panels and
+# fully regenerable by `python examples/e21_panel.py` from the database. What
+# pins the result is its sha256, recorded beside it and in E21_REPORT.md --
+# committing the bytes would trade a verifiable hash for an unusable history.
+backtest_output/E21_flow_lock_panel.csv.gz
