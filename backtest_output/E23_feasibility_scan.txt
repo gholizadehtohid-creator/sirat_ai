@@ -1,0 +1,34 @@
+actionable bars (sellable at t): 1422652
+base rate of a NEWLY forming sell queue at t+1: 1.4096%
+
+BREAK-EVEN PRECISION NEEDED: ~29%  (4.24pp avoided / 1.24pp cost, h=5)
+
+decision-time state at t                 bars  precision      lift
+--------------------------------------------------------------------
+(any sellable bar)                    1422652      1.41%      1.0x
+closed_at_low                           14498     12.41%      8.8x
+ret < -3%                              118512      2.98%      2.1x
+closed_at_low & vol_ratio>1             10057     10.13%      7.2x
+closed_at_low & ret<-4%                  3270      8.96%      6.4x
+locked_down yesterday                   18510      7.91%      5.6x
+locked_down 2 of last 3                  9912     10.33%      7.3x
+
+[exited with code 0]
+DECIDE AT t (after close)  ->  SELL AT t+1  ->  AVOID LOCK AT t+2
+
+state at t                      bars P(ld t+1) P(ld t+2)  exit works
+----------------------------------------------------------------------
+(any sellable bar)           1422652     1.41%     1.49%      98.59%
+closed_at_low                  14498    12.41%     7.98%      87.59%
+closed_at_low & vol>1          10057    10.13%     6.82%      89.87%
+
+THE POLICY THAT IS ACTUALLY AVAILABLE
+  flagged                       : 14498
+  exit at t+1 succeeded         : 87.59%
+  of those, locked at t+2       : 3.24%
+  -> precision of the USABLE arm: 3.24%  (need ~29%)
+
+  base rate P(ld at t+2)        : 1.49%
+  lift of the usable arm        : 2.2x
+
+[exited with code 0]
