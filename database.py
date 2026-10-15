@@ -842,8 +842,16 @@ def instrument_counts():
         "SELECT COALESCE(kind, 'unknown'), COUNT(*) FROM instruments GROUP BY kind"
     ).fetchall()
 
+    # Equities only, so the figure is comparable with `equities` beside it.
+    # Counting every ins_code in price_history made the panel print
+    # "832/818 equities have bars" -- a coverage ratio above 100%, because the
+    # gold funds have bars and are not equities. A count that can exceed its own
+    # denominator is not a coverage figure.
     with_history = conn.execute("""
-        SELECT COUNT(DISTINCT ins_code) FROM price_history
+        SELECT COUNT(DISTINCT p.ins_code)
+        FROM price_history p
+        JOIN instruments i ON i.ins_code = p.ins_code
+        WHERE i.is_equity = 1
     """).fetchone()[0]
 
     conn.close()
@@ -1889,6 +1897,37 @@ def client_type_coverage():
         "rows": sessions or 0,
         "last_date": newest,
     }
+
+
+def newest_equity_bar():
+    """The newest stored bar ACROSS EQUITIES ONLY, as a datetime, or None.
+
+    Deliberately not `MAX(date) FROM price_history`. That table also holds the
+    gold funds, which gold.py fetches on its own schedule, and on 2026-08-24 it
+    held fund bars three sessions newer than any equity bar. Anything asking
+    "is the market data current" and answering from the whole table gets a yes
+    on the strength of instruments the equity scanners never read.
+    """
+
+    create_database()
+
+    conn = _connect()
+
+    row = conn.execute("""
+        SELECT MAX(p.date)
+        FROM price_history p
+        JOIN instruments i ON i.ins_code = p.ins_code
+        WHERE i.is_equity = 1
+    """).fetchone()
+
+    conn.close()
+
+    if not row or not row[0]:
+        return None
+
+    stamp = pd.to_datetime(row[0], errors="coerce")
+
+    return None if pd.isna(stamp) else stamp.to_pydatetime()
 
 
 def market_turnover(limit=None):

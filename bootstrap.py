@@ -242,10 +242,16 @@ def _history_state():
 
     # Recency is the newest bar we hold, not when we last fetched: a fetch that
     # returned nothing new must not read as fresh.
-    turnover = database.market_turnover()
-    newest = None
-    if turnover is not None and not turnover.empty:
-        newest = turnover["date"].iloc[-1].to_pydatetime()
+    #
+    # OVER EQUITIES ONLY. This used market_turnover(), which sums every row in
+    # price_history -- and gold.py fetches the bullion funds on its own
+    # schedule. On 2026-08-24 those funds carried bars to 08-23 while every
+    # single equity stopped at 08-19, so this reported "newest 2026-08-23,
+    # behind: False" and the auto-fetcher never refetched. The panel told the
+    # user the market data was current while every scanner, the screen and the
+    # basket were reading a three-session-old market. Non-equity instruments
+    # cannot vouch for equity freshness, and the query now says so.
+    newest = database.newest_equity_bar()
 
     missed = sessions_behind(newest)
 
