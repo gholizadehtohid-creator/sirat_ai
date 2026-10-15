@@ -49,6 +49,11 @@ backtest_output/*.html
 logs/
 *.log
 
+# The forward prediction log's OS lock. The log itself IS evidence and is
+# committed; the lock is one run's claim on the file, and a committed lock
+# would travel to a machine where the process holding it never existed.
+backtest_output/forward_predictions.jsonl.lock
+
 # ---- NOT ignored, on purpose ----------------------------------------------
 # backtest_output/*.json   the experiment artifacts ARE the record of Phase 1
 # backtest_output/*.md     the reports that interpret them

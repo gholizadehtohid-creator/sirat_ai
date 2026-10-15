@@ -667,7 +667,34 @@ def ensure(force=False, only=None):
         _status_cache["at"] = None
         _status_cache["value"] = None
 
+    _forward_log()
+
     return results
+
+
+def _forward_log():
+    """Append today's forward prediction, now that the day's data is in.
+
+    The forward prediction log (examples/forward_prediction_log.py) is how
+    the reserved out-of-sample window R-FORWARD-2027 becomes a PROSPECTIVE
+    test: a prediction written this evening is provably older than
+    tomorrow's outcome. An evening the log misses is an admissible forward
+    prediction lost permanently -- which is why it runs here, on the same
+    trigger as the data itself, instead of relying on someone remembering.
+
+    log_once() is append-once per session, takes an OS lock against a
+    concurrent writer, and returns a message instead of raising; and this
+    wrapper still guards the import, because a fetch that succeeded must
+    never be taken down by the bookkeeping that follows it.
+    """
+
+    try:
+        from examples.forward_prediction_log import log_once
+
+        _note("forward log: %s" % log_once(verbose=False))
+    except Exception as exc:                                    # noqa: BLE001
+        _note("forward log failed to run: %s: %s"
+              % (type(exc).__name__, str(exc)[:160]))
 
 
 def _step_detail(name):
