@@ -132,6 +132,70 @@ class SupportResistanceTests(unittest.TestCase):
         sr = technical.support_resistance(self._frame([10, 11, 12]), price=None)
         self.assertEqual(sr["resistances"], [])
 
+    def test_every_level_carries_a_touch_count(self):
+        closes = [10, 11, 12, 15, 20, 15, 12, 11, 13, 14, 13, 12, 11, 13]
+        sr = technical.support_resistance(self._frame(closes), price=13.0)
+
+        for level in sr["resistances"] + sr["supports"]:
+            self.assertGreaterEqual(level["touches"], 1)
+
+
+class ClusterLevelsTests(unittest.TestCase):
+    """Pivots close together are ONE level tested repeatedly, not several.
+
+    Tested directly rather than through a price series, because the property
+    that matters -- that a shelf does not consume the whole ladder -- needs
+    pivots placed to the basis point, which a generated series cannot promise.
+    """
+
+    def _entries(self, prices):
+        return [{"price": p, "date": "2025-01-%02d" % (i + 1)}
+                for i, p in enumerate(prices)]
+
+    def test_neighbours_inside_the_tolerance_become_one_level(self):
+        # Four touches inside 0.4%, then a genuinely separate level.
+        out = technical._cluster_levels(
+            self._entries([100.0, 100.1, 100.2, 100.3, 108.0]), price=99.0)
+
+        self.assertEqual(len(out), 2)
+        self.assertEqual(out[0]["touches"], 4)
+        self.assertEqual(out[1]["touches"], 1)
+        # The shelf is the mean of its members, not the first or the extreme.
+        self.assertAlmostEqual(out[0]["price"], 100.15, places=2)
+
+    def test_levels_beyond_the_tolerance_stay_separate(self):
+        out = technical._cluster_levels(
+            self._entries([100.0, 102.0, 104.0]), price=99.0)
+
+        self.assertEqual(len(out), 3)
+        self.assertTrue(all(o["touches"] == 1 for o in out))
+
+    def test_the_date_kept_is_the_most_recent_touch(self):
+        """A level last tested this month and one last tested years ago are
+        not equally live, and only the newest date can say which this is."""
+
+        entries = [{"price": 100.0, "date": "2023-04-01"},
+                   {"price": 100.2, "date": "2025-06-30"},
+                   {"price": 100.1, "date": "2024-01-15"}]
+
+        out = technical._cluster_levels(entries, price=99.0)
+
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["date"], "2025-06-30")
+
+    def test_a_shelf_cannot_crowd_out_the_rest_of_the_ladder(self):
+        """The regression this exists for: five touches of one price used to
+        fill every resistance slot, hiding every other level above."""
+
+        prices = [100.0, 100.1, 100.2, 100.3, 100.4, 110.0, 120.0]
+        out = technical._cluster_levels(self._entries(prices), price=99.0)
+
+        self.assertEqual(len(out[:technical.LEVELS_EACH_SIDE]), 3)
+        self.assertEqual([round(o["price"]) for o in out], [100, 110, 120])
+
+    def test_no_entries_is_no_levels(self):
+        self.assertEqual(technical._cluster_levels([], price=100.0), [])
+
 
 class TechnicalSignalTests(unittest.TestCase):
     """A transparent vote: the call must follow the shown votes, never lead."""
@@ -182,6 +246,38 @@ class TechnicalSignalTests(unittest.TestCase):
         self.assertTrue(sig["caveat"])
         self.assertIn("E19", sig["caveat"])
 
+    def test_both_sides_of_a_squeeze_are_voted(self):
+        """A price boxed between a near wall and a near floor casts BOTH.
+
+        The regression this exists for: the two proximity checks were an
+        if/elif, so a price one percent under a ceiling and one percent over a
+        floor cast only the bearish vote -- and a vote that is never cast
+        leaves no trace in the table of votes, so the missing half was
+        invisible to the reader as well as to the tally.
+        """
+
+        latest = {"close": 100, "ma_fast": 100, "ma_slow": 100,
+                  "macd": 1.0, "macd_signal": 1.0, "rsi": 50, "bb_pct": 0.5}
+        sr = {"resistances": [{"price": 101, "distance_pct": 1.0}],
+              "supports": [{"price": 99, "distance_pct": -1.0}]}
+
+        sig = technical.technical_signal(latest, sr)
+        names = [v["name"] for v in sig["votes"]]
+
+        self.assertIn("مقاومت نزدیک", names)
+        self.assertIn("حمایت نزدیک", names)
+        # The box nets to nothing, which is the honest reading of a box.
+        self.assertEqual(sig["net"], 0)
+
+    def test_strength_is_the_margin_over_the_votes_cast(self):
+        latest = {"close": 110, "ma_fast": 105, "ma_slow": 100,
+                  "macd": 2.0, "macd_signal": 1.0, "rsi": 58,
+                  "bb_pct": 0.5, "adx": 30}
+        sig = technical.technical_signal(latest, self.EMPTY_SR)
+
+        self.assertAlmostEqual(sig["strength"],
+                               round(sig["net"] / sig["total"], 2))
+
     def test_a_single_indicator_never_decides(self):
         """One bullish vote is not enough to say BUY -- needs a margin of 2."""
         latest = {"close": 100, "ma_fast": 100, "ma_slow": 100,
@@ -189,6 +285,74 @@ class TechnicalSignalTests(unittest.TestCase):
         sig = technical.technical_signal(latest, self.EMPTY_SR)
         self.assertEqual(sig["call"], "HOLD")
         self.assertEqual(sig["bullish"], 1)
+
+
+class DirectionalVoteTests(unittest.TestCase):
+    """ADX says how strong; DI says which way. The vote needs both."""
+
+    def test_no_di_means_no_vote_not_a_neutral_one(self):
+        """A series with no high/low range has no DI at all. An invented
+        neutral vote there would dilute a real tally."""
+
+        self.assertIsNone(technical._directional_vote({"adx": 30}))
+
+    def test_a_trendless_tape_has_no_direction_to_vote_on(self):
+        vote = technical._directional_vote(
+            {"adx": 12, "di_plus": 30, "di_minus": 10})
+
+        self.assertEqual(vote["vote"], 0)
+
+    def test_direction_follows_di_when_a_trend_exists(self):
+        up = technical._directional_vote(
+            {"adx": 30, "di_plus": 30, "di_minus": 10})
+        down = technical._directional_vote(
+            {"adx": 30, "di_plus": 10, "di_minus": 30})
+
+        self.assertEqual(up["vote"], +1)
+        self.assertEqual(down["vote"], -1)
+
+
+class VolumeVoteTests(unittest.TestCase):
+    """Is the move being paid for -- and the one case that is not a move."""
+
+    def _frame(self, closes, volumes, average):
+        import pandas as pd
+        return pd.DataFrame({
+            "close": closes, "volume": volumes,
+            "VOLUME_MA": [average] * len(closes),
+        })
+
+    def test_no_frame_means_no_vote(self):
+        self.assertIsNone(technical._volume_vote(None))
+
+    def test_rise_on_heavy_volume_is_bullish(self):
+        frame = self._frame([100, 101, 102, 103, 104, 108],
+                            [1000] * 6, 800)
+        self.assertEqual(technical._volume_vote(frame)["vote"], +1)
+
+    def test_rise_on_thin_volume_is_bearish(self):
+        """The classic warning: an advance nobody is paying for."""
+
+        frame = self._frame([100, 101, 102, 103, 104, 108],
+                            [400] * 6, 800)
+        self.assertEqual(technical._volume_vote(frame)["vote"], -1)
+
+    def test_an_untraded_session_is_neutral_not_bearish(self):
+        """A zero-volume last bar means the instrument did not trade.
+
+        Scored as a ratio it reads as 0% of average and casts a bearish vote
+        -- a claim about supply and demand on a day neither appeared. TSETMC
+        emits such a row for every session a listed name is halted or simply
+        untraded, so this is common, not exotic.
+        """
+
+        frame = self._frame([100, 101, 102, 103, 104, 108],
+                            [1000, 1000, 1000, 1000, 1000, 0], 800)
+
+        vote = technical._volume_vote(frame)
+
+        self.assertEqual(vote["vote"], 0)
+        self.assertIn("معامله", vote["reason"])
 
 
 class TopTechnicalTests(unittest.TestCase):
