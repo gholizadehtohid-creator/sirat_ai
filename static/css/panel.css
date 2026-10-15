@@ -669,6 +669,34 @@ button.link:hover { background: none; text-decoration: underline; }
 .chart { width: 100%; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 
+/* The vote tally as one bar: bullish, neutral, bearish, sized by count.
+   Status tokens, not series hues -- this encodes a verdict's composition, not
+   a category, and it has to read the same way the badges beside it do.
+
+   Capped in width and pinned to RTL. Stretched across a full card it read as a
+   progress bar -- something filling up -- rather than a tally, and a flex row
+   left to inherit its direction put the bullish end on whichever side the
+   surrounding text happened to resolve to. Positive leads from the right, the
+   same order the caption above it counts in. */
+.vote-meter {
+  display: flex;
+  direction: rtl;
+  gap: 2px;
+  width: 100%;
+  max-width: 320px;
+  height: 9px;
+  margin-top: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.vote-meter .seg { display: block; height: 100%; }
+.vote-meter .seg.pos { background: var(--status-good); }
+.vote-meter .seg.mid { background: var(--axis); }
+.vote-meter .seg.neg { background: var(--status-critical); }
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -711,8 +739,7 @@ button.link:hover { background: none; text-decoration: underline; }
 /* The portfolio table is the widest thing on the page: seventeen columns of
    numbers that must stay comparable down the column. Scroll it rather than
    letting it wrap into unreadable stacks. */
-#portfolioTable table,
-#correlationTable table { white-space: nowrap; }
+#portfolioTable table { white-space: nowrap; }
 
 #portfolioTable td:nth-child(2) { font-weight: 600; }
 
@@ -779,6 +806,14 @@ tbody tr:hover { background: var(--surface-2); }
 .badge.serious  .dot { background: var(--status-serious); }
 .badge.critical .dot { background: var(--status-critical); }
 .badge.neutral  .dot { background: var(--text-muted); }
+
+/* `bad` and `warn` are what the panel's own code writes -- the trend
+   classifier, the support/resistance rows and the target ladder all emit them.
+   Without these two rules their dots have no background at all, so a level
+   marked as resistance renders identically to one marked as support. Aliases,
+   not new colours: the palette stays four states wide. */
+.badge.bad      .dot { background: var(--status-critical); }
+.badge.warn     .dot { background: var(--status-warning); }
 
 /* ---------- tooltip ---------- */
 
@@ -937,3 +972,160 @@ tbody tr:hover { background: var(--surface-2); }
   border-radius: 999px;
 }
 .table-wrap::-webkit-scrollbar-track { background: transparent; }
+
+/* =========================================================================
+   MARKET INTELLIGENCE (هوش بازار) -- a report panel, isolated from trading.
+   Reuses the design tokens above; no new colours, only layout.
+   ========================================================================= */
+
+.muted { color: var(--text-muted); }
+
+.intel-card #intelDisclaimer {
+  border-inline-start: 3px solid var(--status-warning);
+  padding-inline-start: 10px;
+  color: var(--text-secondary);
+}
+
+/* overview tiles */
+.intel-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 8px;
+}
+.intel-tile {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  padding: 10px 8px;
+  text-align: center;
+}
+.intel-tile-v { font-size: 22px; font-weight: 700; color: var(--text-primary); }
+.intel-tile-k { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+/* theme chips (non-interactive, lighter than the filter .chip) */
+.intel-themes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.intel-themes .chip { cursor: default; font-size: 12px; padding: 4px 10px; }
+.intel-themes .chip:hover { border-color: var(--border); }
+
+/* four market columns side by side (oil, gold, dollar, stocks) */
+.intel-markets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .intel-markets { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .intel-markets { grid-template-columns: 1fr; }
+}
+
+/* price-forecast section -- the lead block */
+.intel-forecasts {
+  border: 1px solid var(--silver);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-1));
+  box-shadow: var(--shadow-sm);
+  padding: 12px 14px;
+}
+.intel-fc-head { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+.intel-fc-empty { padding: 8px 2px; font-size: 13px; }
+.intel-forecasts .intel-list { max-height: 340px; overflow-y: auto; }
+
+/* small badges */
+.intel-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-inline-start: 4px;
+  white-space: nowrap;
+}
+.intel-badge.forecast { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.intel-badge.analysis { background: color-mix(in srgb, var(--status-good) 20%, transparent); color: var(--status-good); }
+.intel-badge.market   { background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); }
+
+/* per-market outlook line (a read of the news, not a signal) */
+.intel-outlook {
+  padding: 7px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+}
+.intel-outlook-tag { color: var(--text-muted); margin-inline-end: 4px; }
+.intel-col {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.intel-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-weight: 700;
+}
+.intel-col-name { color: var(--text-primary); }
+.intel-col-tone { font-size: 12px; display: flex; gap: 7px; }
+
+.intel-list { list-style: none; margin: 0; padding: 4px 0; }
+.intel-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.intel-item:last-child { border-bottom: 0; }
+.intel-title { font-size: 13.5px; line-height: 1.5; }
+.intel-title a { color: var(--text-primary); text-decoration: none; }
+.intel-title a:hover { color: var(--accent); text-decoration: underline; }
+.intel-meta {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  direction: rtl;
+}
+.intel-corr { color: var(--accent); }
+
+/* tone dot: green up, red down, grey flat */
+.tone-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-inline-end: 7px;
+  vertical-align: middle;
+  background: var(--text-muted);
+}
+.tone-dot.up   { background: var(--status-good); }
+.tone-dot.down { background: var(--status-critical); }
+.tone-dot.flat { background: var(--text-muted); }
+
+/* source health */
+.intel-sources-wrap > summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 4px 0;
+}
+.intel-sources { font-size: 12.5px; line-height: 1.7; margin-top: 6px; }
+.intel-src-line { margin-bottom: 4px; }
+
+/* Gold funds: the price-to-NAV cell. Two lines in one cell -- the ratio
+   itself, and the premium it implies -- so the number the panel is asked for
+   and the number a reader actually thinks in sit together without costing a
+   second column on an already wide table. */
+.nav-ratio {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+.nav-bubble {
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.9;
+}

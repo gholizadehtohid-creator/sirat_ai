@@ -1225,4 +1225,12 @@ HOLD_ATR_EFFICIENCY = 0.45
 
 SERVER_HOST = "127.0.0.1"
 
-SERVER_PORT = 5000
+# app.py refuses to start when the port is taken and tells the reader to "set
+# SIRAT_SERVER_PORT=..." to serve elsewhere. Nothing read that variable, so the
+# advertised escape hatch did nothing and the second panel had no way to come
+# up at all. An unparseable value falls back rather than crashing the panel on
+# a typo.
+try:
+    SERVER_PORT = int(os.environ.get("SIRAT_SERVER_PORT", "") or 5000)
+except ValueError:
+    SERVER_PORT = 5000

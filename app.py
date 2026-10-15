@@ -199,6 +199,34 @@ def params_key(params):
     return ",".join(f"{k}={params[k]}" for k in sorted(params))
 
 
+def full_scan_disabled():
+    """The 403 the two full-market routes return when the guard is down.
+
+    SIRAT_FULL_SCAN=0 is a deliberate switch -- it exists so a panel can be
+    opened for a quick look without paying for a whole-market scan -- but it
+    silences the two routes the suggested basket is built from, and the old
+    reply ("full scans are disabled") named the variable without saying what
+    it cost or how to undo it. A reader saw an empty basket and a fragment of
+    English, and had no way to tell a switched-off feature from a broken one.
+
+    The message is the whole fix: it says what is off, what that removes, and
+    the exact command that restores it. `code` lets the panel style this as a
+    setting rather than a failure -- nothing crashed, and calling it a crash
+    sends the reader hunting for a bug that is not there.
+    """
+
+    return jsonify({
+        "code": "full_scan_disabled",
+        "error": (
+            "اسکن کامل بازار خاموش است، پس غربال و سبد پیشنهادی ساخته "
+            "نمی‌شوند. این پنل با متغیر SIRAT_FULL_SCAN=0 اجرا شده است — "
+            "یک سوئیچ عمدی برای باز کردن سریع صفحه بدون هزینه‌ی اسکن کل "
+            "بازار، نه یک خطا. برای برگرداندن آن، پنل را ببندید و بدون آن "
+            "متغیر دوباره اجرا کنید:  python app.py  (یا run.bat)."
+        ),
+    }), 403
+
+
 @app.errorhandler(Exception)
 def handle_error(exc):
     """Return JSON on API routes so the panel can surface the real message."""
@@ -286,7 +314,7 @@ def api_portfolio():
     """
 
     if not settings.FULL_SCAN_ENABLED:
-        return jsonify({"error": "full scans are disabled (SIRAT_FULL_SCAN=0)"}), 403
+        return full_scan_disabled()
 
     args = wanted_portfolio_args()
     params = wanted_params()
@@ -395,7 +423,7 @@ def api_screen():
     """Two-stage scan: fundamental screen, then technical analysis."""
 
     if not settings.FULL_SCAN_ENABLED:
-        return jsonify({"error": "full scans are disabled (SIRAT_FULL_SCAN=0)"}), 403
+        return full_scan_disabled()
 
     limit = request.args.get("limit", type=int)
     approve = request.args.get("approve", type=int)
@@ -421,7 +449,16 @@ def api_screen():
 
 @app.route("/api/indices")
 def api_indices():
-    """Technical read on شاخص کل and شاخص کل هم‌وزن, plus breadth between them."""
+    """Full technical read on شاخص کل and شاخص کل هم‌وزن, plus their breadth.
+
+    Carries what /api/technical carries for a share -- the latest indicator
+    values, support and resistance from confirmed pivots, a transparent vote
+    with every component shown, and a level ladder -- and two things only an
+    index has: a vote on whether market turnover confirms the move, and one on
+    the gap between the two indices. The ladder is two-sided and measured in
+    the index's own ATR; see indices.index_targets for why it is not the
+    equity target path.
+    """
 
     params = wanted_params()
     bars = request.args.get("bars", type=int)
@@ -519,6 +556,59 @@ def api_technical_inflow():
     return jsonify(memoise(key, build, force=force))
 
 
+@app.route("/api/smartmoney")
+def api_smart_money():
+    """The Smart Money Accumulation Scanner: names bought at their own floor.
+
+    One conjunction over the liquid universe -- MFI above 70 WHILE the price is
+    still in the bottom third of its multi-month range, near a tested support --
+    then scored on the transfer from حقوقی to حقیقی, the concentration of the
+    receiving side, valuation against the sector, size, and volume.
+
+    Memoised like the other whole-market views. NOT memoised away, though: every
+    computed scan writes its candidates and its funnel to smart_money_signals
+    with the timestamp it was computed at, so the list can be evaluated later
+    instead of remembered. A cache hit serves a stored run and writes nothing,
+    which is correct -- it is the same run.
+    """
+
+    top = request.args.get("top", type=int) or 20
+    top = max(1, min(top, 50))
+    params = wanted_params()
+    force = request.args.get("refresh") == "1"
+
+    key = cache_key("smart_money", data_version(), top, params_key(params))
+
+    def build():
+        import smart_money
+        return smart_money.scan(top=top, params=params)
+
+    return jsonify(memoise(key, build, force=force))
+
+
+@app.route("/api/smartmoney/history")
+def api_smart_money_history():
+    """Past scans: the funnel per run, and the signals they raised.
+
+    Read-only and never memoised -- it is a log, it only grows, and a stale
+    view of it would hide the run that was just written.
+    """
+
+    limit = request.args.get("limit", type=int) or 30
+    limit = max(1, min(limit, 200))
+
+    symbol = request.args.get("ins_code")
+
+    from smart_money import store
+
+    if symbol:
+        return jsonify({"ins_code": symbol,
+                        "history": store.signal_history(symbol, limit=limit)})
+
+    return jsonify({"runs": store.runs(limit=limit),
+                    "signals": store.recent_signals(limit=limit)})
+
+
 @app.route("/api/gold")
 def api_gold():
     """Gold funds (صندوق‌های طلا) with a technical read each.
@@ -548,6 +638,45 @@ def api_import_gold():
         stored = gold.fetch_history(verbose=False)
         invalidate()
         return {"stored": stored, "coverage": gold.coverage()}
+
+    try:
+        return jsonify(build())
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
+@app.route("/api/intelligence")
+def api_intelligence():
+    """Market-intelligence REPORT (news analysis). Read-only, memoised.
+
+    This endpoint is deliberately isolated from every trading route: it reads the
+    event_intelligence tables and returns an analytical report. It produces no
+    BUY/SELL and is never consumed by the Decision Engine -- see the package
+    docstring. News is information here, not a signal.
+    """
+
+    window = request.args.get("window", type=int) or 72
+    top = request.args.get("top", type=int) or 20
+    force = request.args.get("refresh") == "1"
+
+    key = cache_key("intelligence", window, top)
+
+    def build():
+        from event_intelligence import intelligence as ei
+        return ei.report(window_hours=window, top=top)
+
+    return jsonify(memoise(key, build, force=force))
+
+
+@app.route("/api/intelligence/fetch", methods=["POST"])
+def api_intelligence_fetch():
+    """Fetch and classify all reachable feeds. User-triggered write path."""
+
+    def build():
+        from event_intelligence import intelligence as ei
+        summ = ei.collect()
+        invalidate()
+        return summ
 
     try:
         return jsonify(build())

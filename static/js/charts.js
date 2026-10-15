@@ -14,8 +14,26 @@ function tok(name) {
     .getPropertyValue(name).trim();
 }
 
+// Read a design token from a caller outside this module. Panels need the real
+// colour to build reference lines (a resistance line must be the same red the
+// resistance badge is), and a CSS var() cannot be used in an SVG presentation
+// attribute -- so the value has to be resolved here.
+export { tok as cssVar };
+
+// The palette defines exactly this many categorical slots. Asking for more
+// used to return "" for every slot past the last one, and an SVG stroke of ""
+// draws nothing: the chart looked fine, axes and all, with whole series
+// silently invisible. Cycling repeats a hue, which is a legibility problem the
+// reader can see -- far better than one they cannot.
+const SERIES_SLOTS = 6;
+
 export function seriesColors(n) {
-  return Array.from({ length: n }, (_, i) => tok(`--series-${i + 1}`));
+  return Array.from({ length: n },
+    (_, i) => tok(`--series-${(i % SERIES_SLOTS) + 1}`));
+}
+
+function isNum(v) {
+  return v !== null && v !== undefined && !Number.isNaN(v);
 }
 
 function el(tag, attrs = {}, parent = null) {
@@ -278,15 +296,38 @@ export function stackedHBar(container, opts) {
 
 /* ============================================================
  * 3. Multi-line chart with crosshair + shared tooltip.
+ *
+ * Options beyond the obvious:
+ *
+ *   series[].color / .dash / .width
+ *       A series that brings its own colour is a REFERENCE line, not data --
+ *       an RSI 70 band, a support level, a zero baseline. It is drawn thin and
+ *       dashed if asked, and it does not consume a palette slot, so adding
+ *       four level lines to a price chart cannot push the price itself onto a
+ *       hue that does not exist. A series with a falsy label gets no end
+ *       label; three unlabelled reference lines stacked at the right edge is
+ *       noise.
+ *   yMin / yMax
+ *       Pin the value axis. A bounded oscillator has to be read against its
+ *       own bounds: auto-scaling RSI makes a 45-55 drift look like a crisis.
+ *   bars
+ *       {key, label, signKey} -- a column series measured FROM ZERO on the
+ *       same axis, for a MACD histogram or a volume panel. Zero is forced into
+ *       the domain, because a column chart whose baseline is not zero draws
+ *       bar lengths that mean nothing.
  * ============================================================ */
 
 export function lineChart(container, opts) {
   const {
-    data, xKey = "date", series, height: h = 260,
-    format = (v) => fmt(v, 1), directLabel = true
+    data, xKey = "date", series = [], height: h = 260,
+    format = (v) => fmt(v, 1), directLabel = true,
+    yMin = null, yMax = null, bars = null, zeroLine = false
   } = opts;
 
-  const points = data.filter(d => series.some(s => d[s.key] !== null && d[s.key] !== undefined));
+  const barKey = bars && bars.key ? bars.key : null;
+
+  const points = data.filter(d =>
+    series.some(s => isNum(d[s.key])) || (barKey && isNum(d[barKey])));
 
   if (!points.length) { container.innerHTML = '<div class="empty">No data</div>'; return; }
 
@@ -297,17 +338,36 @@ export function lineChart(container, opts) {
 
   const svg = svgRoot(container, width, h);
 
+  // Palette slots go only to series that did NOT bring their own colour, so a
+  // reference line never displaces a data hue and the data series keep the
+  // order the reader learned on the last chart.
+  const auto = seriesColors(series.filter(s => !s.color).length);
+  let slot = 0;
+  const lines = series.map(s => ({ ...s, color: s.color || auto[slot++] }));
+
   const values = [];
   for (const d of points) {
-    for (const s of series) {
-      const v = d[s.key];
-      if (v !== null && v !== undefined && !Number.isNaN(v)) values.push(v);
-    }
+    for (const s of lines) if (isNum(d[s.key])) values.push(d[s.key]);
+    if (barKey && isNum(d[barKey])) values.push(d[barKey]);
   }
 
+  if (!values.length) { container.innerHTML = '<div class="empty">No data</div>'; return; }
+
   let lo = Math.min(...values), hi = Math.max(...values);
+
+  if (barKey) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+
   const pad = (hi - lo) * 0.08 || Math.abs(hi) * 0.08 || 1;
   lo -= pad; hi += pad;
+
+  // Padding below an all-positive column series would float the bars off their
+  // own baseline. Clamp back onto zero (and the mirror case above it).
+  if (barKey && Math.min(...values) >= 0) lo = 0;
+  if (barKey && Math.max(...values) <= 0) hi = 0;
+
+  if (yMin !== null && yMin !== undefined) lo = yMin;
+  if (yMax !== null && yMax !== undefined) hi = yMax;
+  if (hi <= lo) hi = lo + 1;
 
   const X = (i) => padL + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
   const Y = (v) => padT + plotH - ((v - lo) / (hi - lo)) * plotH;
@@ -334,35 +394,61 @@ export function lineChart(container, opts) {
     stroke: tok("--axis"), "stroke-width": 1
   }, svg);
 
+  // ---- columns, under the lines so the lines stay readable over them ----
+  if (barKey) {
+    const slotW = plotW / Math.max(1, points.length);
+    const barW = Math.max(1, Math.min(14, slotW * 0.68));
+    const zeroY = Y(0);
+    const pos = bars.posColor || tok("--diverge-pos");
+    const neg = bars.negColor || tok("--diverge-neg");
+
+    points.forEach((p, i) => {
+      const v = p[barKey];
+      if (!isNum(v)) return;
+      // The sign that COLOURS the bar is not always the bar's own value: a
+      // volume column is always positive, and what the reader wants to know is
+      // whether that volume traded up or down.
+      const sign = isNum(p[bars.signKey]) ? p[bars.signKey] : v;
+      const y = Y(v);
+      el("rect", {
+        x: X(i) - barW / 2, y: Math.min(y, zeroY), width: barW,
+        height: Math.max(0.75, Math.abs(y - zeroY)),
+        fill: sign >= 0 ? pos : neg, opacity: 0.5, rx: 1
+      }, svg);
+    });
+  }
+
+  if ((zeroLine || barKey) && lo < 0 && hi > 0) {
+    el("line", {
+      x1: padL, x2: padL + plotW, y1: Y(0), y2: Y(0),
+      stroke: tok("--axis"), "stroke-width": 1
+    }, svg);
+  }
+
   const endLabels = [];
 
-  // A series with no colour of its own takes the palette slot matching its
-  // position. el() drops undefined attributes, so without this the path is
-  // drawn with SVG's default stroke of `none` -- an invisible line on a chart
-  // that otherwise looks fine, axes, labels and all.
-  const palette = seriesColors(series.length);
-
-  series.forEach((s, si) => {
-    const color = s.color || palette[si];
+  lines.forEach((s) => {
+    const color = s.color;
     let d = "";
     let started = false;
     points.forEach((p, i) => {
       const v = p[s.key];
-      if (v === null || v === undefined || Number.isNaN(v)) { started = false; return; }
+      if (!isNum(v)) { started = false; return; }
       d += `${started ? "L" : "M"}${X(i).toFixed(2)},${Y(v).toFixed(2)}`;
       started = true;
     });
     if (!d) return;
 
     el("path", {
-      d, fill: "none", stroke: color, "stroke-width": 2,
+      d, fill: "none", stroke: color, "stroke-width": s.width ?? 2,
+      "stroke-dasharray": s.dash || null,
       "stroke-linejoin": "round", "stroke-linecap": "round"
     }, svg);
 
-    if (directLabel) {
+    if (directLabel && s.label) {
       for (let i = points.length - 1; i >= 0; i--) {
         const v = points[i][s.key];
-        if (v === null || v === undefined || Number.isNaN(v)) continue;
+        if (!isNum(v)) continue;
         endLabels.push({ x: X(i) + 7, y: Y(v), label: s.label, color });
         break;
       }
@@ -395,10 +481,23 @@ export function lineChart(container, opts) {
     "stroke-width": 1, opacity: 0
   }, svg);
 
-  const dots = series.map(s => el("circle", {
-    r: 4.5, fill: s.color, stroke: tok("--surface-1"),
-    "stroke-width": 2, opacity: 0
-  }, svg));
+  // The dots and the tooltip swatches read the RESOLVED colour. They used to
+  // read series[].color, which is undefined for every palette-coloured series
+  // -- so el() dropped the attribute and every crosshair dot on the dashboard
+  // rendered in SVG's default black, while the tooltip swatch got
+  // "background:undefined" and showed nothing at all.
+  // Only data series get a crosshair dot and a tooltip row. A dot riding a
+  // constant reference line, and a tooltip row repeating "70" at every bar,
+  // tell the reader nothing they did not already know -- and they crowd out
+  // the rows that do. `ref: true` marks a series as a ruler rather than a
+  // reading; it still gets its end label, which is how the reader knows what
+  // the line is.
+  const dots = lines.map(s => (s.label && !s.ref
+    ? el("circle", {
+        r: 4.5, fill: s.color, stroke: tok("--surface-1"),
+        "stroke-width": 2, opacity: 0
+      }, svg)
+    : null));
 
   const overlay = el("rect", {
     x: padL, y: padT, width: plotW, height: plotH, fill: "transparent"
@@ -417,9 +516,19 @@ export function lineChart(container, opts) {
     cross.setAttribute("opacity", 1);
 
     let html = `<div class="t-title">${p[xKey]}</div>`;
-    series.forEach((s, k) => {
+
+    if (barKey && isNum(p[barKey])) {
+      const sign = isNum(p[bars.signKey]) ? p[bars.signKey] : p[barKey];
+      const swatch = sign >= 0
+        ? (bars.posColor || tok("--diverge-pos"))
+        : (bars.negColor || tok("--diverge-neg"));
+      html += `<div class="t-row"><span><span class="sw" style="background:${swatch}"></span>${bars.label || barKey}</span><b>${(bars.format || format)(p[barKey])}</b></div>`;
+    }
+
+    lines.forEach((s, k) => {
+      if (!dots[k]) return;                 // a reference line, not a reading
       const v = p[s.key];
-      if (v === null || v === undefined || Number.isNaN(v)) {
+      if (!isNum(v)) {
         dots[k].setAttribute("opacity", 0);
         return;
       }
@@ -433,7 +542,7 @@ export function lineChart(container, opts) {
 
   overlay.addEventListener("mouseleave", () => {
     cross.setAttribute("opacity", 0);
-    dots.forEach(d => d.setAttribute("opacity", 0));
+    dots.forEach(d => d && d.setAttribute("opacity", 0));
     hideTip();
   });
 

@@ -9,8 +9,24 @@
 
 import {
   hBarChart, stackedHBar, lineChart, divergingBar,
-  seriesColors, fmt, hideTip
+  seriesColors, cssVar, fmt, hideTip
 } from "./charts.js";
+
+/* Reference-line styling, in one place.
+
+   A support line, an RSI 70 band and a MACD zero line are not data series --
+   they are the ruler the data is read against, and they must not look like a
+   sixth indicator. Thin, dashed, and coloured by MEANING rather than by
+   palette slot: resistance is the same red as the resistance badge, support
+   the same green, everything neutral recedes to the axis colour. Resolved
+   through cssVar() because a CSS var() is not honoured inside an SVG
+   presentation attribute. */
+const refLine = (color, dash = "5 5") =>
+  ({ color: cssVar(color), dash, width: 1.25, ref: true });
+
+const RESISTANCE_LINE = () => refLine("--status-critical");
+const SUPPORT_LINE = () => refLine("--status-good");
+const GUIDE_LINE = (dash) => refLine("--axis", dash);
 
 const $ = (id) => document.getElementById(id);
 
@@ -69,7 +85,7 @@ const state = {
   screen: null, indices: null, sectors: null,
   regime: null, portfolio: null, flow: null,
   fundamentals: null, codal: null, technical: null, topTechnical: null,
-  gold: null, inflow: null
+  gold: null, inflow: null, intel: null, smartMoney: null
 };
 
 /* ---------- helpers ---------- */
@@ -95,7 +111,13 @@ async function getJSON(url, opts) {
       );
     }
 
-    throw new Error(message);
+    // The code survives the throw so a caller can tell a switched-off
+    // feature from a broken one without matching on message text -- message
+    // text is written for a reader and is free to change.
+    const err = new Error(message);
+    err.code = body.code || null;
+    err.status = res.status;
+    throw err;
   }
 
   return body;
@@ -157,6 +179,19 @@ function banner(id, textId, kind, html) {
   node.querySelector(".icon").textContent =
     kind === "is-live" ? "✓" : kind === "is-error" ? "✕" : "⚠";
   $(textId).innerHTML = html;
+}
+
+// SIRAT_FULL_SCAN=0 switches off the two routes the screen and the basket
+// are built from. That is a setting somebody chose, not a fault, and styling
+// it as a crash sends the reader looking for a bug that does not exist. The
+// server's own message carries the command that undoes it, so it is shown
+// whole rather than summarised.
+function scanLocked(err, statusId, textId, taskId, headline) {
+  if (err?.code !== "full_scan_disabled") return false;
+
+  banner(statusId, textId, "", `<strong>${esc(headline)}</strong> ${esc(err.message)}`);
+  setTask(taskId, "warn", "اسکن کامل بازار خاموش است (SIRAT_FULL_SCAN=0)");
+  return true;
 }
 
 function esc(value) {
@@ -342,30 +377,442 @@ async function loadRegime(force = false) {
   }
 }
 
-/* ---------- indices, one section each ---------- */
+/* ---------- shared readers: one instrument OR one index ----------
 
-function renderIndexCard(index, ids, rep) {
+   The equity panel and the two index cards show the same four things -- the
+   indicator reading, the pivot levels, the transparent vote, and a ladder of
+   levels. They are rendered by the helpers below rather than by three copies,
+   because a support level that read one way on the share card and another way
+   on the index card would be a bug nobody could see. Each helper takes an id
+   PREFIX; every element it touches is `prefix + Suffix`, and a missing element
+   is skipped rather than thrown on, so a card can opt out of any piece.
+*/
+
+// One element of a prefixed card. Returns null when the card does not have
+// that piece, which is how a card opts out of a section.
+function part(prefix, suffix) { return $(prefix + suffix); }
+
+// One indicator reading -> the rows of the "خوانش اندیکاتورها" table. The
+// single list means an indicator cannot be labelled or rounded differently in
+// two places. A null indicator shows "—", never a fabricated zero.
+function indicatorRows(L) {
+  const n = (v, d = 2) => (v === null || v === undefined ? "—" : num(v, d));
+
+  return [
+    ["بسته", n(L.close, 0)],
+    ["میانگین متحرک کوتاه", n(L.ma_fast, 0)],
+    ["میانگین متحرک بلند", n(L.ma_slow, 0)],
+    ["RSI", n(L.rsi, 1)],
+    ["MACD", n(L.macd, 2)],
+    ["خط سیگنال MACD", n(L.macd_signal, 2)],
+    ["هیستوگرام MACD", n(L.macd_hist, 2)],
+    ["باند بالای بولینگر", n(L.bb_upper, 0)],
+    ["باند پایین بولینگر", n(L.bb_lower, 0)],
+    ["%B بولینگر", n(L.bb_pct, 3)],
+    ["پهنای باند بولینگر %", n(L.bb_width, 1)],
+    ["ATR", n(L.atr, 0)],
+    ["ATR %", n(L.atr_pct, 2)],
+    ["ADX (قدرت روند)", n(L.adx, 1)],
+    ["قدرت جهت صعودی (DI+)", n(L.di_plus, 1)],
+    ["قدرت جهت نزولی (DI−)", n(L.di_minus, 1)],
+    ["حجم", L.volume === null || L.volume === undefined ? "—" : money(L.volume)],
+    ["میانگین حجم",
+     L.volume_ma === null || L.volume_ma === undefined ? "—" : money(L.volume_ma)]
+  ];
+}
+
+function renderReading(prefix, latest) {
+  const node = part(prefix, "Reading");
+  if (!node) return;
+  node.innerHTML = latest
+    ? table(["اندیکاتور", "مقدار"], indicatorRows(latest))
+    : '<div class="empty">خوانشی در دسترس نیست</div>';
+}
+
+// Support and resistance from confirmed pivots. Resistance is red and support
+// green throughout the dashboard; the target ladder below reuses the same two
+// colours for the same two meanings.
+function renderLevels(prefix, lv, digits = 0, valueHeader = "قیمت") {
+  const node = part(prefix, "Levels");
+  if (!node) return;
+
+  const n = (v) => (v === null || v === undefined ? "—" : num(v, digits));
+
+  // How many confirmed pivots formed the level. It is the only strength
+  // measure price alone offers -- a shelf the market has turned at four times
+  // is not the same object as one it touched once -- and it is shown as
+  // "N بار" rather than a bare integer so it cannot be misread as a price.
+  const touches = (x) => {
+    const t = x.touches || 1;
+    return t > 1
+      ? `<strong>${t}</strong> بار`
+      : `<span class="hint-inline">۱ بار</span>`;
+  };
+
+  const rows = [];
+
+  (lv?.resistances || []).forEach(r =>
+    rows.push([`<span class="badge bad"><span class="dot"></span>مقاومت</span>`,
+               n(r.price), signed(r.distance_pct, 1), touches(r),
+               esc(r.date || "—")]));
+
+  (lv?.supports || []).forEach(s =>
+    rows.push([`<span class="badge good"><span class="dot"></span>حمایت</span>`,
+               n(s.price), signed(s.distance_pct, 1), touches(s),
+               esc(s.date || "—")]));
+
+  node.innerHTML = rows.length
+    ? table(["نوع", valueHeader, "فاصله", "برخورد", "آخرین برخورد"], rows)
+    : '<div class="empty">پیوت تأییدشده‌ای یافت نشد</div>';
+}
+
+// Support and resistance as flat reference lines across a price chart, and the
+// one rule that makes them safe to draw: A LEVEL OFF THE CHART IS NOT DRAWN.
+//
+// The lines are added to the chart's own data, so the chart scales to include
+// them. A pivot low 40% under the current price -- perfectly ordinary after a
+// long advance -- therefore used to drag the axis down until the whole visible
+// price series flattened into a band a few pixels tall, hiding the very thing
+// the reader opened the chart to see. Levels outside the plotted range plus a
+// margin are dropped here instead; they are still in the table beside the
+// chart, with their exact price, which is where a level that far away belongs.
+//
+// Mutates `rows` (adding one constant column per drawn level) and returns the
+// series descriptors for them.
+const LEVEL_MARGIN = 0.25;
+
+function levelSeries(rows, lv, perSide = 2) {
+  const span = [];
+  for (const row of rows) {
+    for (const key of ["close", "bb_upper", "bb_lower"]) {
+      const v = row[key];
+      if (v !== null && v !== undefined && !Number.isNaN(v)) span.push(v);
+    }
+  }
+
+  if (!span.length) return [];
+
+  const lo = Math.min(...span), hi = Math.max(...span);
+  const margin = (hi - lo) * LEVEL_MARGIN || Math.abs(hi) * 0.02;
+  const visible = (p) =>
+    p !== null && p !== undefined && p >= lo - margin && p <= hi + margin;
+
+  const out = [];
+
+  const add = (list, prefix, label, style) =>
+    (list || []).filter(x => visible(x.price)).slice(0, perSide)
+      .forEach((x, i) => {
+        const key = `${prefix}${i}`;
+        rows.forEach(row => { row[key] = x.price; });
+        // Only the nearest of each kind is named: three identical dashed reds
+        // stacked at the right edge is a legend nobody can read, and the table
+        // below already names every one of them.
+        out.push({ key, label: i === 0 ? label : "", ...style() });
+      });
+
+  add(lv?.resistances, "res", "مقاومت", RESISTANCE_LINE);
+  add(lv?.supports, "sup", "حمایت", SUPPORT_LINE);
+
+  return out;
+}
+
+// Volume under the price, coloured by the day's direction.
+//
+// A price chart with no volume beneath it cannot answer whether a move was
+// paid for -- which is exactly the question the signal's volume vote answers
+// in words, and the reader should be able to check that claim against the
+// picture. The average is drawn over the columns as the line they are read
+// against: "above average" is the whole point and is invisible without it.
+function renderVolume(prefix, points) {
+  const node = part(prefix, "VolumeChart");
+  if (!node) return;
+
+  if (!points.length) {
+    node.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    return;
+  }
+
+  // A volume bar is always positive, so its own sign cannot colour it. What
+  // the reader wants is whether that volume traded the price up or down.
+  let previous = null;
+  const rows = points.map(p => {
+    const dir = (previous === null || p.close === null || p.close === undefined)
+      ? 0 : p.close - previous;
+    if (p.close !== null && p.close !== undefined) previous = p.close;
+    return { ...p, dir };
+  });
+
+  lineChart(node, {
+    data: rows, xKey: "date", height: 130,
+    bars: { key: "volume", label: "حجم", signKey: "dir",
+            posColor: cssVar("--status-good"),
+            negColor: cssVar("--status-critical") },
+    // Not a ref line: unlike an RSI 70 band this one MOVES, and its value at
+    // the hovered bar is the number that makes "above average" mean something.
+    // --text-muted rather than --axis because the line carries a LABEL, and
+    // the axis token is chrome dark enough to render that label unreadable on
+    // the dark theme.
+    series: [{ key: "volume_ma", label: "میانگین حجم",
+               color: cssVar("--text-muted"), dash: "5 5", width: 1.5 }],
+    format: (v) => fmt(v, 0)
+  });
+}
+
+// MACD and RSI, on two charts rather than one.
+//
+// They used to share an axis, which is wrong wherever the two have different
+// units -- and on an index it is fatal: MACD is in index points and runs to
+// hundreds of thousands, so RSI (0..100) drew as a flat line on the zero grid
+// and told the reader nothing. Splitting them costs one more chart and makes
+// both readable.
+//
+// Two further things the split made room for:
+//
+//   The MACD HISTOGRAM. It is the difference the two lines already show, but
+//   as columns around zero it turns BEFORE the crossover does -- which is the
+//   only part of MACD that is early. Drawing the pair without it showed the
+//   lagging half of the indicator and hid the leading half.
+//
+//   RSI PINNED TO 0..100. It is a bounded oscillator and only means anything
+//   read against its own bounds. Auto-scaled, a drift between 45 and 55 filled
+//   the panel and looked like a violent swing; overbought at 71 and overbought
+//   at 95 drew identically. The 70/50/30 guides are reference lines now, not
+//   palette series, so they no longer compete with the reading itself.
+function renderMomentum(prefix, points) {
+  const macd = part(prefix, "MomentumChart");
+  const rsi = part(prefix, "RsiChart");
+
+  if (!points.length) {
+    [macd, rsi].forEach(n => {
+      if (n) n.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    });
+    return;
+  }
+
+  if (macd) {
+    lineChart(macd, {
+      data: points, xKey: "date", height: 210,
+      bars: { key: "macd_hist", label: "هیستوگرام" },
+      zeroLine: true,
+      series: [
+        { key: "macd", label: "MACD" },
+        { key: "macd_signal", label: "سیگنال" }
+      ]
+    });
+  }
+
+  if (rsi) {
+    const withBands = points.map(p =>
+      ({ ...p, rsi_ob: 70, rsi_mid: 50, rsi_os: 30 }));
+
+    lineChart(rsi, {
+      data: withBands, xKey: "date", height: 170,
+      yMin: 0, yMax: 100,
+      series: [
+        { key: "rsi", label: "RSI" },
+        { key: "rsi_ob", label: "۷۰ اشباع خرید", ...RESISTANCE_LINE() },
+        { key: "rsi_mid", ...GUIDE_LINE("2 6") },
+        { key: "rsi_os", label: "۳۰ اشباع فروش", ...SUPPORT_LINE() }
+      ],
+      format: (v) => fmt(v, 0)
+    });
+  }
+}
+
+// The transparent vote. Every component's vote and reason is printed, because
+// the whole point of this signal is that the reader can see the mechanism --
+// and its standing caveat rides along with it.
+function renderVoteCard(prefix, sig) {
+  const card = part(prefix, "SignalCard");
+  if (!card) return;
+
+  if (!sig || !sig.call) { card.style.display = "none"; return; }
+
+  card.style.display = "";
+
+  const cls = sig.call === "BUY" ? "good" : sig.call === "SELL" ? "bad" : "neutral";
+  const conv = sig.conviction === "trending" ? "روند‌دار (ADX بالا)"
+    : sig.conviction === "weak" ? "ضعیف (ADX پایین، بازار بی‌روند)"
+    : "معمولی";
+
+  // The tally as a bar, because the tally is the signal. Three segments sized
+  // by the actual vote counts: a call resting on 2 positives out of 8 and one
+  // resting on 6 out of 8 print the same badge, and only this shows which is
+  // which at a glance. It is drawn from the same numbers printed beside it --
+  // a meter that could disagree with its own caption would be worse than none.
+  const total = sig.total || 0;
+  const pct = (n) => (total ? (n / total) * 100 : 0);
+
+  const meter = total
+    ? `<div class="vote-meter" role="img"
+            aria-label="${sig.bullish} مثبت، ${sig.neutral} خنثی، ${sig.bearish} منفی">
+         <span class="seg pos" style="width:${pct(sig.bullish)}%"></span>
+         <span class="seg mid" style="width:${pct(sig.neutral)}%"></span>
+         <span class="seg neg" style="width:${pct(sig.bearish)}%"></span>
+       </div>`
+    : "";
+
+  // The margin as a share of the votes cast. The number of votes VARIES with
+  // what the data supports -- a series with no high/low range casts no
+  // directional vote at all -- so the bare net is not comparable between two
+  // symbols and this is.
+  const strength = (sig.strength === null || sig.strength === undefined)
+    ? "" : ` · اتفاق نظر ${Math.round(Math.abs(sig.strength) * 100)}٪`;
+
+  part(prefix, "SignalHead").innerHTML =
+    `<span class="badge ${cls}" style="font-size:1.05em">` +
+    `<span class="dot"></span>${esc(sig.call_fa)}</span> ` +
+    `<span class="hint" style="margin-inline-start:8px">` +
+    `${sig.bullish} رأی مثبت · ${sig.bearish} منفی · ${sig.neutral} خنثی ` +
+    `(خالص ${signed(sig.net, 0, "")})${strength} · قوت: ${conv}</span>` +
+    meter;
+
+  const note = part(prefix, "SignalNote");
+  if (note) note.textContent = sig.note || "";
+
+  part(prefix, "SignalCaveat").textContent = "⚠ " + (sig.caveat || "");
+
+  const voteRows = (sig.votes || []).map(v => {
+    const vb = v.vote > 0
+      ? `<span class="badge good"><span class="dot"></span>مثبت</span>`
+      : v.vote < 0
+        ? `<span class="badge bad"><span class="dot"></span>منفی</span>`
+        : `<span class="badge neutral"><span class="dot"></span>خنثی</span>`;
+    return [esc(v.name), vb, esc(v.reason)];
+  });
+
+  part(prefix, "Votes").innerHTML = voteRows.length
+    ? table(["اندیکاتور", "رأی", "دلیل"], voteRows)
+    : '<div class="empty">رأیی ثبت نشد</div>';
+}
+
+/* ---------- indices, one section each ----------
+
+   Both cards are driven by one renderer keyed on an id prefix ("capIndex",
+   "ewIndex"), so the equal-weighted card cannot silently fall behind the
+   cap-weighted one when something is added to either.
+*/
+
+// The two-sided target ladder. It is two-sided because an index is not a
+// position: there is no entry to be long or short of, so the honest question
+// is "what does it meet on the way up, and on the way down", not "where is my
+// stop". Colours follow the level table above -- a level overhead is red
+// whether it is called resistance or a target.
+function renderIndexTargets(prefix, tg) {
+  const card = part(prefix, "TargetCard");
+  if (!card) return;
+
+  if (!tg || (!(tg.upside || []).length && !(tg.downside || []).length)) {
+    card.style.display = "none";
+    return;
+  }
+
+  card.style.display = "";
+
+  const n = (v, d = 0) => (v === null || v === undefined ? "—" : num(v, d));
+
+  // A rung's "how long" is honest about being unknown: no ATR, no estimate.
+  const when = (row) => row?.sessions ? `${row.sessions} جلسه` : "نامعلوم";
+
+  const rungTile = (label, row, fallback) => ({
+    k: label,
+    v: row ? n(row.price) : "—",
+    sub: row ? `${signed(row.distance_pct, 2)} · ${when(row)} · ${esc(row.label)}`
+             : fallback
+  });
+
+  tiles(prefix + "TargetKpis", [
+    rungTile("نزدیک‌ترین سطح بالا", tg.objective_1,
+             "هیچ سطحی بالای شاخص نیست — سقف پنجره"),
+    rungTile("سطح بالای بعدی", tg.objective_2, "سطح دومی بالای شاخص نیست"),
+    rungTile("نزدیک‌ترین سطح پایین", tg.break_level,
+             "هیچ سطحی زیر شاخص نیست"),
+    { k: "واحد نوسان (ATR)", v: n(tg.unit),
+      sub: tg.unit_pct === null || tg.unit_pct === undefined
+        ? "بدون ATR" : `${num(tg.unit_pct, 2)}٪ از شاخص · دامنه‌ی معمول یک جلسه` },
+    { k: "سقف مؤثر",
+      v: tg.overhead_pct === null || tg.overhead_pct === undefined
+        ? "—" : signed(tg.overhead_pct, 2),
+      sub: `از ${Object.values(tg.overhead_sources || {}).filter(v => v !== null).length} منبع سطحی` },
+    { k: "بیشترین حرکت یک‌جلسه‌ای",
+      v: tg.max_session_move_pct === null || tg.max_session_move_pct === undefined
+        ? "—" : `${num(tg.max_session_move_pct, 2)}%`,
+      sub: "سقف سرعت تجربی در همین پنجره" }
+  ]);
+
+  // Read top-down like a chart: the furthest level above, down through the
+  // current value, to the furthest level below.
+  const rows = [];
+
+  [...(tg.upside || [])].reverse().forEach(row => rows.push([
+    `<span class="badge bad"><span class="dot"></span>سطح بالا</span>`,
+    n(row.price), signed(row.distance_pct, 2), when(row),
+    `${esc(row.label)} — ${esc(row.kind_fa)}` +
+    (row.date ? ` (${esc(row.date)})` : "")
+  ]));
+
+  rows.push([
+    `<span class="badge neutral"><span class="dot"></span>اکنون</span>`,
+    n(tg.price), "—", "—", "آخرین مقدار منتشرشده‌ی شاخص"
+  ]);
+
+  (tg.downside || []).forEach(row => rows.push([
+    `<span class="badge good"><span class="dot"></span>سطح پایین</span>`,
+    n(row.price), signed(row.distance_pct, 2), when(row),
+    `${esc(row.label)} — ${esc(row.kind_fa)}` +
+    (row.date ? ` (${esc(row.date)})` : "")
+  ]));
+
+  part(prefix, "TargetTable").innerHTML =
+    table(["جهت", "مقدار", "فاصله", "زمان تخمینی", "از کجا آمده"], rows);
+
+  part(prefix, "TargetCaveat").textContent = "⚠ " + (tg.caveat || "");
+
+  bulletList(prefix + "TargetNotes", tg.notes || []);
+}
+
+function renderIndexCard(index, prefix, rep) {
+  const chartNode = part(prefix, "Chart");
+
   if (!index || index.error) {
-    banner(ids.status, ids.statusText, "is-error",
+    banner(prefix + "Status", prefix + "StatusText", "is-error",
       `<strong>داده‌ی این شاخص موجود نیست.</strong> ${esc(index?.error || "")}` +
       bootstrapNote(rep));
-    tiles(ids.kpis, []);
-    $(ids.chart).innerHTML = '<div class="empty">داده‌ای نیست</div>';
-    if ($(ids.table)) $(ids.table).innerHTML = "";
-    if (ids.breakdown) $(ids.breakdown).innerHTML = "";
+    tiles(prefix + "Kpis", []);
+    if (chartNode) chartNode.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    ["MomentumChart", "RsiChart", "Breakdown"].forEach(s => {
+      const node = part(prefix, s);
+      if (node) node.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    });
+    ["Table", "Reading", "Levels"].forEach(s => {
+      const node = part(prefix, s);
+      if (node) node.innerHTML = "";
+    });
+    renderVoteCard(prefix, null);
+    renderIndexTargets(prefix, null);
     return;
   }
 
   const t = index.technical || {};
   const r = index.returns || {};
+  const sig = index.signal || {};
+  const lv = index.levels || { resistances: [], supports: [] };
 
-  banner(ids.status, ids.statusText, "is-live",
+  banner(prefix + "Status", prefix + "StatusText", "is-live",
     `<strong>${esc(index.name)}</strong> — ${index.bars} جلسه تا ${index.last_date}. ` +
     `مؤلفه‌ی حجم از ${esc(index.volume_source || "هیچ منبعی")} تغذیه شده.`);
 
-  tiles(ids.kpis, [
+  const call = sig.call
+    ? `<span class="badge ${CALL_CLASS[sig.call] || "neutral"}">` +
+      `<span class="dot"></span>${esc(sig.call_fa)}</span>`
+    : "—";
+
+  tiles(prefix + "Kpis", [
     { k: "مقدار شاخص", v: num(index.close, 0), sub: index.last_date },
-    { k: "امتیاز تکنیکال", v: t.scored === false ? "—" : t.score, sub: badge(t.status || "NO DATA") },
+    { k: "امتیاز تکنیکال", v: t.scored === false ? "—" : t.score,
+      sub: badge(t.status || "NO DATA") },
+    { k: "سیگنال تکنیکال", v: call,
+      sub: sig.call ? `خالص ${signed(sig.net, 0, "")} از ${sig.total} رأی` : "بدون رأی" },
     { k: "روند", v: t.trend || "n/a", sub: `RSI ${num(t.rsi, 1)}` },
     { k: "۲۰ روزه", v: signed(r["20d"]), sub: "بازده" },
     { k: "۶۰ روزه", v: signed(r["60d"]), sub: "بازده" }
@@ -373,43 +820,98 @@ function renderIndexCard(index, ids, rep) {
 
   const s = index.series || {};
 
+  const col = (name, k) => (s[name] && s[name].length ? s[name][k] : null);
+
   const points = (s.dates || []).map((d, k) => ({
-    date: d, close: s.close[k], ma_fast: s.ma_fast[k], ma_slow: s.ma_slow[k]
+    date: d,
+    close: col("close", k),
+    ma_fast: col("ma_fast", k),
+    ma_slow: col("ma_slow", k),
+    bb_upper: col("bb_upper", k),
+    bb_lower: col("bb_lower", k),
+    macd: col("macd", k),
+    macd_signal: col("macd_signal", k),
+    macd_hist: col("macd_hist", k),
+    rsi: col("rsi", k),
+    volume: col("volume", k)
   }));
 
-  $(ids.chartHint).textContent =
-    `${index.name} — بسته در برابر میانگین‌های متحرک.`;
+  const hint = part(prefix, "ChartHint");
+  if (hint) {
+    hint.textContent = `${index.name} — بسته، میانگین‌های متحرک و باندهای ` +
+      `بولینگر. خطوط چین: حمایت‌ها و مقاومت‌های پیوتی.`;
+  }
 
-  lineChart($(ids.chart), {
-    data: points,
-    series: [
-      { key: "close", label: "Close" },
-      { key: "ma_fast", label: "Fast MA" },
-      { key: "ma_slow", label: "Slow MA" }
-    ],
-    format: (v) => fmt(v, 0)
-  });
+  if (chartNode) {
+    if (points.length) {
+      const withLevels = points.map(p => ({ ...p }));
 
-  const colors = seriesColors(3);
-  $(ids.legend).innerHTML = ["Close", "Fast MA", "Slow MA"]
-    .map((l, k) => `<span class="key"><i style="background:${colors[k]}"></i>${l}</span>`)
-    .join("");
+      const priceSeries = [
+        { key: "close", label: "بسته" },
+        { key: "ma_fast", label: "کوتاه" },
+        { key: "ma_slow", label: "بلند" },
+        { key: "bb_upper", label: "باند بالا" },
+        { key: "bb_lower", label: "باند پایین" },
+        ...levelSeries(withLevels, lv, 2)
+      ];
 
-  if (ids.breakdown && t.breakdown) {
-    hBarChart($(ids.breakdown), {
+      lineChart(chartNode, {
+        data: withLevels, xKey: "date",
+        series: priceSeries,
+        format: (v) => fmt(v, 0)
+      });
+
+      // Built from the series actually drawn, so an added line can never go
+      // missing from the key or borrow the wrong colour. Reference lines carry
+      // their own colour; only the data series draw from the palette, and they
+      // must be counted the same way the chart counts them or the swatches
+      // shift by one for every level line added.
+      const legend = part(prefix, "Legend");
+      if (legend) {
+        const auto = seriesColors(priceSeries.filter(x => !x.color).length);
+        let slot = 0;
+        legend.innerHTML = priceSeries
+          .map((x) => {
+            const color = x.color || auto[slot++];
+            // .key/<i> were never styled -- the swatch was a zero-size inline
+            // element, so the whole legend rendered as bare words.
+            return x.label
+              ? `<span class="item"><span class="swatch" style="background:${color}"></span>${esc(x.label)}</span>`
+              : "";
+          })
+          .join("");
+      }
+    } else {
+      chartNode.innerHTML = '<div class="empty">داده‌ای نیست</div>';
+    }
+  }
+
+  renderMomentum(prefix, points);
+
+  const breakdown = part(prefix, "Breakdown");
+  if (breakdown && t.breakdown) {
+    hBarChart(breakdown, {
       data: COMPONENTS.map(c => ({ label: c, value: t.breakdown[c] ?? 0 })),
       max: 25,
       format: (v) => fmt(v, 0)
     });
   }
 
-  if ($(ids.table)) {
-    $(ids.table).innerHTML = table(
+  const returnsTable = part(prefix, "Table");
+  if (returnsTable) {
+    returnsTable.innerHTML = table(
       ["بازه", "بازده"],
       [["۱ روزه", signed(r["1d"])], ["۵ روزه", signed(r["5d"])],
        ["۲۰ روزه", signed(r["20d"])], ["۶۰ روزه", signed(r["60d"])]]
     );
   }
+
+  // An index value runs to millions; 0 decimals is the readable rounding, and
+  // "مقدار" rather than "قیمت" because an index has a value, not a price.
+  renderReading(prefix, index.latest);
+  renderLevels(prefix, lv, 0, "مقدار");
+  renderVoteCard(prefix, index.signal);
+  renderIndexTargets(prefix, index.targets);
 }
 
 function renderIndices(rep) {
@@ -417,20 +919,8 @@ function renderIndices(rep) {
 
   const list = rep.indices || [];
 
-  const cap = list.find(i => i.weighting === "capitalisation");
-  const equal = list.find(i => i.weighting === "equal");
-
-  renderIndexCard(cap, {
-    status: "capIndexStatus", statusText: "capIndexStatusText",
-    kpis: "capIndexKpis", chart: "capIndexChart", chartHint: "capIndexChartHint",
-    legend: "capIndexLegend", table: "capIndexTable", breakdown: "capIndexBreakdown"
-  }, rep);
-
-  renderIndexCard(equal, {
-    status: "ewIndexStatus", statusText: "ewIndexStatusText",
-    kpis: "ewIndexKpis", chart: "ewIndexChart", chartHint: "ewIndexChartHint",
-    legend: "ewIndexLegend", table: "ewIndexTable"
-  }, rep);
+  renderIndexCard(list.find(i => i.weighting === "capitalisation"), "capIndex", rep);
+  renderIndexCard(list.find(i => i.weighting === "equal"), "ewIndex", rep);
 
   const breadth = rep.breadth;
 
@@ -472,6 +962,15 @@ async function loadIndices(force = false) {
 
 /* ---------- technical: one instrument, on demand ---------- */
 
+// Every chart on the single-symbol card, named once. Both the reset path and
+// the failure path have to blank all of them, and the two lists had already
+// drifted from the panel by one chart -- a stale volume panel left standing
+// under a failed lookup reads as the new symbol's volume.
+const TECHNICAL_CHARTS = [
+  "technicalPriceChart", "technicalVolumeChart",
+  "technicalMomentumChart", "technicalRsiChart"
+];
+
 // Persian labels for the trend classifier's English states.
 const TREND_FA = {
   "Strong Uptrend": "روند صعودی قوی",
@@ -486,11 +985,185 @@ const TREND_CLASS = {
   "Weak Downtrend": "warn", "Downtrend": "bad", "Unknown": "neutral"
 };
 
+// ADX measures a trend's STRENGTH and is silent about its direction; +DI/-DI
+// carry the sign. Printing ADX alone let a big number read as bullish, which
+// it never was -- a strong downtrend scores exactly as high as a strong
+// uptrend. The two are shown together or not at all.
+function adxNote(L) {
+  if (L.adx === null || L.adx === undefined) return "بدون ADX";
+
+  const where = L.adx >= 25 ? "روند قوی"
+    : L.adx < 20 ? "بی‌روند" : "روند ضعیف";
+
+  if (L.di_plus === null || L.di_plus === undefined
+      || L.di_minus === null || L.di_minus === undefined) return where;
+
+  if (L.adx < 20) return `${where} (جهت بی‌معنا)`;
+
+  return L.di_plus > L.di_minus ? `${where} صعودی` : `${where} نزولی`;
+}
+
+// Where the stop distance came from. risk_engine names it in English and
+// composes suffixes onto it (`atr+floor`), so map the head and keep any
+// suffix's meaning rather than falling through to a raw token.
+const STOP_SOURCE_FA = {
+  "atr": "از ATR",
+  "price_band": "از دو دامنه‌ی نوسان",
+};
+
+function stopSourceFa(source) {
+  if (!source) return "—";
+  const [head, ...rest] = String(source).split("+");
+  const base = STOP_SOURCE_FA[head] || esc(head);
+  if (rest.includes("floor")) return `${base}، رسیده به کف مجاز`;
+  if (rest.includes("ceiling")) return `${base}، محدود به سقف مجاز`;
+  return base;
+}
+
+// Price targets. Rendered from what the backend computed -- the ladder, the
+// stop it is measured in, and the two states that must not read as ordinary
+// targets: a target crushed against a ceiling (no room), and a second target
+// that sits ABOVE that ceiling and so requires it to break.
+function renderTechnicalTargets(tg, signal) {
+  const card = $("technicalTargetCard");
+  if (!card) return;
+
+  if (!tg || tg.target_1 === null || tg.target_1 === undefined) {
+    card.style.display = "none";
+    return;
+  }
+
+  card.style.display = "";
+
+  const n = (v, d = 0) => (v === null || v === undefined ? "—" : num(v, d));
+
+  // The reward/risk verdict, against the platform's own minimum. A ratio below
+  // it is not a small edge, it is a trade this system would refuse to open.
+  const rr = tg.risk_reward;
+  const floor = tg.min_risk_reward;
+  const rrCls = (rr === null || rr === undefined) ? "neutral"
+    : (floor !== null && floor !== undefined && rr < floor) ? "bad" : "good";
+  const rrNote = (rr === null || rr === undefined) ? "بدون نسبت"
+    : (floor !== null && floor !== undefined && rr < floor)
+      ? `زیر حد ${num(floor, 1)} — این پلتفرم چنین موقعیتی را باز نمی‌کند`
+      : `بالای حد ${num(floor, 1)}`;
+
+  const horizon = tg.expected_sessions === null || tg.expected_sessions === undefined
+    ? "—" : `${tg.expected_sessions} سشن`;
+  const horizonSub = tg.band_min_sessions
+    ? `دست‌کم ${tg.band_min_sessions} سشن به‌خاطر دامنه‌ی ${num(tg.band_pct, 0)}٪`
+    : "بدون فاصله‌ای برای پیمودن";
+
+  tiles("technicalTargetKpis", [
+    { k: "هدف اول",
+      v: tg.no_room ? '<span class="badge warn"><span class="dot"></span>فضایی نمانده</span>'
+                    : n(tg.target_1),
+      sub: tg.no_room ? "مقاومت چسبیده به قیمت است"
+                      : `${signed(tg.target_1_pct, 1)} از قیمت` +
+                        (tg.capped ? " · زیر مقاومت محدود شد" : "") },
+    { k: "هدف دوم", v: n(tg.target_2),
+      sub: `${signed(tg.target_2_pct, 1)} از قیمت` +
+           (tg.target_2_above_wall ? " · بالای مقاومت" : "") },
+    { k: "حد ضرر", v: n(tg.stop_loss),
+      sub: `${signed(-Math.abs(tg.stop_distance_pct), 1)} · ${stopSourceFa(tg.stop_source)}` },
+    { k: "سود به زیان",
+      v: `<span class="badge ${rrCls}"><span class="dot"></span>${n(rr, 2)}</span>`,
+      sub: rrNote },
+    { k: "افق زمانی", v: horizon, sub: horizonSub },
+    { k: "نزدیک‌ترین مقاومت",
+      v: tg.nearest_resistance ? n(tg.nearest_resistance.price) : "—",
+      sub: tg.nearest_resistance
+        ? `${signed(tg.nearest_resistance.distance_pct, 1)} · ` +
+          `${tg.nearest_resistance.touches || 1} برخورد تا ` +
+          `${esc(tg.nearest_resistance.date || "—")}`
+        : "پیوتی بالای قیمت نیست" }
+  ]);
+
+  // The ladder, read bottom-up: the stop, the price now, then every objective
+  // above it in order. Putting the stop in the same table as the targets is
+  // the point -- a target without the loss that pays for it is half a number.
+  //
+  // Every rung now carries its R -- what it is worth in units of the risk
+  // taken to reach it. The measured targets always showed theirs; the
+  // structural ones did not, so a Fibonacci extension sitting 0.4R above the
+  // price (inside the noise the stop is sized to absorb) looked exactly like a
+  // real objective. One column, and the ladder can be read down.
+  const r = (v) => (v === null || v === undefined ? "—" : `${num(v, 2)}R`);
+
+  const rows = [];
+
+  rows.push([
+    `<span class="badge bad"><span class="dot"></span>حد ضرر</span>`,
+    n(tg.stop_loss), signed(-Math.abs(tg.stop_distance_pct), 1), "−1R",
+    `${stopSourceFa(tg.stop_source)} — فاصله‌ای که اهداف با آن اندازه گرفته می‌شوند`
+  ]);
+
+  rows.push([
+    `<span class="badge neutral"><span class="dot"></span>قیمت فعلی</span>`,
+    n(tg.price), "—", "0R", "بسته‌ی آخرین کندل"
+  ]);
+
+  if (!tg.no_room) {
+    rows.push([
+      `<span class="badge good"><span class="dot"></span>هدف اول</span>`,
+      n(tg.target_1), signed(tg.target_1_pct, 1), r(tg.risk_reward),
+      tg.capped
+        ? `اندازه‌گیری‌شده، سپس زیر مقاومت ${signed(tg.overhead_pct, 1)} کشیده شد`
+        : `اندازه‌گیری‌شده — ${n(tg.risk_reward, 2)} برابر فاصله‌ی حد ضرر`
+    ]);
+  } else {
+    rows.push([
+      `<span class="badge warn"><span class="dot"></span>هدف اول</span>`,
+      "—", "—", "—",
+      `مقاومت تنها ${signed(tg.overhead_pct, 1)} بالاتر است — فضایی برای هدف نمانده`
+    ]);
+  }
+
+  rows.push([
+    `<span class="badge ${tg.target_2_above_wall ? "warn" : "good"}">` +
+    `<span class="dot"></span>هدف دوم</span>`,
+    n(tg.target_2), signed(tg.target_2_pct, 1), r(tg.risk_reward_target_2),
+    tg.target_2_above_wall
+      ? `بالای مقاومت — تنها با شکستن آن در دسترس است (${n(tg.risk_reward_target_2, 2)} برابر حد ضرر)`
+      : `${n(tg.risk_reward_target_2, 2)} برابر فاصله‌ی حد ضرر`
+  ]);
+
+  // The swing an extension projects is dated, because an extension of a move
+  // that ended two years ago is arithmetic on history, not on this market.
+  const swingWhen = tg.swing_to
+    ? ` — سوئینگی که تا ${esc(tg.swing_to)} کامل شد` : "";
+
+  (tg.structural || []).forEach(t => rows.push([
+    `<span class="badge neutral"><span class="dot"></span>هدف ساختاری</span>`,
+    n(t.price), signed(t.distance_pct, 1), r(t.r_multiple),
+    `بسط ${esc(t.ratio)} برابرِ سوئینگ آخر` +
+    (tg.swing_direction === "up" ? " (صعودی)"
+      : tg.swing_direction === "down" ? " (نزولی)" : "") + swingWhen
+  ]));
+
+  $("technicalTargetTable").innerHTML =
+    table(["سطح", "قیمت", "فاصله", "برحسب ریسک", "از کجا آمده"], rows);
+
+  $("technicalTargetCaveat").textContent = "⚠ " + (tg.caveat || "");
+
+  // The ladder is long-only because the exchange is. On a SELL reading that
+  // has to be said on the card -- an upward ladder under a sell call reads as
+  // an invitation unless something states otherwise.
+  const notes = [...(tg.notes || [])];
+  if (signal && signal.call === "SELL") {
+    notes.unshift("خوانش تکنیکال «فروش» است. این نردبان رو به بالاست چون در " +
+      "این بازار فروش استقراضی وجود ندارد — پس این اهداف می‌گویند مقاومت کجاست، " +
+      "نه اینکه بخرید.");
+  }
+
+  bulletList("technicalTargetNotes", notes);
+}
+
 function renderTechnical(rep) {
   state.technical = rep;
 
   const clear = () => {
-    ["technicalPriceChart", "technicalMomentumChart"].forEach(id => {
+    TECHNICAL_CHARTS.forEach(id => {
       const n = $(id);
       if (n) n.innerHTML = '<div class="empty">داده‌ای نیست</div>';
     });
@@ -499,6 +1172,8 @@ function renderTechnical(rep) {
     if (lvNode) lvNode.innerHTML = "";
     const card = $("technicalSignalCard");
     if (card) card.style.display = "none";
+    const tCard = $("technicalTargetCard");
+    if (tCard) tCard.style.display = "none";
     tiles("technicalKpis", []);
   };
 
@@ -515,7 +1190,7 @@ function renderTechnical(rep) {
     (rep.name ? ` — ${esc(rep.name)}` : "") +
     ` · ${esc(rep.sector || "بدون صنعت")} · ` +
     `${rep.bars_used} کندل تا ${esc(rep.as_of || "—")}. ` +
-    `این بخش داده است، نه سیگنال.`);
+    `خوانش و اهداف، هر دو با هشدارِ خودشان.`);
 
   // Reading tiles. A null indicator shows "—", never a fabricated zero.
   const n = (v, d = 2) => (v === null || v === undefined ? "—" : num(v, d));
@@ -535,7 +1210,21 @@ function renderTechnical(rep) {
     { k: "%B بولینگر", v: n(L.bb_pct, 2),
       sub: `پهنای باند ${n(L.bb_width, 1)}%` },
     { k: "ATR%", v: n(L.atr_pct, 2),
-      sub: `ADX ${n(L.adx, 1)}` }
+      sub: `ADX ${n(L.adx, 1)} · ${adxNote(L)}` },
+    // Volume against its own average. "Above average" is the reading; the raw
+    // share count is not comparable to anything, which is why the ratio is the
+    // headline number. A zero-volume bar gets its own words rather than a
+    // 0.00x ratio: the instrument did not trade, which is a different
+    // statement from "it traded on no interest".
+    { k: "حجم / میانگین",
+      v: (!L.volume || !L.volume_ma)
+        ? (L.volume === 0
+            ? '<span class="badge neutral"><span class="dot"></span>معامله نشد</span>'
+            : "—")
+        : `${num(L.volume / L.volume_ma, 2)}×`,
+      sub: L.volume === null || L.volume === undefined ? "بدون داده‌ی حجم"
+        : L.volume === 0 ? "آخرین جلسه بدون معامله"
+        : `حجم امروز ${money(L.volume)}` }
   ]);
 
   const series = rep.series || [];
@@ -544,129 +1233,41 @@ function renderTechnical(rep) {
   const priceNode = $("technicalPriceChart");
   if (priceNode) {
     if (series.length) {
-      // Draw each support/resistance as a flat line across the window, using
-      // the chart's own series mechanism -- lineChart has no ref-line option
-      // and the shared module should not be forked for one panel. The nearest
-      // level of each kind is labelled; farther ones ride along unlabelled to
-      // avoid crowding the axis.
       const withLevels = series.map(pt => ({ ...pt }));
-      const extra = [];
-      (lv.resistances || []).slice(0, 2).forEach((r, i) => {
-        const key = `res${i}`;
-        withLevels.forEach(pt => { pt[key] = r.price; });
-        extra.push({ key, label: i === 0 ? "مقاومت" : "" });
-      });
-      (lv.supports || []).slice(0, 2).forEach((s, i) => {
-        const key = `sup${i}`;
-        withLevels.forEach(pt => { pt[key] = s.price; });
-        extra.push({ key, label: i === 0 ? "حمایت" : "" });
-      });
 
       lineChart(priceNode, {
-        data: withLevels, xKey: "date",
+        data: withLevels, xKey: "date", height: 300,
         series: [
           { key: "close", label: "بسته" },
           { key: "ma_fast", label: "کوتاه" },
           { key: "ma_slow", label: "بلند" },
           { key: "bb_upper", label: "باند بالا" },
           { key: "bb_lower", label: "باند پایین" },
-          ...extra
-        ]
+          ...levelSeries(withLevels, lv, 2)
+        ],
+        format: (v) => fmt(v, 0)
       });
     } else {
       priceNode.innerHTML = '<div class="empty">داده‌ای نیست</div>';
     }
   }
 
-  const momNode = $("technicalMomentumChart");
-  if (momNode) {
-    if (series.length) {
-      lineChart(momNode, {
-        data: series, xKey: "date",
-        series: [
-          { key: "macd", label: "MACD" },
-          { key: "macd_signal", label: "سیگنال" },
-          { key: "rsi", label: "RSI" }
-        ]
-      });
-    } else {
-      momNode.innerHTML = '<div class="empty">داده‌ای نیست</div>';
-    }
-  }
+  renderVolume("technical", series);
 
-  // A compact current-reading table beneath the charts.
-  const rows = [
-    ["بسته", n(L.close, 0)],
-    ["میانگین متحرک کوتاه", n(L.ma_fast, 0)],
-    ["میانگین متحرک بلند", n(L.ma_slow, 0)],
-    ["RSI", n(L.rsi, 1)],
-    ["MACD", n(L.macd, 2)],
-    ["خط سیگنال MACD", n(L.macd_signal, 2)],
-    ["هیستوگرام MACD", n(L.macd_hist, 2)],
-    ["باند بالای بولینگر", n(L.bb_upper, 0)],
-    ["باند پایین بولینگر", n(L.bb_lower, 0)],
-    ["%B بولینگر", n(L.bb_pct, 3)],
-    ["پهنای باند بولینگر %", n(L.bb_width, 1)],
-    ["ATR", n(L.atr, 0)],
-    ["ATR %", n(L.atr_pct, 2)],
-    ["ADX", n(L.adx, 1)],
-    ["حجم", L.volume === null ? "—" : money(L.volume)],
-    ["میانگین حجم", L.volume_ma === null ? "—" : money(L.volume_ma)]
-  ];
+  renderMomentum("technical", series);
 
-  $("technicalTable").innerHTML = table(
-    ["اندیکاتور", "مقدار"], rows.map(r => [r[0], r[1]]));
+  // A compact current-reading table beneath the charts, and the pivot levels
+  // and vote beside it. All three come from the shared renderers the index
+  // cards use, so the same indicator cannot be rounded or labelled two ways.
+  $("technicalTable").innerHTML =
+    table(["اندیکاتور", "مقدار"], indicatorRows(L));
 
-  // ---- support / resistance table ----
-  const levelRows = [];
-  (lv.resistances || []).forEach(r =>
-    levelRows.push([`<span class="badge bad"><span class="dot"></span>مقاومت</span>`,
-                    n(r.price, 0), signed(r.distance_pct, 1), esc(r.date || "—")]));
-  (lv.supports || []).forEach(s =>
-    levelRows.push([`<span class="badge good"><span class="dot"></span>حمایت</span>`,
-                    n(s.price, 0), signed(s.distance_pct, 1), esc(s.date || "—")]));
+  renderLevels("technical", lv, 0);
 
-  $("technicalLevels").innerHTML = levelRows.length
-    ? table(["نوع", "قیمت", "فاصله", "تاریخ پیوت"], levelRows)
-    : '<div class="empty">پیوت تأییدشده‌ای یافت نشد</div>';
+  renderVoteCard("technical", rep.signal);
 
-  // ---- signal card ----
-  const sig = rep.signal;
-  const card = $("technicalSignalCard");
-
-  if (sig && sig.call) {
-    if (card) card.style.display = "";
-
-    const cls = sig.call === "BUY" ? "good"
-      : sig.call === "SELL" ? "bad" : "neutral";
-    const conv = sig.conviction === "trending" ? "روند‌دار (ADX بالا)"
-      : sig.conviction === "weak" ? "ضعیف (ADX پایین، بازار بی‌روند)"
-      : "معمولی";
-
-    $("technicalSignalHead").innerHTML =
-      `<span class="badge ${cls}" style="font-size:1.05em">` +
-      `<span class="dot"></span>${esc(sig.call_fa)}</span> ` +
-      `<span class="hint" style="margin-inline-start:8px">` +
-      `${sig.bullish} رأی مثبت · ${sig.bearish} منفی · ${sig.neutral} خنثی ` +
-      `(خالص ${signed(sig.net, 0, "")}) · قوت: ${conv}</span>`;
-
-    $("technicalSignalCaveat").textContent = "⚠ " + (sig.caveat || "");
-
-    const voteRows = (sig.votes || []).map(v => {
-      const vb = v.vote > 0
-        ? `<span class="badge good"><span class="dot"></span>مثبت</span>`
-        : v.vote < 0
-          ? `<span class="badge bad"><span class="dot"></span>منفی</span>`
-          : `<span class="badge neutral"><span class="dot"></span>خنثی</span>`;
-      return [esc(v.name), vb, esc(v.reason)];
-    });
-
-    $("technicalVotes").innerHTML = voteRows.length
-      ? table(["اندیکاتور", "رأی", "دلیل"], voteRows)
-      : '<div class="empty">رأیی ثبت نشد</div>';
-  } else if (card) {
-    card.style.display = "none";
-  }
+  // ---- price targets ----
+  renderTechnicalTargets(rep.targets, rep.signal);
 }
 
 async function loadTechnical(force = false) {
@@ -691,7 +1292,7 @@ async function loadTechnical(force = false) {
     state.technical = null;
     banner("technicalStatus", "technicalStatusText", "is-error",
       `<strong>تحلیل نشد.</strong> ${esc(err.message)}`);
-    ["technicalPriceChart", "technicalMomentumChart"].forEach(id => {
+    TECHNICAL_CHARTS.forEach(id => {
       const node = $(id);
       if (node) node.innerHTML = '<div class="empty">داده‌ای نیست</div>';
     });
@@ -700,6 +1301,8 @@ async function loadTechnical(force = false) {
     if (lvNode) lvNode.innerHTML = "";
     const card = $("technicalSignalCard");
     if (card) card.style.display = "none";
+    const tCard = $("technicalTargetCard");
+    if (tCard) tCard.style.display = "none";
     tiles("technicalKpis", []);
     console.error(err);
   } finally {
@@ -836,6 +1439,214 @@ async function loadInflow(force = false) {
   }
 }
 
+/* ---------- Smart Money Accumulation Scanner ---------- */
+
+// Every status this scanner issues is a WATCH status. There is deliberately no
+// green "buy" here: the platform's own research rejected the return claim
+// behind each of the scanner's ingredients, and painting a row green would
+// overturn that with a colour rather than with evidence.
+const SM_STATUS_CLASS = {
+  "تحت نظر ویژه": "warning",
+  "تحت نظر": "warning",
+  "زیر نظر": "neutral",
+  "ضعیف": "neutral"
+};
+
+// The V2 decision is shown as-is, including when it contradicts the scanner.
+// A row where the swing engine says AVOID and the scanner says 82 is the most
+// informative row in the table.
+const SM_V2_CLASS = { BUY: "good", HOLD: "neutral", SELL: "bad", AVOID: "bad" };
+
+// Market caps are read in همت on this market (۱ همت = ۱۰ هزار میلیارد ریال),
+// not in the T/B abbreviations money() uses for turnover. A reader who knows
+// this exchange knows instantly what "۱۲ همت" is and has to convert "120.00B".
+function hemat(v) {
+  return (v === null || v === undefined) ? "n/a"
+    : `${(v / 1e13).toFixed(v < 1e13 ? 2 : 1)} همت`;
+}
+
+function smartMoneyFunnel(c) {
+  tiles("smartMoneyFunnel", [
+    { k: "کل نمادها", v: c.universe ?? "n/a",
+      sub: `${c.illiquid ?? 0} زیر کف نقدشوندگی` },
+    { k: "نقدشونده", v: c.liquid ?? "n/a",
+      sub: `${c.dirty_data ?? 0} با داده مخدوش` },
+    { k: "MFI بالای ۷۰", v: c.passed_mfi ?? "n/a",
+      sub: "شرط اول — به‌تنهایی عادی است" },
+    { k: "در کف محدوده", v: c.passed_range ?? "n/a",
+      sub: `${c.queue_locked ?? 0} در صف، حذف شد` },
+    { k: "هنوز حرکت نکرده", v: c.still_quiet ?? "n/a",
+      sub: `${c.already_moved ?? 0} قبلاً حرکت کرده بودند` },
+    { k: "واجد شرایط", v: c.qualified ?? "n/a",
+      sub: `${c.with_code_to_code ?? 0} با کد به کد تأییدشده` }
+  ]);
+}
+
+function renderSmartMoney(rep) {
+  state.smartMoney = rep;
+
+  const rows = rep.top || [];
+  const c = rep.counts || {};
+
+  smartMoneyFunnel(c);
+  renderSmartMoneyRejected(rep.rejected || {});
+
+  const ms = rep.market_state;
+  const regime = (ms && !ms.informative)
+    ? `<br><strong style="color:var(--status-warning)">⚠ وضعیت بازار — ${esc(ms.regime)}:</strong> ${esc(ms.note || "")}`
+    : "";
+
+  const stale = (rep.staleness && !rep.staleness.actionable)
+    ? `<br><strong style="color:var(--status-warning)">⚠ داده کهنه:</strong> ${esc(rep.staleness.note || "")}`
+    : "";
+
+  const news = rep.news
+    ? ` خبر بازار: ${esc(rep.news.lean_label || "—")} (${rep.news.articles || 0} خبر) — ${esc(rep.news.note || "")}`
+    : "";
+
+  if (!rows.length) {
+    banner("smartMoneyStatus", "smartMoneyStatusText", "is-warn",
+      `<strong>امروز هیچ نمادی هر دو شرط را ندارد.</strong> ` +
+      `از ${c.liquid || 0} نماد نقدشونده، ${c.passed_mfi || 0} نماد MFI بالای ` +
+      `۷۰ داشتند اما ${c.passed_range || 0} نماد همزمان در کف محدوده‌ی خود ` +
+      `بودند. این یک نتیجه است، نه خطا — و مثل هر اجرای دیگری ثبت شد. ` +
+      `⚠ ${esc(rep.caveat || "")}${news}${regime}${stale}`);
+    $("smartMoneyTable").innerHTML = "";
+    $("smartMoneyAlerts").innerHTML = "";
+    return;
+  }
+
+  const live = !(rep.staleness && !rep.staleness.actionable);
+
+  banner("smartMoneyStatus", "smartMoneyStatusText", live ? "is-live" : "is-warn",
+    `<strong>${rows.length} نماد</strong> ` +
+    (live ? "در حال جمع‌آوری" : "— سابقه‌ی یک جلسه‌ی گذشته، نه فهرست جاری") + `، از ` +
+    `${c.qualified || 0} واجد شرایط (${c.passed_mfi || 0} با MFI بالای ۷۰، ` +
+    `${c.passed_range || 0} از آن‌ها در کف محدوده). جلسه‌ی داده: ` +
+    `${esc(rep.session_date || "—")}` +
+    (rep.run_id ? ` — ثبت شد با شناسه‌ی اجرای ${rep.run_id}` : "") +
+    `. ⚠ ${esc(rep.caveat || "")}${news}${regime}${stale}`);
+
+  const body = rows.map(r => {
+    const v2 = r.engine_v2 || {};
+
+    // P/E as a RELATION, which is what the reader is asked to judge. The raw
+    // pair is kept in the title so the claim can be checked, not just trusted.
+    const pe = (r.pe == null || r.sector_pe == null)
+      ? "n/a"
+      : `<span class="${r.pe < r.sector_pe ? "up" : "down"}" ` +
+        `title="P/E ${num(r.pe, 1)} در برابر میانه صنعت ${num(r.sector_pe, 1)}">` +
+        `${r.pe < r.sector_pe ? "کمتر" : "بیشتر"} از گروه ` +
+        `(${signed(r.pe_vs_sector, 0)})</span>`;
+
+    const smart = r.code_to_code
+      ? `<span class="badge warning"><span class="dot"></span>کد به کد ` +
+        `${num(r.smart_money_ratio, 2)}</span>`
+      : `<span class="badge neutral" title="${esc((r.code_to_code_reasons || [])[0] || "")}">` +
+        `<span class="dot"></span>تأیید نشد</span>`;
+
+    const sup = r.support || {};
+    const support = sup.price == null
+      ? "n/a"
+      : `${num(sup.distance_pct, 1)}٪ بالای ${esc(sup.label || "حمایت")}` +
+        (sup.touches ? ` (${sup.touches} بار تست)` : "");
+
+    return [
+      String(r.rank),
+      `<a href="?tech=${encodeURIComponent(r.symbol || "")}"
+          title="تحلیل تک‌نماد">${esc(r.symbol || "—")}</a>`,
+      `<strong>${r.score}</strong>` +
+        (r.coverage < 1
+          ? `<span class="hint" title="بخشی از مدل ورودی نداشت و صفر گرفت — ` +
+            `امتیاز بازتوزیع نمی‌شود">` +
+            ` ${Math.round(r.coverage * 100)}٪ مدل اجرا شد</span>`
+          : ""),
+      num(r.mfi, 1) + (r.divergence ? " ⚡" : ""),
+      pe,
+      `${esc(r.size_band_fa || "—")}<span class="hint"> ${hemat(r.market_cap)}</span>`,
+      `${signed(r.net_pct, 1)} ${smart}`,
+      // What the scanner is trying to precede: if this is already positive
+      // against the market, the move started without you.
+      `${signed(r.advance_excess_pct, 1)}` +
+        `<span class="hint"> ${r.band_closes ?? 0} بار در باند</span>`,
+      support,
+      `<span class="badge ${SM_STATUS_CLASS[r.status] || "neutral"}">` +
+        `<span class="dot"></span>${esc(r.status)}</span>` +
+        (v2.action
+          ? ` <span class="badge ${SM_V2_CLASS[v2.action] || "neutral"}" ` +
+            `title="نظر موتور تصمیم V2 — جدا از این اسکنر">` +
+            `<span class="dot"></span>V2: ${esc(v2.action)}</span>`
+          : "")
+    ];
+  });
+
+  $("smartMoneyTable").innerHTML = table(
+    ["#", "نماد", "امتیاز", "MFI", "P/E گروه", "ارزش بازار",
+     "ورود پول هوشمند", "مازاد بر بازار", "حمایت", "وضعیت"], body);
+
+  // The per-name sentence. Written out in full rather than hidden behind a
+  // tooltip: the score is the summary, and this is the reason.
+  $("smartMoneyAlerts").innerHTML =
+    `<p class="hint">توضیح هر نماد — قابل بررسی روی نمودار:</p>` +
+    rows.map(r => `
+      <div class="banner" style="margin-top:6px">
+        <span class="icon">◆</span>
+        <div><strong>${esc(r.symbol || "—")}</strong> —
+          ${esc(r.alert || "")}</div>
+      </div>`).join("");
+}
+
+// The rules that removed names, with their counts. A name failing two rules is
+// counted under both, so these do not sum to the number of names rejected --
+// they describe the market, not a partition of it.
+const SM_RULE_FA = {
+  mfi_floor: "MFI زیر ۷۰",
+  at_ceiling: "قیمت در سقف محدوده — در کف نیست",
+  no_range: "محدوده‌ی چندماهه قابل محاسبه نبود",
+  no_support: "هیچ حمایتی زیر قیمت نبود (کف در حال ساخته شدن)",
+  far_from_support: "فاصله از نزدیک‌ترین حمایت بیش از آستانه",
+  no_transfer: "انتقال حقوقی به حقیقی رخ نداده بود",
+  no_flow_data: "داده‌ی حقیقی/حقوقی ذخیره نشده",
+  data_integrity: "داده‌ی قیمتی مخدوش (حرکت غیرممکن در یک جلسه)",
+  thin_trading: "متوقف یا قفل در صف — پنجره‌ی خوانش واقعاً معامله نشده",
+  queue_locked: "در آخرین جلسه در صف خرید یا فروش بوده",
+  already_moved: "حرکت قیمت قبلاً شروع شده (مازاد بر بازار)"
+};
+
+function renderSmartMoneyRejected(rejected) {
+  const entries = Object.entries(rejected).sort((a, b) => b[1] - a[1]);
+
+  $("smartMoneyRejectedTable").innerHTML = entries.length
+    ? `<p class="hint">یک نماد می‌تواند در چند قانون بیفتد، پس جمع این اعداد
+       از تعداد نمادهای حذف‌شده بیشتر است.</p>` +
+      table(["قانون", "تعداد"],
+        entries.map(([rule, n]) => [esc(SM_RULE_FA[rule] || rule), String(n)]))
+    : "";
+}
+
+async function loadSmartMoney(force = false) {
+  const btn = $("runSmartMoneyBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "در حال اسکن…"; }
+  banner("smartMoneyStatus", "smartMoneyStatusText", "is-loading",
+    "اسکن کل بازار — دو دروازه‌ی ارزان اول اجرا می‌شوند و بقیه فقط روی " +
+    "بازماندگان…");
+
+  try {
+    const rep = await getJSON(
+      `/api/smartmoney?top=20&${query()}${force ? "&refresh=1" : ""}`);
+    renderSmartMoney(rep);
+  } catch (err) {
+    state.smartMoney = null;
+    banner("smartMoneyStatus", "smartMoneyStatusText", "is-error",
+      `<strong>اسکن انجام نشد.</strong> ${esc(err.message)}`);
+    $("smartMoneyTable").innerHTML = "";
+    $("smartMoneyAlerts").innerHTML = "";
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "▶ اجرای اسکنر"; }
+  }
+}
+
 /* ---------- gold funds (صندوق‌های طلا) ---------- */
 
 function renderGold(rep) {
@@ -855,20 +1666,63 @@ function renderGold(rep) {
     return;
   }
 
+  const navMissing = c.with_data - (c.with_nav || 0);
+
   banner("goldStatus", "goldStatusText", "is-live",
     `<strong>${c.with_data} صندوق طلا</strong> با داده` +
     (c.missing ? ` (${c.missing} منتظر دریافت)` : "") +
+    (navMissing > 0
+      ? ` — NAV برای ${navMissing} صندوق نیامد` +
+        (rep.nav_error ? ` (${esc(rep.nav_error)})` : "")
+      : " — NAV زنده از TSETMC") +
     `. ⚠ ${esc(rep.caveat || "")}`);
 
   const callBadge = (call, fa) =>
     `<span class="badge ${CALL_CLASS[call] || "neutral"}">` +
     `<span class="dot"></span>${esc(fa)}</span>`;
 
+  // The حباب cell: the ratio the user asked for, with the premium it implies
+  // spelled out underneath. Coloured only outside ±BUBBLE_BAND, because a
+  // fund half a percent off its NAV is at its NAV, and painting that red would
+  // turn rounding into a verdict.
+  const band = rep.nav_band || 0.02;
+
+  const bubbleCell = (r) => {
+    if (r.price_to_nav === null || r.price_to_nav === undefined) {
+      return r.nav_error
+        ? `<span class="muted" title="${esc(r.nav_error)}">—</span>`
+        : "—";
+    }
+    const b = r.bubble;
+    const cls = b > band ? "down" : b < -band ? "up" : "muted";
+    // The sign is spelled out rather than printed as + / -. A leading minus is
+    // a bidi-neutral character: in this RTL cell it resolves to the far end of
+    // the run, so "-1.16٪ حباب" renders with the sign detached from its
+    // number and a discount reads exactly like a premium. مثبت / منفی cannot
+    // move.
+    const word = b > 0 ? "حباب مثبت" : b < 0 ? "حباب منفی" : "بدون حباب";
+    return `<span class="nav-ratio">${r.price_to_nav.toFixed(4)}</span>` +
+      `<span class="nav-bubble ${cls}">` +
+      (b === 0 ? word
+        : `${(Math.abs(b) * 100).toFixed(2)}٪ ${word}`) + `</span>`;
+  };
+
   const body = rows.map(r => [
     `<a href="?tech=${encodeURIComponent(r.symbol || "")}"
         title="تحلیل تک‌نماد">${esc(r.symbol || "—")}</a>`,
     esc((r.name || "").slice(0, 30)),
-    num(r.close, 0),
+    // The live پایانی when the pull got one, else the last stored bar. The
+    // tooltip names the source, so a price and a NAV struck at different
+    // moments can never be mistaken for a matched pair.
+    r.day_close != null
+      ? `<span title="قیمت پایانی امروز — از TSETMC">${num(r.day_close, 0)}</span>`
+      : `<span class="muted" title="آخرین کندل ذخیره‌شده (${esc(r.as_of || "؟")})">` +
+        `${num(r.close, 0)}</span>`,
+    r.nav != null
+      ? `<span title="NAV ابطال؛ صدور: ${num(r.nav_issue, 0)}">` +
+        `${num(r.nav, 0)}</span>`
+      : "—",
+    bubbleCell(r),
     num(r.rsi, 1),
     num(r.macd, 2),
     esc(r.trend || "—"),
@@ -877,7 +1731,8 @@ function renderGold(rep) {
   ]);
 
   $("goldTable").innerHTML = table(
-    ["نماد", "نام", "قیمت", "RSI", "MACD", "روند", "سیگنال", "تا تاریخ"], body);
+    ["نماد", "نام", "قیمت روز", "NAV ابطال", "قیمت / NAV",
+     "RSI", "MACD", "روند", "سیگنال", "تا تاریخ"], body);
 }
 
 async function loadGold(force = false) {
@@ -915,6 +1770,202 @@ async function importGold() {
     console.error(err);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "↓ دریافت تاریخچه"; }
+  }
+}
+
+/* ---------- market intelligence (هوش بازار) ----------
+   A REPORT, never a signal. This panel reads /api/intelligence, which is
+   isolated from every trading route; nothing here produces a buy/sell. */
+
+const TONE_FA = { up: "مثبت", down: "منفی", neutral: "خنثی" };
+
+function whenText(iso) {
+  if (!iso) return "بدون تاریخ";
+  try {
+    return new Date(iso).toLocaleString("fa-IR", {
+      timeZone: "Asia/Tehran", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit"
+    });
+  } catch (e) {
+    return iso.slice(0, 16).replace("T", " ");
+  }
+}
+
+function toneDot(tone) {
+  const cls = tone === "up" ? "up" : tone === "down" ? "down" : "flat";
+  return `<span class="tone-dot ${cls}" title="${TONE_FA[tone] || ""}"></span>`;
+}
+
+function intelBadges(e, opts = {}) {
+  const b = [];
+  if (e.is_price_forecast && !opts.hideForecast)
+    b.push(`<span class="intel-badge forecast">پیش‌بینی قیمت</span>`);
+  else if (e.is_analysis)
+    b.push(`<span class="intel-badge analysis">تحلیلی</span>`);
+  if (opts.showMarkets && (e.market_labels || []).length)
+    b.push(`<span class="intel-badge market">${esc(e.market_labels.join("، "))}</span>`);
+  return b.join("");
+}
+
+function intelItem(e, opts = {}) {
+  const title = e.link
+    ? `<a href="${esc(e.link)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>`
+    : esc(e.title);
+  const srcs = (e.sources || []).slice(0, 3).join("، ");
+  const cats = (e.category_labels || []).slice(0, 2).join("، ");
+  const corr = e.corroboration > 1
+    ? ` · <b class="intel-corr">${e.corroboration} منبع</b>` : "";
+  const meta = [esc(srcs), whenText(e.published_at), esc(cats)]
+    .filter(Boolean).join(" · ");
+  return `<li class="intel-item">
+    <div class="intel-title">${toneDot(e.tone)}${title} ${intelBadges(e, opts)}</div>
+    <div class="intel-meta">${meta}${corr}</div>
+  </li>`;
+}
+
+function outlookLine(o) {
+  if (!o) return "";
+  const cls = o.lean === "supportive" ? "up"
+    : o.lean === "pressure" ? "down" : "muted";
+  const drivers = (o.drivers || []).length
+    ? ` — محرک‌ها: ${esc(o.drivers.join("، "))}` : "";
+  const counts = o.total
+    ? ` <span class="muted">(▲${o.up} ▼${o.down} از ${o.total})</span>` : "";
+  return `<div class="intel-outlook">
+    <span class="intel-outlook-tag">چشم‌انداز خبری:</span>
+    <span class="${cls}">${esc(o.lean_label)}</span>${drivers}${counts}
+  </div>`;
+}
+
+function intelColumn(sec) {
+  const t = sec.tone || {};
+  const list = (sec.events || []).length
+    ? (sec.events || []).map(e => intelItem(e)).join("")
+    : `<li class="muted">موردی در این بازه نیست.</li>`;
+  return `<div class="intel-col">
+    <div class="intel-col-head">
+      <span class="intel-col-name">${esc(sec.label)}</span>
+      <span class="intel-col-tone">
+        <span class="up">▲${t.up || 0}</span>
+        <span class="down">▼${t.down || 0}</span>
+        <span class="muted">●${t.neutral || 0}</span>
+      </span>
+      <span class="muted">(${sec.economic || 0}/${sec.total || 0})</span>
+    </div>
+    ${outlookLine(sec.outlook)}
+    <ul class="intel-list">${list}</ul>
+  </div>`;
+}
+
+function renderIntelligence(rep) {
+  state.intel = rep;
+
+  const o = rep.overview || {};
+  const bm = o.by_market || {};
+  const tn = o.tone || {};
+
+  // The disclaimer is not decorative -- it is the scope of the whole panel.
+  const disc = $("intelDisclaimer");
+  if (disc) disc.textContent = "ℹ " + (rep.disclaimer || "");
+
+  const rng = o.time_range || {};
+  banner("intelStatus", "intelStatusText", "is-live",
+    `<strong>${o.forecasts || 0} پیش‌بینی قیمت</strong> · ${o.economic || 0} خبر ` +
+    `اقتصادی از ${o.articles || 0} خبر · بازه‌ی ${rep.window_hours || 0} ساعت` +
+    (rng.to ? ` · تازه‌ترین: ${whenText(rng.to)}` : ""));
+
+  // overview tiles -- economic and forecast counts lead, tone lives in outlooks
+  const tiles = [
+    ["خبر", o.articles || 0],
+    ["رویداد", o.events || 0],
+    ["اقتصادی", o.economic || 0],
+    ["پیش‌بینی قیمت", o.forecasts || 0],
+    ["تحلیلی", o.analysis || 0],
+    ["نفت", bm.oil || 0],
+    ["طلا", bm.gold || 0],
+    ["دلار", bm.fx || 0],
+    ["بورس", bm.tse || 0],
+  ];
+  $("intelOverview").innerHTML = tiles.map(([k, v]) =>
+    `<div class="intel-tile"><div class="intel-tile-v">${v}</div>` +
+    `<div class="intel-tile-k">${k}</div></div>`).join("");
+
+  // PRICE FORECASTS -- first, per the user's priority
+  const fc = rep.price_forecasts || [];
+  const fcNode = $("intelForecasts");
+  if (fcNode) {
+    fcNode.innerHTML =
+      `<div class="intel-fc-head">🔮 پیش‌بینی قیمت — نفت، طلا، دلار، سهام` +
+      ` <span class="muted">(${fc.length})</span></div>` +
+      (fc.length
+        ? `<ul class="intel-list">${fc.map(e =>
+            intelItem(e, { showMarkets: true, hideForecast: true })).join("")}</ul>`
+        : `<div class="muted intel-fc-empty">در این بازه خبرِ پیش‌بینی قیمتی یافت نشد. ` +
+          `بازه را بلندتر کنید یا «دریافت اخبار جدید» را بزنید.</div>`);
+  }
+
+  // themes chips
+  const themes = o.themes || [];
+  $("intelThemes").innerHTML = themes.length
+    ? `<span class="muted">موضوع‌های پرتکرار:</span> ` + themes.map(t =>
+      `<span class="chip">${esc(t.label)} <b>${t.count}</b></span>`).join(" ")
+    : "";
+
+  // market columns (oil, gold, dollar, stocks), each with its news outlook
+  const order = rep.market_order || ["oil", "gold", "fx", "tse"];
+  const m = rep.markets || {};
+  $("intelMarkets").innerHTML =
+    order.map(k => m[k]).filter(Boolean).map(intelColumn).join("");
+
+  // source health -- ok / failed / html-only / unavailable, all on record
+  const s = rep.sources || {};
+  const okNames = (s.ok || []).map(x => x.name);
+  const failed = (s.failed || []).map(x => `${x.name} (${x.status})`);
+  const html = (s.html_only || []).map(x => x.name);
+  const unavail = (s.unavailable || []).map(x => `${x.name} — ${x.reason}`);
+  $("intelSources").innerHTML =
+    `<div class="intel-src-line"><b>${okNames.length} منبع فعال:</b> ` +
+    `<span class="muted">${esc(okNames.join("، "))}</span></div>` +
+    (failed.length ? `<div class="intel-src-line down"><b>ناموفق:</b> ${esc(failed.join("، "))}</div>` : "") +
+    (html.length ? `<div class="intel-src-line"><b>فقط HTML (بدون فید):</b> <span class="muted">${esc(html.join("، "))}</span></div>` : "") +
+    (unavail.length ? `<div class="intel-src-line"><b>در دسترس نیست (ثبت‌شده، جعل‌نشده):</b> <span class="muted">${esc(unavail.join("؛ "))}</span></div>` : "");
+}
+
+async function loadIntelligence(force = false) {
+  const win = $("intelWindow")?.value || 72;
+  const btn = $("runIntelBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "در حال بارگذاری…"; }
+  try {
+    const rep = await getJSON(
+      `/api/intelligence?window=${win}&top=20${force ? "&refresh=1" : ""}`);
+    renderIntelligence(rep);
+  } catch (err) {
+    state.intel = null;
+    banner("intelStatus", "intelStatusText", "is-error",
+      `<strong>گزارش ساخته نشد.</strong> ${esc(err.message)}`);
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↻ گزارش"; }
+  }
+}
+
+async function fetchIntelligence() {
+  const btn = $("fetchIntelBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "در حال دریافت…"; }
+  banner("intelStatus", "intelStatusText", "is-loading",
+    "در حال دریافت و دسته‌بندی اخبار از همه‌ی منابع …");
+  try {
+    const res = await getJSON("/api/intelligence/fetch", { method: "POST" });
+    banner("intelStatus", "intelStatusText", "is-live",
+      `<strong>${res.inserted} خبر تازه</strong> (${res.updated} به‌روزرسانی) ` +
+      `از ${res.sources_ok}/${res.sources_ok + res.sources_failed} منبع. در حال ساخت گزارش…`);
+    await loadIntelligence(true);
+  } catch (err) {
+    banner("intelStatus", "intelStatusText", "is-error",
+      `<strong>دریافت نشد.</strong> ${esc(err.message)}`);
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↓ دریافت اخبار جدید"; }
   }
 }
 
@@ -1602,9 +2653,12 @@ async function loadScreen(force = false) {
       `${rep.counts.technically_analysed} از ${rep.counts.universe} تحلیل شد`,
       `${rep.counts.technically_analysed}/${rep.counts.universe}`);
   } catch (err) {
-    banner("screenStatus", "screenStatusText", "is-error",
-      `<strong>غربال شکست خورد.</strong> ${esc(err.message)}`);
-    setTask("screen", "failed", err.message);
+    if (!scanLocked(err, "screenStatus", "screenStatusText", "screen",
+                    "غربال اجرا نشد — تنظیمات است، نه خطا.")) {
+      banner("screenStatus", "screenStatusText", "is-error",
+        `<strong>غربال شکست خورد.</strong> ${esc(err.message)}`);
+      setTask("screen", "failed", err.message);
+    }
     console.error(err);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "▶ اجرای غربال"; }
@@ -1623,7 +2677,7 @@ function renderPortfolio(rep) {
     $("portfolioTable").innerHTML = "";
     $("allocationChart").innerHTML = '<div class="empty">سبدی نیست</div>';
     $("riskTable").innerHTML = "";
-    $("correlationTable").innerHTML = "";
+    bulletList("riskNotes", []);
     bulletList("portfolioNotes", []);
     return;
   }
@@ -1743,7 +2797,7 @@ function renderRisk(riskRep, basket) {
   if (!riskRep || !riskRep.available) {
     $("riskTable").innerHTML =
       `<div class="empty">${esc(riskRep?.reason || "تحلیل ریسک در دسترس نیست")}</div>`;
-    $("correlationTable").innerHTML = "";
+    bulletList("riskNotes", []);
     return;
   }
 
@@ -1786,27 +2840,28 @@ function renderRisk(riskRep, basket) {
     ]
   );
 
-  $("riskHint").textContent = riskRep.price_band_warning || "";
+  // Everything qualifying the numbers above, in one list under them: the
+  // ±3% band warning, the names dropped for want of history, the short
+  // overlap window. These used to be split between a hint that overwrote the
+  // card's own explanation and a hint under the correlation matrix -- so
+  // removing the matrix would have taken the caveats with it, even though
+  // they qualify volatility, VaR and beta just as much.
+  //
+  // "همبستگی محاسبه نشد" earns a line of its own: without a correlation
+  // matrix behind it the diversification ratio and the average-correlation
+  // row in the table above are not measured, and a blank cell cannot say so.
+  const notes = [];
 
-  if (corr.labels && corr.values) {
-    const cells = corr.values.map((row, i) => [
-      `<strong>${corr.labels[i]}</strong>`,
-      ...row.map((v, j) => {
-        if (i === j) return "—";
-        if (v === null) return "n/a";
-        const cls = v >= 0.7 ? "down" : v <= 0.3 ? "up" : "";
-        return `<span class="${cls}">${v.toFixed(2)}</span>`;
-      })
-    ]);
-    $("correlationTable").innerHTML = table(["", ...corr.labels], cells);
-  } else {
-    $("correlationTable").innerHTML =
-      '<div class="empty">همبستگی محاسبه نشد — سابقه‌ی مشترک کافی نیست</div>';
+  if (riskRep.price_band_warning) notes.push(riskRep.price_band_warning);
+
+  if (!(corr.labels && corr.values)) {
+    notes.push("همبستگی محاسبه نشد — سابقه‌ی مشترک کافی بین نمادهای سبد " +
+               "نیست، پس نسبت تنوع‌بخشی و میانگین همبستگی خوانده نمی‌شوند.");
   }
 
-  if (riskRep.notes && riskRep.notes.length) {
-    $("corrHint").textContent = riskRep.notes.join("  ");
-  }
+  notes.push(...(riskRep.notes || []));
+
+  bulletList("riskNotes", notes);
 }
 
 async function loadPortfolio(force = false) {
@@ -1825,9 +2880,12 @@ async function loadPortfolio(force = false) {
         : (rep.error || "ساخته نشد"),
       n ? String(n) : "");
   } catch (err) {
-    banner("portfolioStatus", "portfolioStatusText", "is-error",
-      `<strong>ساخت سبد شکست خورد.</strong> ${esc(err.message)}`);
-    setTask("portfolio", "failed", err.message);
+    if (!scanLocked(err, "portfolioStatus", "portfolioStatusText", "portfolio",
+                    "سبد ساخته نشد — تنظیمات است، نه خطا.")) {
+      banner("portfolioStatus", "portfolioStatusText", "is-error",
+        `<strong>ساخت سبد شکست خورد.</strong> ${esc(err.message)}`);
+      setTask("portfolio", "failed", err.message);
+    }
     console.error(err);
   } finally {
     setLoading(false);
@@ -2025,7 +3083,8 @@ function renderTasks() {
 
   $("taskSteps").innerHTML = TASKS.map((t) => {
     const s = taskState[t.id] || { state: "queued", detail: "not started" };
-    const cls = ["running", "done", "failed"].includes(s.state) ? s.state : "queued";
+    const cls = ["running", "done", "failed", "warn"].includes(s.state)
+      ? s.state : "queued";
     return pill(cls, shortLabel(t.label), `${t.label}\n${s.detail || s.state}`,
       s.count || "");
   }).join("");
@@ -2127,6 +3186,7 @@ async function loadAll() {
   loadSectors();
   loadFundamentals();
   loadMoneyflow();
+  loadIntelligence();
   await loadScreen();
   await loadPortfolio();
 }
@@ -2141,7 +3201,9 @@ function rerender() {
   if (state.technical) renderTechnical(state.technical);
   if (state.topTechnical) renderTopTechnical(state.topTechnical);
   if (state.inflow) renderInflow(state.inflow);
+  if (state.smartMoney) renderSmartMoney(state.smartMoney);
   if (state.gold) renderGold(state.gold);
+  if (state.intel) renderIntelligence(state.intel);
   if (state.screen) renderScreen(state.screen);
   if (state.portfolio) renderPortfolio(state.portfolio);
 }
@@ -2252,8 +3314,12 @@ on("runPortfolioBtn", "click", () => loadPortfolio(true));
 on("runTechnicalBtn", "click", () => loadTechnical(true));
 on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
 on("runInflowBtn", "click", () => loadInflow(true));
+on("runSmartMoneyBtn", "click", () => loadSmartMoney(true));
 on("runGoldBtn", "click", () => loadGold(true));
 on("importGoldBtn", "click", importGold);
+on("runIntelBtn", "click", () => loadIntelligence(true));
+on("fetchIntelBtn", "click", fetchIntelligence);
+on("intelWindow", "change", () => loadIntelligence(true));
 
 // Enter in the symbol box runs the analysis, so the button is optional.
 on("techSymbolInput", "keydown", (e) => {
@@ -2369,6 +3435,21 @@ if (techParam) {
   const input = $("techSymbolInput");
   if (input) input.value = techParam;
   loadTechnical(true);
+}
+
+// ?intel=1 opens the Market-Intelligence panel straight away (bookmark/share,
+// and it lets the panel be captured without a manual click).
+if (new URLSearchParams(location.search).get("intel")) {
+  const group = $("evidenceIntel");
+  if (group) group.open = true;
+  loadIntelligence(true);
+}
+
+// ?indices=1 does the same for the index section. No extra fetch: loadAll()
+// already runs loadIndices(), so this only unfolds what is being loaded anyway.
+if (new URLSearchParams(location.search).get("indices")) {
+  const group = $("evidenceIndices");
+  if (group) group.open = true;
 }
 
 getJSON("/api/status").then(status => {

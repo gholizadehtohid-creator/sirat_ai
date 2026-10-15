@@ -173,23 +173,19 @@
 
     <div class="card">
       <div class="card-head"><h2>ریسک سبد</h2></div>
-      <p class="hint" id="riskHint">
+      <p class="hint">
         ریسک هر موقعیت به‌تنهایی کافی نیست: ده موقعیت که هرکدام ۱٪ ریسک دارند،
-        اگر با هم بیفتند ۱۰٪ ریسک ندارند — بستگی به همبستگی‌شان دارد.
+        اگر با هم بیفتند ۱۰٪ ریسک ندارند — بستگی به همبستگی‌شان دارد. «میانگین
+        همبستگی جفتی» در جدول همین را در یک عدد می‌گوید: نزدیک ۱ یعنی تنوع
+        اسمی است نه واقعی.
       </p>
       <div class="table-wrap" id="riskTable"></div>
+      <!-- Caveats on the numbers above: names dropped for want of history, a
+           short overlap window. They used to live under the correlation matrix,
+           but they qualify volatility, VaR and beta too -- so they belong with
+           the table they describe, not with the one that was removed. -->
+      <ul class="evidence" id="riskNotes" style="margin-top:12px"></ul>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head">
-      <h2>ماتریس همبستگی</h2>
-    </div>
-    <p class="hint" id="corrHint">
-      همبستگی بالا یعنی تنوع اسمی است نه واقعی. مقادیر نزدیک ۱ یعنی دو نماد
-      عملاً یک موقعیت‌اند.
-    </p>
-    <div class="table-wrap" id="correlationTable"></div>
   </div>
 
   <!-- ================= THE EVIDENCE =================
@@ -257,8 +253,9 @@
     </div>
     <p class="hint">
       خواندنِ اندیکاتورهای همان موتور سهام روی یک نماد — میانگین‌های متحرک،
-      RSI، MACD، باند بولینگر و %B، ATR و ADX، و برچسب روند. این بخش فقط
-      <strong>داده</strong> است، نه سیگنال: هیچ خرید/فروش تولید نمی‌کند. یک نماد
+      RSI، MACD، باند بولینگر و %B، ATR و ADX، و برچسب روند. زیر آن یک خوانش
+      خرید/فروش و یک نردبان اهداف قیمتی می‌آید؛ هر دو <strong>خوانش</strong>‌اند،
+      نه لبه‌ی اعتبارسنجی‌شده، و هر دو هشدار خودشان را همراه دارند. یک نماد
       وارد کنید تا آخرین وضعیتش نمایش داده شود؛ صفحه با هیچ نماد پیش‌فرضی باز
       نمی‌شود.
     </p>
@@ -279,17 +276,53 @@
       <div class="table-wrap" id="technicalVotes" style="margin-top:10px"></div>
     </div>
 
+    <!-- price targets: where a move from here would end, and what it costs -->
+    <div class="card" id="technicalTargetCard"
+         style="border:none;padding:0;margin-top:16px;display:none">
+      <div class="card-head"><h2>اهداف قیمتی</h2></div>
+      <p class="hint">
+        هدف اندازه‌گیری‌شده از فاصله‌ی حد ضرر ساخته می‌شود — همان قاعده‌ای که
+        دفتر سوئینگ استفاده می‌کند، نه یک قاعده‌ی مخصوصِ این پنجره — و اگر
+        مقاومتی زیر آن باشد، به زیر همان مقاومت کشیده و نسبت سود به زیان دوباره
+        حساب می‌شود. اهداف ساختاری از بسط سوئینگ آخر می‌آیند. بازار فقط خرید
+        دارد، پس نردبان رو به بالاست.
+      </p>
+
+      <div class="kpi-row" id="technicalTargetKpis"></div>
+
+      <div class="table-wrap" id="technicalTargetTable"
+           style="margin-top:12px"></div>
+
+      <p class="hint" id="technicalTargetCaveat"
+         style="margin-top:8px;font-style:italic"></p>
+
+      <ul class="evidence" id="technicalTargetNotes"
+          style="margin-top:6px"></ul>
+    </div>
+
     <div class="grid-2" style="margin-top:16px">
       <div class="card" style="border:none;padding:0">
-        <div class="card-head"><h2>قیمت و میانگین‌های متحرک</h2></div>
-        <p class="hint">بسته در برابر دو میانگین متحرک و باندهای بولینگر.
-          خطوط چین: حمایت‌ها و مقاومت‌ها.</p>
+        <div class="card-head"><h2>قیمت، سطوح و حجم</h2></div>
+        <p class="hint">
+          بسته در برابر دو میانگین متحرک و باندهای بولینگر. خطوط چین: حمایت
+          (سبز) و مقاومت (قرمز) — فقط آن‌هایی که داخل محدوده‌ی همین نمودارند؛
+          سطحی دورتر، محور را چنان می‌کشد که خودِ قیمت صاف می‌شود، پس در جدول
+          کناری می‌ماند نه روی نمودار. ستون‌های پایین، حجم هر روز است با رنگِ
+          جهتِ همان روز، و خط چین روی آن‌ها میانگین حجم.
+        </p>
         <div class="chart" id="technicalPriceChart"></div>
+        <div class="chart" id="technicalVolumeChart" style="margin-top:6px"></div>
       </div>
       <div class="card" style="border:none;padding:0">
         <div class="card-head"><h2>MACD و RSI</h2></div>
-        <p class="hint">خط MACD در برابر خط سیگنال؛ RSI روی همان محور زمان.</p>
+        <p class="hint">
+          دو نمودار جدا: MACD به واحد قیمت است و RSI بین ۰ و ۱۰۰، پس روی یک
+          محور مشترک یکی دیگری را می‌بلعد. ستون‌ها هیستوگرام MACD‌اند — همان
+          فاصله‌ی دو خط، که پیش از تقاطع می‌چرخد. محور RSI روی ۰ تا ۱۰۰ قفل
+          است تا اشباعِ ۷۱ و اشباعِ ۹۵ یک‌شکل دیده نشوند؛ خطوط چین ۷۰، ۵۰ و ۳۰.
+        </p>
         <div class="chart" id="technicalMomentumChart"></div>
+        <div class="chart" id="technicalRsiChart" style="margin-top:8px"></div>
       </div>
     </div>
 
@@ -297,7 +330,10 @@
       <div class="card" style="border:none;padding:0">
         <div class="card-head"><h2>مقاومت‌ها و حمایت‌ها</h2></div>
         <p class="hint">از پیوت‌های تأییدشده — سقف/کف‌هایی که بازار واقعاً روی
-          آن‌ها معامله کرده، نه سطوح مشتق از نوسان.</p>
+          آن‌ها معامله کرده، نه سطوح مشتق از نوسان. پیوت‌های نزدیک به هم یک
+          سطح‌اند نه چند سطح، پس ادغام می‌شوند؛ ستون «برخورد» می‌گوید چند بار
+          بازار روی آن سطح برگشته — تنها سنجه‌ی قدرتی که خودِ قیمت به دست
+          می‌دهد.</p>
         <div class="table-wrap" id="technicalLevels"></div>
       </div>
       <div class="card" style="border:none;padding:0">
@@ -358,6 +394,49 @@
 
   </details>
 
+  <!-- ========== SMART MONEY ACCUMULATION SCANNER ========== -->
+
+  <details class="evidence-group" id="evidenceSmartMoney">
+  <summary>Smart Money Accumulation Scanner — جمع‌آوری پیش از حرکت</summary>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>اسکنر جمع‌آوری پول هوشمند</h2>
+      <div class="top-actions">
+        <button id="runSmartMoneyBtn" class="primary">▶ اجرای اسکنر</button>
+      </div>
+    </div>
+    <p class="hint">
+      یک تلاقی نادر، نه فهرستی از چند نکته‌ی جداگانه: <em>پول در حال ورود
+      است (MFI بالای ۷۰) در حالی که قیمت هنوز پایین است</em> — در کف محدوده‌ی
+      چندماهه‌ی خودش و نزدیک یک حمایت تست‌شده. هر نیمه به‌تنهایی عادی است؛ در
+      جلسه‌ای که این ماژول نوشته شد، ۲۸۹ نماد از ۶۰۶ نماد نقدشونده MFI بالای ۷۰
+      داشتند و فقط ۷ نماد هر دو شرط را. امتیازدهی ۱۰۰ تایی: MFI ۱۵، P/E نسبت به
+      صنعت ۱۵، اندازه ۱۰، انتقال حقوقی به حقیقی ۲۰، کد به کد ۱۵، کف و حمایت ۱۵،
+      حجم غیرعادی ۱۰. «فروش حقوقی» و «خرید حقیقی» یک واقعیت‌اند نه دو تا، و
+      یک‌بار امتیاز می‌گیرند؛ کد به کد چیز دیگری را می‌سنجد — تعداد دست‌هایی که
+      سهم به آن‌ها رسیده، نه اندازه‌ی انتقال.
+    </p>
+
+    <div id="smartMoneyStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span>
+      <div id="smartMoneyStatusText">برای اجرای اسکنر دکمه را بزنید.</div>
+    </div>
+
+    <div class="kpi-row" id="smartMoneyFunnel"></div>
+
+    <div class="table-wrap" id="smartMoneyTable" style="margin-top:12px"></div>
+
+    <div id="smartMoneyAlerts" style="margin-top:12px"></div>
+
+    <details id="smartMoneyRejected" style="margin-top:12px">
+      <summary>چه چیزی حذف شد و با کدام قانون</summary>
+      <div class="table-wrap" id="smartMoneyRejectedTable"></div>
+    </details>
+  </div>
+
+  </details>
+
   <!-- ================= GOLD FUNDS: صندوق‌های طلا ================= -->
 
   <details class="evidence-group" id="evidenceGold">
@@ -377,6 +456,14 @@
       خوانش تکنیکال معنا دارد، چون سری قیمت دارند. سیگنال همان خوانش کتاب‌درسی
       است، نه لبه‌ی اعتبارسنجی‌شده.
     </p>
+    <p class="hint">
+      ستون <strong>قیمت / NAV</strong> نسبت قیمت پایانی روز به NAV ابطالِ
+      منتشرشده است و زیر آن حباب همان نسبت. برخلاف بقیه‌ی ستون‌ها این یک خوانش
+      تکنیکال نیست؛ ارزش‌گذاری است — تنها چیزی که برای صندوقی که کل دارایی‌اش
+      فلزِ قیمت‌گذاری‌شده است معنا دارد. قیمت و NAV هر دو از یک لحظه‌ی واحد
+      (خوانش زنده‌ی TSETMC) گرفته می‌شوند تا نسبت، حبابی را که بازار هرگز اعلام
+      نکرده نشان ندهد.
+    </p>
 
     <div id="goldStatus" class="banner" style="margin-top:4px">
       <span class="icon">…</span>
@@ -384,6 +471,49 @@
     </div>
 
     <div class="table-wrap" id="goldTable" style="margin-top:12px"></div>
+  </div>
+
+  </details>
+
+  <!-- ================= MARKET INTELLIGENCE: هوش بازار ================= -->
+
+  <details class="evidence-group" id="evidenceIntel">
+  <summary>هوش بازار (تحلیل اخبار)</summary>
+
+  <div class="card intel-card">
+    <div class="card-head">
+      <h2>هوش بازار — تحلیل خبری</h2>
+      <div class="top-actions">
+        <select id="intelWindow" title="بازه‌ی زمانی">
+          <option value="24">۲۴ ساعت</option>
+          <option value="72" selected>۳ روز</option>
+          <option value="168">۷ روز</option>
+          <option value="336">۱۴ روز</option>
+        </select>
+        <button id="fetchIntelBtn">↓ دریافت اخبار جدید</button>
+        <button id="runIntelBtn" class="primary">↻ گزارش</button>
+      </div>
+    </div>
+
+    <p class="hint" id="intelDisclaimer">
+      این پنجره فقط گزارش و تحلیل خبری است و هیچ سیگنال خرید یا فروشی تولید
+      نمی‌کند. اخبار به موتور تصمیم‌گیری متصل نیست.
+    </p>
+
+    <div id="intelStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span>
+      <div id="intelStatusText">برای دریافت اخبار دکمه را بزنید.</div>
+    </div>
+
+    <div id="intelOverview" class="intel-tiles" style="margin-top:12px"></div>
+    <div id="intelForecasts" class="intel-forecasts" style="margin-top:14px"></div>
+    <div id="intelThemes" class="intel-themes" style="margin-top:12px"></div>
+    <div id="intelMarkets" class="intel-markets" style="margin-top:14px"></div>
+
+    <details class="intel-sources-wrap" style="margin-top:14px">
+      <summary>وضعیت منابع</summary>
+      <div id="intelSources" class="intel-sources"></div>
+    </details>
   </div>
 
   </details>
@@ -402,9 +532,11 @@
       </div>
     </div>
     <p class="hint">
-      همان مدل شش‌مؤلفه‌ای سهام، روی سری منتشرشده‌ی شاخص. یک شاخص حجم معاملات
-      مخصوص خود ندارد، پس مؤلفه‌ی حجم با ارزش کل معاملات بازار تغذیه می‌شود —
-      و این موضوع صریحاً اعلام می‌شود، نه اینکه ضمنی فرض شود.
+      همان تحلیلی که پنل سهام انجام می‌دهد، روی سری منتشرشده‌ی شاخص: امتیاز
+      شش‌مؤلفه‌ای، خوانش کامل اندیکاتورها، حمایت و مقاومت از پیوت‌های تأییدشده،
+      رأی‌گیری شفاف تکنیکال، و نردبان اهداف. یک شاخص حجم معاملات مخصوص خود
+      ندارد، پس مؤلفه‌ی حجم با ارزش کل معاملات بازار تغذیه می‌شود — و این
+      موضوع صریحاً اعلام می‌شود، نه اینکه ضمنی فرض شود.
     </p>
 
     <div id="capIndexStatus" class="banner" style="margin-top:4px">
@@ -412,6 +544,40 @@
     </div>
 
     <div class="kpi-row" id="capIndexKpis"></div>
+
+    <!-- signal: the same transparent vote the equity panel runs, plus the
+         two votes only an index has -->
+    <div class="card" id="capIndexSignalCard"
+         style="border:none;padding:0;margin-top:16px;display:none">
+      <div class="card-head"><h2>سیگنال تکنیکال شاخص</h2></div>
+      <div id="capIndexSignalHead" style="margin-top:4px"></div>
+      <p class="hint" id="capIndexSignalNote" style="margin-top:8px"></p>
+      <p class="hint" id="capIndexSignalCaveat"
+         style="margin-top:6px;font-style:italic"></p>
+      <div class="table-wrap" id="capIndexVotes" style="margin-top:10px"></div>
+    </div>
+
+    <!-- the two-sided ladder: where the index meets something, either way -->
+    <div class="card" id="capIndexTargetCard"
+         style="border:none;padding:0;margin-top:16px;display:none">
+      <div class="card-head"><h2>اهداف و سطوح شاخص</h2></div>
+      <p class="hint">
+        نردبان دوطرفه است، چون شاخص موقعیت نیست و جهت ندارد. هر پله یا جایی
+        است که بازار پیش‌تر در آن ایستاده (پیوت، سقف/کف دوره‌ای، فیبوناچی) یا
+        جایی که نوسان معمول خودِ شاخص به آن می‌رسد. واحد اندازه‌گیری، ATR همین
+        شاخص است.
+      </p>
+
+      <div class="kpi-row" id="capIndexTargetKpis"></div>
+
+      <div class="table-wrap" id="capIndexTargetTable"
+           style="margin-top:12px"></div>
+
+      <p class="hint" id="capIndexTargetCaveat"
+         style="margin-top:8px;font-style:italic"></p>
+
+      <ul class="evidence" id="capIndexTargetNotes" style="margin-top:6px"></ul>
+    </div>
 
     <div class="grid-2" style="margin-top:16px">
       <div class="card" style="border:none;padding:0">
@@ -421,13 +587,41 @@
         <div class="legend" id="capIndexLegend"></div>
       </div>
       <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>MACD و RSI</h2></div>
+        <p class="hint">
+          دو نمودار جدا، چون MACD شاخص به واحد شاخص است و به صدها هزار
+          می‌رسد: روی یک محور مشترک، RSI صاف روی صفر می‌خوابید و ناخوانا
+          می‌شد. خطوط ۷۰ و ۳۰ مرزهای اشباع‌اند.
+        </p>
+        <div class="chart" id="capIndexMomentumChart"></div>
+        <div class="chart" id="capIndexRsiChart" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>مقاومت‌ها و حمایت‌ها</h2></div>
+        <p class="hint">از پیوت‌های تأییدشده — سقف/کف‌هایی که شاخص واقعاً روی
+          آن‌ها ایستاده، نه سطوح مشتق از نوسان.</p>
+        <div class="table-wrap" id="capIndexLevels"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
         <div class="card-head"><h2>اجزای امتیاز</h2></div>
         <p class="hint">شش مؤلفه‌ی وزنی که امتیاز ۰–۱۰۰ را می‌سازند.</p>
         <div class="chart" id="capIndexBreakdown"></div>
       </div>
     </div>
 
-    <div class="table-wrap" id="capIndexTable"></div>
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>بازده در بازه‌ها</h2></div>
+        <div class="table-wrap" id="capIndexTable"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>خوانش اندیکاتورها</h2></div>
+        <div class="table-wrap" id="capIndexReading"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ================= INDEX: شاخص کل هم‌وزن ================= -->
@@ -451,6 +645,36 @@
 
     <div class="kpi-row" id="ewIndexKpis"></div>
 
+    <div class="card" id="ewIndexSignalCard"
+         style="border:none;padding:0;margin-top:16px;display:none">
+      <div class="card-head"><h2>سیگنال تکنیکال شاخص هم‌وزن</h2></div>
+      <div id="ewIndexSignalHead" style="margin-top:4px"></div>
+      <p class="hint" id="ewIndexSignalNote" style="margin-top:8px"></p>
+      <p class="hint" id="ewIndexSignalCaveat"
+         style="margin-top:6px;font-style:italic"></p>
+      <div class="table-wrap" id="ewIndexVotes" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card" id="ewIndexTargetCard"
+         style="border:none;padding:0;margin-top:16px;display:none">
+      <div class="card-head"><h2>اهداف و سطوح شاخص هم‌وزن</h2></div>
+      <p class="hint">
+        همان نردبان دوطرفه، روی سری هم‌وزن. چون این شاخص «سهم متوسط بازار» را
+        نشان می‌دهد، سطوح آن به آنچه یک سبد معمولی تجربه می‌کند نزدیک‌ترند تا
+        سطوح شاخص کل.
+      </p>
+
+      <div class="kpi-row" id="ewIndexTargetKpis"></div>
+
+      <div class="table-wrap" id="ewIndexTargetTable"
+           style="margin-top:12px"></div>
+
+      <p class="hint" id="ewIndexTargetCaveat"
+         style="margin-top:8px;font-style:italic"></p>
+
+      <ul class="evidence" id="ewIndexTargetNotes" style="margin-top:6px"></ul>
+    </div>
+
     <div class="grid-2" style="margin-top:16px">
       <div class="card" style="border:none;padding:0">
         <div class="card-head"><h2>شاخص و میانگین‌های متحرک</h2></div>
@@ -459,17 +683,56 @@
         <div class="legend" id="ewIndexLegend"></div>
       </div>
       <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>MACD و RSI</h2></div>
+        <p class="hint">
+          دو نمودار جدا، چون MACD شاخص به واحد شاخص است و به صدها هزار
+          می‌رسد: روی یک محور مشترک، RSI صاف روی صفر می‌خوابید و ناخوانا
+          می‌شد. خطوط ۷۰ و ۳۰ مرزهای اشباع‌اند.
+        </p>
+        <div class="chart" id="ewIndexMomentumChart"></div>
+        <div class="chart" id="ewIndexRsiChart" style="margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>مقاومت‌ها و حمایت‌ها</h2></div>
+        <p class="hint">از پیوت‌های تأییدشده روی سری هم‌وزن.</p>
+        <div class="table-wrap" id="ewIndexLevels"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>اجزای امتیاز</h2></div>
+        <p class="hint">شش مؤلفه‌ی وزنی که امتیاز ۰–۱۰۰ را می‌سازند.</p>
+        <div class="chart" id="ewIndexBreakdown"></div>
+      </div>
+    </div>
+
+    <!-- Full width, not a grid cell: breadth is the one reading here that is
+         about the market rather than about this index, and the diverging bars
+         are easier to compare across horizons when they are not squeezed. -->
+    <div style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
         <div class="card-head"><h2>عمق بازار — هم‌وزن منهای کل</h2></div>
         <p class="hint">
           شاخصِ وزنیِ ارزش بازار می‌تواند صعود کند در حالی که اکثر سهام می‌ریزند.
-          فاصله‌ی این دو شاخص، همان را مستقیم اندازه می‌گیرد.
+          فاصله‌ی این دو شاخص، همان را مستقیم اندازه می‌گیرد — و همین فاصله به
+          صورت یک رأی به هر دو سیگنال بالا وارد شده است.
         </p>
         <div class="chart" id="breadthChart"></div>
         <div id="breadthVerdict" class="hint"></div>
       </div>
     </div>
 
-    <div class="table-wrap" id="ewIndexTable"></div>
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>بازده در بازه‌ها</h2></div>
+        <div class="table-wrap" id="ewIndexTable"></div>
+      </div>
+      <div class="card" style="border:none;padding:0">
+        <div class="card-head"><h2>خوانش اندیکاتورها</h2></div>
+        <div class="table-wrap" id="ewIndexReading"></div>
+      </div>
+    </div>
   </div>
 
   </details>
