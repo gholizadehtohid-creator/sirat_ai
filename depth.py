@@ -59,6 +59,32 @@ from datetime import datetime, timezone
 
 import config
 
+
+def _utf8_stdout():
+    """Make Persian printable when stdout is a pipe, not a console.
+
+    Windows gives a redirected stream the ANSI codepage (cp1252 here), so the
+    moment this module's output goes to a file -- which is exactly what a
+    scheduled task does -- printing a symbol like فملی raises
+    UnicodeEncodeError and takes the whole run down. The console itself is
+    already UTF-8 (chcp 65001), so the crash only ever appears unattended,
+    which is the worst place to discover it.
+
+    `errors="replace"` rather than a bare reconfigure: a log line with a
+    question mark in it is a cosmetic loss, and an encoding fault must never
+    again be able to end a collection run.
+    """
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if (stream.encoding or "").lower() not in ("utf-8", "utf8"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            # A stream that cannot be reconfigured is not a reason to refuse
+            # to collect; the ASCII progress lines still print.
+            pass
+
+
 DB = config.DATABASE_NAME
 
 URL = ("https://cdn.tsetmc.com/api/ClosingPrice/GetMarketWatch"
@@ -456,6 +482,8 @@ def schedule_command(python=None, at="13:00"):
 
 
 def main(argv=None):
+    _utf8_stdout()
+
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--status", action="store_true")
     parser.add_argument("--if-due", action="store_true", dest="if_due",
