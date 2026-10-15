@@ -609,6 +609,58 @@ def api_smart_money_history():
                     "signals": store.recent_signals(limit=limit)})
 
 
+@app.route("/api/live")
+def api_live():
+    """The session as it stands: who is locked, what just changed, who is being bought.
+
+    Reads only what monitor.py has already written. Deliberately issues no
+    network request of its own -- a dashboard load must not put traffic on
+    TSETMC, and the collector is at most one poll ahead of this anyway.
+
+    NOT MEMOISED. Every other whole-market view here is cached for five
+    minutes because it costs a scan; this one is three indexed reads, and a
+    five-minute-old answer on a panel whose entire claim is "right now" would
+    be the one cache in this file that actively misleads.
+
+    `session` is asked of the live feed rather than the clock, and carries
+    three states: the exchange published a complete frozen market every day
+    for the eleven weeks it was shut, so "a bar exists" proves nothing and
+    "unreachable" is not "closed".
+
+    Every block carries `age_minutes`. The panel is the one view in this
+    project most likely to be read as a live terminal, and the collector runs
+    only during a session -- opened on a Thursday it is showing Wednesday's
+    close, and opened while the scheduled task is broken it could be showing
+    last month. The age is part of the answer.
+    """
+
+    import market_session
+    import monitor
+
+    top = request.args.get("top", type=int) or 15
+    top = max(1, min(top, 50))
+
+    captured_at = monitor.latest_capture()
+
+    # The feed probe is one call and it is the only honest way to answer
+    # "is a session running". Failure here must not take the panel down:
+    # the stored half is still worth rendering, and says so.
+    try:
+        session = market_session.is_trading_now()
+    except Exception as exc:                                    # noqa: BLE001
+        session = {"trading": None, "traded": 0, "last_trade": None,
+                   "reason": "%s: %s" % (type(exc).__name__, str(exc)[:120])}
+
+    return jsonify({
+        "session": session,
+        "collector": monitor.last_tick(),
+        "counts": monitor.queue_counts(captured_at),
+        "queues": monitor.queues(captured_at, limit=top),
+        "events": monitor.recent_events(limit=40),
+        "flow": monitor.live_flow(limit=top),
+    })
+
+
 @app.route("/api/gold")
 def api_gold():
     """Gold funds (صندوق‌های طلا) with a technical read each.

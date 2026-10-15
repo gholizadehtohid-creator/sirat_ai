@@ -628,6 +628,295 @@ class Monitor:
             sleeper(wait)
 
 
+# ==============================
+# THE READ SIDE -- what the panel asks for
+# ==============================
+# Everything here reads the tables the loop above writes. It never fetches: a
+# dashboard load must not put a request on TSETMC, and the loop is at most one
+# poll behind anyway.
+#
+# THE AGE IS PART OF THE ANSWER, NOT A FOOTNOTE. This panel is the one place in
+# the project most likely to be mistaken for a live terminal, and the monitor
+# only runs during a session. Opened on a Thursday it is showing Wednesday's
+# close; opened while the scheduled task is broken it could be showing last
+# month. So every payload carries the capture instant and its age in minutes,
+# and the caller is expected to render them.
+
+
+def _ro(db=DB):
+    return sqlite3.connect("file:%s?mode=ro" % str(db).replace("\\", "/"),
+                           uri=True)
+
+
+def _age_minutes(stamp):
+    if not stamp:
+        return None
+
+    try:
+        then = datetime.fromisoformat(stamp)
+    except (TypeError, ValueError):
+        return None
+
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=timezone.utc)
+
+    return round((datetime.now(timezone.utc) - then).total_seconds() / 60.0, 1)
+
+
+def latest_capture(db=DB):
+    conn = _ro(db)
+
+    try:
+        row = conn.execute(
+            "SELECT MAX(captured_at) FROM depth_snapshot").fetchone()
+
+        return row[0] if row else None
+    except sqlite3.OperationalError:
+        return None
+    finally:
+        conn.close()
+
+
+def queues(captured_at=None, limit=25, db=DB):
+    """Names locked at the last capture, deepest queue first.
+
+    A queue is read off the book, not inferred: the ask side at level one is
+    empty while the bid side is not, which is صف خرید, and the mirror is صف
+    فروش. `bid_qty` is the demand standing behind the lock -- the number E14
+    measured a 3.03x queue-exposure ratio without ever seeing a rial of.
+
+    Ordered by size because size is a magnitude. Nothing here ranks names by
+    how good they are; this module does not have an opinion about that.
+    """
+
+    captured_at = captured_at or latest_capture(db)
+
+    if not captured_at:
+        return {"captured_at": None, "age_minutes": None,
+                "buy": [], "sell": []}
+
+    conn = _ro(db)
+
+    sql = """
+        SELECT s.ins_code, s.symbol_fa, s.last, s.prev_close,
+               s.limit_up, s.limit_down, s.value, s.trades,
+               l.bid_qty, l.bid_orders, l.ask_qty, l.ask_orders
+        FROM depth_levels l
+        JOIN depth_snapshot s
+          ON s.ins_code = l.ins_code AND s.captured_at = l.captured_at
+        JOIN instruments i ON i.ins_code = s.ins_code
+        WHERE l.captured_at = ? AND l.level = 1 AND i.is_equity = 1
+          AND %s
+        ORDER BY %s DESC
+        LIMIT ?
+    """
+
+    def fetch(side):
+        if side == "buy":
+            where = "(l.ask_qty IS NULL OR l.ask_qty = 0) AND l.bid_qty > 0"
+            order = "l.bid_qty"
+        else:
+            where = "(l.bid_qty IS NULL OR l.bid_qty = 0) AND l.ask_qty > 0"
+            order = "l.ask_qty"
+
+        rows = conn.execute(sql % (where, order),
+                            (captured_at, limit)).fetchall()
+
+        out = []
+
+        for (ins_code, symbol, last, prev, up, down, value, trades,
+             bid_qty, bid_orders, ask_qty, ask_orders) in rows:
+            qty = bid_qty if side == "buy" else ask_qty
+            orders = bid_orders if side == "buy" else ask_orders
+
+            out.append({
+                "ins_code": ins_code,
+                "symbol": symbol,
+                "last": last,
+                "prev_close": prev,
+                "change_pct": (round((last - prev) / prev * 100, 2)
+                               if last and prev else None),
+                "limit_up": up,
+                "limit_down": down,
+                "queue_shares": qty,
+                "queue_orders": orders,
+                # Rials standing in the queue, which is what "how big is this
+                # صف" means to someone judging whether it will clear.
+                "queue_value": (round(qty * last) if qty and last else None),
+                "value": value,
+                "trades": trades,
+            })
+
+        return out
+
+    try:
+        return {"captured_at": captured_at,
+                "age_minutes": _age_minutes(captured_at),
+                "buy": fetch("buy"),
+                "sell": fetch("sell")}
+    finally:
+        conn.close()
+
+
+def queue_counts(captured_at=None, db=DB):
+    """How many equities are locked each way at the last capture."""
+
+    captured_at = captured_at or latest_capture(db)
+
+    if not captured_at:
+        return {"buy": 0, "sell": 0, "instruments": 0}
+
+    conn = _ro(db)
+
+    try:
+        buy, sell, total = conn.execute("""
+            SELECT
+              SUM(CASE WHEN (l.ask_qty IS NULL OR l.ask_qty = 0)
+                        AND l.bid_qty > 0 THEN 1 ELSE 0 END),
+              SUM(CASE WHEN (l.bid_qty IS NULL OR l.bid_qty = 0)
+                        AND l.ask_qty > 0 THEN 1 ELSE 0 END),
+              COUNT(*)
+            FROM depth_levels l
+            JOIN instruments i ON i.ins_code = l.ins_code
+            WHERE l.captured_at = ? AND l.level = 1 AND i.is_equity = 1
+        """, (captured_at,)).fetchone()
+
+        return {"buy": int(buy or 0), "sell": int(sell or 0),
+                "instruments": int(total or 0)}
+    except sqlite3.OperationalError:
+        return {"buy": 0, "sell": 0, "instruments": 0}
+    finally:
+        conn.close()
+
+
+def recent_events(limit=40, db=DB):
+    """The last transitions the loop saw, newest first.
+
+    Empty is the normal state outside a session and must not be dressed up:
+    the loop only writes when the market moves, so nothing here means either
+    nothing moved or nothing was watching, and the tick ledger is what tells
+    those apart.
+    """
+
+    conn = _ro(db)
+
+    try:
+        rows = conn.execute("""
+            SELECT observed_at, ins_code, symbol_fa, event,
+                   last, limit_up, limit_down, bid_qty, ask_qty
+            FROM market_events
+            ORDER BY observed_at DESC, ins_code
+            LIMIT ?
+        """, (limit,)).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    finally:
+        conn.close()
+
+    return [{"observed_at": r[0], "ins_code": r[1], "symbol": r[2],
+             "event": r[3], "last": r[4], "limit_up": r[5],
+             "limit_down": r[6], "bid_qty": r[7], "ask_qty": r[8],
+             "age_minutes": _age_minutes(r[0])}
+            for r in rows]
+
+
+def live_flow(limit=25, min_participants=20, db=DB):
+    """Intraday قدرت خریدار from the newest flow snapshot.
+
+    Per-capita retail buying over per-capita retail selling, computed from
+    volumes and counts because that is what the bulk endpoint publishes. It
+    matches the value-based figure at correlation 0.99999999 over 57,649
+    stored rows -- both legs of one instrument trade at nearly one price
+    inside a session, so price cancels in the ratio.
+
+    `min_participants` is a FLOOR ON EVIDENCE, not a filter on outcome: a
+    ratio built from two buyers and one seller is arithmetic, not a reading.
+    moneyflow.py makes the same point about daily ratios reaching the millions
+    on a session where four people sold.
+    """
+
+    conn = _ro(db)
+
+    try:
+        stamp = conn.execute(
+            "SELECT MAX(captured_at) FROM client_type_live").fetchone()
+    except sqlite3.OperationalError:
+        conn.close()
+        return {"captured_at": None, "age_minutes": None, "names": [],
+                "universe": 0}
+
+    stamp = stamp[0] if stamp else None
+
+    if not stamp:
+        conn.close()
+        return {"captured_at": None, "age_minutes": None, "names": [],
+                "universe": 0}
+
+    try:
+        rows = conn.execute("""
+            SELECT f.ins_code, i.symbol_fa,
+                   f.individual_buy_volume, f.individual_sell_volume,
+                   f.individual_buy_count, f.individual_sell_count
+            FROM client_type_live f
+            JOIN instruments i ON i.ins_code = f.ins_code
+            WHERE f.captured_at = ? AND i.is_equity = 1
+              AND f.individual_buy_count >= ?
+              AND f.individual_sell_count >= ?
+              AND f.individual_sell_volume > 0
+              AND f.individual_buy_volume > 0
+        """, (stamp, min_participants, min_participants)).fetchall()
+    finally:
+        conn.close()
+
+    names = []
+
+    for ins_code, symbol, buy_vol, sell_vol, buy_cnt, sell_cnt in rows:
+        power = (buy_vol / buy_cnt) / (sell_vol / sell_cnt)
+
+        names.append({
+            "ins_code": ins_code,
+            "symbol": symbol,
+            "buyer_power": round(power, 3),
+            "buyers": int(buy_cnt or 0),
+            "sellers": int(sell_cnt or 0),
+            # One fact, signed once: every share حقیقی bought net was sold
+            # net by حقوقی. moneyflow.py refuses to report both as separate
+            # evidence and so does this.
+            "net_retail_shares": round((buy_vol or 0) - (sell_vol or 0)),
+        })
+
+    names.sort(key=lambda row: row["buyer_power"], reverse=True)
+
+    return {"captured_at": stamp, "age_minutes": _age_minutes(stamp),
+            "names": names[:limit], "universe": len(names)}
+
+
+def last_tick(db=DB):
+    """The loop's own most recent record of itself.
+
+    What separates "the market stood still" from "nothing was watching".
+    """
+
+    conn = _ro(db)
+
+    try:
+        row = conn.execute("""
+            SELECT observed_at, outcome, changed, events, detail
+            FROM monitor_ticks ORDER BY observed_at DESC LIMIT 1
+        """).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    return {"observed_at": row[0], "outcome": row[1], "changed": row[2],
+            "events": row[3], "detail": row[4],
+            "age_minutes": _age_minutes(row[0])}
+
+
 def status(db=DB):
     conn = sqlite3.connect("file:%s?mode=ro" % str(db).replace("\\", "/"),
                            uri=True)

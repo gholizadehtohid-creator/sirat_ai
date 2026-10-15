@@ -3181,6 +3181,11 @@ document.addEventListener("visibilitychange", () => {
 // feeds -- the order an analyst reads them in, and the order the page is laid
 // out in. The portfolio waits for the screen because it is built from it.
 async function loadAll() {
+  // First because it is the cheapest (three indexed reads plus one session
+  // probe) and the only panel whose value expires. A reader who opens the
+  // page during a session should not watch the basket build before being
+  // told whether the market is even trading.
+  loadLive();
   loadRegime();
   loadIndices();
   loadSectors();
@@ -3305,6 +3310,206 @@ on("importCodalBtn", "click", () =>
         : "<strong>یک دریافت کدال از قبل در حال اجراست.</strong>");
   }));
 
+/* ---------- live session watch ----------
+
+   The one view here whose value expires. Everything else on this page is as
+   true in an hour as it is now; this is not, and the whole of the rendering
+   below is shaped by that.
+
+   THE AGE IS RENDERED EVERYWHERE, AND NEVER AS COLOUR ALONE. The collector
+   runs only during a session, so this panel opened on a Thursday is showing
+   Wednesday's close and opened with a broken scheduled task could be showing
+   last month. `ageTag` prints the number and adds the word "کهنه" past the
+   threshold -- a reader who does not know the palette still gets told.
+
+   AUTO-REFRESH IS OFF BY DEFAULT AND POLLS THE DATABASE, NOT THE EXCHANGE.
+   /api/live issues no outbound request of its own beyond one session probe,
+   so leaving this on costs three indexed reads a minute. It is still off by
+   default, because a panel that quietly generates traffic forever is how a
+   source starts refusing you. */
+
+// Past this, a reading is labelled stale in words. One session is 210
+// minutes, and the collector captures the book every 15 -- so an hour is
+// four missed captures, which is a collector that has stopped rather than
+// one that is merely between ticks.
+const LIVE_STALE_MINUTES = 60;
+
+const LIVE_POLL_MS = 60000;
+
+let liveTimer = null;
+
+const EVENT_FA = {
+  buy_queue_formed:   "صف خرید تشکیل شد",
+  buy_queue_broke:    "صف خرید شکست",
+  sell_queue_formed:  "صف فروش تشکیل شد",
+  sell_queue_broke:   "صف فروش شکست",
+  reached_limit_up:   "به سقف دامنه رسید",
+  left_limit_up:      "از سقف دامنه برگشت",
+  reached_limit_down: "به کف دامنه رسید",
+  left_limit_down:    "از کف دامنه برگشت",
+};
+
+function ageTag(minutes) {
+  if (minutes === null || minutes === undefined) return "";
+  const stale = minutes > LIVE_STALE_MINUTES;
+  const text = minutes < 90
+    ? `${minutes.toFixed(0)} دقیقه پیش`
+    : `${(minutes / 60).toFixed(1)} ساعت پیش`;
+  return `<span class="age-tag${stale ? " stale" : ""}">${text}${
+    stale ? " — کهنه" : ""}</span>`;
+}
+
+async function loadLive() {
+  const btn = $("refreshLiveBtn");
+
+  if (btn) { btn.disabled = true; btn.textContent = "در حال خواندن…"; }
+
+  let rep;
+
+  try {
+    rep = await getJSON("/api/live?top=15");
+  } catch (err) {
+    banner("liveStatus", "liveStatusText", "is-error",
+      `<strong>رصد زنده در دسترس نیست.</strong> ${esc(err.message)}`);
+    console.error(err);
+    return;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↻ به‌روزرسانی"; }
+  }
+
+  const s = rep.session || {};
+  const tick = rep.collector;
+  const counts = rep.counts || {};
+
+  // Three states, not two. An unreachable feed is not a closed market: the
+  // first says nothing about the exchange, the second is a claim about it.
+  let kind, headline;
+
+  if (s.trading === true) {
+    kind = "is-live";
+    headline = "جلسه در حال اجراست";
+  } else if (s.trading === false) {
+    kind = "";
+    headline = "جلسه در حال اجرا نیست";
+  } else {
+    kind = "is-error";
+    headline = "وضعیت جلسه نامعلوم است — فید خوانده نشد";
+  }
+
+  // market_session returns its reason in English because it is a library and
+  // that string goes to logs. The panel is read in Persian, so the figure is
+  // restated here rather than echoed.
+  let detail = (s.traded === null || s.traded === undefined)
+    ? esc(s.reason || "")
+    : `${s.traded} نماد گردش معامله دارند`;
+
+  if (tick) {
+    detail += ` · آخرین تیک جمع‌آورنده: ${esc(tick.outcome)} ${
+      ageTag(tick.age_minutes)}`;
+  } else {
+    detail += " · جمع‌آورنده هنوز هیچ تیکی ثبت نکرده است";
+  }
+
+  banner("liveStatus", "liveStatusText", kind,
+         `<strong>${headline}</strong> — ${detail}`);
+
+  const q = rep.queues || {};
+
+  tiles("liveKpis", [
+    { k: "صف خرید", v: counts.buy ?? "n/a",
+      sub: `از ${counts.instruments ?? "n/a"} سهم` },
+    { k: "صف فروش", v: counts.sell ?? "n/a",
+      sub: `از ${counts.instruments ?? "n/a"} سهم` },
+    { k: "نمادهای دارای گردش", v: s.traded ?? "n/a",
+      sub: "همین حالا، از روی تابلو" },
+    { k: "آخرین عکس دفتر", v: q.age_minutes === null
+        || q.age_minutes === undefined ? "—" : `${q.age_minutes.toFixed(0)}′`,
+      sub: q.captured_at ? esc(q.captured_at.slice(11, 16)) + " UTC" : "ثبت نشده" },
+  ]);
+
+  renderQueueSide("liveBuyTable", "liveBuyHint", q.buy, q, "خرید");
+  renderQueueSide("liveSellTable", "liveSellHint", q.sell, q, "فروش");
+  renderLiveEvents(rep.events);
+  renderLiveFlow(rep.flow);
+}
+
+function renderQueueSide(tableId, hintId, rows, q, side) {
+  $(hintId).innerHTML = q.captured_at
+    ? `از عکس دفتر سفارش — ${ageTag(q.age_minutes)}`
+    : "هیچ عکسی از دفتر سفارش ثبت نشده است.";
+
+  if (!rows || !rows.length) {
+    $(tableId).innerHTML =
+      `<p class="hint">هیچ نمادی در صف ${side} نیست.</p>`;
+    return;
+  }
+
+  $(tableId).innerHTML = table(
+    ["نماد", "آخرین", "تغییر", "حجم صف", "سفارش‌ها", "ارزش صف (ریال)"],
+    rows.map(r => [
+      esc(r.symbol || r.ins_code),
+      num(r.last, 0),
+      signed(r.change_pct),
+      money(r.queue_shares),
+      num(r.queue_orders, 0),
+      money(r.queue_value),
+    ]));
+}
+
+function renderLiveEvents(events) {
+  if (!events || !events.length) {
+    $("liveEventsTable").innerHTML =
+      `<p class="hint">هیچ رویدادی ثبت نشده است.</p>`;
+    return;
+  }
+
+  $("liveEventsTable").innerHTML = table(
+    ["زمان", "نماد", "چه شد", "آخرین"],
+    events.map(e => [
+      `${esc((e.observed_at || "").slice(11, 19))} ${ageTag(e.age_minutes)}`,
+      esc(e.symbol || e.ins_code),
+      esc(EVENT_FA[e.event] || e.event),
+      num(e.last, 0),
+    ]));
+}
+
+function renderLiveFlow(flow) {
+  flow = flow || {};
+
+  if (!flow.names || !flow.names.length) {
+    $("liveFlowTable").innerHTML = flow.captured_at
+      ? `<p class="hint">هیچ نمادی به کف ۲۰ مشارکت‌کننده نرسید.</p>`
+      : `<p class="hint">هنوز هیچ عکس درون‌جلسه‌ای از جریان حقیقی/حقوقی
+         گرفته نشده است. جمع‌آورنده فقط در جلسه اجرا می‌شود.</p>`;
+    return;
+  }
+
+  $("liveFlowTable").innerHTML =
+    `<p class="hint">${flow.universe} نماد واجد شرط —
+       ${ageTag(flow.age_minutes)}</p>` +
+    table(["نماد", "قدرت خریدار", "خریداران", "فروشندگان", "خالص سهم حقیقی"],
+      flow.names.map(r => [
+        esc(r.symbol || r.ins_code),
+        num(r.buyer_power, 2),
+        num(r.buyers, 0),
+        num(r.sellers, 0),
+        money(r.net_retail_shares),
+      ]));
+}
+
+function setLiveAuto(on) {
+  if (liveTimer) {
+    clearInterval(liveTimer);
+    liveTimer = null;
+  }
+
+  // document.hidden: a backgrounded tab polling forever is traffic nobody
+  // is reading. The visibilitychange handler below resumes it.
+  if (on) liveTimer = setInterval(() => {
+    if (!document.hidden) loadLive();
+  }, LIVE_POLL_MS);
+}
+
 on("runIndicesBtn", "click", () => loadIndices(true));
 on("runSectorsBtn", "click", () => loadSectors(true));
 on("runFundBtn", "click", () => loadFundamentals(true));
@@ -3317,6 +3522,15 @@ on("runInflowBtn", "click", () => loadInflow(true));
 on("runSmartMoneyBtn", "click", () => loadSmartMoney(true));
 on("runGoldBtn", "click", () => loadGold(true));
 on("importGoldBtn", "click", importGold);
+on("refreshLiveBtn", "click", loadLive);
+on("liveAuto", "change", (e) => setLiveAuto(e.target.checked));
+
+// A tab that was hidden while auto-refresh ran comes back showing whatever
+// it had when it was hidden, which on this panel is the one thing that must
+// never be stale without saying so.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && $("liveAuto")?.checked) loadLive();
+});
 on("runIntelBtn", "click", () => loadIntelligence(true));
 on("fetchIntelBtn", "click", fetchIntelligence);
 on("intelWindow", "change", () => loadIntelligence(true));

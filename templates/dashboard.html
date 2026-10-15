@@ -188,6 +188,92 @@
     </div>
   </div>
 
+  <!-- ================= LIVE SESSION WATCH =================
+       Placed above the evidence rather than inside it, because this section
+       does not explain the basket -- it describes the market the basket
+       would have to be traded into, right now. It is also the only view here
+       whose value expires: everything else is as true in an hour as it is
+       now, and this is not.
+
+       Every block renders its own age, and the banner goes amber the moment
+       the data stops being current. The panel is the view most likely to be
+       mistaken for a live terminal, and the collector only runs during a
+       session. -->
+
+  <div class="section-title">رصد زنده‌ی بازار — Live session watch</div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>وضعیت جلسه</h2>
+      <div class="top-actions">
+        <label class="inline-check">
+          <input type="checkbox" id="liveAuto"> به‌روزرسانی خودکار
+        </label>
+        <button id="refreshLiveBtn" class="primary">↻ به‌روزرسانی</button>
+      </div>
+    </div>
+
+    <p class="hint">
+      این بخش <em>مشاهده</em> است، نه سیگنال. هیچ امتیاز، رتبه و توصیه‌ی
+      خرید و فروشی اینجا تولید نمی‌شود و هیچ عددی از اینجا وارد موتور تصمیم
+      نمی‌شود. «صف» هم تعریف است نه آستانه: سمت فروش در سطح یک خالی است و سمت
+      خرید نیست. ترتیب بر اساس <em>اندازه</em>ی صف است، چون اندازه یک کمیت
+      است — نه چون آن نماد بهتر است.
+      <br>
+      زنده‌بودن جلسه از روی <em>گردش معامله</em> خوانده می‌شود نه ساعت: این
+      بورس در یازده هفته‌ای که تعطیل بود، هر روز یک بازار کامل و یخ‌زده منتشر
+      می‌کرد، پس وجود کندل چیزی را ثابت نمی‌کند.
+    </p>
+
+    <div id="liveStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span>
+      <div id="liveStatusText">در حال خواندن…</div>
+    </div>
+
+    <div class="kpi-row" id="liveKpis"></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><h2>صف خرید</h2></div>
+      <p class="hint" id="liveBuyHint"></p>
+      <div class="table-wrap" id="liveBuyTable"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>صف فروش</h2></div>
+      <p class="hint" id="liveSellHint"></p>
+      <div class="table-wrap" id="liveSellTable"></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><h2>تغییرات لحظه‌ای</h2></div>
+      <p class="hint">
+        لحظه‌ای که یک صف تشکیل شد یا شکست، یا نمادی به حد دامنه رسید یا از آن
+        برگشت. اولین خوانش هر اجرا <em>مبنا</em> است و رویدادی تولید نمی‌کند —
+        وگرنه هر بار راه‌اندازی مجدد، تشکیل صف همه‌ی نمادهای از قبل قفل را
+        گزارش می‌کرد. خالی‌بودن این فهرست یعنی یا چیزی تکان نخورده یا چیزی در
+        حال رصد نبوده، و «آخرین تیک» بالا تفاوتشان را می‌گوید.
+      </p>
+      <div class="table-wrap" id="liveEventsTable"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>قدرت خریدار حقیقی — درون‌جلسه‌ای</h2></div>
+      <p class="hint">
+        سرانه‌ی خرید حقیقی تقسیم بر سرانه‌ی فروش حقیقی، از حجم و تعداد همین
+        جلسه. برابر با نسخه‌ی ارزش‌محور است (همبستگی ۰٫۹۹۹۹۹۹۹۹ روی ۵۷٬۶۴۹
+        ردیف) چون قیمت در نسبت حذف می‌شود. نمادهایی با کمتر از ۲۰ خریدار یا
+        فروشنده کنار گذاشته می‌شوند: نسبتی که از دو خریدار ساخته شود حساب است،
+        نه خوانش.
+      </p>
+      <div class="table-wrap" id="liveFlowTable"></div>
+    </div>
+  </div>
+
+
   <!-- ================= THE EVIDENCE =================
        Collapsed, not deleted. This system is not validated enough to be a
        black box: the sections below are what let a reader see how much data
