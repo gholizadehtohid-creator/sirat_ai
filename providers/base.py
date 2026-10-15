@@ -49,6 +49,30 @@ CLIENT_TYPE_COLUMNS = [
     "institutional_buy_count", "institutional_sell_count",
 ]
 
+# The INTRADAY whole-market flow snapshot, which is a different shape from the
+# history above and must not be confused with it. Two differences, both of
+# which bite silently:
+#
+#   NO VALUE COLUMNS. GetClientTypeAll publishes volumes and participant
+#   counts only. Anything needing rials must take them from the per-symbol
+#   history at end of day, or go without.
+#
+#   ONE ROW PER INSTRUMENT, not per date. It is the running total of the
+#   session in progress, reset by the exchange at each session's start.
+#
+# قدرت خریدار survives the missing values. Measured over 57,649 stored rows,
+# the per-capita ratio computed from volumes matches the one computed from
+# values with a median relative difference of 0.0135% and a correlation of
+# 0.99999999 -- because both legs of one instrument trade at nearly one price
+# in one session, so price cancels in the ratio.
+CLIENT_TYPE_LIVE_COLUMNS = [
+    "ins_code",
+    "individual_buy_volume", "individual_sell_volume",
+    "institutional_buy_volume", "institutional_sell_volume",
+    "individual_buy_count", "individual_sell_count",
+    "institutional_buy_count", "institutional_sell_count",
+]
+
 
 # Capabilities an adapter may advertise.
 CAP_UNIVERSE = "universe"

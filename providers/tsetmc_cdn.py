@@ -24,6 +24,7 @@ from providers.base import (
     CAP_INFO,
     CAP_SNAPSHOT,
     CLIENT_TYPE_COLUMNS,
+    CLIENT_TYPE_LIVE_COLUMNS,
     INDEX_COLUMNS,
     SNAPSHOT_COLUMNS,
     MarketDataProvider,
@@ -413,6 +414,108 @@ class TsetmcCdnProvider(MarketDataProvider):
 
         return ProviderResult.success(
             df[CLIENT_TYPE_COLUMNS], self.name, warnings=warnings
+        )
+
+    def get_client_type_all(self):
+        """Whole-market حقیقی/حقوقی for the session in progress, in ONE call.
+
+        Measured 2026-10-15: 2,286 instruments, 519 KB, 0.9 seconds. The
+        per-symbol path above needs 780 requests and 316 seconds to cover the
+        equity universe, which is why flow has only ever been read after the
+        close. One call makes it readable DURING a session.
+
+        THIS IS NOT THE HISTORY ENDPOINT WITH A WIDER NET. Two differences:
+
+          The field names are spelled differently. History returns
+          `buy_I_Count`; this returns `buy_CountI`. The same transposition
+          shipped once already in get_client_type_history and was silent --
+          every value column parsed, every count became NaN, and قدرت خریدار
+          reported "unavailable" for the whole market while the score carried
+          on with the components that were left. So the count fields here are
+          REQUIRED: an absent one fails the call instead of warning, because
+          a bulk collector that quietly drops the counts drops the only thing
+          that separates one institution from four thousand retail holders.
+
+          There are no value columns at all. Rials are not available here and
+          are not invented; they come from the per-symbol history at end of
+          day. قدرت خریدار does not need them -- see CLIENT_TYPE_LIVE_COLUMNS
+          for the measurement that establishes it.
+
+        Returns one row per instrument, not per date: the exchange resets
+        these totals at the start of each session, so the snapshot is only
+        meaningful alongside the moment it was taken.
+        """
+
+        url = f"{self.base_url}/api/ClientType/GetClientTypeAll"
+
+        try:
+            payload = self._get(url, timeout=(settings.TIMEOUT_CONNECT,
+                                              45.0)).json()
+        except Exception as exc:
+            return ProviderResult.failure(
+                self.name, f"{type(exc).__name__}: {str(exc)[:160]}"
+            )
+
+        records = (payload.get("clientTypeAllDto")
+                   or payload.get("clientTypeAll")
+                   or [])
+
+        if not records:
+            return ProviderResult.failure(
+                self.name, "whole-market client type returned no rows"
+            )
+
+        # Declared, so a rename stops the collector rather than thinning it.
+        # `DDD` fields also appear in the payload and are deliberately not
+        # read: what they count is not documented anywhere reachable, and a
+        # column whose meaning is a guess is worse than a column that is
+        # absent.
+        required = (
+            ("individual_buy_volume", "buy_I_Volume"),
+            ("individual_sell_volume", "sell_I_Volume"),
+            ("institutional_buy_volume", "buy_N_Volume"),
+            ("institutional_sell_volume", "sell_N_Volume"),
+            ("individual_buy_count", "buy_CountI"),
+            ("individual_sell_count", "sell_CountI"),
+            ("institutional_buy_count", "buy_CountN"),
+            ("institutional_sell_count", "sell_CountN"),
+        )
+
+        first = records[0]
+        missing = [key for _column, key in required if key not in first]
+
+        if missing:
+            return ProviderResult.failure(
+                self.name,
+                "whole-market client type is missing %s -- the feed's field "
+                "names have changed and the counts would read as NaN"
+                % ", ".join(missing)
+            )
+
+        rows = []
+
+        for item in records:
+            row = {"ins_code": str(item.get("insCode") or "")}
+
+            for column, key in required:
+                row[column] = item.get(key)
+
+            rows.append(row)
+
+        df = pd.DataFrame(rows)
+
+        for column in CLIENT_TYPE_LIVE_COLUMNS[1:]:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
+
+        df = df[df["ins_code"] != ""]
+
+        if df.empty:
+            return ProviderResult.failure(
+                self.name, "whole-market client type parsed to zero rows"
+            )
+
+        return ProviderResult.success(
+            df[CLIENT_TYPE_LIVE_COLUMNS].reset_index(drop=True), self.name
         )
 
     def get_client_type_histories(self, ins_codes, progress=None):
