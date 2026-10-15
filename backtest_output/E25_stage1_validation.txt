@@ -1,0 +1,304 @@
+
+SMART MONEY ACCUMULATION SCANNER -- STAGE 1 VALIDATION
+Verification that the scanner computes what it claims.
+NOT a test of predictive power. No window is spent here.
+
+==============================================================================
+1  DATA AUDIT -- source, coverage, history, and what absence does
+==============================================================================
+
+  MFI                  price_history (high/low/close/volume)
+                       coverage : 818/818 equities
+                       history  : 2001-03-25 .. 2026-08-23
+                       complete : 100.0% of bars since 2024 have H/L/volume
+                       if absent: flow.read() returns None -> component scores NOTHING (not zero) and the name fails the MFI gate
+
+  P/E (per share)      market_snapshot.pe -- TSETMC's own figure
+                       coverage : 932/978 snapshot rows carry a positive P/E
+                       history  : NONE -- 1 distinct captured_at, table is REPLACED per pull
+                       complete : current session only
+                       if absent: valuation component returns None -> 15 points score ZERO and coverage drops to 0.85
+
+  P/E (sector median)  fundamental_engine.sector_medians over the same column, grouped by instruments.sector_name
+                       coverage : computed live; needs >= 3 comparables per sector
+                       history  : NONE -- inherits market_snapshot's single timestamp
+                       complete : current session only
+                       if absent: same as P/E -- no median, no points
+
+  Market Cap           market_snapshot.total_shares x market_snapshot.close
+                       coverage : 978/978 snapshot rows
+                       history  : NONE -- share counts are not versioned anywhere
+                       complete : current session only
+                       if absent: size band is None -> 10 points score ZERO
+
+  خرید/فروش حقیقی      client_type_history (value + volume + COUNT per side)
+                       coverage : 780/818 equities
+                       history  : 2008-11-26 .. 2026-08-23
+                       complete : 100.0% of rows since 2024 carry participant counts
+                       if absent: transfer is None -> VETO 'no_flow_data', the name is excluded entirely
+
+  خرید/فروش حقوقی      client_type_history (value + volume + COUNT per side)
+                       coverage : 780/818 equities
+                       history  : 2008-11-26 .. 2026-08-23
+                       complete : 100.0% of rows since 2024 carry participant counts
+                       if absent: transfer is None -> VETO 'no_flow_data', the name is excluded entirely
+
+  کد به کد             DERIVED from client_type_history counts. TSETMC publishes NO per-code data -- see accumulation.py
+                       coverage : needs >= 9 stored sessions (5 recent + 8 baseline)
+                       history  : same as client_type_history
+                       complete : an ESTIMATE by an explicit stated formula, not a measurement
+                       if absent: component returns None -> 15 points score ZERO. A FAILED test scores 0; MISSING data scores None
+
+  حجم                  price_history.volume, 20-session mean EXCLUDING the session measured
+                       coverage : 818/818 equities
+                       history  : 2001-03-25 .. 2026-08-23
+                       complete : needs 21 bars
+                       if absent: ratio is None -> 10 points score ZERO
+
+  حمایت تکنیکال        technical.support_resistance (confirmed pivots) + SMA50/200 + range low + levels.fibonacci
+                       coverage : derived from price_history
+                       history  : same as price_history
+                       complete : pivots need depth*2+1 bars; SMA200 needs 200
+                       if absent: no support below price -> VETO 'no_support'
+
+  --------------------------------------------------------------------------
+  THE FINDING THAT DECIDES STAGE 2:
+  P/E, sector P/E and market cap have NO HISTORY AT ALL. One snapshot,
+  replaced on every pull. That is the valuation component (15 points)
+  and the size component (10) -- 25 of the model's 100 points cannot
+  be computed for any past date. Using today's P/E on a 2024 signal is
+  look-ahead of the most direct kind.
+  --------------------------------------------------------------------------
+  [PASS] client-type counts present (the کد به کد component depends on them)  -- 100.0% of recent rows
+  [BLOCK] P/E / sector P/E / market cap have no history  -- 1 snapshot stored; the valuation (15) and size (10) components cannot be computed for any past date, so Stage 2 cannot run THIS scanner -- only its 75-point point-in-time subset, which is a different model
+
+==============================================================================
+2  FACTOR VERIFICATION -- each factor recomputed independently
+==============================================================================
+
+  2a  MFI -- library implementation vs first principles
+
+  [PASS] MFI matches an independent implementation on 13 names  -- largest absolute difference 2.74e-13
+  [PASS] MFI stays inside [0, 100]
+
+  2b  P/E -- internal consistency and the sector comparison
+
+  [PASS] stored P/E equals close/EPS on 384 names  -- 1 disagreed by more than 2%
+     largest sectors, median P/E recomputed here:
+       محصولات شيميايي                            n=46  median 6.95
+       مواد و محصولات دارويي                      n=38  median 9.80
+       فلزات اساسي                                n=36  median 7.15
+       سيمان، آهك و گچ                            n=35  median 6.50
+       محصولات غذايي و آشاميدني به جز قند و شكر   n=33  median 6.70
+  [PASS] scanner's sector medians match a hand recomputation (30 sectors)
+  [PASS] no sector median is built from fewer than 3 comparables
+
+  2c  Market cap and the Small/Mid/Large split
+
+     five largest by computed cap (shares x close):
+       فملی           2714.4 همت
+       فارس           1233.8 همت
+       شپنا            705.0 همت
+       وپاسار          511.3 همت
+       فولاد           503.3 همت
+     tercile boundaries this run: p33 3.3 همت   p67 11.8 همت
+     resulting split: {'Large Cap': 172, 'Mid Cap': 172, 'Small Cap': 173}
+  [PASS] terciles split the market into roughly equal thirds  -- small=173 mid=172 large=172
+  [PASS] band boundaries are monotonic
+
+  2d  Flow -- the accounting identity the whole component rests on
+
+  [PASS] buy side equals sell side on every session of 14 names  -- largest relative gap 0.00e+00
+  [PASS] institutional supply is reported as the exact mirror (3 names)
+
+  2e  کد به کد -- the estimate, recomputed by hand on real names
+
+  [PASS] Smart Money Ratio matches its stated formula on 14 names
+  [PASS] the ratio never reaches 1.0 (so extremes stay distinguishable)
+     genuineness test on 14 names: 6 genuine, 8 rejected
+  [PASS] the کد به کد test separates rather than passing everything  -- 6/14 passed
+
+  2f  Support levels -- all four families
+
+  [PASS] every reported support sits below the price
+  [PASS] supports are ordered nearest-first
+     levels found by family: {'fibonacci': 52, 'static': 38, 'channel': 11, 'dynamic': 18}
+  [PASS] all four support families are reachable  -- found: ['channel', 'dynamic', 'fibonacci', 'static']
+
+==============================================================================
+3  LOOK-AHEAD AUDIT -- does a reading at bar T use a bar after T
+==============================================================================
+
+  Method: compute every price-derived reading on frame[:T], then on
+  frame[:T+40] TRUNCATED BACK to T. Identical inputs must give
+  identical answers; any difference means the longer frame leaked.
+
+  [PASS] readings are a pure function of the bars given (25 names)
+
+  Pivots: levels.swings() claims to return CONFIRMED pivots only.
+  A pivot within `depth` bars of the end cannot be confirmed yet, so
+  none may be reported there.
+
+  [PASS] no pivot is reported inside the unconfirmable tail (25 names)  -- 0 late pivots
+
+  --------------------------------------------------------------------------
+  THE ONE LOOK-AHEAD THAT EXISTS, AND IT IS STRUCTURAL:
+  P/E, sector P/E and market cap come from market_snapshot, which
+  holds ONE timestamp and is replaced on every pull. For a LIVE scan
+  that is correct -- today's figures for today's decision. For any
+  historical date it is look-ahead, and the data to fix it does not
+  exist in this database.
+
+  CONSEQUENCE: the scanner as built is a LIVE instrument. A historical
+  backtest can only use the 75 points that ARE point-in-time --
+    MFI 15 + transfer 20 + کد به کد 15 + support 15 + volume 10 = 75
+  and must drop valuation (15) and size (10). Rescaled to 100 that is
+  a DIFFERENT model with different weights, and it has to be
+  preregistered as such rather than described as this scanner.
+  --------------------------------------------------------------------------
+
+==============================================================================
+4  COMBINED OUTPUT -- the brief's table, on real names
+==============================================================================
+
+  funnel: 818 universe -> 606 liquid -> 231 MFI>70 -> 5 at floor -> 3 qualified
+  data session: 2026-08-19
+
+  نماد     امتیاز    MFI  P/E سهم P/E گروه ارزش بازار  خرید حقیقی  فروش حقوقی  کدبه‌کد Vol Ratio     حمایت
+  --------------------------------------------------------------------------------------------------------
+  پارس        76   78.9      4.6      7.0  123.2 همت      +30.1%      -30.1% بله 0.61     2.77      4.3%
+  سخوز        67   70.5      5.6      6.5   12.2 همت      +24.3%      -24.3% بله 0.38     1.08      0.1%
+  حشکوه       58   70.1      n/a      7.5        n/a      +23.0%      -23.0% بله 0.43     2.89      4.4%
+
+  دلیل انتخاب هر نماد:
+
+   پارس (76/100, تحت نظر ویژه)
+     - MFI: MFI 78.9 و در 5 جلسه‌ی اخیر +17.8 واحد رشد کرده؛ واگرایی مثبت: کف قیمت -0.9% پایین‌تر آمده اما MFI +17.2 واحد بالاتر رفته
+     - P/E نسبت به صنعت: P/E 4.6 در برابر میانه‌ی صنعت 7.0 — 34% زیر میانه صنعت — ارزان‌تر از گروه، در محدوده منطقی
+     - اندازه شرکت: ارزش بازار 123.2 همت — بزرگ (Large Cap)
+     - حقوقی به حقیقی: خالص +30.1% از گردش پنجره به سمت حقیقی — ورود قوی در 4 از 5 جلسه
+     - کد به کد: Smart Money Ratio 0.61 — تمرکز بسیار بالا: میانگین خرید هر کد حقیقی 3.4x پایه‌ی خودِ نماد، و حقیقی 86% از حجم جلسه را گرفته
+     - کف و حمایت: قیمت در 35% پایینِ محدوده 120 روزه، و 4.4% بالای فیبوناچی 0.236 ؛ در محدوده 250 روزه: 19%
+     - حجم غیرعادی: حجم 2.77 برابر میانگین ۲۰ روزه — حجم به‌شدت بالاتر از میانگین
+
+   سخوز (67/100, تحت نظر)
+     - MFI: MFI 70.5 و در 5 جلسه‌ی اخیر -11.6 واحد تغییر کرده
+     - P/E نسبت به صنعت: P/E 5.6 در برابر میانه‌ی صنعت 6.5 — 14% زیر میانه صنعت — کمی ارزان‌تر از گروه
+     - اندازه شرکت: ارزش بازار 12.2 همت — بزرگ (Large Cap)
+     - حقوقی به حقیقی: خالص +24.3% از گردش پنجره به سمت حقیقی — ورود قوی در 5 از 5 جلسه
+     - کد به کد: Smart Money Ratio 0.38 — تمرکز بالا: میانگین خرید هر کد حقیقی 2.4x پایه‌ی خودِ نماد، و حقیقی 64% از حجم جلسه را گرفته
+     - کف و حمایت: قیمت در 28% پایینِ محدوده 120 روزه، و 0.1% بالای میانگین ۲۰۰ روزه ؛ در محدوده 250 روزه: 41%
+     - حجم غیرعادی: حجم 1.08 برابر میانگین ۲۰ روزه — حجم اندکی بالاتر از میانگین
+
+   حشکوه (58/100, زیر نظر)
+     - MFI: MFI 70.1 و در 5 جلسه‌ی اخیر +13.5 واحد رشد کرده
+     - P/E نسبت به صنعت: P/E مثبتی برای این نماد ثبت نشده — شرکت زیان‌ده است یا سود گزارش‌شده ندارد
+     - اندازه شرکت: ارزش بازار قابل محاسبه نیست (تعداد سهام یا قیمت ثبت نشده)
+     - حقوقی به حقیقی: خالص +23.0% از گردش پنجره به سمت حقیقی — ورود قوی در 5 از 5 جلسه
+     - کد به کد: Smart Money Ratio 0.43 — تمرکز بسیار بالا: میانگین خرید هر کد حقیقی 1.8x پایه‌ی خودِ نماد، و حقیقی 99% از حجم جلسه را گرفته
+     - کف و حمایت: قیمت در 28% پایینِ محدوده 120 روزه، و 4.4% بالای حمایت استاتیک (پیوت) (1 بار تست شده)؛ در محدوده 250 روزه: 19%
+     - حجم غیرعادی: حجم 2.89 برابر میانگین ۲۰ روزه — حجم به‌شدت بالاتر از میانگین
+
+==============================================================================
+5  FALSE POSITIVE AUDIT -- does every claim on every row hold up
+==============================================================================
+
+  A false positive here is a row the scanner selected whose stated
+  conditions are not actually true of the name. This is a claim audit,
+  not an outcome audit -- outcomes belong to Stage 2.
+
+  [PASS] every claim on every selected row is independently reproducible
+     3 rows checked against 7 independent recomputations each: no discrepancy.
+
+==============================================================================
+6  PARAMETER SENSITIVITY -- how much do the knobs move the output
+==============================================================================
+
+  IN-SAMPLE, ON ONE SESSION. This measures SELECTIVITY (how many names
+  survive), not performance. Choosing a setting because it produced a
+  nicer list and then claiming an edge for it later is precisely the
+  selection error E19/E21 documented in this programme.
+
+  liquid, clean, readable names: 488
+
+  MFI floor    position <=     passing    share
+  ----------------------------------------------
+  65           35                    7     1.4%
+  70           35                    5     1.0%
+  75           35                    1     0.2%
+
+  Volume Ratio >=   passing    share
+  ------------------------------------
+  1.5                     2     0.4%
+  2.0                     2     0.4%
+
+  Score >=          names
+  ------------------------
+  70                    1
+  75                    1
+  80                    0
+
+  qualified today: 3, scores: [76, 67, 58]
+
+  --------------------------------------------------------------------------
+  READING THIS TABLE HONESTLY:
+  At Score >= 75 the scanner produces 1 name(s) on this session.
+  A portfolio rule that needs 10 names per rebalance cannot be fed by
+  a filter that yields that many. That is a STRUCTURAL fact about the
+  filter's selectivity, and it is knowable now, before any backtest.
+  --------------------------------------------------------------------------
+
+==============================================================================
+7  HISTORICAL BREADTH -- an upper bound on names per session
+==============================================================================
+
+  Windows E19 (2023-03..2024-09) and E21 (2024-09..2026-08) are
+  already spent, so this reads nothing new. R-FORWARD-2027 untouched.
+  Gates applied: liquidity, traded-share, MFI>70, range<=35%.
+  Support and flow gates omitted -- both only remove, so this is an
+  UPPER BOUND.
+
+  panel: 864236 bars, 795 names
+  names scanned: 794   sessions covered: 867
+
+  candidates per session (upper bound):
+    mean     21.7
+    median     11
+    p10         0
+    p25         4
+    p75        27
+    p90        58
+    p99       139
+    max       162
+
+    sessions with >=  1 candidates :  88.8%
+    sessions with >=  5 candidates :  75.0%
+    sessions with >= 10 candidates :  55.9%
+    sessions with >= 20 candidates :  32.8%
+
+  by year:
+    2023  sessions 240   mean  18.5   median  12   >=10 on  60.0%
+    2024  sessions 241   mean  28.9   median  16   >=10 on  71.4%
+    2025  sessions 240   mean  29.3   median  14   >=10 on  65.0%
+    2026  sessions 146   mean   2.9   median   1   >=10 on   8.9%
+
+  --------------------------------------------------------------------------
+  WHAT THIS DECIDES:
+  The requested portfolio rule is 'Score >= 75, take the top 10,
+  10% each'. On this UPPER BOUND -- before the support and flow gates,
+  before scoring, before the 75 threshold -- 10 or more names are
+  available on 55.9% of sessions.
+  --------------------------------------------------------------------------
+
+==============================================================================
+VERDICT
+==============================================================================
+
+  STAGE 1: PASSED. Every correctness check holds.
+  The scanner computes what it claims to compute, on live data.
+
+  STAGE 2: BLOCKED -- 1 blocker(s), none of them a bug:
+    - P/E / sector P/E / market cap have no history
+      1 snapshot stored; the valuation (15) and size (10) components cannot be computed for any past date, so Stage 2 cannot run THIS scanner -- only its 75-point point-in-time subset, which is a different model
+
+  written: backtest_output/E25_stage1_validation.json

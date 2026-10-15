@@ -1,0 +1,472 @@
+{
+  "results": {
+    "data_audit": [
+      {
+        "input": "MFI",
+        "source": "price_history (high/low/close/volume)",
+        "coverage": "818/818 equities",
+        "history": "2001-03-25 .. 2026-08-23",
+        "complete": "100.0% of bars since 2024 have H/L/volume",
+        "on_missing": "flow.read() returns None -> component scores NOTHING (not zero) and the name fails the MFI gate"
+      },
+      {
+        "input": "P/E (per share)",
+        "source": "market_snapshot.pe -- TSETMC's own figure",
+        "coverage": "932/978 snapshot rows carry a positive P/E",
+        "history": "NONE -- 1 distinct captured_at, table is REPLACED per pull",
+        "complete": "current session only",
+        "on_missing": "valuation component returns None -> 15 points score ZERO and coverage drops to 0.85"
+      },
+      {
+        "input": "P/E (sector median)",
+        "source": "fundamental_engine.sector_medians over the same column, grouped by instruments.sector_name",
+        "coverage": "computed live; needs >= 3 comparables per sector",
+        "history": "NONE -- inherits market_snapshot's single timestamp",
+        "complete": "current session only",
+        "on_missing": "same as P/E -- no median, no points"
+      },
+      {
+        "input": "Market Cap",
+        "source": "market_snapshot.total_shares x market_snapshot.close",
+        "coverage": "978/978 snapshot rows",
+        "history": "NONE -- share counts are not versioned anywhere",
+        "complete": "current session only",
+        "on_missing": "size band is None -> 10 points score ZERO"
+      },
+      {
+        "input": "خرید/فروش حقیقی",
+        "source": "client_type_history (value + volume + COUNT per side)",
+        "coverage": "780/818 equities",
+        "history": "2008-11-26 .. 2026-08-23",
+        "complete": "100.0% of rows since 2024 carry participant counts",
+        "on_missing": "transfer is None -> VETO 'no_flow_data', the name is excluded entirely"
+      },
+      {
+        "input": "خرید/فروش حقوقی",
+        "source": "client_type_history (value + volume + COUNT per side)",
+        "coverage": "780/818 equities",
+        "history": "2008-11-26 .. 2026-08-23",
+        "complete": "100.0% of rows since 2024 carry participant counts",
+        "on_missing": "transfer is None -> VETO 'no_flow_data', the name is excluded entirely"
+      },
+      {
+        "input": "کد به کد",
+        "source": "DERIVED from client_type_history counts. TSETMC publishes NO per-code data -- see accumulation.py",
+        "coverage": "needs >= 9 stored sessions (5 recent + 8 baseline)",
+        "history": "same as client_type_history",
+        "complete": "an ESTIMATE by an explicit stated formula, not a measurement",
+        "on_missing": "component returns None -> 15 points score ZERO. A FAILED test scores 0; MISSING data scores None"
+      },
+      {
+        "input": "حجم",
+        "source": "price_history.volume, 20-session mean EXCLUDING the session measured",
+        "coverage": "818/818 equities",
+        "history": "2001-03-25 .. 2026-08-23",
+        "complete": "needs 21 bars",
+        "on_missing": "ratio is None -> 10 points score ZERO"
+      },
+      {
+        "input": "حمایت تکنیکال",
+        "source": "technical.support_resistance (confirmed pivots) + SMA50/200 + range low + levels.fibonacci",
+        "coverage": "derived from price_history",
+        "history": "same as price_history",
+        "complete": "pivots need depth*2+1 bars; SMA200 needs 200",
+        "on_missing": "no support below price -> VETO 'no_support'"
+      }
+    ],
+    "mfi_max_diff": 2.7355895326763857e-13,
+    "flow_identity_gap": 0.0,
+    "support_kinds": {
+      "fibonacci": 52,
+      "static": 38,
+      "channel": 11,
+      "dynamic": 18
+    },
+    "lookahead": {
+      "pure_function": true,
+      "late_pivots": 0
+    },
+    "output": [
+      {
+        "rank": 1,
+        "ins_code": "6110133418282108",
+        "symbol": "پارس",
+        "name": "پتروشیمی پارس",
+        "sector": "محصولات شيميايي",
+        "close": 2265.0,
+        "turnover": 1108477861914.0,
+        "score": 76,
+        "status": "تحت نظر ویژه",
+        "coverage": 1.0,
+        "breakdown": {
+          "MFI": 15.0,
+          "P/E نسبت به صنعت": 15.0,
+          "اندازه شرکت": 3.0,
+          "حقوقی به حقیقی": 18.8,
+          "کد به کد": 15.0,
+          "کف و حمایت": 1.0,
+          "حجم غیرعادی": 8.5
+        },
+        "notes": [
+          "MFI: MFI 78.9 و در 5 جلسه‌ی اخیر +17.8 واحد رشد کرده؛ واگرایی مثبت: کف قیمت -0.9% پایین‌تر آمده اما MFI +17.2 واحد بالاتر رفته",
+          "P/E نسبت به صنعت: P/E 4.6 در برابر میانه‌ی صنعت 7.0 — 34% زیر میانه صنعت — ارزان‌تر از گروه، در محدوده منطقی",
+          "اندازه شرکت: ارزش بازار 123.2 همت — بزرگ (Large Cap)",
+          "حقوقی به حقیقی: خالص +30.1% از گردش پنجره به سمت حقیقی — ورود قوی در 4 از 5 جلسه",
+          "کد به کد: Smart Money Ratio 0.61 — تمرکز بسیار بالا: میانگین خرید هر کد حقیقی 3.4x پایه‌ی خودِ نماد، و حقیقی 86% از حجم جلسه را گرفته",
+          "کف و حمایت: قیمت در 35% پایینِ محدوده 120 روزه، و 4.4% بالای فیبوناچی 0.236 ؛ در محدوده 250 روزه: 19%",
+          "حجم غیرعادی: حجم 2.77 برابر میانگین ۲۰ روزه — حجم به‌شدت بالاتر از میانگین"
+        ],
+        "mfi": 78.9,
+        "mfi_change": 17.8,
+        "mfi_rising": true,
+        "divergence": true,
+        "pe": 4.6,
+        "sector_pe": 6.95,
+        "pe_vs_sector": 33.8,
+        "market_cap": 1232432766093844.0,
+        "size_band": "Large Cap",
+        "size_band_fa": "بزرگ",
+        "net_pct": 30.15,
+        "power_ratio": 0.99,
+        "smart_money_ratio": 0.612,
+        "elevation": 3.45,
+        "code_to_code": true,
+        "code_to_code_reasons": [],
+        "volume_ratio": 2.77,
+        "traded_pct": 100.0,
+        "position_pct": 34.8,
+        "long_position_pct": 18.5,
+        "range_low": 1841.0,
+        "range_high": 3060.0,
+        "support": {
+          "price": 2166.46,
+          "distance_pct": 4.35,
+          "kind": "fibonacci",
+          "label": "فیبوناچی 0.236",
+          "touches": null
+        },
+        "support_levels": [
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.236",
+            "price": 2166.46,
+            "distance_pct": 4.350375275938193
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.382",
+            "price": 2104.27,
+            "distance_pct": 7.096335540838851
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.5",
+            "price": 2054.0,
+            "distance_pct": 9.315673289183222
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.618",
+            "price": 2003.73,
+            "distance_pct": 11.535011037527596
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.786",
+            "price": 1932.16,
+            "distance_pct": 14.69474613686534
+          },
+          {
+            "kind": "static",
+            "label": "حمایت استاتیک (پیوت)",
+            "price": 1841.0,
+            "distance_pct": 18.719646799116997,
+            "touches": 1,
+            "last_touch": "2026-07-25"
+          },
+          {
+            "kind": "channel",
+            "label": "کف کانال 120 روزه",
+            "price": 1841.0,
+            "distance_pct": 18.719646799116997
+          }
+        ],
+        "alert": "این نماد در 35% پایینِ محدوده‌ی 120 روزه‌ی خود و تنها 4.4% بالای فیبوناچی 0.236 قرار دارد، MFI روی 78.9 است و با وجود پایین‌تر آمدن کف قیمت، خودِ MFI بالاتر رفته — واگرایی مثبت، P/E برابر 4.6 در مقابل میانه‌ی 7.0 گروه «محصولات شيميايي» — ارزان‌تر از هم‌گروه‌ها، در 5 جلسه‌ی اخیر خالص 30.1% از گردش معاملات از حقوقی به حقیقی منتقل شده، و میانگین خرید هر کد حقیقی 3.4 برابر پایه‌ی خودِ نماد است (Smart Money Ratio 0.61) — الگوی کد به کد، حجم معاملات 2.77 برابر میانگین ۲۰ روزه است، اندازه‌ی شرکت بزرگ است. امتیاز جمع‌آوری 76 از ۱۰۰ (تحت نظر ویژه). این یک فهرست تحت نظر است، نه سیگنال خرید.",
+        "engine_v2": {
+          "action": "BUY",
+          "label": "خرید",
+          "swing_score": 71,
+          "reasons": [
+            "امتیاز سوئینگ 71 — بالای حد خرید 68"
+          ]
+        }
+      },
+      {
+        "rank": 2,
+        "ins_code": "41974758296041288",
+        "symbol": "سخوز",
+        "name": "سیمان خوزستان",
+        "sector": "سيمان، آهك و گچ",
+        "close": 82340.0,
+        "turnover": 279614297860.0,
+        "score": 67,
+        "status": "تحت نظر",
+        "coverage": 1.0,
+        "breakdown": {
+          "MFI": 8.2,
+          "P/E نسبت به صنعت": 11.2,
+          "اندازه شرکت": 3.0,
+          "حقوقی به حقیقی": 20.0,
+          "کد به کد": 12.8,
+          "کف و حمایت": 8.8,
+          "حجم غیرعادی": 3.0
+        },
+        "notes": [
+          "MFI: MFI 70.5 و در 5 جلسه‌ی اخیر -11.6 واحد تغییر کرده",
+          "P/E نسبت به صنعت: P/E 5.6 در برابر میانه‌ی صنعت 6.5 — 14% زیر میانه صنعت — کمی ارزان‌تر از گروه",
+          "اندازه شرکت: ارزش بازار 12.2 همت — بزرگ (Large Cap)",
+          "حقوقی به حقیقی: خالص +24.3% از گردش پنجره به سمت حقیقی — ورود قوی در 5 از 5 جلسه",
+          "کد به کد: Smart Money Ratio 0.38 — تمرکز بالا: میانگین خرید هر کد حقیقی 2.4x پایه‌ی خودِ نماد، و حقیقی 64% از حجم جلسه را گرفته",
+          "کف و حمایت: قیمت در 28% پایینِ محدوده 120 روزه، و 0.1% بالای میانگین ۲۰۰ روزه ؛ در محدوده 250 روزه: 41%",
+          "حجم غیرعادی: حجم 1.08 برابر میانگین ۲۰ روزه — حجم اندکی بالاتر از میانگین"
+        ],
+        "mfi": 70.5,
+        "mfi_change": -11.6,
+        "mfi_rising": false,
+        "divergence": false,
+        "pe": 5.6,
+        "sector_pe": 6.5,
+        "pe_vs_sector": 13.8,
+        "market_cap": 122290000000000.0,
+        "size_band": "Large Cap",
+        "size_band_fa": "بزرگ",
+        "net_pct": 24.34,
+        "power_ratio": 1.51,
+        "smart_money_ratio": 0.376,
+        "elevation": 2.4,
+        "code_to_code": true,
+        "code_to_code_reasons": [],
+        "volume_ratio": 1.08,
+        "traded_pct": 100.0,
+        "position_pct": 28.0,
+        "long_position_pct": 40.6,
+        "range_low": 66850.0,
+        "range_high": 122120.0,
+        "support": {
+          "price": 82247.2,
+          "distance_pct": 0.11,
+          "kind": "dynamic",
+          "label": "میانگین ۲۰۰ روزه",
+          "touches": null
+        },
+        "support_levels": [
+          {
+            "kind": "dynamic",
+            "label": "میانگین ۲۰۰ روزه",
+            "price": 82247.2,
+            "distance_pct": 0.11270342482390444
+          },
+          {
+            "kind": "static",
+            "label": "حمایت استاتیک (پیوت)",
+            "price": 81020.0,
+            "distance_pct": 1.603109059995142,
+            "touches": 1,
+            "last_touch": "2026-02-08"
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.236",
+            "price": 79893.72,
+            "distance_pct": 2.9709497206703896
+          },
+          {
+            "kind": "static",
+            "label": "حمایت استاتیک (پیوت)",
+            "price": 79460.0,
+            "distance_pct": 3.4976924945348555,
+            "touches": 1,
+            "last_touch": "2025-11-09"
+          },
+          {
+            "kind": "static",
+            "label": "حمایت استاتیک (پیوت)",
+            "price": 73030.0,
+            "distance_pct": 11.30677677920816,
+            "touches": 2,
+            "last_touch": "2026-03-08"
+          },
+          {
+            "kind": "channel",
+            "label": "کف کانال 120 روزه",
+            "price": 66850.0,
+            "distance_pct": 18.81224192373087
+          }
+        ],
+        "alert": "این نماد در 28% پایینِ محدوده‌ی 120 روزه‌ی خود و تنها 0.1% بالای میانگین ۲۰۰ روزه قرار دارد، MFI روی 70.5 است، P/E برابر 5.6 در مقابل میانه‌ی 6.5 گروه «سيمان، آهك و گچ» — ارزان‌تر از هم‌گروه‌ها، در 5 جلسه‌ی اخیر خالص 24.3% از گردش معاملات از حقوقی به حقیقی منتقل شده، و میانگین خرید هر کد حقیقی 2.4 برابر پایه‌ی خودِ نماد است (Smart Money Ratio 0.38) — الگوی کد به کد، حجم معاملات 1.08 برابر میانگین ۲۰ روزه است، اندازه‌ی شرکت بزرگ است. امتیاز جمع‌آوری 67 از ۱۰۰ (تحت نظر). این یک فهرست تحت نظر است، نه سیگنال خرید.",
+        "engine_v2": {
+          "action": "BUY",
+          "label": "خرید",
+          "swing_score": 74,
+          "reasons": [
+            "امتیاز سوئینگ 74 — بالای حد خرید 68"
+          ]
+        }
+      },
+      {
+        "rank": 3,
+        "ins_code": "50587892784913370",
+        "symbol": "حشکوه",
+        "name": "دلیجان طلایی شکوه پارس",
+        "sector": "حمل ونقل، انبارداري و ارتباطات",
+        "close": 1359.0,
+        "turnover": 68612189061.0,
+        "score": 58,
+        "status": "زیر نظر",
+        "coverage": 0.75,
+        "breakdown": {
+          "MFI": 11.2,
+          "P/E نسبت به صنعت": null,
+          "اندازه شرکت": null,
+          "حقوقی به حقیقی": 20.0,
+          "کد به کد": 15.0,
+          "کف و حمایت": 3.1,
+          "حجم غیرعادی": 8.5
+        },
+        "notes": [
+          "MFI: MFI 70.1 و در 5 جلسه‌ی اخیر +13.5 واحد رشد کرده",
+          "P/E نسبت به صنعت: P/E مثبتی برای این نماد ثبت نشده — شرکت زیان‌ده است یا سود گزارش‌شده ندارد",
+          "اندازه شرکت: ارزش بازار قابل محاسبه نیست (تعداد سهام یا قیمت ثبت نشده)",
+          "حقوقی به حقیقی: خالص +23.0% از گردش پنجره به سمت حقیقی — ورود قوی در 5 از 5 جلسه",
+          "کد به کد: Smart Money Ratio 0.43 — تمرکز بسیار بالا: میانگین خرید هر کد حقیقی 1.8x پایه‌ی خودِ نماد، و حقیقی 99% از حجم جلسه را گرفته",
+          "کف و حمایت: قیمت در 28% پایینِ محدوده 120 روزه، و 4.4% بالای حمایت استاتیک (پیوت) (1 بار تست شده)؛ در محدوده 250 روزه: 19%",
+          "حجم غیرعادی: حجم 2.89 برابر میانگین ۲۰ روزه — حجم به‌شدت بالاتر از میانگین"
+        ],
+        "mfi": 70.1,
+        "mfi_change": 13.5,
+        "mfi_rising": true,
+        "divergence": false,
+        "pe": null,
+        "sector_pe": 7.5,
+        "pe_vs_sector": null,
+        "market_cap": null,
+        "size_band": null,
+        "size_band_fa": null,
+        "net_pct": 23.02,
+        "power_ratio": 1.14,
+        "smart_money_ratio": 0.428,
+        "elevation": 1.76,
+        "code_to_code": true,
+        "code_to_code_reasons": [],
+        "volume_ratio": 2.89,
+        "traded_pct": 100.0,
+        "position_pct": 28.3,
+        "long_position_pct": 18.9,
+        "range_low": 1078.0,
+        "range_high": 2070.0,
+        "support": {
+          "price": 1299.0,
+          "distance_pct": 4.42,
+          "kind": "static",
+          "label": "حمایت استاتیک (پیوت)",
+          "touches": 1
+        },
+        "support_levels": [
+          {
+            "kind": "static",
+            "label": "حمایت استاتیک (پیوت)",
+            "price": 1299.0,
+            "distance_pct": 4.415011037527594,
+            "touches": 1,
+            "last_touch": "2026-08-09"
+          },
+          {
+            "kind": "dynamic",
+            "label": "میانگین ۵۰ روزه",
+            "price": 1261.88,
+            "distance_pct": 7.146431199411324
+          },
+          {
+            "kind": "static",
+            "label": "حمایت استاتیک (پیوت)",
+            "price": 1252.0,
+            "distance_pct": 7.873436350257543,
+            "touches": 1,
+            "last_touch": "2026-06-06"
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.236",
+            "price": 1246.84,
+            "distance_pct": 8.252832965415744
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.382",
+            "price": 1214.58,
+            "distance_pct": 10.627078734363504
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.5",
+            "price": 1188.5,
+            "distance_pct": 12.54598969830758
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.618",
+            "price": 1162.42,
+            "distance_pct": 14.464900662251653
+          },
+          {
+            "kind": "fibonacci",
+            "label": "فیبوناچی 0.786",
+            "price": 1125.29,
+            "distance_pct": 17.19690949227374
+          },
+          {
+            "kind": "static",
+            "label": "حمایت استاتیک (پیوت)",
+            "price": 1121.0,
+            "distance_pct": 17.51287711552612,
+            "touches": 3,
+            "last_touch": "2026-05-16"
+          },
+          {
+            "kind": "channel",
+            "label": "کف کانال 120 روزه",
+            "price": 1078.0,
+            "distance_pct": 20.676968359087564
+          }
+        ],
+        "alert": "این نماد در 28% پایینِ محدوده‌ی 120 روزه‌ی خود و تنها 4.4% بالای حمایت استاتیک (پیوت) قرار دارد، MFI روی 70.1 است و در حال صعود است، در 5 جلسه‌ی اخیر خالص 23.0% از گردش معاملات از حقوقی به حقیقی منتقل شده، و میانگین خرید هر کد حقیقی 1.8 برابر پایه‌ی خودِ نماد است (Smart Money Ratio 0.43) — الگوی کد به کد، حجم معاملات 2.89 برابر میانگین ۲۰ روزه است. امتیاز جمع‌آوری 58 از ۱۰۰ (زیر نظر). این یک فهرست تحت نظر است، نه سیگنال خرید.",
+        "engine_v2": {
+          "action": "BUY",
+          "label": "خرید",
+          "swing_score": 73,
+          "reasons": [
+            "امتیاز سوئینگ 73 — بالای حد خرید 68"
+          ]
+        }
+      }
+    ],
+    "false_positives": [],
+    "sensitivity": {
+      "mfi_65": 7,
+      "mfi_70": 5,
+      "mfi_75": 1,
+      "vol_1.5": 2,
+      "vol_2.0": 2,
+      "score_70": 1,
+      "score_75": 1,
+      "score_80": 0
+    },
+    "breadth": {
+      "mean": 21.73933102652826,
+      "median": 11.0,
+      "sessions": 867,
+      "share_ge_10": 0.5594002306805075
+    }
+  },
+  "failures": []
+}
