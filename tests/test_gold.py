@@ -102,6 +102,59 @@ class UniverseTests(unittest.TestCase):
         c = rep["counts"]
         self.assertEqual(c["total"], c["with_data"] + c["missing"])
 
+    def test_gold_list_carries_the_nav_fields(self):
+        """Every row has the NAV keys, present or null -- never absent.
+
+        The panel reads `price_to_nav` off each row and prints an em dash when
+        it is null. A missing KEY and a null VALUE render identically there, so
+        a silent rename upstream would look exactly like a market with no NAV.
+        This asserts the shape, not the network: with TSETMC unreachable the
+        values are all None and the test still passes.
+        """
+        if not self._has_db():
+            self.skipTest("no database")
+
+        import technical
+        rep = technical.gold_list()
+
+        if not rep["funds"]:
+            self.skipTest("no gold fund has history yet")
+
+        for row in rep["funds"]:
+            for key in ("day_close", "nav", "nav_issue", "price_to_nav",
+                        "bubble", "nav_date"):
+                self.assertIn(key, row, "%s missing %s" % (row["symbol"], key))
+
+        self.assertIn("with_nav", rep["counts"])
+        self.assertIn("nav_band", rep)
+
+
+class NavArithmeticTests(unittest.TestCase):
+    """The ratio itself. No network -- these are the failure modes that would
+    print a wrong number rather than no number."""
+
+    def test_zero_is_read_as_absent_not_as_a_price(self):
+        """GetClosingPriceInfo returns pRedTran = 0.0 for these funds.
+
+        If zero were taken at face value the حباب would be a division by zero
+        for every single row -- and an infinity is a number that renders.
+        """
+        self.assertIsNone(gold._number(0))
+        self.assertIsNone(gold._number(0.0))
+        self.assertIsNone(gold._number(None))
+        self.assertIsNone(gold._number("not a number"))
+        self.assertEqual(gold._number("1487864"), 1487864.0)
+
+    def test_a_missing_side_yields_no_ratio(self):
+        self.assertIsNone(gold._rate(None, 100.0))
+        self.assertIsNone(gold._rate(100.0, None))
+        self.assertIsNone(gold._rate(None, None))
+
+    def test_the_ratio_is_price_over_nav(self):
+        """Not NAV over price. Inverted, a 3% premium reads as a 3% discount
+        and the colour on the panel flips with it."""
+        self.assertAlmostEqual(gold._rate(103.0, 100.0), 1.03)
+
 
 if __name__ == "__main__":
     unittest.main()
