@@ -777,6 +777,14 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
     totals = {"letters": 0, "stored": 0, "unparseable": 0, "pauses": 0,
               "rounds": 0}
 
+    # Rounds in a row that achieved NOTHING against a throttle. The wait
+    # doubles on each one, because retrying inside Codal's rolling window
+    # RENEWS the penalty rather than outlasting it -- observed 2026-08-23 as
+    # three consecutive rounds of "5 of 5 refused" at a fixed 15m pause, and
+    # observed before that as a panel that kept itself permanently 429'd.
+    # One productive round clears it.
+    refused_rounds = 0
+
     while time.monotonic() < deadline:
 
         totals["rounds"] += 1
@@ -784,11 +792,13 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
         left = remaining_to_discover(since)
 
         paused = False
+        letters_this_round = 0
 
         if left:
             found = discover(since, limit=batch, verbose=verbose,
                              client=client)
             totals["letters"] += found["letters"]
+            letters_this_round = found["letters"]
             paused = paused or found["throttled"]
 
         if time.monotonic() >= deadline:
@@ -834,7 +844,22 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
         if time.monotonic() >= deadline:
             break
 
-        wait = cool_minutes * 60 if paused else 60
+        productive = bool(got["stored"] or got["unparseable"]
+                          or letters_this_round)
+
+        if paused and not productive:
+            refused_rounds += 1
+        elif productive:
+            refused_rounds = 0
+
+        # 15m, 30m, 60m, 120m, 240m cap. cool_minutes stays the knob; the
+        # doubling is what stops a refused campaign from renewing the very
+        # throttle it is waiting out.
+        if paused:
+            wait = min(cool_minutes * (2 ** max(0, refused_rounds - 1)),
+                       240) * 60
+        else:
+            wait = 60
 
         totals["pauses"] += 1
 
@@ -842,7 +867,9 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
             print("campaign: round %d done (%d letters, %d filings so far); "
                   "waiting %dm before the next batch%s"
                   % (totals["rounds"], totals["letters"], totals["stored"],
-                     wait // 60, " -- throttled" if paused else ""),
+                     wait // 60,
+                     " -- throttled (streak %d)" % refused_rounds
+                     if paused else ""),
                   flush=True)
 
         if time.monotonic() + wait > deadline:
@@ -950,7 +977,14 @@ def main(argv=None):
         description="Backfill historical Codal statements for the backtester"
     )
 
-    parser.add_argument("--from", dest="since", default="1402/06/01",
+    # 1394 is the fundamental panel's target depth, not the daily sync's
+    # horizon. The old default of 1402/06/01 silently capped every run at the
+    # sync window -- which is how 23,827 discovered statements were counted as
+    # "median 3 filings" (RESEARCH_OPTIONS.md section 7): the pipeline's output
+    # was measured and reported as the size of the input. The PIT gate needs 24
+    # quarters of depth; 1394 leaves room in front of any window that gate can
+    # accept.
+    parser.add_argument("--from", dest="since", default="1394/01/01",
                         help="oldest publication date to keep (Jalali)")
     parser.add_argument("--to", dest="until", default=None,
                         help="newest publication date to keep (Jalali)")

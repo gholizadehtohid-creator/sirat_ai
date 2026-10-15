@@ -17,11 +17,20 @@ being an 800 MB download every morning.
 Three things about this data that are not guessable and were verified against
 live responses:
 
-  THE EXCEL ENDPOINT RETURNS HTML. It is named Excel, it sends
-  `application/ms-excel`, and its body starts `\\r\\n<h`. It is an ASP.NET
-  table dump, not a workbook -- openpyxl cannot open it and pandas.read_excel
-  refuses it. It parses perfectly as HTML, which is better anyway: no
-  dependency beyond lxml, which the project already has.
+  THE EXCEL ENDPOINT RETURNS HTML -- FOR THE CURRENT ERA. It is named Excel,
+  it sends `application/ms-excel`, and its body starts `\\r\\n<h`. It is an
+  ASP.NET table dump, not a workbook -- openpyxl cannot open it and
+  pandas.read_excel refuses it. It parses perfectly as HTML.
+
+  OLD FILINGS ARE REAL LEGACY WORKBOOKS. Verified 2026-08-23 against a 1393
+  interim statement: the same endpoint returns an OLE2 compound document
+  (magic d0cf11e0a1b11ae1, a genuine BIFF .xls) for the early era, one flat
+  right-to-left grid holding every statement. The two eras are told apart by
+  the first eight BYTES of the body, never by date -- `split_sheets_xls`
+  handles the old one and needs xlrd. Before this branch existed the old era
+  read as "no table at all" and was classified transient, so a backfill
+  walking past ~1400 backed off forever against documents that were never
+  going to become HTML.
 
   AMOUNTS ARE IN MILLION RIALS, PER-SHARE FIGURES IN RIALS, ON THE SAME SHEET.
   Verified by reconstruction: فولاد's FY1404 sheet gives owners' profit
@@ -484,6 +493,38 @@ class CodalClient:
             return CodalResult(error="filing returned an empty body",
                                kind=KIND_TRANSIENT)
 
+        # The era split. Old filings are genuine OLE2 workbooks and decoding
+        # one as UTF-8 yields garbage with no <table> in it -- which the HTML
+        # path reads as a firewall page and classifies TRANSIENT, so the old
+        # era used to bounce forever without ever being wrong once.
+        if body[:8] == XLS_MAGIC:
+
+            try:
+                sheets = split_sheets_xls(body)
+            except ImportError:
+                # An environment defect, not a document defect. Settling the
+                # filing for it would make a missing package permanent.
+                return CodalResult(
+                    error="legacy .xls filing needs the xlrd package "
+                          "(pip install xlrd); leaving it pending",
+                    kind=KIND_TRANSIENT,
+                )
+            except Exception as exc:
+                return CodalResult(
+                    error=f"legacy .xls filing would not open: "
+                          f"{type(exc).__name__}: {str(exc)[:120]}",
+                    kind=KIND_BAD,
+                )
+
+            if not sheets:
+                return CodalResult(
+                    error=f"legacy .xls filing parsed to no statement "
+                          f"sections ({len(body)} bytes)",
+                    kind=KIND_BAD,
+                )
+
+            return CodalResult(data=sheets)
+
         text = body.decode("utf-8", errors="replace")
 
         sheets = split_sheets(text)
@@ -622,6 +663,198 @@ def split_sheets(text):
 
         if frames:
             sheets.setdefault(current, []).extend(frames)
+
+    return sheets
+
+
+# ==============================
+# LEGACY .XLS FILINGS (the pre-HTML era)
+# ==============================
+
+# The OLE2 compound-document signature. Every genuine legacy .xls starts with
+# these eight bytes; no HTML response can, so this is the era test.
+XLS_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+# Section boundaries inside the flat grid, matched on normalised text with
+# every space removed -- the old era writes "صورت سود وزیان" where the new one
+# writes "صورت سود و زیان", and a space-sensitive match reads that as two
+# different statements. Each pattern maps to the CANONICAL sheet name the
+# extractor already looks for (financials.INCOME_SHEETS et al.), or to None
+# for sections that exist only so their rows stop polluting a statement.
+_XLS_SECTIONS = (
+    ("صورتسودوزیان", "صورت سود و زیان"),
+    ("ترازنامه", "صورت وضعیت مالی"),
+    ("صورتوضعیتمالی", "صورت وضعیت مالی"),
+    ("صورتجریان", "صورت جریان های نقدی"),
+    ("گردشحساب", None),
+    ("آمارتولید", None),
+    ("گزارشفعالیت", None),
+    ("سایراطلاعات", None),
+    ("دلایلتغییر", None),
+)
+
+# A heading is a short cell. The filing's own title row ("اطلاعات و صورتهای
+# مالی میاندوره ای ...") and the advisory sentences both contain statement
+# words, and length is what separates a heading from prose that mentions one.
+_XLS_HEADING_MAX_CHARS = 40
+
+# Rows on one side of the balance sheet that identify a headless leading
+# section as the balance sheet. The old grid often opens straight into the
+# balance sheet with no heading row at all.
+_XLS_BALANCE_MARKERS = ("جمعبدهیهاوحقوقصاحبانسهام", "جمعداراییها",
+                        "داراییهایجاری")
+
+
+def _xls_squash(value):
+    """Normalised text with every space removed, or '' for a non-string."""
+
+    if value is None or isinstance(value, (int, float)):
+        return ""
+
+    text = persian.normalize(str(value)).strip()
+
+    if not text or text.lower() == "nan":
+        return ""
+
+    return re.sub(r"\s+", "", text)
+
+
+def _xls_boundary(row):
+    """(raw heading, canonical name) when this row starts a section."""
+
+    for cell in row:
+
+        squashed = _xls_squash(cell)
+
+        if not squashed or len(squashed) > _XLS_HEADING_MAX_CHARS:
+            continue
+
+        for marker, canonical in _XLS_SECTIONS:
+            if marker in squashed:
+                # The comprehensive-income statement begins with the same
+                # words as the income statement. It gets a section of its own
+                # so its rows leave, but never the income statement's
+                # canonical name -- pick_sheet's جامع exclusion then drops it
+                # by the same rule the HTML path relies on.
+                if canonical and "جامع" in squashed:
+                    canonical = None
+                return persian.normalize(str(cell)).strip(), canonical
+
+    return None, None
+
+
+def _xls_rows(section):
+    """One section's grid rows -> [[label, current, comparative, ...], ...].
+
+    The old grid is laid out right to left: each label owns the numeric cells
+    to its LEFT, nearest first -- so reading a row left to right and flushing
+    the accumulated numbers at each string cell, reversed, yields values in
+    exactly the order `flatten` promises its callers: value[0] the reported
+    period, value[1] the comparative. The balance sheet interleaves two
+    statements on one row (liabilities mid-row, assets at the right edge) and
+    this walk emits both labels with their own values.
+    """
+
+    out = []
+
+    for row in section:
+
+        buffer = []
+
+        for cell in row:
+
+            number = parse_number(cell)
+
+            if number is not None:
+                buffer.append(number)
+                continue
+
+            label = _xls_squash(cell) and persian.normalize(str(cell)).strip()
+
+            if label:
+                out.append([label] + list(reversed(buffer)))
+                buffer = []
+
+        # Numbers with no label to their right belong to nothing.
+
+    return out
+
+
+def split_sheets_xls(body):
+    """A legacy OLE2 filing -> {sheet name: [DataFrame]}, same contract as
+    `split_sheets`.
+
+    Sheet names carry the canonical statement name so `pick_sheet` finds them
+    with the constants it already has; the raw heading is kept alongside so a
+    تلفیقی marker survives for the consolidated preference.
+    """
+
+    import xlrd  # noqa: F401  -- the engine read_excel resolves lazily
+
+    book = pd.ExcelFile(io.BytesIO(body), engine="xlrd")
+
+    sheets = {}
+
+    for sheet_name in book.sheet_names:
+
+        grid = book.parse(sheet_name, header=None)
+
+        if grid.empty:
+            continue
+
+        rows = grid.values.tolist()
+
+        # ---- split at headings ------------------------------------------
+        sections = []
+        current_key = None
+        current_rows = []
+
+        for row in rows:
+
+            raw, canonical = _xls_boundary(row)
+
+            if raw is not None:
+                sections.append((current_key, current_rows))
+                current_key = (raw, canonical)
+                current_rows = []
+                continue
+
+            current_rows.append(row)
+
+        sections.append((current_key, current_rows))
+
+        for key, section_rows in sections:
+
+            if not section_rows:
+                continue
+
+            if key is None:
+                # The grid opens with no heading. When what follows is
+                # recognisably the balance sheet, name it; anything else
+                # headless is preamble and carries no statement.
+                squashed = {_xls_squash(cell)
+                            for row in section_rows for cell in row}
+                if not any(marker in text for text in squashed
+                           for marker in _XLS_BALANCE_MARKERS):
+                    continue
+                raw, canonical = "ترازنامه (بدون عنوان)", "صورت وضعیت مالی"
+            else:
+                raw, canonical = key
+
+            parsed = _xls_rows(section_rows)
+
+            if not parsed:
+                continue
+
+            width = max(len(row) for row in parsed)
+
+            frame = pd.DataFrame(
+                [row + [None] * (width - len(row)) for row in parsed])
+
+            name = raw if not canonical or canonical in raw else (
+                "%s — %s" % (raw, canonical))
+
+            sheets.setdefault(name, []).append(frame)
 
     return sheets
 
