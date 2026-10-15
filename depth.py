@@ -301,6 +301,40 @@ def content_hash(snapshots, levels):
     return digest.hexdigest()
 
 
+def state_hash(snapshots, levels):
+    """A fingerprint of the MARKET, with the capture instant removed.
+
+    content_hash above answers "prove what I stored"; it hashes the stored
+    tuples, and `captured_at` is element 1 of every one of them. So two
+    byte-identical market states a minute apart hash differently BY
+    CONSTRUCTION, which makes it a perfectly good provenance record and
+    useless as a liveness check. Demonstrated: the same payload parsed at
+    09:00 and 09:01 gives f40b0fa6... and 98278115....
+
+    This hash drops that element, so an unchanging answer across consecutive
+    captures means the market did not move -- which during a session is the
+    signature of a frozen feed, and the failure this project has already been
+    blind to once for eleven weeks.
+
+    It is a SIGNAL, NOT A VERDICT. A legitimately motionless market hashes
+    the same: on 2026-10-15, a closed Thursday, three calls two seconds apart
+    returned byte-identical payloads. Only a repeat DURING a live session,
+    established independently by market_session, says anything is wrong.
+    """
+
+    digest = hashlib.sha256()
+
+    for row in sorted(repr(r[:1] + r[2:]) for r in snapshots):
+        digest.update(row.encode("utf-8"))
+
+    digest.update(b"|levels|")
+
+    for row in sorted(repr(r[:1] + r[2:]) for r in levels):
+        digest.update(row.encode("utf-8"))
+
+    return digest.hexdigest()
+
+
 def store(snapshots, levels, db=DB, captured_at=None):
     conn = sqlite3.connect(db)
 
