@@ -66,7 +66,7 @@ whole book.
 WHAT STOPS IT RUNNING ON A DEAD MARKET
 ---------------------------------------
 market_session.is_trading_now(), which counts instruments reporting turnover
-rather than reading a clock. The exchange was shut for eleven weeks this year
+on a session the exchange itself dates today, rather than reading a clock. The exchange was shut for eleven weeks this year
 while publishing a complete, frozen market every day (MARKET_REGIME_AUDIT.md),
 so a monitor that trusted the calendar would have captured 50 identical
 books and called it history. An unreadable feed returns None and is treated
@@ -113,6 +113,14 @@ UNREADABLE_BACKOFF_SECONDS = 120.0
 # moments before the first trade prints, and a monitor that exits at 08:59
 # has missed the session it was started for.
 CLOSED_TICKS_BEFORE_EXIT = 3
+
+# ...and closed readings taken before this Tehran time do not count towards
+# that exit at all. The scheduled task starts at 08:40 and polls every 60 s,
+# so three closed readings used to arrive by 08:43 and the monitor quit before
+# every open it was started for -- the 2026-10-18 log shows exactly that. This
+# clock never decides that a session IS running; only market_session does.
+# It only stops a pre-open silence from being mistaken for a closed day.
+EXIT_NOT_BEFORE = (9, 15)
 
 # Consecutive polls returning NOTHING CHANGED, during a session established
 # as live, before the feed is called frozen. The delta cursor makes this
@@ -482,18 +490,17 @@ class Monitor:
 
         result = depth.collect(db=self.db, verbose=False)
 
-        captured_at = result.get("captured_at") if isinstance(result, dict) \
-            else None
+        if not isinstance(result, dict):
+            result = {}
 
-        if captured_at is None:
-            captured_at = _now()
+        captured_at = result.get("captured_at") or _now()
 
         flow_rows = self._capture_flow(captured_at)
 
         self.captures += 1
         self.last_capture = time.monotonic()
 
-        return captured_at, flow_rows
+        return captured_at, result.get("state_hash"), flow_rows
 
     def _capture_flow(self, captured_at):
         result = self.provider.get_client_type_all()
@@ -596,8 +603,10 @@ class Monitor:
 
         return self.poll_seconds, outcome
 
-    def run(self, once=False, max_ticks=None, sleeper=time.sleep):
+    def run(self, once=False, max_ticks=None, sleeper=time.sleep,
+            clock=None):
         closed_streak = 0
+        clock = clock or market_session.tehran_now
 
         while True:
             try:
@@ -610,7 +619,10 @@ class Monitor:
                 wait, outcome = UNREADABLE_BACKOFF_SECONDS, "error"
 
             if outcome == "closed":
-                closed_streak += 1
+                local = clock()
+
+                if (local.hour, local.minute) >= EXIT_NOT_BEFORE:
+                    closed_streak += 1
 
                 if closed_streak >= CLOSED_TICKS_BEFORE_EXIT:
                     self.say("session is not running; stopping after %d "

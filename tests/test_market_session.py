@@ -17,6 +17,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -184,21 +185,54 @@ class BoundaryTests(unittest.TestCase):
             os.unlink(path)
 
 
+# 10:30 Tehran on Wednesday 2026-10-28, a session that traded.
+SESSION_NOW = datetime(2026, 10, 28, 7, 0, tzinfo=timezone.utc)
+
+# One row of GetMarketWatch exactly as the live feed served it on Friday
+# 2026-10-30, trimmed of the order book. The two facts that matter: qtj holds
+# Wednesday's volume two days later, and qTotTran5J is 0.0 even though the name
+# traded a million shares.
+RECORDED_ROW = {
+    "lva": "سكرما", "insCode": "15472396110662150", "qtj": 1001465.0,
+    "pdv": 97420.0, "pMax": 97420.0, "pMin": 91760, "dEven": 0,
+    "hEven": 122706, "qTotTran5J": 0.0, "zTotTran": 0.0,
+}
+
+# GetMarketOverview/1 from the same call.
+RECORDED_OVERVIEW = {
+    "marketActivityDEven": 20261028, "marketActivityHEven": 180327,
+    "marketState": "F", "marketStateTitle": "بسته",
+}
+
+
+def overview(date=20261028, state="N"):
+    return {"marketActivityDEven": date, "marketState": state}
+
+
 class LiveStateTests(unittest.TestCase):
     """is_trading_now() reads the tape, and has three answers rather than two."""
 
     class FakeProvider:
         base_url = "https://example.invalid"
 
-        def __init__(self, rows=None, error=None):
+        def __init__(self, rows=None, error=None, market=None,
+                     overview_error=None):
             self.rows = rows
             self.error = error
+            self.market = market if market is not None else overview()
+            self.overview_error = overview_error
 
         def _get(self, url, timeout=None):
-            if self.error:
-                raise self.error
+            if "GetMarketOverview" in url:
+                if self.overview_error:
+                    raise self.overview_error
 
-            payload = {"marketwatch": self.rows}
+                payload = {"marketOverview": self.market}
+            else:
+                if self.error:
+                    raise self.error
+
+                payload = {"marketwatch": self.rows}
 
             class Response:
                 @staticmethod
@@ -207,42 +241,71 @@ class LiveStateTests(unittest.TestCase):
 
             return Response()
 
-    def test_turnover_on_the_tape_means_trading(self):
-        rows = [{"qTotTran5J": 1000, "hEven": 100530},
-                {"qTotTran5J": 0, "hEven": 0}]
+    def ask(self, rows, **kwargs):
+        return market_session.is_trading_now(
+            provider=self.FakeProvider(rows, **kwargs), now=SESSION_NOW)
 
-        state = market_session.is_trading_now(
-            provider=self.FakeProvider(rows))
+    def test_turnover_on_the_tape_means_trading(self):
+        rows = [{"qtj": 1000, "hEven": 100530},
+                {"qtj": 0, "hEven": 0}]
+
+        state = self.ask(rows)
 
         self.assertTrue(state["trading"])
         self.assertEqual(state["traded"], 1)
         self.assertEqual(state["last_trade"], 100530)
+        self.assertEqual(state["session_date"], 20261028)
+
+    def test_the_recorded_friday_payload_is_closed(self):
+        """The real feed, two days after the session it still describes.
+
+        Before this test existed the detector read qTotTran5J, which is 0.0
+        on every row, and called every live session closed. Reading qtj
+        alone would have called this Friday open instead.
+        """
+
+        friday = datetime(2026, 10, 30, 8, 0, tzinfo=timezone.utc)
+
+        state = market_session.is_trading_now(
+            provider=self.FakeProvider([RECORDED_ROW],
+                                       market=RECORDED_OVERVIEW),
+            now=friday)
+
+        self.assertFalse(state["trading"])
+        self.assertEqual(state["traded"], 1)
+
+    def test_qtj_counts_even_when_qtottran5j_reads_zero(self):
+        """The field mix of the real feed, on the day it was live."""
+
+        state = self.ask([RECORDED_ROW])
+
+        self.assertTrue(state["trading"])
+        self.assertEqual(state["traded"], 1)
+
+    def test_yesterdays_volume_is_not_todays_session(self):
+        """A pre-open morning: the tape still shows the last session."""
+
+        state = self.ask([RECORDED_ROW], market=overview(date=20261027))
+
+        self.assertFalse(state["trading"])
+        self.assertIn("left over", state["reason"])
+
+    def test_the_exchange_saying_shut_is_believed(self):
+        """After the close on a session day: today's date, state F."""
+
+        state = self.ask([RECORDED_ROW], market=overview(state="F"))
+
+        self.assertFalse(state["trading"])
 
     def test_a_full_market_at_zero_turnover_is_closed(self):
         """What every day of the eleven-week closure looked like live."""
 
-        rows = [{"qTotTran5J": 0, "hEven": 172118} for _ in range(900)]
+        rows = [{"qtj": 0, "hEven": 172118} for _ in range(900)]
 
-        state = market_session.is_trading_now(
-            provider=self.FakeProvider(rows))
+        state = self.ask(rows)
 
         self.assertFalse(state["trading"])
         self.assertEqual(state["traded"], 0)
-
-    def test_a_stale_heven_does_not_imply_a_session(self):
-        """hEven survives the session that set it; turnover does not.
-
-        Measured on the live feed 2026-10-15, a closed Thursday: every
-        instrument reported hEven 17:21:18 from the previous session while
-        turnover had reset to zero. A liveness test built on hEven alone
-        would have called that Thursday a trading day.
-        """
-
-        rows = [{"qTotTran5J": 0, "hEven": 172118}]
-
-        self.assertFalse(
-            market_session.is_trading_now(
-                provider=self.FakeProvider(rows))["trading"])
 
     def test_an_unreadable_feed_is_neither_open_nor_closed(self):
         """None, not False.
@@ -253,35 +316,42 @@ class LiveStateTests(unittest.TestCase):
         the only honest one.
         """
 
-        state = market_session.is_trading_now(
-            provider=self.FakeProvider(error=OSError("no route to host")))
+        state = self.ask(None, error=OSError("no route to host"))
 
         self.assertIsNone(state["trading"])
         self.assertIn("unreadable", state["reason"])
 
-    def test_an_empty_payload_is_also_unknown(self):
-        state = market_session.is_trading_now(
-            provider=self.FakeProvider(rows=[]))
+    def test_an_unreadable_overview_is_also_unknown(self):
+        """Without a date the tape cannot be placed in time."""
+
+        state = self.ask([RECORDED_ROW],
+                         overview_error=OSError("no route to host"))
 
         self.assertIsNone(state["trading"])
+        self.assertIn("overview", state["reason"])
 
-    def test_the_older_volume_field_name_is_honoured(self):
-        """`qtj` is the same figure as qTotTran5J under the older name."""
+    def test_an_empty_payload_is_also_unknown(self):
+        self.assertIsNone(self.ask([])["trading"])
 
-        state = market_session.is_trading_now(
-            provider=self.FakeProvider([{"qtj": 500, "hEven": 93000}]))
+    def test_the_other_volume_field_is_a_fallback(self):
+        """A row with no qtj at all falls back to qTotTran5J."""
 
-        self.assertTrue(state["trading"])
+        self.assertTrue(self.ask([{"qTotTran5J": 500, "hEven": 93000}])
+                        ["trading"])
 
     def test_an_unparseable_volume_does_not_crash_the_read(self):
-        rows = [{"qTotTran5J": "n/a", "hEven": "bad"},
-                {"qTotTran5J": 10, "hEven": 90000}]
+        rows = [{"qtj": "n/a", "hEven": "bad"},
+                {"qtj": 10, "hEven": 90000}]
 
-        state = market_session.is_trading_now(
-            provider=self.FakeProvider(rows))
+        state = self.ask(rows)
 
         self.assertTrue(state["trading"])
         self.assertEqual(state["traded"], 1)
+
+    def test_tehran_time_is_utc_plus_three_thirty(self):
+        local = market_session.tehran_now(SESSION_NOW)
+
+        self.assertEqual((local.hour, local.minute), (10, 30))
 
 
 if __name__ == "__main__":

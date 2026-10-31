@@ -386,7 +386,8 @@ def collect(db=DB, session=None, verbose=True):
         print("  content hash: %s" % chash[:16])
 
     return {"captured_at": captured_at, "instruments": len(snapshots),
-            "levels": len(levels), "written": written, "content_hash": chash}
+            "levels": len(levels), "written": written, "content_hash": chash,
+            "state_hash": state_hash(snapshots, levels)}
 
 
 # ==============================

@@ -14,9 +14,10 @@ rem The monitor decides for itself whether a session is running, by counting
 rem instruments that report turnover. It does NOT read a clock or a holiday
 rem calendar: this exchange published a complete frozen market every day for
 rem the eleven weeks it was shut (MARKET_REGIME_AUDIT.md), so a calendar is
-rem exactly the thing that cannot be trusted here. Starting early and letting
-rem it exit on three consecutive closed readings costs three HTTP calls on a
-rem holiday.
+rem exactly the thing that cannot be trusted here. It exits on three
+rem consecutive closed readings, but only readings from 09:15 on count
+rem (monitor.EXIT_NOT_BEFORE): before that, closed is just "not open yet".
+rem A holiday costs about 35 minutes of polling.
 rem
 rem 08:40 Tehran is before the 09:00 open. The machine runs on +03:30 with no
 rem DST, so local time is used directly.

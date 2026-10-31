@@ -67,6 +67,20 @@ TRADING_WEEKDAYS = {5, 6, 0, 1, 2}
 # that has never been seen.
 MIN_TRADED_NAMES = 1
 
+# Iran has kept standard time all year since 2022, so a fixed offset is exact
+# and needs no tz database (which Windows Python does not ship).
+TEHRAN = timezone(timedelta(hours=3, minutes=30))
+
+# GetMarketOverview's code for a shut market. Its title reads "بسته".
+# Observed 2026-10-30, a Friday, with the last session dated 2026-10-28.
+MARKET_STATE_CLOSED = "F"
+
+
+def tehran_now(now=None):
+    """The wall clock in Tehran. `now` is an aware datetime, for tests."""
+
+    return (now or datetime.now(timezone.utc)).astimezone(TEHRAN)
+
 
 def _connect(db=DB):
     return sqlite3.connect("file:%s?mode=ro" % str(db).replace("\\", "/"),
@@ -205,16 +219,25 @@ def last_live_session(db=DB):
     return None
 
 
-def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES):
+def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES, now=None):
     """Is a session running RIGHT NOW? Observed from the live tape.
 
-    Asks the market-watch feed how many instruments report turnover today and
-    what the newest trade stamp is. Returns a dict rather than a bool because
-    the three outcomes a caller must separate -- trading, not trading, and
-    could not tell -- are not two.
+    Asks the market-watch feed how many instruments report turnover and what
+    the newest trade stamp is, and asks the market overview which date the
+    exchange last traded on and whether it calls itself shut. Returns a dict
+    rather than a bool because the three outcomes a caller must separate --
+    trading, not trading, and could not tell -- are not two.
 
         {"trading": True/False/None, "traded": int, "last_trade": int|None,
-         "reason": str}
+         "session_date": int|None, "market_state": str|None, "reason": str}
+
+    TURNOVER ALONE CANNOT ANSWER THIS. The market watch carries no date
+    (`dEven` is 0 on every row) and its volume field `qtj` keeps the last
+    session's figure until the next one starts: on Friday 2026-10-30, 938 of
+    1,065 rows still showed Wednesday's volume. The field this function used
+    to read first, `qTotTran5J`, is 0.0 on every row whether or not anything
+    traded -- so for weeks every live session read as closed. Turnover counts
+    only when the overview's `marketActivityDEven` is today's Tehran date.
 
     `trading=None` means the feed could not be read. A caller that treats an
     unreachable exchange as a closed one will happily resume when the network
@@ -234,6 +257,7 @@ def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES):
         payload = provider._get(url, timeout=(10.0, 45.0)).json()
     except Exception as exc:                                    # noqa: BLE001
         return {"trading": None, "traded": 0, "last_trade": None,
+                "session_date": None, "market_state": None,
                 "reason": "feed unreadable: %s: %s"
                           % (type(exc).__name__, str(exc)[:120])}
 
@@ -241,19 +265,32 @@ def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES):
 
     if not rows:
         return {"trading": None, "traded": 0, "last_trade": None,
+                "session_date": None, "market_state": None,
                 "reason": "market watch returned no rows"}
+
+    try:
+        overview = provider._get(
+            provider.base_url + "/api/MarketData/GetMarketOverview/1",
+            timeout=(10.0, 30.0)).json()["marketOverview"]
+        session_date = int(overview.get("marketActivityDEven") or 0) or None
+        market_state = overview.get("marketState")
+    except Exception as exc:                                    # noqa: BLE001
+        return {"trading": None, "traded": 0, "last_trade": None,
+                "session_date": None, "market_state": None,
+                "reason": "market overview unreadable: %s: %s"
+                          % (type(exc).__name__, str(exc)[:120])}
 
     traded = 0
     newest = 0
 
     for item in rows:
-        # qTotTran5J is share volume; qtj is the same figure under the older
-        # name. A row with volume is a row that traded today -- the feed
-        # resets these at the start of each session.
-        volume = item.get("qTotTran5J")
+        # qtj is share volume. qTotTran5J is in the payload too but is 0.0 on
+        # every row, traded or not -- measured on the live feed 2026-10-30 --
+        # so it is only a fallback for a row that lacks qtj altogether.
+        volume = item.get("qtj")
 
         if volume is None:
-            volume = item.get("qtj")
+            volume = item.get("qTotTran5J")
 
         try:
             if float(volume or 0) > 0:
@@ -268,12 +305,29 @@ def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES):
 
         newest = max(newest, stamp)
 
+    today = int(tehran_now(now).strftime("%Y%m%d"))
+
+    if market_state == MARKET_STATE_CLOSED:
+        trading = False
+        reason = ("exchange reports the market shut (state %s); last "
+                  "session %s" % (market_state, session_date))
+    elif session_date != today:
+        trading = False
+        reason = ("last session on record is %s, today is %d -- the %d "
+                  "rows with turnover are left over from it"
+                  % (session_date, today, traded))
+    else:
+        trading = traded >= min_names
+        reason = ("%d of %d instruments show turnover today"
+                  % (traded, len(rows)))
+
     return {
-        "trading": traded >= min_names,
+        "trading": trading,
         "traded": traded,
         "last_trade": newest or None,
-        "reason": "%d of %d instruments show turnover today" % (traded,
-                                                                len(rows)),
+        "session_date": session_date,
+        "market_state": market_state,
+        "reason": reason,
     }
 
 
@@ -348,6 +402,8 @@ def main(argv=None):
         print("trading   : %s" % state["trading"])
         print("traded    : %d" % state["traded"])
         print("last trade: %s" % state["last_trade"])
+        print("session   : %s  (state %s)" % (state["session_date"],
+                                              state["market_state"]))
         print("reason    : %s" % state["reason"])
         return 0
 

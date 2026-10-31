@@ -24,12 +24,14 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import market_session                                           # noqa: E402
 import monitor                                                  # noqa: E402
 
 
@@ -40,7 +42,7 @@ def row(ins_code="1", bid_qty=100.0, ask_qty=100.0, last=4300.0,
     return {
         "insCode": ins_code, "lva": "نماد%s" % ins_code,
         "pdv": last, "pMax": limit_up, "pMin": limit_down,
-        "qTotTran5J": volume, "hEven": 100530,
+        "qtj": volume, "hEven": 100530,
         "blDs": [{"n": 1, "pmd": last - 1, "qmd": bid_qty, "zmd": 2,
                   "pmo": last + 1, "qmo": ask_qty, "zmo": 3, "rid": rid}],
     }
@@ -56,6 +58,19 @@ class FakeProvider:
         self.calls = []
 
     def _get(self, url, timeout=None):
+        if "GetMarketOverview" in url:
+            # Dated today, so the tape in `sequence` counts as this session's.
+            today = int(market_session.tehran_now().strftime("%Y%m%d"))
+            payload = {"marketOverview": {"marketActivityDEven": today,
+                                          "marketState": "N"}}
+
+            class Overview:
+                @staticmethod
+                def json():
+                    return payload
+
+            return Overview()
+
         self.calls.append(url)
 
         rows = self.sequence[0] if len(self.sequence) == 1 \
@@ -274,6 +289,94 @@ class TickLedgerTests(unittest.TestCase):
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0][0], "closed")
+
+
+class TradingTickTests(unittest.TestCase):
+    """The live path, which no test reached until it had already broken.
+
+    tick() unpacked three values from a capture() that returned two, so every
+    capture during a session would have raised -- and the session detector
+    reading the wrong volume field had kept the loop from ever getting here.
+    """
+
+    def setUp(self):
+        self.path = temp_db()
+
+    def tearDown(self):
+        os.unlink(self.path)
+
+    def test_a_trading_tick_captures_and_records_the_state_hash(self):
+        mon = monitor.Monitor(db=self.path,
+                              provider=FakeProvider([[row("1")]]),
+                              verbose=False)
+
+        original = monitor.depth.collect
+        monitor.depth.collect = lambda db=None, verbose=False: {
+            "captured_at": "2026-10-28T07:00:00+00:00",
+            "state_hash": "abc123"}
+        mon._capture_flow = lambda captured_at: 0
+
+        try:
+            wait, outcome = mon.tick()
+        finally:
+            monitor.depth.collect = original
+
+        self.assertEqual(outcome, "trading")
+
+        conn = sqlite3.connect(self.path)
+
+        try:
+            stored = conn.execute(
+                "SELECT outcome, captured_at, state_hash FROM monitor_ticks"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        self.assertEqual(stored, [("trading", "2026-10-28T07:00:00+00:00",
+                                   "abc123")])
+
+
+class ExitTimingTests(unittest.TestCase):
+    """Closed before the open is "not yet", not "not today"."""
+
+    def setUp(self):
+        self.path = temp_db()
+
+    def tearDown(self):
+        os.unlink(self.path)
+
+    def run_closed(self, hour, minute, limit=10):
+        mon = monitor.Monitor(db=self.path,
+                              provider=FakeProvider([[row("1")]]),
+                              verbose=False)
+        mon.tick = lambda: (0, "closed")
+
+        sleeps = []
+
+        def sleeper(seconds):
+            sleeps.append(seconds)
+
+            if len(sleeps) >= limit:
+                raise StopIteration
+
+        local = datetime(2026, 10, 28, hour, minute,
+                         tzinfo=market_session.TEHRAN)
+
+        try:
+            mon.run(sleeper=sleeper, clock=lambda: local)
+        except StopIteration:
+            return None
+
+        return len(sleeps)
+
+    def test_pre_open_readings_do_not_stop_the_monitor(self):
+        """08:41 -- the scheduled start. It used to quit by 08:43."""
+
+        self.assertIsNone(self.run_closed(8, 41))
+
+    def test_closed_after_the_open_still_stops_it(self):
+        self.assertEqual(self.run_closed(9, 30),
+                         monitor.CLOSED_TICKS_BEFORE_EXIT - 1)
 
 
 class FrozenFeedTests(unittest.TestCase):
