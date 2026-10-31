@@ -188,7 +188,7 @@ def run(equity=None, size=None, max_per_sector=None, min_score=None,
 # ==============================
 
 def v2_scan(equity=None, size=None, max_per_sector=None, positions=None,
-            verbose=False):
+            verbose=False, risk_pct=None):
     """THE one call that runs the v2 chain. Every caller comes through here.
 
     regime_engine -> factor_engine -> risk_engine -> trade_manager ->
@@ -206,7 +206,7 @@ def v2_scan(equity=None, size=None, max_per_sector=None, positions=None,
 
     return swing_advisor.scan(
         equity=equity, size=size, max_per_sector=max_per_sector,
-        positions=positions, verbose=verbose,
+        positions=positions, verbose=verbose, risk_pct=risk_pct,
     )
 
 
@@ -244,7 +244,8 @@ def _run_v2(equity=None, size=None, max_per_sector=None, risk_pct=None,
 
     try:
         out = v2_scan(equity=equity, size=size,
-                      max_per_sector=max_per_sector, positions=positions)
+                      max_per_sector=max_per_sector, positions=positions,
+                      risk_pct=risk_pct)
     except Exception as exc:
         log.exception("v2 scan failed")
         return {

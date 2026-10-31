@@ -685,11 +685,20 @@ def decide(swing, technical=None, regime=None, risk_score=None,
             reasons.append("هشدار بنیادی بحرانی: %s" % critical[0]["message"])
             return _verdict(SELL, reasons, score)
 
-        if mode == "CASH_ONLY":
-            # CASH_ONLY is only reached on a bear market WITH high volatility --
+        if mode == "CASH_ONLY" and (regime or {}).get("available", True):
+            # A MEASURED CASH_ONLY is a bear market WITH high volatility --
             # the one condition where holding through is the expensive choice.
             reasons.append("بازار نزولی و پرنوسان — خروج از موقعیت")
             return _verdict(SELL, reasons, score)
+
+        if regime is not None and not regime.get("available", True):
+            # regime_engine.assess() ALSO answers CASH_ONLY when it could not
+            # read the market at all. That is a reason to stop entering, which
+            # the entry path already does, and never a reason to sell: a
+            # missing index history used to liquidate the whole book into
+            # whatever queue the market had, on a data fault.
+            reasons.append("وضعیت بازار قابل تشخیص نیست — خروج فقط بر پایه‌ی "
+                           "امتیاز سهم")
 
         if score is None:
             # Refusing to score is not a sell signal. A held position whose

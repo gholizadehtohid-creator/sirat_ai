@@ -144,6 +144,16 @@ class PositionSizeTest(unittest.TestCase):
         self.assertLessEqual(result["weight_pct"], config.MAX_POSITION_PCT)
         self.assertEqual(result["bound_by"], risk_engine.BOUND_POSITION_CAP)
 
+    def test_a_name_with_no_turnover_gets_no_position(self):
+        """adv == 0 used to skip the liquidity cap entirely."""
+
+        result = risk_engine.position_size(
+            price=1000.0, distance=100.0, equity=EQUITY, risk_pct=1.0,
+            adv=0.0)
+
+        self.assertEqual(result.get("shares") or 0, 0)
+        self.assertEqual(result["bound_by"], risk_engine.BOUND_LIQUIDITY)
+
     def test_liquidity_binds_before_the_position_cap(self):
         thin_adv = 1_000_000_000.0        # 1 bn rials a day
 
@@ -492,6 +502,18 @@ class PlanTest(unittest.TestCase):
         self.assertLess(signal["stop_loss"], signal["entry_price"])
         self.assertLess(signal["entry_price"], signal["target_1"])
         self.assertLess(signal["target_1"], signal["target_2"])
+
+    def test_an_unbuyable_name_is_watched_not_bought(self):
+        """A buy queue or a halt: HOLD, with the reason on the signal."""
+
+        reading = dict(self.READING, entry_blocker="صف خرید")
+        risk = risk_engine.assess(reading, equity=EQUITY)
+
+        signal = trade_manager.plan(reading, self._buy(), risk)
+
+        self.assertEqual(signal["action"], factor_engine.HOLD)
+        self.assertTrue(any("صف خرید" in d
+                            for d in signal.get("downgrades") or []))
 
     def test_a_nearby_ceiling_downgrades_a_buy_to_avoid(self):
         """The whole reason the reward/risk is recomputed."""

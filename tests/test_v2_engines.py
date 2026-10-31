@@ -1072,6 +1072,33 @@ class DecisionTest(unittest.TestCase):
 
         self.assertEqual(verdict["action"], factor_engine.AVOID)
 
+    def test_a_measured_cash_only_exits_a_holding(self):
+        verdict = factor_engine.decide(
+            self._swing(80), technical=85,
+            regime=self._regime(regime_engine.CASH_ONLY), held=True)
+
+        self.assertEqual(verdict["action"], factor_engine.SELL)
+
+    def test_an_unreadable_market_does_not_liquidate_the_book(self):
+        """assess() answers CASH_ONLY for "could not read" as well.
+
+        That used to SELL every holding on a data fault. Now it stops
+        entries and leaves exits to the name's own score.
+        """
+
+        unknown = self._regime(regime_engine.CASH_ONLY, available=False)
+
+        held = factor_engine.decide(
+            self._swing(80), technical=85, regime=unknown, held=True)
+        weak = factor_engine.decide(
+            self._swing(30), technical=85, regime=unknown, held=True)
+        entry = factor_engine.decide(
+            self._swing(99), technical=99, regime=unknown)
+
+        self.assertEqual(held["action"], factor_engine.HOLD)
+        self.assertEqual(weak["action"], factor_engine.SELL)
+        self.assertEqual(entry["action"], factor_engine.AVOID)
+
     def test_a_middling_score_is_watched_not_avoided(self):
         verdict = factor_engine.decide(
             self._swing(55), technical=80, regime=self._regime())

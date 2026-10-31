@@ -274,11 +274,19 @@ def plan(reading, decision=None, risk=None, overhead_pct=None,
 
         rr = _finite(level.get("rr_1"))
 
+        blocker = reading.get("entry_blocker")
+
         # A hair of tolerance, because rr_1 is a rounded ratio of two floats and
         # an uncapped target computed AT the minimum would otherwise reject or
         # accept depending on the last bit of a division. The tolerance is
         # smaller than the rounding, so it cannot admit a genuinely worse trade.
-        if rr is not None and rr < min_risk_reward - 0.005:
+        if blocker:
+            # HOLD, not AVOID: nothing is wrong with the name, only with
+            # buying it today at the price this plan would print.
+            downgrades.append("قابل خرید نیست: %s" % blocker)
+            action = factor_engine.HOLD
+
+        elif rr is not None and rr < min_risk_reward - 0.005:
             downgrades.append(
                 "نسبت سود به زیان %.2f زیر حد %.2f%s"
                 % (rr, min_risk_reward,

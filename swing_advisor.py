@@ -143,7 +143,8 @@ def _instruments():
 # ==============================
 
 def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
-             positions=None, held=False, index_series=None, fundamental=None):
+             positions=None, held=False, index_series=None, fundamental=None,
+             risk_pct=None):
     """One name, all the way to a signal. Returns None when it cannot be scored.
 
     `fundamental` is the ONE input a historical caller cannot read the same way
@@ -192,6 +193,7 @@ def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
         "adx": _finite(last.get("ADX")),
         "adv": adv,
         "volatility_60": volatility,
+        "entry_blocker": _entry_blocker(frame),
     }
 
     if fundamental is None:
@@ -222,7 +224,7 @@ def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
     decision = result["decision"]
 
     risk = risk_engine.assess(reading, equity=equity, positions=positions,
-                              regime=regime)
+                              regime=regime, risk_pct=risk_pct)
 
     # The risk score is a gate as well as a report, so the decision is re-run
     # with it. Cheap, and the alternative is a BUY the sizing engine will refuse
@@ -248,6 +250,39 @@ def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
     signal["position_value"] = signal.get("position_value") or 0.0
 
     return signal
+
+
+def _entry_blocker(frame):
+    """Why this name cannot be BOUGHT at the price the plan quotes, or None.
+
+    Two conditions, both read off the last bar and neither a threshold:
+
+    NO TRADE IN THE LAST SESSION. TSETMC publishes a bar for a halted name
+    every day, the previous close carried forward at zero volume -- so a
+    halted name has a fresh bar, a flat series, a low ATR and therefore a
+    flattering risk score. The plan would quote an entry nobody can fill.
+
+    A BUY QUEUE (صف خرید). The momentum factor rewards a close at the upper
+    limit, which is exactly the close nobody could buy at. The detector is
+    E14's, from smart_money.microstructure, unchanged.
+
+    Entry only. A held name is never blocked from anything by this.
+    """
+
+    if "volume" in frame.columns:
+        volume = _finite(frame["volume"].iloc[-1])
+
+        if volume is not None and volume <= 0:
+            return "در آخرین جلسه معامله‌ای نداشته — نماد متوقف یا بی‌معامله است"
+
+    from smart_money import microstructure
+
+    state = microstructure.locks(frame)
+
+    if state and state.get("locked_up_now"):
+        return state.get("reason")
+
+    return None
 
 
 # The constructions in levels.overhead() that represent a price the market has
@@ -298,7 +333,8 @@ def _overhead(frame, close):
 # ==============================
 
 def scan(equity=None, size=None, max_per_sector=None, limit=None,
-         positions=None, verbose=True, params=None, min_action=None):
+         positions=None, verbose=True, params=None, min_action=None,
+         risk_pct=None):
     """Score the market and build the proposed book. Returns everything computed."""
 
     params = params or DEFAULT_PARAMS
@@ -393,7 +429,7 @@ def scan(equity=None, size=None, max_per_sector=None, limit=None,
         signal = evaluate(code, instruments[code], frame, regime=regime,
                           medians=medians, equity=equity, positions=positions,
                           index_series=index_series,
-                          held=code in held_codes)
+                          held=code in held_codes, risk_pct=risk_pct)
 
         if signal is None:
             skipped += 1

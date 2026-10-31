@@ -379,6 +379,13 @@ def position_size(price, distance, equity, risk_pct=None, adv=None,
 
     adv = _finite(adv)
 
+    if adv is not None and adv <= 0:
+        # Nothing traded in the window. This used to skip the liquidity cap,
+        # so the one name that cannot be traded at all was the one name sized
+        # without any participation limit.
+        return _no_position("در دوره‌ی اخیر معامله‌ای نداشته — حجم قابل خرید صفر",
+                            notes, bound=BOUND_LIQUIDITY)
+
     if adv is not None and adv > 0:
         participation = adv * (config.MAX_ADV_PARTICIPATION_PCT / 100.0)
         if wanted > participation:
