@@ -197,6 +197,39 @@ def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+# SetThreadExecutionState flags. CONTINUOUS keeps the request in force until
+# it is cleared; DISPLAY is included because on a Modern Standby laptop the
+# machine drops into standby when the screen goes off, and SYSTEM alone does
+# not stop that.
+_ES_CONTINUOUS = 0x80000000
+_ES_SYSTEM_REQUIRED = 0x00000001
+_ES_DISPLAY_REQUIRED = 0x00000002
+
+
+def _keep_awake(on):
+    """Ask Windows not to sleep while a session is being watched.
+
+    On 2026-10-31 the machine entered Modern Standby at 09:48:55 Tehran
+    (Kernel-Power 506) and woke at 11:48 (507): two hours of the session with
+    no tick, no capture and no log line, because a sleeping process cannot
+    record that it is asleep. Returns True if the request was made. A no-op
+    off Windows, and a closed lid still wins.
+    """
+
+    if sys.platform != "win32":
+        return False
+
+    try:
+        import ctypes
+
+        flags = (_ES_CONTINUOUS | _ES_SYSTEM_REQUIRED | _ES_DISPLAY_REQUIRED
+                 if on else _ES_CONTINUOUS)
+
+        return bool(ctypes.windll.kernel32.SetThreadExecutionState(flags))
+    except Exception:                                           # noqa: BLE001
+        return False
+
+
 def ensure_schema(db=DB):
     conn = sqlite3.connect(db)
 
@@ -605,6 +638,15 @@ class Monitor:
 
     def run(self, once=False, max_ticks=None, sleeper=time.sleep,
             clock=None):
+        held = _keep_awake(True)
+
+        try:
+            return self._run(once, max_ticks, sleeper, clock)
+        finally:
+            if held:
+                _keep_awake(False)
+
+    def _run(self, once, max_ticks, sleeper, clock):
         closed_streak = 0
         clock = clock or market_session.tehran_now
 
