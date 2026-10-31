@@ -848,7 +848,26 @@ def run(path=None, top_n=DEFAULT_TOP_N, verbose=True, quick=False):
 
     kwargs = {"top_n": top_n}
 
-    train, test = split_dates(dates)
+    # The project's sealed holdout starts at backtest_config.OUT_OF_SAMPLE_START,
+    # and backtesting/ later validates these weights on it. So nothing that
+    # SELECTS a vector may see it: the 60/40 split used to run over every date,
+    # its "out of sample" vetoed candidates inside the selection, and the
+    # walk-forward trained into 2026 -- the same window the weights were then
+    # validated on. Selection now runs on the dates before the seal; the sealed
+    # dates are measured once, for the vectors already chosen, and never fed
+    # back.
+    from backtest_config import OUT_OF_SAMPLE_START
+
+    sealed_from = pd.Timestamp(OUT_OF_SAMPLE_START)
+    research = [d for d in dates if pd.Timestamp(d) < sealed_from]
+    holdout = [d for d in dates if pd.Timestamp(d) >= sealed_from]
+
+    if len(research) < 4:
+        raise SystemExit("only %d decision dates before the holdout (%s); too "
+                         "few to fit anything" % (len(research),
+                                                  OUT_OF_SAMPLE_START))
+
+    train, test = split_dates(research)
 
     # ---- 1. the fixed vectors, everywhere --------------------------------
 
@@ -912,16 +931,26 @@ def run(path=None, top_n=DEFAULT_TOP_N, verbose=True, quick=False):
 
     # ---- 4. walk forward --------------------------------------------------
 
-    forward = walk_forward(frame, candidates, dates, **kwargs)
+    forward = walk_forward(frame, candidates, research, **kwargs)
 
     # ---- 5. the recommendation -------------------------------------------
 
     recommended = _recommend(plateau, out_of_sample, headline)
 
+    # ---- 6. the sealed holdout, read once ---------------------------------
+
+    sealed = {
+        name: evaluate(frame, score(frame, w), dates=holdout, **kwargs)
+        for name, w in list(fixed.items()) + [
+            ("recommended", recommended["weights"])]
+    } if holdout else {}
+
     result = {
         "dates": dates,
         "train": train,
         "test": test,
+        "holdout_dates": holdout,
+        "holdout": sealed,
         "top_n": top_n,
         "verify": check,
         "headline": headline,
@@ -1145,6 +1174,19 @@ def report(result):
 
     for factor in factor_engine.FACTORS:
         print("    %-12s %d%%" % (factor, recommended["weights"].get(factor, 0)))
+
+    sealed = result.get("holdout") or {}
+
+    if sealed:
+        print("\n\n9. THE SEALED HOLDOUT — %d dates from %s, read once, "
+              "selected nothing"
+              % (len(result["holdout_dates"]),
+                 pd.Timestamp(result["holdout_dates"][0]).date()))
+        print("-" * 78)
+        print(HEADER)
+
+        for name, row in sealed.items():
+            print(_line(name, row))
 
 
 def main(argv=None):

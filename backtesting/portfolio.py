@@ -416,27 +416,43 @@ class Portfolio(object):
         if low is None:
             low = close
 
+        opened = _finite(bar.get("open"))
+
         trail_atr = cfg.trail_atr_multiple if trail_atr is None else trail_atr
 
+        # Tested against the stop AS IT STOOD this morning. The ratchet used to
+        # run first, on a peak that already held today's close, so a bar with
+        # a low of 97 and a close of 110 raised the stop to 104 and booked an
+        # exit at 104 -- a price the stop never existed at.
+        hit_stop = position.stop is not None and low <= position.stop
+        hit_target = position.target is not None and high >= position.target
+
+        # A bar that OPENS beyond a level fills at the open. A 3% gap down is
+        # sold at the gap, not at the stop drawn above it; a gap up through
+        # the target is sold at the better price for the same reason.
+        stop_fill = (min(opened, position.stop)
+                     if hit_stop and opened is not None else position.stop)
+        target_fill = (max(opened, position.target)
+                       if hit_target and opened is not None
+                       else position.target)
+
+        if hit_stop and hit_target:
+            if cfg.ambiguous_bar_resolves_to == "target":
+                return "target", target_fill
+            return "stop", stop_fill
+
+        if hit_stop:
+            return "stop", stop_fill
+
+        if hit_target:
+            return "target", target_fill
+
         # Ratchet the stop upward on the highest close seen, never downward.
+        # From today's close, for TOMORROW's test.
         if trail_atr and position.atr_unit and position.stop is not None:
             position.peak = max(position.peak or close, close)
             trailed = position.peak - position.atr_unit * trail_atr
             position.stop = max(position.stop, trailed)
-
-        hit_stop = position.stop is not None and low <= position.stop
-        hit_target = position.target is not None and high >= position.target
-
-        if hit_stop and hit_target:
-            if cfg.ambiguous_bar_resolves_to == "target":
-                return "target", position.target
-            return "stop", position.stop
-
-        if hit_stop:
-            return "stop", position.stop
-
-        if hit_target:
-            return "target", position.target
 
         return None, None
 

@@ -200,5 +200,49 @@ class TestSizing(unittest.TestCase):
         self.assertEqual(shares, 0)
 
 
+class TestSimulationFills(unittest.TestCase):
+    """Fills and costs on the equity curve, not just on the trade rows."""
+
+    def run_gap(self):
+        from backtest_config import BacktestConfig
+
+        days = pd.to_datetime(["2025-01-04", "2025-01-05", "2025-01-06",
+                               "2025-01-07"])
+        frame = pd.DataFrame({
+            "date": days,
+            "open": [1000.0, 1000.0, 900.0, 890.0],
+            "high": [1000.0, 1010.0, 905.0, 895.0],
+            "low": [1000.0, 990.0, 880.0, 885.0],
+            "close": [1000.0, 1000.0, 890.0, 890.0],
+        })
+        panel = {days[0]: {"A": {"symbol": "A", "sector": "s", "technical": 95,
+                                  "flow": 50, "headroom": 50.0,
+                                  "close": 1000.0, "atr": 30.0}}}
+
+        out = bp.simulate(panel, [days[0], days[3]], {"A": frame},
+                          size=1, max_per_sector=1, equity=1_000_000_000,
+                          use_trailing=False, mode="blend", verbose=False)
+
+        return out, BacktestConfig()
+
+    def test_a_gap_through_the_stop_fills_at_the_open(self):
+        out, _ = self.run_gap()
+
+        trades = out["trades"] if isinstance(out, dict) else out[1]
+        stop = [t for t in trades if t["reason"] == "stop"]
+
+        self.assertEqual(len(stop), 1)
+        self.assertEqual(stop[0]["exit"], 900.0)
+
+    def test_each_side_pays_its_own_cost_once(self):
+        out, cfg = self.run_gap()
+
+        trades = out["trades"] if isinstance(out, dict) else out[1]
+        expected = ((900.0 * (1 - cfg.sell_cost_rate()))
+                    / (1000.0 * (1 + cfg.buy_cost_rate())) - 1) * 100
+
+        self.assertAlmostEqual(trades[0]["return_pct"], expected, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()

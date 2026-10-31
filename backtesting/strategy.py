@@ -419,13 +419,16 @@ class Strategy(object):
 
         record = history[-1]
 
-        ratios = self.data.market_ratios(record, reading["close"],
+        price = self.data.valuation_price(ins_code, date,
+                                          fallback=reading["close"])
+
+        ratios = self.data.market_ratios(record, price,
                                          sector=reading["sector"])
 
         result = fundamental_v2.evaluate(
             history, ratios,
             trend_weight=getattr(self.cfg, "fundamental_trend_weight", None),
-            price=reading["close"], sector=reading["sector"],
+            price=price, sector=reading["sector"],
         )
 
         # Kept even when INSUFFICIENT, because "a filing existed and the model

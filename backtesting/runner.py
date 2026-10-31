@@ -93,6 +93,17 @@ def full_run(start=None, end=None, cfg=None, variant=TECHNICAL_ONLY,
 
     oos = folds = monte = sweep = variants = None
 
+    # The two stages that CHOOSE a parameter value stop before the sealed
+    # holdout. They used to sweep start..end, so 2026 helped pick the gate in
+    # the later walk-forward windows and set the sensitivity sweep's
+    # best_value -- and the out-of-sample stage then "validated" on the same
+    # sessions. The holdout is for measuring, and only out_of_sample reads it.
+    tune_end = min(pd.Timestamp(end),
+                   pd.Timestamp(backtest_config.OUT_OF_SAMPLE_START)
+                   - pd.Timedelta(days=1))
+    can_tune = tune_end > pd.Timestamp(start)
+    tune_end = str(tune_end.date())
+
     if "oos" in stages:
         if verbose:
             print()
@@ -105,10 +116,13 @@ def full_run(start=None, end=None, cfg=None, variant=TECHNICAL_ONLY,
         if verbose:
             print()
             print("-- walk-forward --")
-        folds = validation.walk_forward(cfg, data, start, end, variant=variant,
-                                        panel=panel, dates=dates,
-                                        verbose=verbose)
-        out["stages_run"].append("walk_forward")
+        if can_tune:
+            folds = validation.walk_forward(cfg, data, start, tune_end,
+                                            variant=variant, panel=panel,
+                                            dates=dates, verbose=verbose)
+            out["stages_run"].append("walk_forward")
+        elif verbose:
+            print("   skipped: the whole window is inside the holdout")
 
     if "montecarlo" in stages:
         if verbose:
@@ -121,9 +135,13 @@ def full_run(start=None, end=None, cfg=None, variant=TECHNICAL_ONLY,
         if verbose:
             print()
             print("-- sensitivity --")
-        sweep = validation.sensitivity(cfg, data, start, end, variant=variant,
-                                       panel=panel, dates=dates, verbose=verbose)
-        out["stages_run"].append("sensitivity")
+        if can_tune:
+            sweep = validation.sensitivity(cfg, data, start, tune_end,
+                                           variant=variant, panel=panel,
+                                           dates=dates, verbose=verbose)
+            out["stages_run"].append("sensitivity")
+        elif verbose:
+            print("   skipped: the whole window is inside the holdout")
 
     if "variants" in stages:
         if verbose:

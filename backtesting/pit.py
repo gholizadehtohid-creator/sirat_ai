@@ -191,6 +191,11 @@ class PointInTimeData(object):
             if frame is None or frame.empty:
                 self._bars[key] = None
             else:
+                frame = frame.copy()
+                # Kept BEFORE adjustment, for the one reading that needs the
+                # price as it was printed: a valuation multiple. See
+                # valuation_price().
+                frame["raw_close"] = frame["close"].astype(float)
                 frame, _ = back_adjust(frame)
                 frame = frame.copy()
                 frame["date"] = pd.to_datetime(frame["date"])
@@ -214,6 +219,33 @@ class PointInTimeData(object):
             return -1
 
         return int(frame["date"].searchsorted(pd.Timestamp(date), side="right")) - 1
+
+    def valuation_price(self, ins_code, date, fallback=None):
+        """The close as PRINTED on `date`, for pricing a filing.
+
+        The adjusted close is the right input for returns and indicators and
+        the wrong one for P/E, P/S and P/B. Back-adjustment is anchored at the
+        newest bar, so every price before a later capital increase is scaled
+        down by it -- and a filing's EPS and share count are not. A company
+        that went on to issue bonus shares therefore looked cheap in its own
+        past, by exactly its later growth: look-ahead with a sign.
+        """
+
+        frame = self.bars(ins_code)
+
+        index = self.position(ins_code, date)
+
+        if frame is None or index < 0 or "raw_close" not in frame.columns:
+            return fallback
+
+        value = frame["raw_close"].iloc[index]
+
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return fallback
+
+        return value if value > 0 else fallback
 
     def history_until(self, ins_code, date, bars=None):
         """Bars up to and including `date`. Never one row further.

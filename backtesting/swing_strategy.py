@@ -210,7 +210,10 @@ class SwingStrategy(object):
             return None
 
         try:
-            ratios = self.data.market_ratios(history[-1], close, sector=sector)
+            ratios = self.data.market_ratios(
+                history[-1],
+                self.data.valuation_price(ins_code, date, fallback=close),
+                sector=sector)
         except Exception:
             return None
 

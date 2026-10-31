@@ -649,6 +649,11 @@ def _observe_symbol(rows, enriched, bars, dates, ins_code, meta, data, cfg,
     values = bars["value"].tolist() if "value" in bars.columns else []
     volumes = bars["volume"].tolist() if "volume" in bars.columns else []
 
+    opens = (enriched["open"].tolist() if "open" in enriched.columns
+             else closes)
+    highs = enriched["high"].tolist() if "high" in enriched.columns else []
+    lows = enriched["low"].tolist() if "low" in enriched.columns else []
+
     warmup = max(required_bars(params), max(config.MOMENTUM_HORIZONS) + 1)
 
     for date in dates:
@@ -678,20 +683,29 @@ def _observe_symbol(rows, enriched, bars, dates, ins_code, meta, data, cfg,
 
         # ---- the forward return ------------------------------------------
         #
-        # Strictly after the decision bar. `index + hold` and not `index + hold
-        # - 1`: the position is opened on the bar AFTER the decision, so the
-        # first session of the hold is index+1.
+        # Strictly after the decision bar, and FROM the price the position
+        # could have been opened at: the open of index+1. This used to be
+        # measured from the decision bar's own close, which credited every
+        # name with its next-session gap -- and the names that gap hardest
+        # are the ones that closed in a buy queue, which nobody could buy.
+        # weight_optimizer fitted the shipped weights on those rows.
         exit_index = index + hold
 
         if exit_index >= len(closes):
             continue
 
-        exit_close = _finite(closes[exit_index])
+        entry_index = index + 1
 
-        if not exit_close or exit_close <= 0:
+        if _unfillable(entry_index, close, opens, highs, lows, volumes):
             continue
 
-        forward = (exit_close - close) / close * 100.0
+        entry = _finite(opens[entry_index])
+        exit_close = _finite(closes[exit_index])
+
+        if not entry or entry <= 0 or not exit_close or exit_close <= 0:
+            continue
+
+        forward = (exit_close - entry) / entry * 100.0
 
         # ---- the factors --------------------------------------------------
 
@@ -757,6 +771,37 @@ def _observe_symbol(rows, enriched, bars, dates, ins_code, meta, data, cfg,
         })
 
 
+def _unfillable(i, previous_close, opens, highs, lows, volumes):
+    """Could a buy order NOT have filled on bar i?
+
+    Two cases, both observations rather than thresholds. Nothing traded
+    (a halt, carried forward at zero volume), or the session was a buy queue:
+    no range at all and up on the previous close by more than a tick -- E14's
+    lock definition, from smart_money.microstructure.
+    """
+
+    from smart_money import microstructure
+
+    if volumes:
+        volume = _finite(volumes[i])
+        if volume is not None and volume <= 0:
+            return True
+
+    if not highs or not lows:
+        return False
+
+    high, low = _finite(highs[i]), _finite(lows[i])
+
+    if high is None or low is None or not previous_close:
+        return False
+
+    move = (_finite(opens[i]) or high) / previous_close * 100.0 - 100.0
+
+    return (high == low
+            and microstructure.LOCK_MIN_RETURN < move
+            <= microstructure.LOCK_MAX_RETURN)
+
+
 def _fundamental_at(data, cfg, ins_code, date, close, sector):
     """The v2 fundamental score from filings public before this session closed.
 
@@ -779,7 +824,9 @@ def _fundamental_at(data, cfg, ins_code, date, close, sector):
     newest = history[-1]
 
     try:
-        ratios = data.market_ratios(newest, close, sector=sector)
+        ratios = data.market_ratios(
+            newest, data.valuation_price(ins_code, date, fallback=close),
+            sector=sector)
     except Exception:
         return None
 

@@ -414,6 +414,7 @@ class TestExits(unittest.TestCase):
         book = self._book_with_position(trail_atr_multiple=1.0)
 
         position = book.positions["AAA"]
+        position.target = None      # a bar through the target exits instead
 
         # A rise lifts the stop: peak 1200 - 1 ATR unit (25) = 1175.
         book.exit_signal("AAA", {"high": 1210.0, "low": 1190.0, "close": 1200.0})
@@ -424,6 +425,39 @@ class TestExits(unittest.TestCase):
         book.exit_signal("AAA", {"high": 1190.0, "low": 1180.0, "close": 1185.0})
 
         self.assertAlmostEqual(position.stop, 1175.0, places=6)
+
+    def test_a_gap_through_the_stop_fills_at_the_open(self):
+        book = self._book_with_position(trail_atr_multiple=0.0)
+
+        reason, price = book.exit_signal(
+            "AAA", {"open": 920.0, "high": 930.0, "low": 910.0,
+                    "close": 925.0})
+
+        self.assertEqual(reason, "stop")
+        self.assertEqual(price, 920.0)
+
+    def test_a_gap_through_the_target_fills_at_the_open(self):
+        book = self._book_with_position(trail_atr_multiple=0.0)
+
+        reason, price = book.exit_signal(
+            "AAA", {"open": 1130.0, "high": 1140.0, "low": 1120.0,
+                    "close": 1135.0})
+
+        self.assertEqual(reason, "target")
+        self.assertEqual(price, 1130.0)
+
+    def test_todays_close_cannot_raise_todays_stop(self):
+        """Low 960, close 1200: the stop that day is 950, so no exit."""
+
+        book = self._book_with_position(trail_atr_multiple=1.0)
+        book.positions["AAA"].target = None
+
+        reason, _ = book.exit_signal(
+            "AAA", {"open": 1000.0, "high": 1200.0, "low": 960.0,
+                    "close": 1200.0})
+
+        self.assertIsNone(reason)
+        self.assertAlmostEqual(book.positions["AAA"].stop, 1175.0)
 
     def test_no_exit_when_neither_level_is_touched(self):
 
@@ -1102,6 +1136,45 @@ def engine_stub(cfg):
     result.benchmarks = {"tedpix": {"excess_pct": 10.0}}
 
     return result
+
+
+class ValuationPriceTest(unittest.TestCase):
+    """A multiple is priced at the close as printed, not as adjusted."""
+
+    def test_a_later_bonus_issue_does_not_cheapen_the_past(self):
+        import backtesting.pit as pit_module
+
+        dates = pd.bdate_range("2025-01-01", periods=10)
+        raw = pd.DataFrame({
+            "date": dates.strftime("%Y-%m-%d"),
+            "open": [100.0] * 5 + [50.0] * 5,
+            "high": [100.0] * 5 + [50.0] * 5,
+            "low": [100.0] * 5 + [50.0] * 5,
+            "close": [100.0] * 5 + [50.0] * 5,      # a 100% bonus issue
+            "volume": [1000.0] * 10,
+        })
+
+        original = pit_module.database.load_history_by_inscode
+        pit_module.database.load_history_by_inscode = lambda code: raw.copy()
+
+        try:
+            data = PointInTimeData(backtest_config.BacktestConfig(),
+                                   verbose=False)
+
+            adjusted = data.history_until("1", dates[2])["close"].iloc[-1]
+            printed = data.valuation_price("1", dates[2])
+        finally:
+            pit_module.database.load_history_by_inscode = original
+
+        self.assertAlmostEqual(adjusted, 50.0)
+        self.assertAlmostEqual(printed, 100.0)
+
+    def test_no_bar_falls_back(self):
+        data = PointInTimeData(backtest_config.BacktestConfig(), verbose=False)
+        data._bars["9"] = None
+
+        self.assertEqual(data.valuation_price("9", "2025-01-01",
+                                              fallback=7.0), 7.0)
 
 
 if __name__ == "__main__":

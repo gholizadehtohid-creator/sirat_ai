@@ -480,5 +480,32 @@ class ReportTest(unittest.TestCase):
         self.assertIn("regime factor was DISABLED", buffer.getvalue())
 
 
+class UnfillableEntryTest(unittest.TestCase):
+    """The forward return starts where a buy could actually have filled."""
+
+    def test_a_buy_queue_session_is_unfillable(self):
+        # Opened, traded and closed at +3% with no range: a صف خرید.
+        self.assertTrue(swing_backtest._unfillable(
+            1, 100.0, [100.0, 103.0], [100.0, 103.0], [100.0, 103.0],
+            [1000.0, 5000.0]))
+
+    def test_a_halted_session_is_unfillable(self):
+        self.assertTrue(swing_backtest._unfillable(
+            1, 100.0, [100.0, 100.0], [100.0, 100.0], [100.0, 100.0],
+            [1000.0, 0.0]))
+
+    def test_an_ordinary_session_fills(self):
+        self.assertFalse(swing_backtest._unfillable(
+            1, 100.0, [100.0, 101.0], [100.0, 103.0], [100.0, 99.5],
+            [1000.0, 5000.0]))
+
+    def test_a_flat_untraded_looking_but_unchanged_session_fills(self):
+        """No range at an unchanged price is not a queue."""
+
+        self.assertFalse(swing_backtest._unfillable(
+            1, 100.0, [100.0, 100.0], [100.0, 100.0], [100.0, 100.0],
+            [1000.0, 50.0]))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

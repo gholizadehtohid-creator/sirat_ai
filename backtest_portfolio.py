@@ -478,7 +478,26 @@ def simulate(panel, dates, price_by_code, size=None, max_per_sector=None,
     curve = []
     trades = []
 
-    cost_rate = config.TRANSACTION_COST_PCT / 100.0
+    # One rate per side, from the same BacktestConfig backtesting/engine.py
+    # charges. This used to apply config.TRANSACTION_COST_PCT -- already a
+    # ROUND-TRIP figure, 1.04% -- on the buy AND again on the sale: 2.08% per
+    # trade on the equity curve, while the trade rows deducted it once.
+    from backtest_config import BacktestConfig
+
+    _costs = BacktestConfig()
+    buy_rate = _costs.buy_cost_rate()
+    sell_rate = _costs.sell_cost_rate()
+
+    def net_return(entry, sold_at):
+        return ((sold_at * (1 - sell_rate)) / (entry * (1 + buy_rate))
+                - 1) * 100
+
+    def exit_price(ins_code, state):
+        # A decision made on a session's close is executed at the NEXT open,
+        # exactly like the buys below. These sales used to fill at the
+        # decision close itself -- a price the decision did not exist for yet.
+        return (_next_open(price_by_code.get(ins_code), date)
+                or state.get("last", state["entry"]))
 
     rebalance_set = {pd.Timestamp(d) for d in dates}
 
@@ -528,6 +547,25 @@ def simulate(panel, dates, price_by_code, size=None, max_per_sector=None,
 
             state["last"] = close
 
+            # The stop is tested BEFORE today's close can raise it. Ratcheting
+            # first let a bar with a low of 97 and a close of 110 lift the stop
+            # to 104 and then exit at 104 -- a fill that never existed.
+            if low is not None and low <= state["stop"]:
+                # A bar that OPENS through the stop fills at the open, not at
+                # the stop: a 3% gap down does not stop at the level drawn.
+                opened = _finite(bar.get("open")) or state["stop"]
+                fill = min(opened, state["stop"])
+                cash += state["shares"] * fill * (1 - sell_rate)
+                trades.append({
+                    "ins_code": ins_code, "symbol": state["symbol"],
+                    "entry_date": state["entry_date"], "exit_date": str(date.date()),
+                    "entry": state["entry"], "exit": fill,
+                    "shares": state["shares"], "reason": "stop",
+                    "return_pct": net_return(state["entry"], fill),
+                })
+                del positions[ins_code]
+                continue
+
             if use_trailing and trail_atr > 0:
                 state["peak"] = max(state.get("peak", close), close)
                 # The trail is measured in the position's own ATR units, which
@@ -535,20 +573,6 @@ def simulate(panel, dates, price_by_code, size=None, max_per_sector=None,
                 # multiple -- so a 3-ATR trail is three of those units.
                 trail = state["peak"] - state["atr_unit"] * trail_atr
                 state["stop"] = max(state["stop"], trail)
-
-            if low is not None and low <= state["stop"]:
-                # Filled at the stop, which is the pessimistic reading when a
-                # bar's range spans it.
-                proceeds = state["shares"] * state["stop"] * (1 - cost_rate)
-                cash += proceeds
-                trades.append({
-                    "ins_code": ins_code, "symbol": state["symbol"],
-                    "entry_date": state["entry_date"], "exit_date": str(date.date()),
-                    "entry": state["entry"], "exit": state["stop"],
-                    "shares": state["shares"], "reason": "stop",
-                    "return_pct": (state["stop"] / state["entry"] - 1) * 100 - config.TRANSACTION_COST_PCT,
-                })
-                del positions[ins_code]
 
         # ---- rebalance ----------------------------------------------------
         if date in rebalance_set:
@@ -563,25 +587,24 @@ def simulate(panel, dates, price_by_code, size=None, max_per_sector=None,
                     # the index with the proceeds.
                     for ins_code in list(positions):
                         state = positions[ins_code]
-                        price = state.get("last", state["entry"])
-                        cash += state["shares"] * price * (1 - cost_rate)
+                        price = exit_price(ins_code, state)
+                        cash += state["shares"] * price * (1 - sell_rate)
                         trades.append({
                             "ins_code": ins_code, "symbol": state["symbol"],
                             "entry_date": state["entry_date"],
                             "exit_date": str(date.date()),
                             "entry": state["entry"], "exit": price,
                             "shares": state["shares"], "reason": "switch to index",
-                            "return_pct": (price / state["entry"] - 1) * 100
-                                          - config.TRANSACTION_COST_PCT,
+                            "return_pct": net_return(state["entry"], price),
                         })
                         del positions[ins_code]
 
-                    index_value = cash * (1 - cost_rate)
+                    index_value = cash * (1 - buy_rate)
                     cash = 0.0
                     in_index = True
 
                 elif not want_index and in_index:
-                    cash = index_value * (1 - cost_rate)
+                    cash = index_value * (1 - sell_rate)
                     index_value = 0.0
                     in_index = False
 
@@ -607,14 +630,14 @@ def simulate(panel, dates, price_by_code, size=None, max_per_sector=None,
                 if ins_code in wanted_codes:
                     continue
                 state = positions[ins_code]
-                price = state.get("last", state["entry"])
-                cash += state["shares"] * price * (1 - cost_rate)
+                price = exit_price(ins_code, state)
+                cash += state["shares"] * price * (1 - sell_rate)
                 trades.append({
                     "ins_code": ins_code, "symbol": state["symbol"],
                     "entry_date": state["entry_date"], "exit_date": str(date.date()),
                     "entry": state["entry"], "exit": price,
                     "shares": state["shares"], "reason": "rotated out",
-                    "return_pct": (price / state["entry"] - 1) * 100 - config.TRANSACTION_COST_PCT,
+                    "return_pct": net_return(state["entry"], price),
                 })
                 del positions[ins_code]
 
@@ -642,14 +665,14 @@ def simulate(panel, dates, price_by_code, size=None, max_per_sector=None,
 
                 for ins_code in list(positions):
                     state = positions[ins_code]
-                    price = state.get("last", state["entry"])
+                    price = exit_price(ins_code, state)
                     target_shares = int(state["shares"] * keep)
                     sold = state["shares"] - target_shares
 
                     if sold <= 0:
                         continue
 
-                    cash += sold * price * (1 - cost_rate)
+                    cash += sold * price * (1 - sell_rate)
 
                     if target_shares <= 0:
                         trades.append({
@@ -658,8 +681,7 @@ def simulate(panel, dates, price_by_code, size=None, max_per_sector=None,
                             "exit_date": str(date.date()),
                             "entry": state["entry"], "exit": price,
                             "shares": state["shares"], "reason": "cash target",
-                            "return_pct": (price / state["entry"] - 1) * 100
-                                          - config.TRANSACTION_COST_PCT,
+                            "return_pct": net_return(state["entry"], price),
                         })
                         del positions[ins_code]
                     else:
@@ -737,16 +759,16 @@ def simulate(panel, dates, price_by_code, size=None, max_per_sector=None,
 
                 if shares <= 0:
                     continue
-                outlay = shares * price * (1 + cost_rate)
+                outlay = shares * price * (1 + buy_rate)
 
                 if outlay > cash or (held + outlay) > investable:
                     # Shrink to what is affordable rather than skipping: a
                     # basket that silently holds eight names because two were
                     # unaffordable is not the basket being tested.
                     affordable = int(min(cash, investable - held) /
-                                     (price * (1 + cost_rate)))
+                                     (price * (1 + buy_rate)))
                     shares = max(0, min(shares, affordable))
-                    outlay = shares * price * (1 + cost_rate)
+                    outlay = shares * price * (1 + buy_rate)
 
                 if shares <= 0:
                     continue
