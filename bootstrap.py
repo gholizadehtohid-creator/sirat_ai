@@ -504,11 +504,16 @@ def _fetch_indices(on_item):
 
 
 def _fetch_history(on_item):
+    # Incremental: the stored series is kept and only the sessions it lacks
+    # are fetched. A full HISTORY_BARS pull is now only for a name with no
+    # bars at all. `python seed_import.py --history` still does the full pull.
     import seed_import
-    stored = seed_import.import_history(
-        count=HISTORY_BARS, verbose=False, progress=on_item
+    stats = seed_import.update_history(
+        full_count=HISTORY_BARS, verbose=False, progress=on_item
     )
-    return bool(stored)
+    for message in stats.get("notes") or []:
+        _note(message)
+    return bool(stats.get("ok"))
 
 
 def _fetch_sectors(on_item):

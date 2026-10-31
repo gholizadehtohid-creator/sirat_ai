@@ -205,7 +205,7 @@ RECORDED_OVERVIEW = {
 }
 
 
-def overview(date=20261028, state="N"):
+def overview(date=20261028, state="S"):
     return {"marketActivityDEven": date, "marketState": state}
 
 
@@ -255,6 +255,17 @@ class LiveStateTests(unittest.TestCase):
         self.assertEqual(state["traded"], 1)
         self.assertEqual(state["last_trade"], 100530)
         self.assertEqual(state["session_date"], 20261028)
+
+    def test_state_n_after_the_session_is_not_trading(self):
+        """Seen 14:30-15:04 on 2026-10-31: the day's date, turnover, "N"."""
+
+        rows = [{"qtj": 1000, "hEven": 122959}]
+
+        state = market_session.is_trading_now(
+            provider=self.FakeProvider(rows, market=overview(state="N")),
+            now=SESSION_NOW)
+
+        self.assertFalse(state["trading"])
 
     def test_the_recorded_friday_payload_is_closed(self):
         """The real feed, two days after the session it still describes.

@@ -1899,6 +1899,37 @@ def client_type_coverage():
     }
 
 
+def newest_bars(ins_codes=None):
+    """{ins_code: (newest date 'YYYY-MM-DD', close on that date)}.
+
+    What an incremental update needs to know per instrument: how far its own
+    series reaches, and the price the next session's `py` must agree with.
+    Instruments with no bars are simply absent.
+    """
+
+    create_database()
+
+    conn = _connect()
+
+    rows = conn.execute("""
+        SELECT p.ins_code, p.date, p.close
+        FROM price_history p
+        JOIN (SELECT ins_code, MAX(date) AS date
+              FROM price_history GROUP BY ins_code) n
+          ON n.ins_code = p.ins_code AND n.date = p.date
+    """).fetchall()
+
+    conn.close()
+
+    wanted = None if ins_codes is None else {str(c) for c in ins_codes}
+
+    return {
+        str(code): (date, close)
+        for code, date, close in rows
+        if wanted is None or str(code) in wanted
+    }
+
+
 def newest_equity_bar():
     """The newest stored bar ACROSS EQUITIES ONLY, as a datetime, or None.
 

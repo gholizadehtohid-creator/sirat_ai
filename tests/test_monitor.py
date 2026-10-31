@@ -62,7 +62,7 @@ class FakeProvider:
             # Dated today, so the tape in `sequence` counts as this session's.
             today = int(market_session.tehran_now().strftime("%Y%m%d"))
             payload = {"marketOverview": {"marketActivityDEven": today,
-                                          "marketState": "N"}}
+                                          "marketState": "S"}}
 
             class Overview:
                 @staticmethod

@@ -75,6 +75,12 @@ TEHRAN = timezone(timedelta(hours=3, minutes=30))
 # Observed 2026-10-30, a Friday, with the last session dated 2026-10-28.
 MARKET_STATE_CLOSED = "F"
 
+# Every state that means the day's session is over. "N" is what the overview
+# reports after 14:30 on a trading day (observed 2026-10-31, through 15:04);
+# "F" only comes later. "S" (12:19) and "P" (13:01) are not here: P follows
+# the continuous session but the day's prices are not final in it.
+MARKET_STATES_SHUT = frozenset({MARKET_STATE_CLOSED, "N"})
+
 
 def tehran_now(now=None):
     """The wall clock in Tehran. `now` is an aware datetime, for tests."""
@@ -219,6 +225,31 @@ def last_live_session(db=DB):
     return None
 
 
+def exchange_session(provider):
+    """(date of the last session that traded as YYYYMMDD int, marketState).
+
+    The exchange's own answer, from GetMarketOverview: "F" is shut, "S" is a
+    session in progress (both observed live). Raises if the overview cannot
+    be read -- the callers each decide what an unreadable exchange means.
+    """
+
+    # The default provider is a chain, which has no raw `_get`: ask the
+    # member that does, or build one.
+    if not hasattr(provider, "_get"):
+        provider = next((m for m in getattr(provider, "providers", ())
+                         if hasattr(m, "_get")), None)
+        if provider is None:
+            from providers.tsetmc_cdn import TsetmcCdnProvider
+            provider = TsetmcCdnProvider()
+
+    overview = provider._get(
+        provider.base_url + "/api/MarketData/GetMarketOverview/1",
+        timeout=(10.0, 30.0)).json()["marketOverview"]
+
+    return (int(overview.get("marketActivityDEven") or 0) or None,
+            overview.get("marketState"))
+
+
 def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES, now=None):
     """Is a session running RIGHT NOW? Observed from the live tape.
 
@@ -269,11 +300,7 @@ def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES, now=None):
                 "reason": "market watch returned no rows"}
 
     try:
-        overview = provider._get(
-            provider.base_url + "/api/MarketData/GetMarketOverview/1",
-            timeout=(10.0, 30.0)).json()["marketOverview"]
-        session_date = int(overview.get("marketActivityDEven") or 0) or None
-        market_state = overview.get("marketState")
+        session_date, market_state = exchange_session(provider)
     except Exception as exc:                                    # noqa: BLE001
         return {"trading": None, "traded": 0, "last_trade": None,
                 "session_date": None, "market_state": None,
@@ -307,7 +334,7 @@ def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES, now=None):
 
     today = int(tehran_now(now).strftime("%Y%m%d"))
 
-    if market_state == MARKET_STATE_CLOSED:
+    if market_state in MARKET_STATES_SHUT:
         trading = False
         reason = ("exchange reports the market shut (state %s); last "
                   "session %s" % (market_state, session_date))
