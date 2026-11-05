@@ -1,0 +1,38 @@
+{
+  "experiment_id": "E26-v2-basket-stop-cadence-cash",
+
+  "hypothesis": "The v2 basket's losses on 2024-09-01..2026-11-04 are driven by its book mechanics more than by its selection: stops inside normal daily noise exit 67-75% of trades at the stop (9 of 44 on the entry day in 2026), and a 20-session rebalance then leaves the freed capital idle, so the book averages 80-85% cash earning nothing. Widening the stop beyond two daily price bands, refilling the book every 5 sessions and crediting idle cash at the policy rate should raise total return in BOTH windows relative to the unchanged v2 book.",
+
+  "strategy_version": "v2 swing engine at the commit that adds this file; selection, weights, factor thresholds and targets' reward:risk UNCHANGED",
+
+  "researcher": "Claude, at the user's request of 2026-11-05",
+
+  "changes_frozen_here": {
+    "config.V2_STOP_ATR_MULTIPLE (new, read by risk_engine.stop_distance)": "3.0, where v2 used STOP_ATR_MULTIPLE 2.0; v1 keeps 2.0",
+    "config.V2_MIN_STOP_PCT (new, risk_engine floor)": "2 x PRICE_BAND_PCT (6%), where v2 used RISK_MIN_STOP_PCT 3% -- the two-band distance risk_engine already uses as its no-ATR fallback",
+    "backtest_config.V2_REBALANCE_SESSIONS (new, engine=v2 only)": "5, where v2 used REBALANCE_SESSIONS 20 (one trading week; the live panel can be re-run any day, so a monthly refill understated how it is used)",
+    "backtest_config.V2_CREDIT_IDLE_CASH (new, engine=v2 only)": "True at CASH_ANNUAL_RATE = config.RISK_FREE_RATE (0.23), i.e. unallocated cash parked in a fixed-income fund; the global CREDIT_IDLE_CASH stays False so published v1/research results reproduce",
+    "panel": "the v2 report states the unallocated share and that it belongs in a fixed-income fund, not a current account"
+  },
+
+  "values_chosen_how": "A priori, from the diagnosis above and from risk_engine's own geometry (_score_stop already calls a stop inside one band 'triggered by ordinary noise'). No grid, no second value tried. If a run is repeated with other values, that is a new experiment and is recorded as one.",
+
+  "evaluation": {
+    "windows": ["2024-09-01..2025-12-31", "2026-01-01..2026-11-04"],
+    "baseline": "v2 at the parent commit, already measured 2026-11-05 with idle cash uncredited: -0.86% and -9.37% total return. Because E26 also credits cash, the baseline is re-run with the cash credit on and the old stop/cadence, so the stop+cadence effect is read against that, not against the uncredited figure.",
+    "engine": "backtesting/engine.run(engine='v2'), same costs (1.039% round trip), same T+1 and queue model",
+    "selection_test": "examples/basket_random_null.py, 500 draws, seed 20261105, both with the engine's exits and with a fixed 20-session hold",
+    "also_reported": "TEDPIX, equal-weight index, bank deposit, cash share, exit reasons"
+  },
+
+  "decision_rule": "KEEP the stop and cadence changes as the shipped defaults only if E26 total return exceeds the baseline in BOTH windows. Otherwise set V2_STOP_ATR_MULTIPLE, V2_MIN_STOP_PCT and V2_REBALANCE_SESSIONS back to 2.0, 3% and 20. The idle-cash credit and the panel's fixed-income note are kept either way: they correct a measurement and an omission in the advice, not the strategy.",
+
+  "declared_limits": "Both windows were spent on 2026-11-05 by the baseline measurement that motivated this experiment, so E26 CAN show the package is worse and CANNOT establish an edge: an improvement here is an in-sample finding. Beating the baseline is not beating the index, and the decision rule does not claim it is. Any claim of profitability needs sessions after 2026-11-05. The universe is today's listings (survivorship), which flatters every arm equally.",
+
+  "expected_failure": [
+    "wider stops make losses per stopped trade larger and positions smaller (risk-based sizing), so the book stays mostly in cash and the gain is mostly the cash credit",
+    "weekly refills raise turnover and the 1.039% round trip eats the extra exposure",
+    "found from a unit test before any run, not from results: a 6% stop puts target 1 (2.5R) 15% away, so overhead resistance that used to trim it to an acceptable reward:risk now drops it below MIN_RISK_REWARD and the BUY becomes AVOID -- fewer buys, more cash",
+    "the selection is at or below random (2nd and 20th percentile at baseline); no exit rule can fix that, so the package still trails the index by a wide margin"
+  ]
+}

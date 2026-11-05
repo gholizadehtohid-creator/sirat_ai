@@ -44,6 +44,19 @@ class DefaultIsOffTest(unittest.TestCase):
         self.assertEqual(book.accrue_cash(), 0.0)
 
 
+class V2CreditTest(unittest.TestCase):
+    """E26: the v2 book's idle cash earns the fixed-income rate; nothing else's."""
+
+    def test_v2_is_credited_and_the_global_default_is_not(self):
+        cfg = backtest_config.load()
+        self.assertTrue(cfg.v2_credit_idle_cash)
+        self.assertFalse(cfg.credit_idle_cash)
+
+    def test_the_v2_switch_survives_replace(self):
+        cfg = backtest_config.load().replace(v2_credit_idle_cash=False)
+        self.assertFalse(cfg.v2_credit_idle_cash)
+
+
 class AccrualTest(unittest.TestCase):
 
     def _book(self, capital=1_000_000.0, rate=None):

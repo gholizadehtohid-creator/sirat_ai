@@ -199,6 +199,13 @@ CASH_RESERVE_PCT = config.MIN_CASH_PCT
 # reported as a separate version rather than as a correction to the old ones.
 CREDIT_IDLE_CASH = False
 
+# ...except for the v2 book, from 2026-11-05 (E26). It averaged 80-85% cash
+# over 2024-09..2026-11, and an engine that pays nothing on that measures a
+# book nobody would hold: the panel now tells the user to park unallocated
+# money in a fixed-income fund. Applied by engine.run() for engine="v2" only,
+# so every published v1 and research result above stays reproducible.
+V2_CREDIT_IDLE_CASH = True
+
 CASH_ANNUAL_RATE = config.RISK_FREE_RATE
 
 RISK_PER_TRADE_PCT = config.RISK_PER_TRADE_PCT
@@ -271,6 +278,11 @@ DEFAULT_END = None
 # Sessions between rebalances. 20 is one trading month and is also the horizon
 # every signal measurement in this project was made over.
 REBALANCE_SESSIONS = 20
+
+# The v2 book is refilled weekly (E26). Its stops free capital between
+# monthly rebalances that then sat idle; the live panel can be re-run any day,
+# so a monthly refill also understated how it is used. v1 keeps 20.
+V2_REBALANCE_SESSIONS = 5
 
 # Stops and targets are checked EVERY session regardless of the rebalance
 # schedule. A risk rule that only fires on rebalance day is not a risk rule.
@@ -584,7 +596,9 @@ _OVERRIDABLE = (
     "cash_reserve_pct", "credit_idle_cash", "cash_annual_rate",
     "risk_per_trade_pct", "stop_atr_multiple",
     "take_profit_atr_multiple", "trail_atr_multiple", "use_regime_cash",
-    "rebalance_sessions", "universe_limit", "min_history_bars",
+    "rebalance_sessions", "v2_rebalance_sessions", "v2_credit_idle_cash",
+    "universe_limit",
+    "min_history_bars",
     # check_exits_daily was a field that could be read but never overridden, so
     # a run could not turn the stop path off without editing the module. Added
     # for Experiment 3, which has to hold the exit rule constant while it
@@ -650,6 +664,8 @@ class BacktestConfig(object):
         self.use_regime_cash = USE_REGIME_CASH
 
         self.rebalance_sessions = REBALANCE_SESSIONS
+        self.v2_rebalance_sessions = V2_REBALANCE_SESSIONS
+        self.v2_credit_idle_cash = V2_CREDIT_IDLE_CASH
         self.check_exits_daily = CHECK_EXITS_DAILY
         self.universe_limit = UNIVERSE_LIMIT
         self.min_history_bars = MIN_HISTORY_BARS

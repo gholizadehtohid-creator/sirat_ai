@@ -102,7 +102,8 @@ def stop_distance(price, atr=None, atr_multiple=None, band_pct=None):
     multiple = _finite(atr_multiple)
 
     if multiple is None:
-        multiple = config.STOP_ATR_MULTIPLE
+        multiple = getattr(config, "V2_STOP_ATR_MULTIPLE",
+                           config.STOP_ATR_MULTIPLE)
 
     atr = _finite(atr)
 
@@ -121,7 +122,8 @@ def stop_distance(price, atr=None, atr_multiple=None, band_pct=None):
 
     pct = distance / price * 100.0
 
-    floor = _finite(config.RISK_MIN_STOP_PCT) or config.PRICE_BAND_PCT
+    floor = (_finite(getattr(config, "V2_MIN_STOP_PCT", None))
+             or _finite(config.RISK_MIN_STOP_PCT) or config.PRICE_BAND_PCT)
     ceiling = _finite(config.RISK_MAX_STOP_PCT) or 18.0
 
     if pct < floor:

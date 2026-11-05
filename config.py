@@ -1177,6 +1177,15 @@ RISK_MAX_EXIT_SESSIONS = 3.0
 RISK_MIN_STOP_PCT = PRICE_BAND_PCT
 RISK_MAX_STOP_PCT = 18.0
 
+# The v2 engine's own stop geometry (E26, backtest_output/E26_preregistration
+# .json). At 2 ATR with a one-band floor the median stop sat ~5% below entry:
+# 67-75% of v2 trades exited at it, 9 of 44 in 2026 on the day they were
+# bought, and the book then waited in cash for the next rebalance. Two full
+# bands is the distance risk_engine already falls back to without an ATR.
+# Separate names so v1 and every report measured on 2.0 / 3% are untouched.
+V2_STOP_ATR_MULTIPLE = 3.0
+V2_MIN_STOP_PCT = 2 * PRICE_BAND_PCT
+
 # Risk score floor for a position to be opened at all.
 RISK_MIN_SCORE = 35
 

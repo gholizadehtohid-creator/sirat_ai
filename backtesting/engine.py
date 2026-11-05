@@ -173,8 +173,20 @@ def run(start, end, cfg=None, variant=TECHNICAL_ONLY, data=None, panel=None,
         )
         return result
 
+    every = cfg.rebalance_sessions
+
+    # v2 refills weekly and its idle cash earns the fixed-income rate (E26);
+    # v1 and the research variants keep their own settings.
+    if str(engine or "").lower() == "v2":
+        if getattr(cfg, "v2_rebalance_sessions", None):
+            every = cfg.v2_rebalance_sessions
+        if (getattr(cfg, "v2_credit_idle_cash", False)
+                and not cfg.credit_idle_cash):
+            cfg = cfg.replace(credit_idle_cash=True)
+            result.cfg = cfg
+
     if rebalance_dates is None:
-        rebalance_dates = data.rebalance_dates(start, end, cfg.rebalance_sessions)
+        rebalance_dates = data.rebalance_dates(start, end, every)
     else:
         rebalance_dates = [pd.Timestamp(d) for d in rebalance_dates]
 
@@ -183,7 +195,7 @@ def run(start, end, cfg=None, variant=TECHNICAL_ONLY, data=None, panel=None,
     if len(rebalance_dates) < 2:
         result.insufficient.append(
             "fewer than two rebalance dates in the window at "
-            "REBALANCE_SESSIONS=%d" % cfg.rebalance_sessions
+            "REBALANCE_SESSIONS=%d" % every
         )
         return result
 
@@ -248,7 +260,7 @@ def run(start, end, cfg=None, variant=TECHNICAL_ONLY, data=None, panel=None,
         print("backtest %s .. %s   engine=%s variant=%s"
               % (start, end, which, variant if which == advisor.V1 else "-"))
         print("  %d sessions, %d rebalance dates every %d sessions"
-              % (len(sessions), len(rebalance_dates), cfg.rebalance_sessions))
+              % (len(sessions), len(rebalance_dates), every))
 
     if panel is None:
         panel = strategy.build_panel(rebalance_dates, use_cache=use_cache)
@@ -876,8 +888,14 @@ def _rebalance_v2(book, orders, strategy, data, date, sessions, diagnostics,
 
         atr_unit = None
 
-        if stop is not None and cfg.stop_atr_multiple:
-            atr_unit = (entry - stop) / cfg.stop_atr_multiple
+        # The stop came from risk_engine at V2_STOP_ATR_MULTIPLE ATRs, so that
+        # is what recovers one ATR from it -- dividing by v1's multiple would
+        # widen the trailing stop by the ratio of the two.
+        v2_multiple = getattr(config, "V2_STOP_ATR_MULTIPLE",
+                              cfg.stop_atr_multiple)
+
+        if stop is not None and v2_multiple:
+            atr_unit = (entry - stop) / v2_multiple
 
         # The reading the fill path needs: a price to size the affordable
         # quantity from, and a sector for the book's own cap.

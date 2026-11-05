@@ -297,6 +297,20 @@ def _run_v2(equity=None, size=None, max_per_sector=None, risk_pct=None,
                      % (out["book"].get("reason") or
                         "سیگنال خریدی تولید نشد یا محدودیت‌های سبد اجازه ندادند."))
 
+    # The unallocated share is part of the advice, not a remainder. The v2 book
+    # averaged 80-85% cash over 2024-09..2026-11 (E26); left in a current
+    # account that money loses to inflation while a fixed-income fund pays
+    # about the policy rate with no market risk.
+    idle = equity - invested if equity else 0.0
+
+    if equity and idle / equity >= 0.05:
+        notes.append(
+            "%.0f%% سرمایه (%s ریال) در سبد سهام نیست — آن را در صندوق درآمد "
+            "ثابت نگه دارید، نه در حساب کارگزاری؛ سود حدود %.0f%% سالانه "
+            "بدون ریسک بازار است."
+            % (idle / equity * 100.0, "{:,.0f}".format(idle),
+               config.RISK_FREE_RATE * 100.0))
+
     policy = out.get("policy") or {}
 
     basket = {

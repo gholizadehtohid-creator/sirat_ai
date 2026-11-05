@@ -33,7 +33,7 @@ class StopDistanceTest(unittest.TestCase):
     def test_an_atr_stop_is_the_atr_multiple(self):
         distance, source, _notes = risk_engine.stop_distance(1000.0, atr=40.0)
 
-        self.assertAlmostEqual(distance, 40.0 * config.STOP_ATR_MULTIPLE)
+        self.assertAlmostEqual(distance, 40.0 * config.V2_STOP_ATR_MULTIPLE)
         self.assertEqual(source, "atr")
 
     def test_without_an_atr_it_falls_back_to_two_price_bands(self):
@@ -50,7 +50,7 @@ class StopDistanceTest(unittest.TestCase):
         distance, source, notes = risk_engine.stop_distance(1000.0, atr=1.0)
 
         self.assertAlmostEqual(distance,
-                               1000.0 * config.RISK_MIN_STOP_PCT / 100.0)
+                               1000.0 * config.V2_MIN_STOP_PCT / 100.0)
         self.assertIn("floor", source)
         self.assertTrue(any("کف" in n for n in notes))
 
@@ -532,7 +532,11 @@ class PlanTest(unittest.TestCase):
 
         reading = dict(self.READING, close=1000.0, atr=20.0, atr_pct=2.0)
 
-        signal = trade_manager.plan(reading, self._buy(), overhead_pct=9.0)
+        # Stop at the 6% floor (E26), so target 1 sits 15% up; resistance at
+        # 13% trims it and still leaves 13/6 = 2.17 >= MIN_RISK_REWARD. (At
+        # 9%, the overhead this test used with the old 3% floor, the trimmed
+        # target no longer pays for the stop and the BUY is refused.)
+        signal = trade_manager.plan(reading, self._buy(), overhead_pct=13.0)
 
         self.assertEqual(signal["action"], factor_engine.BUY)
         self.assertTrue(signal["target_capped"])
