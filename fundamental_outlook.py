@@ -131,11 +131,88 @@ def _backed_out(latest, key, growth_key):
     return value / (1 + growth / 100.0)
 
 
-def analyse(ins_code, price=None, periods=12, today=None, rows=None):
+def monthly_reads(ins_code, fy_end_month, rows=None):
+    """What the newest monthly activity reports say, or None.
+
+    Year-to-date sales growth, this month against the year's monthly run
+    rate, price against volume for the main products, purchases and energy
+    against sales, production against sales, and the company's own estimate
+    of FX earnings for the rest of the year.
+    """
+
+    if rows is None:
+        import codal_monthly
+        try:
+            rows = codal_monthly.load(ins_code, limit=13)
+        except Exception:                                       # noqa: BLE001
+            rows = []
+    if not rows:
+        return None
+
+    newest = rows[0]
+    try:
+        py, pm = (int(p) for p in newest["period_end"].split("/")[:2])
+    except (KeyError, ValueError):
+        return None
+
+    elapsed = (pm - int(fy_end_month or 12)) % 12 or 12
+    fiscal_year = jalali.add_months(py, pm, 12 - elapsed)
+
+    sales = newest.get("sales") or {}
+    ytd, ytd_prev, month = (_f(sales.get(k)) for k in ("ytd", "ytd_prev", "month"))
+
+    out = {
+        "period_end": newest["period_end"],
+        "published_at": newest.get("published_at"),
+        "template": newest.get("template"),
+        "months_elapsed": elapsed,
+        "fiscal_year": fiscal_year,
+        "sales_month": month, "sales_ytd": ytd, "sales_ytd_prev": ytd_prev,
+        "ytd_growth": (ytd / ytd_prev - 1) if ytd and ytd_prev and ytd_prev > 0 else None,
+        "momentum": _div(month, ytd / elapsed) if ytd and month is not None and elapsed > 1 else None,
+    }
+
+    def growth(block):
+        a, b = _f((block or {}).get("ytd")), _f((block or {}).get("ytd_prev"))
+        return a / b - 1 if a and b and b > 0 else None
+
+    out["purchases_growth"] = growth(newest.get("purchases"))
+    out["energy_ytd"] = _f((newest.get("energy") or {}).get("ytd"))
+    out["purchases_to_sales"] = _div((newest.get("purchases") or {}).get("ytd"), ytd)
+    out["fx_forecast_rest_of_year"] = _f((newest.get("fx") or {}).get("forecast"))
+
+    expense = newest.get("expense") or {}
+    out["expense_ytd"] = _f(expense.get("ytd"))
+    out["expense_to_income"] = _div(expense.get("ytd"), ytd)
+
+    products = []
+    for p in (newest.get("products") or [])[:6]:
+        now, before = p.get("ytd") or {}, p.get("ytd_prev") or {}
+        products.append({
+            "name": p.get("name"), "unit": p.get("unit"),
+            "amount_ytd": now.get("amount"),
+            "price_change": (now["rate"] / before["rate"] - 1)
+            if now.get("rate") and before.get("rate") else None,
+            "volume_change": (now["sales_qty"] / before["sales_qty"] - 1)
+            if now.get("sales_qty") and before.get("sales_qty") else None,
+            "production_to_sales": _div(now.get("production"), now.get("sales_qty")),
+        })
+    out["products"] = products
+
+    # The month-by-month series for a trend line, oldest first.
+    out["series"] = [{"period_end": r["period_end"],
+                      "sales": _f((r.get("sales") or {}).get("month"))}
+                     for r in reversed(rows)]
+    return out
+
+
+def analyse(ins_code, price=None, periods=12, today=None, rows=None,
+            monthly_rows=None):
     """The full read for one company, or None with nothing stored.
 
-    `rows` (newest first, load_metrics' shape) replaces the store read; the
-    tests pass hand-built periods through it.
+    `rows` (newest first, load_metrics' shape) replaces the store read, and
+    `monthly_rows` the monthly-report read; the tests pass hand-built
+    periods through them.
     """
 
     if rows is None:
@@ -211,6 +288,28 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None):
         fwd_rev = rev * 12 / m if rev is not None else None
         fwd_net = net * 12 / m
         method = "annualised"
+
+    # ---- the monthly activity report, when it is newer -------------------
+    # A monthly report is ~10 days old; the statement it replaces here is
+    # one to four months older. When it is newer, the year's revenue is the
+    # prior fiscal year's revenue grown at the year-to-date sales growth the
+    # monthly report itself states (this year to date vs the same date last
+    # year, both in the same report, so gross-vs-net differences between the
+    # monthly total and the statement's revenue cancel in the ratio). Profit
+    # is that revenue at the trailing margin.
+    monthly = monthly_reads(ins_code, latest["fy"][1], monthly_rows)
+    if monthly and monthly.get("ytd_growth") is not None and \
+            monthly["period_end"] > latest["end"]:
+        fy_m = monthly["fiscal_year"]
+        base = _find(ps, (fy_m[0] - 1, fy_m[1]), 12)
+        base_rev = _f(base["items"].get("revenue")) if base else None
+        run_margin = _div(ttm_net, ttm_rev) if ttm_rev and ttm_net is not None \
+            else margin
+        if base_rev and run_margin is not None:
+            g = min(max(monthly["ytd_growth"], GROWTH_CAP[0]), GROWTH_CAP[1])
+            fwd_rev = base_rev * (1 + g)
+            fwd_net = fwd_rev * run_margin
+            method = "monthly_sales"
 
     # ---- per share and valuation -----------------------------------------
     capital = _f(li.get("capital"))
@@ -317,6 +416,35 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None):
         flag("جریان نقد آزاد منفی با بدهی خالص — سرمایه‌گذاری با وام")
     if eps_fwd is not None and eps_ttm is not None and eps_ttm > 0 and eps_fwd < eps_ttm * 0.9:
         flag("سود برآوردی سال جاری زیر سود ۱۲ ماه گذشته")
+    if monthly:
+        mg = monthly.get("ytd_growth")
+        if mg is not None:
+            text = ("فروش ماهانه از ابتدای سال تا %s: %+.0f٪ نسبت به سال قبل"
+                    % (monthly["period_end"], mg * 100))
+            (positives if mg >= inflation else flags).append(
+                text + ("" if mg >= inflation else " — زیر تورم"))
+        mom = monthly.get("momentum")
+        if mom is not None and monthly["months_elapsed"] >= 3:
+            if mom < 0.8:
+                flag("فروش ماه آخر %.0f٪ زیر میانگین ماهانه‌ی امسال (کند شدن، یا فصلی)"
+                     % ((1 - mom) * 100))
+            elif mom > 1.2:
+                positives.append("فروش ماه آخر %.0f٪ بالاتر از میانگین ماهانه‌ی امسال"
+                                 % ((mom - 1) * 100))
+        pg = monthly.get("purchases_growth")
+        if pg is not None and mg is not None and (pg - mg) * 100 > 15:
+            flag("خرید مواد اولیه %+.0f٪ در برابر فروش %+.0f٪ — فشار بر حاشیه سود"
+                 % (pg * 100, mg * 100))
+        for p in monthly.get("products") or []:
+            if (p.get("production_to_sales") or 0) > 1.3 and \
+                    (p.get("amount_ytd") or 0) > 0:
+                flag("تولید «%s» %.0f٪ بیشتر از فروش آن — انباشت موجودی"
+                     % (p["name"], (p["production_to_sales"] - 1) * 100))
+                break
+        ratio = monthly.get("expense_to_income")
+        if ratio is not None and monthly.get("template") == "insurance" and ratio > 0.7:
+            flag("خسارت پرداختی %.0f٪ حق بیمه‌ی صادره" % (ratio * 100))
+
     bar = config.RISK_FREE_RATE
     if yield_fwd is not None and 0 < yield_fwd < bar:
         flag("بازده سود برآوردی %.0f٪ — کمتر از نرخ بدون ریسک %.0f٪"
@@ -352,6 +480,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None):
                     "interest_cover": _round(interest_cover),
                     "receivable_days": _round(receivable_days, 0),
                     "receivable_growth_pct": _pct(rec_growth)},
+        "monthly": monthly,
         "flags": flags,
         "positives": positives,
     }

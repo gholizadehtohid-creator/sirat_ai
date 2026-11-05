@@ -92,5 +92,51 @@ class FlagTests(unittest.TestCase):
         self.assertIsNone(fo.analyse("x", rows=[]))
 
 
+
+class MonthlyTests(unittest.TestCase):
+    """The monthly report replaces an older statement's year estimate."""
+
+    statements = [
+        period("1405/06/31", 6, 120 * B, 24 * B),
+        period("1404/12/29", 12, 300 * B, 60 * B),
+        period("1404/06/31", 6, 100 * B, 20 * B),
+    ]
+
+    monthly = [{
+        "period_end": "1405/08/30", "template": "manufacturer",
+        "sales": {"month": 30 * B, "ytd": 200 * B, "ytd_prev": 160 * B},
+        "purchases": {"ytd": 150 * B, "ytd_prev": 80 * B},
+        "products": [{"name": "ورق", "unit": "تن",
+                      "ytd": {"rate": 150, "sales_qty": 10, "production": 15,
+                              "amount": 1.0},
+                      "ytd_prev": {"rate": 100, "sales_qty": 12}}],
+    }]
+
+    def setUp(self):
+        self.r = fo.analyse("x", price=5_000, rows=self.statements,
+                            monthly_rows=self.monthly, today=(1405, 9, 10))
+
+    def test_the_year_grows_at_the_monthly_ytd_rate(self):
+        # 300bn last year x (200/160) = 375bn
+        self.assertEqual(self.r["method"], "monthly_sales")
+        self.assertAlmostEqual(self.r["forward"]["revenue"], 375 * B)
+        self.assertEqual(self.r["monthly"]["months_elapsed"], 8)
+
+    def test_price_and_volume_are_separated(self):
+        p = self.r["monthly"]["products"][0]
+        self.assertAlmostEqual(p["price_change"], 0.5)
+        self.assertAlmostEqual(p["volume_change"], 10 / 12 - 1)
+
+    def test_purchases_outrunning_sales_and_inventory_build_are_flagged(self):
+        self.assertTrue(any("خرید مواد اولیه" in f for f in self.r["flags"]))
+        self.assertTrue(any("انباشت موجودی" in f for f in self.r["flags"]))
+
+    def test_an_older_monthly_report_does_not_override_the_statement(self):
+        old = [dict(self.monthly[0], period_end="1405/05/31")]
+        r = fo.analyse("x", price=5_000, rows=self.statements,
+                       monthly_rows=old, today=(1405, 9, 10))
+        self.assertEqual(r["method"], "year_completed")
+
+
 if __name__ == "__main__":
     unittest.main()

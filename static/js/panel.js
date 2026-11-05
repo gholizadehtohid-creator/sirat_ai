@@ -3321,6 +3321,7 @@ const OUTLOOK_METHOD = {
   year_completed: "تکمیل سال با ماه‌های سال قبل",
   next_year_trend: "سال بعد با رشد و حاشیه‌ی امسال",
   annualised: "سالانه‌سازی ساده (سال قبل در دست نیست)",
+  monthly_sales: "سال قبل × رشد فروش گزارش ماهانه (تازه‌ترین داده)",
 };
 
 function pctCell(v, digits = 1) {
@@ -3352,9 +3353,41 @@ function renderOutlookDetail(r) {
   ];
   const flags = (r.flags || []).map(f => `<li>⚠ ${esc(f)}</li>`).join("");
   const pos = (r.positives || []).map(f => `<li>✓ ${esc(f)}</li>`).join("");
+
+  // The monthly activity report (ن-۳۰): newer than any statement.
+  let monthlyHtml = "";
+  const m = r.monthly;
+  if (m) {
+    const pctOf = x => x == null ? "—" : `${signed(x * 100, 0)}`;
+    const mrows = [
+      ["آخرین گزارش ماهانه", `${esc(m.period_end)} — ماه ${m.months_elapsed} سال مالی`],
+      ["فروش این ماه / از ابتدای سال", `${money(m.sales_month)} / ${money(m.sales_ytd)} ریال`],
+      ["رشد فروش از ابتدای سال نسبت به سال قبل", pctOf(m.ytd_growth)],
+      ["فروش این ماه نسبت به میانگین ماهانه‌ی امسال",
+        m.momentum == null ? "—" : `${num(m.momentum, 2)} برابر`],
+      ["رشد خرید مواد اولیه", pctOf(m.purchases_growth)],
+      ["خرید مواد اولیه به فروش", m.purchases_to_sales == null ? "—" : pctCell(m.purchases_to_sales * 100, 0)],
+    ];
+    if (m.expense_to_income != null) {
+      mrows.push([m.template === "insurance" ? "خسارت به حق بیمه" : "هزینه به درآمد",
+                  pctCell(m.expense_to_income * 100, 0)]);
+    }
+    if (m.fx_forecast_rest_of_year) {
+      mrows.push(["برآورد خود شرکت از درآمد ارزی تا پایان سال", `${money(m.fx_forecast_rest_of_year)} ریال`]);
+    }
+    const prows = (m.products || []).filter(p => p.amount_ytd).map(p => [
+      esc(p.name), esc(p.unit || ""), money(p.amount_ytd),
+      pctOf(p.price_change), pctOf(p.volume_change),
+      p.production_to_sales == null ? "—" : num(p.production_to_sales, 2)]);
+    monthlyHtml = `<h3 style="margin-top:12px">گزارش فعالیت ماهانه</h3>` +
+      table(["شاخص", "مقدار"], mrows) +
+      (prows.length ? table(["محصول", "واحد", "فروش از ابتدای سال (ریال)",
+        "تغییر نرخ", "تغییر مقدار فروش", "تولید به فروش"], prows) : "");
+  }
+
   $("outlookDetail").innerHTML =
     `<h3>${esc(r.symbol || "")} <span class="hint">${esc(r.name || "")}</span></h3>` +
-    table(["شاخص", "مقدار"], rows) +
+    table(["شاخص", "مقدار"], rows) + monthlyHtml +
     `<ul class="evidence" style="margin-top:8px">${flags}${pos}</ul>`;
 }
 
@@ -3365,11 +3398,14 @@ function renderOutlook(rep) {
       `${esc(r.latest.period_end)} (${r.latest.months}م)`,
       pctCell(g.revenue_pct), num(v.pe_ttm, 1), num(v.pe_forward, 1),
       pctCell(v.earnings_yield_forward_pct),
+      r.monthly && r.monthly.ytd_growth != null
+        ? `${signed(r.monthly.ytd_growth * 100, 0)} <span class="hint">(${esc(r.monthly.period_end)})</span>`
+        : "—",
       (r.flags || []).map(esc).join("<br>") || "—"];
   });
   $("outlookTable").innerHTML = rows.length
     ? table(["نماد", "صنعت", "آخرین دوره", "رشد فروش", "P/E گذشته",
-             "P/E آینده‌نگر", "بازده سود برآوردی", "هشدار"], rows)
+             "P/E آینده‌نگر", "بازده سود برآوردی", "رشد فروش ماهانه", "هشدار"], rows)
     : '<div class="empty">هنوز شرکتی با داده‌ی کافی برای برآورد نیست</div>';
   const x = rep.excluded || {};
   banner("outlookStatus", "outlookStatusText", "is-live",
