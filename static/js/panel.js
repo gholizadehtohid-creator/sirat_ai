@@ -3229,6 +3229,7 @@ function renderAllocation(rep) {
     : "";
 
   bulletList("allocationNotes", [rep.rebalance.text, ...(rep.notes || [])]);
+  renderToday();
 
   banner("allocationStatus", "allocationStatusText", h ? "is-live" : "",
     h ? `سابقه‌ی ${esc(h.from)} تا ${esc(h.to)} — صندوق درآمد ثابت در همین ` +
@@ -3261,11 +3262,21 @@ async function loadAllocation(force = false) {
 function renderOpportunities(rep) {
   const labels = rep.sleeve_labels || {};
 
-  bulletList("opportunitiesSummary", rep.summary || []);
+  // The headline (cheapest fund, best bill) now lives in the "today" card.
+  bulletList("opportunitiesSummary", []);
 
+  state.opportunities = rep;
+
+  // The three cheapest of each sleeve first; every other fund behind
+  // "show all", so the table answers "which one" at a glance.
   const fundRows = [];
+  const ordered = [], rest = [];
   for (const k of ["gold", "equity", "fixed", "equity_active"]) {
-    for (const f of (rep.funds || {})[k] || []) {
+    ((rep.funds || {})[k] || []).forEach((f, i) =>
+      (i < 3 && k !== "equity_active" ? ordered : rest).push([k, f]));
+  }
+  for (const [k, f] of [...ordered, ...rest]) {
+    {
       const flag = f.suspect
         ? `<span class="badge neutral"><span class="dot"></span>بررسی در سایت صندوق</span>`
         : f.notable
@@ -3280,6 +3291,7 @@ function renderOpportunities(rep) {
     ? table(["بخش", "صندوق", "قیمت پایانی", "NAV ابطال", "فاصله از NAV",
              "ارزش معاملات"], fundRows)
     : '<div class="empty">NAV صندوق‌ها خوانده نشد</div>';
+  capRows("opportunitiesFunds", ordered.length);
 
   const bills = (rep.bills || {}).bills || [];
   $("opportunitiesBills").innerHTML = bills.length
@@ -3292,7 +3304,10 @@ function renderOpportunities(rep) {
                         money(b.traded_value)]))
     : `<div class="empty">اخزا خوانده نشد ${esc((rep.bills || {}).error || "")}</div>`;
 
+  capRows("opportunitiesBills", 5);
+
   bulletList("opportunitiesNotes", rep.notes || []);
+  renderToday();
 
   banner("opportunitiesStatus", "opportunitiesStatusText", "is-live",
     `${fundRows.length} صندوق و ${bills.length} سری اخزا، از آخرین قیمت پایانی TSETMC.`);
@@ -3439,26 +3454,139 @@ async function lookupOutlook() {
   }
 }
 
+/* ---------- tabs ----------
+   Four tabs instead of one long page (2026-11-05). Each tab's data is
+   requested the first time the tab is opened, so the summary is on screen
+   in seconds instead of waiting behind the whole-market scan. */
+
+const TAB_LOADERS = {
+  // Live first in the summary too: the "today" card's market line reads it.
+  summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities()],
+  stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
+  live: [() => loadLive()],
+  analysis: [() => loadRegime(), () => loadIndices(), () => loadSectors(),
+             () => loadFundamentals(), () => loadMoneyflow(),
+             () => loadIntelligence()],
+};
+const loadedTabs = new Set();
+
+function loadTab(name, force = false) {
+  if (loadedTabs.has(name) && !force) return;
+  loadedTabs.add(name);
+  for (const run of TAB_LOADERS[name] || []) run();
+}
+
+function showTab(name) {
+  if (!TAB_LOADERS[name]) name = "summary";
+  document.querySelectorAll(".tab").forEach(b =>
+    b.classList.toggle("is-active", b.dataset.tab === name));
+  document.querySelectorAll(".tab-panel").forEach(p =>
+    p.classList.toggle("is-active", p.dataset.tab === name));
+  try { localStorage.setItem("sirat-tab", name); } catch (e) { /* private mode */ }
+  if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
+  loadTab(name);
+  // Charts drawn while their tab was hidden measured a zero width.
+  hideTip();
+  rerender();
+}
+
+// Re-run what has been opened so far; tabs never opened stay unloaded.
 async function loadAll() {
-  // First because it is the cheapest (three indexed reads plus one session
-  // probe) and the only panel whose value expires. A reader who opens the
-  // page during a session should not watch the basket build before being
-  // told whether the market is even trading.
-  loadLive();
-  loadAllocation();
-  loadOpportunities();
-  loadRegime();
-  loadIndices();
-  loadSectors();
-  loadFundamentals();
-  loadMoneyflow();
-  loadIntelligence();
-  await loadScreen();
-  await loadPortfolio();
+  for (const name of [...loadedTabs]) loadTab(name, true);
+}
+
+/* ---------- long tables: first rows, then "show all" ---------- */
+
+function capRows(containerId, keep) {
+  const node = $(containerId);
+  if (!node) return;
+  const rows = node.querySelectorAll("tbody tr");
+  node.querySelectorAll(".cap-toggle").forEach(b => b.remove());
+  if (rows.length <= keep) return;
+  rows.forEach((tr, i) => tr.classList.toggle("is-capped", i >= keep));
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "cap-toggle";
+  btn.textContent = `نمایش همه (${rows.length})`;
+  btn.addEventListener("click", () => {
+    const open = btn.dataset.open === "1";
+    rows.forEach((tr, i) => tr.classList.toggle("is-capped", open && i >= keep));
+    btn.dataset.open = open ? "0" : "1";
+    btn.textContent = open ? `نمایش همه (${rows.length})` : "نمایش کمتر";
+  });
+  node.appendChild(btn);
+}
+
+/* ---------- "what do I do today" ----------
+   The picked profile in rials, each part with the cheapest instrument that
+   fills it today. Facts only: weights from the tested allocation (E27/E28),
+   instruments from fund NAV discounts and treasury-bill yields. */
+
+function renderToday() {
+  const rep = state.allocation;
+  const opp = state.opportunities;
+  const live = state.live;
+
+  if (live) {
+    const s = live.session || {};
+    const open = s.trading === true ? "باز است" : s.trading === false ? "بسته است" : "نامعلوم";
+    const c = live.counts || {};
+    $("todayMarket").innerHTML =
+      `بازار <strong>${open}</strong>` +
+      (c.buy != null ? ` · صف خرید <strong>${c.buy}</strong> و صف فروش <strong>${c.sell}</strong>` : "");
+  }
+
+  if (!rep) return;
+
+  const key = $("todayProfile").value || "balanced";
+  const profile = rep.profiles.find(p => p.key === key) || rep.profiles[0];
+  const labels = rep.sleeve_labels || {};
+  const funds = (opp && opp.funds) || {};
+  const bills = ((opp && opp.bills) || {}).bills || [];
+
+  const cheapest = (sleeve) => (funds[sleeve] || []).find(f => !f.suspect);
+
+  const items = Object.entries(profile.weights).filter(([, w]) => w > 0).map(([sleeve, w]) => {
+    let buy = "", why = "";
+    if (sleeve === "gold" || sleeve === "equity") {
+      const f = cheapest(sleeve);
+      if (f) {
+        buy = `بخرید: <strong>${esc(f.symbol)}</strong>`;
+        why = `${signed(f.discount_pct, 1)} نسبت به NAV — ارزان‌ترین صندوق پرمعامله‌ی این بخش`;
+      }
+    } else if (sleeve === "fixed") {
+      const b = bills.find(x => x.beats_fund && x.traded_value > 1e9);
+      const f = cheapest("fixed");
+      if (b) {
+        buy = `بخرید: <strong>${esc(b.symbol)}</strong> (اخزا)`;
+        why = `${num(b.ytm_pct, 1)}٪ سالانه تا ${esc(b.maturity_jalali || b.maturity)}، اگر تا سررسید نگه دارید`;
+      } else if (f) {
+        buy = `بخرید: <strong>${esc(f.symbol)}</strong>`;
+        why = "صندوق درآمد ثابت پرمعامله";
+      }
+    }
+    return `<div class="today-item">
+      <div class="pct">${w}٪ ${esc(labels[sleeve] || sleeve)}</div>
+      <div class="amt">${Math.round((profile.amounts || {})[sleeve] || 0).toLocaleString("fa-IR")} <span class="pct">ریال</span></div>
+      <div class="buy">${buy || '<span class="hint">در حال خواندن قیمت‌ها…</span>'}</div>
+      <div class="why">${why}</div>
+    </div>`;
+  });
+
+  $("todayPlan").innerHTML = items.join("");
+
+  const h = rep.history && rep.history.profiles ? rep.history.profiles[key] : null;
+  $("todayHint").innerHTML = (h
+    ? `این ترکیب از ${esc(rep.history.from)} سالانه ${num(h.cagr_pct, 0)}٪ داده و ` +
+      `بدترین افتش ${num(h.max_drawdown_pct, 0)}٪ بوده است. `
+    : "") +
+    `هر حدود سه ماه به همین وزن‌ها برگردانید. ` +
+    `<span class="hint">${esc(profile.evidence_text || "")}</span>`;
 }
 
 function rerender() {
   if (state.allocation) renderAllocation(state.allocation);
+  if (state.opportunities) renderOpportunities(state.opportunities);
   if (state.regime) renderRegime(state.regime);
   if (state.indices) renderIndices(state.indices);
   if (state.sectors) renderSectors(state.sectors);
@@ -3639,6 +3767,9 @@ async function loadLive() {
     if (btn) { btn.disabled = false; btn.textContent = "↻ به‌روزرسانی"; }
   }
 
+  state.live = rep;
+  renderToday();
+
   const s = rep.session || {};
   const tick = rep.collector;
   const counts = rep.counts || {};
@@ -3716,6 +3847,7 @@ function renderQueueSide(tableId, hintId, rows, q, side) {
       num(r.queue_orders, 0),
       money(r.queue_value),
     ]));
+  capRows(tableId, 10);
 }
 
 function renderLiveEvents(events) {
@@ -3733,6 +3865,7 @@ function renderLiveEvents(events) {
       esc(EVENT_FA[e.event] || e.event),
       num(e.last, 0),
     ]));
+  capRows("liveEventsTable", 10);
 }
 
 function renderLiveFlow(flow) {
@@ -3757,6 +3890,7 @@ function renderLiveFlow(flow) {
         num(r.sellers, 0),
         money(r.net_retail_shares),
       ]));
+  capRows("liveFlowTable", 10);
 }
 
 function setLiveAuto(on) {
@@ -3932,6 +4066,26 @@ if (new URLSearchParams(location.search).get("indices")) {
   if (group) group.open = true;
 }
 
+// Tabs: the hash (#stocks) or the last tab used, else the summary.
+document.querySelectorAll(".tab").forEach(b =>
+  b.addEventListener("click", () => showTab(b.dataset.tab)));
+window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+
+on("todayProfile", "change", () => {
+  try { localStorage.setItem("sirat-profile", $("todayProfile").value); } catch (e) { /* */ }
+  renderToday();
+});
+try {
+  const savedProfile = localStorage.getItem("sirat-profile");
+  if (savedProfile) $("todayProfile").value = savedProfile;
+} catch (e) { /* */ }
+
+// The data panel shows one line when all is well; a click opens the detail.
+on("loadPanel", "click", (ev) => {
+  if (ev.target.closest("button")) return;
+  $("loadPanel").classList.toggle("is-open");
+});
+
 getJSON("/api/status").then(status => {
   $("footnote").textContent =
     `${status.total_bars.toLocaleString()} کندل ذخیره‌شده` +
@@ -3940,4 +4094,12 @@ getJSON("/api/status").then(status => {
     ` · ریسک هر موقعیت ${status.config.risk_per_trade_pct}%`;
 }).catch(() => {});
 
-loadAll();
+{
+  const params = new URLSearchParams(location.search);
+  let first = location.hash.slice(1);
+  if (params.get("tech") || params.get("intel") || params.get("indices")) first = "analysis";
+  if (!first) {
+    try { first = localStorage.getItem("sirat-tab") || "summary"; } catch (e) { first = "summary"; }
+  }
+  showTab(first);
+}

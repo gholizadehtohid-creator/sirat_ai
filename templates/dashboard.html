@@ -64,6 +64,112 @@
 
   </section>
 
+  <!-- Four tabs instead of one page eleven sections long (2026-11-05: "the
+       page has become very crowded"). Every analysis is kept; each tab loads
+       its data the first time it is opened. -->
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="summary">خلاصه و اقدام امروز</button>
+    <button class="tab" role="tab" data-tab="stocks">سهام و سبد</button>
+    <button class="tab" role="tab" data-tab="live">بازار زنده</button>
+    <button class="tab" role="tab" data-tab="analysis">تحلیل‌ها</button>
+  </nav>
+
+
+
+  <section class="tab-panel" data-tab="summary">
+
+  <!-- What to do, in one card: the allocation profile the reader picks,
+       turned into rial amounts and the cheapest instrument for each part
+       today. Built from /api/allocation, /api/opportunities and /api/live. -->
+  <div class="card today-card">
+    <div class="card-head">
+      <h2>امروز چه کنم؟</h2>
+      <div class="top-actions">
+        <select id="todayProfile" aria-label="ترکیب">
+          <option value="balanced">متعادل (پیشنهاد اصلی)</option>
+          <option value="growth">رشد — تمام سهام</option>
+          <option value="defensive">کم‌نوسان</option>
+        </select>
+      </div>
+    </div>
+    <div id="todayMarket" class="today-market">در حال خواندن وضعیت بازار…</div>
+    <div class="today-grid" id="todayPlan"></div>
+    <p class="hint" id="todayHint"></p>
+  </div>
+
+  <!-- ================= SUGGESTED PORTFOLIO =================
+       The answer comes first. Everything below it is the evidence that
+       produced it, and evidence belongs after the conclusion, not in front
+       of it -- this section used to sit tenth of eleven, so the one thing a
+       reader opens the page for was the last thing they reached. -->
+
+  <!-- The allocation comes first because it is the only advice on this page
+       that passed a preregistered test (E27, E28). The stock basket below it
+       did not, and is labelled paper-only. See allocation.py. -->
+  <div class="section-title">تخصیص دارایی</div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>چقدر در سهام، طلا و درآمد ثابت؟</h2>
+      <div class="top-actions">
+        <button id="runAllocationBtn">↻ به‌روزرسانی</button>
+      </div>
+    </div>
+    <p class="hint">
+      تنها توصیه‌ی این پنل که آزمون از پیش ثبت‌شده را گذرانده: در بازار
+      <em>ماندن</em> از بیرون ماندن بهتر بود (E27)، و صندوق طلا بخش دفاعی بهتری
+      از درآمد ثابت بود (E28). چند معامله در سال، با دست — بدون نیاز به API.
+    </p>
+
+    <div id="allocationStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="allocationStatusText">در حال بارگذاری…</div>
+    </div>
+
+    <div class="table-wrap" id="allocationTable" style="margin-top:16px"></div>
+
+    <details class="fold">
+      <summary>صندوق‌های پیشنهادی هر بخش و توضیحات</summary>
+      <div class="table-wrap" id="allocationFunds" style="margin-top:12px"></div>
+      <ul class="evidence" id="allocationNotes" style="margin-top:12px"></ul>
+    </details>
+  </div>
+
+  <!-- How to fill each part of the allocation as cheaply as possible today.
+       Facts, not forecasts: a fund's price against its own NAV, and a bill's
+       fixed yield to maturity. See opportunities.py. -->
+  <div class="card">
+    <div class="card-head">
+      <h2>ارزان‌ترین راه پر کردن هر بخش</h2>
+      <div class="top-actions">
+        <button id="runOpportunitiesBtn">↻ به‌روزرسانی</button>
+      </div>
+    </div>
+    <p class="hint">
+      بدون پیش‌بینی: کدام صندوق امروز زیر ارزش دارایی‌اش (NAV) معامله
+      می‌شود، و اوراق خزانه (اخزا) اگر تا سررسید نگه داشته شود چند درصد قطعی
+      می‌دهد.
+    </p>
+
+    <div id="opportunitiesStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="opportunitiesStatusText">در حال بارگذاری… (حدود یک دقیقه)</div>
+    </div>
+
+    <ul class="evidence" id="opportunitiesSummary" style="margin-top:12px"></ul>
+
+    <div class="table-wrap" id="opportunitiesFunds" style="margin-top:16px"></div>
+
+    <div class="table-wrap" id="opportunitiesBills" style="margin-top:16px"></div>
+
+    <details class="fold">
+      <summary>این اعداد چه چیزی را نمی‌گویند</summary>
+      <ul class="evidence" id="opportunitiesNotes" style="margin-top:12px"></ul>
+    </details>
+  </div>
+
+  </section>
+
+  <section class="tab-panel" data-tab="stocks">
+
   <!-- Portfolio controls. The indicator windows below are tuning; these are
        the decisions that change what the basket actually is. -->
   <div class="filters">
@@ -132,71 +238,7 @@
 
   <p class="warmup-note" id="warmupNote"></p>
 
-  <!-- ================= SUGGESTED PORTFOLIO =================
-       The answer comes first. Everything below it is the evidence that
-       produced it, and evidence belongs after the conclusion, not in front
-       of it -- this section used to sit tenth of eleven, so the one thing a
-       reader opens the page for was the last thing they reached. -->
-
-  <!-- The allocation comes first because it is the only advice on this page
-       that passed a preregistered test (E27, E28). The stock basket below it
-       did not, and is labelled paper-only. See allocation.py. -->
-  <div class="section-title">تخصیص دارایی — Asset allocation</div>
-
-  <div class="card">
-    <div class="card-head">
-      <h2>چقدر در سهام، طلا و درآمد ثابت؟</h2>
-      <div class="top-actions">
-        <button id="runAllocationBtn">↻ به‌روزرسانی</button>
-      </div>
-    </div>
-    <p class="hint">
-      تنها توصیه‌ی این پنل که آزمون از پیش ثبت‌شده را گذرانده: در بازار
-      <em>ماندن</em> از بیرون ماندن بهتر بود (E27)، و صندوق طلا بخش دفاعی بهتری
-      از درآمد ثابت بود (E28). چند معامله در سال، با دست — بدون نیاز به API.
-    </p>
-
-    <div id="allocationStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="allocationStatusText">در حال بارگذاری…</div>
-    </div>
-
-    <div class="table-wrap" id="allocationTable" style="margin-top:16px"></div>
-
-    <div class="table-wrap" id="allocationFunds" style="margin-top:16px"></div>
-
-    <ul class="evidence" id="allocationNotes" style="margin-top:12px"></ul>
-  </div>
-
-  <!-- How to fill each part of the allocation as cheaply as possible today.
-       Facts, not forecasts: a fund's price against its own NAV, and a bill's
-       fixed yield to maturity. See opportunities.py. -->
-  <div class="card">
-    <div class="card-head">
-      <h2>ارزان‌ترین راه پر کردن هر بخش</h2>
-      <div class="top-actions">
-        <button id="runOpportunitiesBtn">↻ به‌روزرسانی</button>
-      </div>
-    </div>
-    <p class="hint">
-      بدون پیش‌بینی: کدام صندوق امروز زیر ارزش دارایی‌اش (NAV) معامله
-      می‌شود، و اوراق خزانه (اخزا) اگر تا سررسید نگه داشته شود چند درصد قطعی
-      می‌دهد.
-    </p>
-
-    <div id="opportunitiesStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="opportunitiesStatusText">در حال بارگذاری… (حدود یک دقیقه)</div>
-    </div>
-
-    <ul class="evidence" id="opportunitiesSummary" style="margin-top:12px"></ul>
-
-    <div class="table-wrap" id="opportunitiesFunds" style="margin-top:16px"></div>
-
-    <div class="table-wrap" id="opportunitiesBills" style="margin-top:16px"></div>
-
-    <ul class="evidence" id="opportunitiesNotes" style="margin-top:12px"></ul>
-  </div>
-
-  <div class="section-title">سبد پیشنهادی — Risk-managed portfolio</div>
+  <div class="section-title">سبد پیشنهادی (معامله‌ی کاغذی)</div>
 
   <div class="card">
     <div class="card-head">
@@ -258,7 +300,11 @@
        mistaken for a live terminal, and the collector only runs during a
        session. -->
 
-  <div class="section-title">رصد زنده‌ی بازار — Live session watch</div>
+  </section>
+
+  <section class="tab-panel" data-tab="live">
+
+  <div class="section-title">رصد زنده‌ی بازار</div>
 
   <div class="card">
     <div class="card-head">
@@ -339,7 +385,11 @@
        "not much". Closed by default so they are available without being in
        the way. -->
 
-  <div class="section-title">شواهد پشت این سبد — Evidence</div>
+  </section>
+
+  <section class="tab-panel" data-tab="analysis">
+
+  <div class="section-title">تحلیل‌ها — هر بخش را باز کنید</div>
 
   <details class="evidence-group" id="evidenceRegime">
   <summary>وضعیت بازار و سقف سرمایه‌گذاری</summary>
@@ -770,7 +820,7 @@
 
   <!-- ================= INDEX: شاخص کل هم‌وزن ================= -->
 
-  <div class="section-title">تحلیل تکنیکال شاخص کل هم‌وزن — Equal-weighted</div>
+  <div class="section-title">تحلیل تکنیکال شاخص کل هم‌وزن</div>
 
   <div class="card">
     <div class="card-head">
@@ -1198,6 +1248,8 @@
   </div>
 
   </details>
+
+  </section>
 
   <p class="footnote" id="footnote"></p>
 
