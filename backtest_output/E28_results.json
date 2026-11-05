@@ -1,0 +1,80 @@
+{
+ "preregistration": "backtest_output/E28_preregistration.json",
+ "range": [
+  "2017-09-04",
+  "2026-11-04"
+ ],
+ "sessions": 2206,
+ "blocks": 110,
+ "gold_funds_in_sleeve_at_end": 14,
+ "returns_dropped_as_errors": 3,
+ "corr_equity_gold_blocks": 0.311,
+ "books": {
+  "equity_100": {
+   "total_pct": 8179.6,
+   "cagr_pct": 61.68,
+   "vol_pct": 20.94,
+   "sharpe_vs_fund": 1.53,
+   "max_drawdown_pct": -47.91
+  },
+  "gold_100": {
+   "total_pct": 13162.9,
+   "cagr_pct": 70.19,
+   "vol_pct": 35.72,
+   "sharpe_vs_fund": 1.158,
+   "max_drawdown_pct": -47.31
+  },
+  "eq70_gold30": {
+   "total_pct": 11224.7,
+   "cagr_pct": 67.29,
+   "vol_pct": 18.78,
+   "sharpe_vs_fund": 1.866,
+   "max_drawdown_pct": -40.96
+  },
+  "eq70_fund30": {
+   "total_pct": 4195.4,
+   "cagr_pct": 50.54,
+   "vol_pct": 15.13,
+   "sharpe_vs_fund": 1.576,
+   "max_drawdown_pct": -34.89
+  },
+  "eq50_gold50": {
+   "total_pct": 12725.6,
+   "cagr_pct": 69.57,
+   "vol_pct": 21.4,
+   "sharpe_vs_fund": 1.725,
+   "max_drawdown_pct": -39.32
+  },
+  "eq50_fund50": {
+   "total_pct": 2482.1,
+   "cagr_pct": 42.43,
+   "vol_pct": 11.11,
+   "sharpe_vs_fund": 1.6,
+   "max_drawdown_pct": -24.63
+  }
+ },
+ "fund_20pct": {
+  "total_pct": 434.3,
+  "cagr_pct": 20.0,
+  "vol_pct": 0.0,
+  "sharpe_vs_fund": null,
+  "max_drawdown_pct": 0.0
+ },
+ "H1_test": {
+  "z_memmel": 2.179,
+  "p_one_sided": 0.01467,
+  "monthly_sharpe_eq70_gold30": 0.3339,
+  "monthly_sharpe_eq70_fund30": 0.2641,
+  "rho": 0.949
+ },
+ "H2_test": {
+  "t": 3.477,
+  "p_one_sided": 0.00025,
+  "mean_block_excess_pct": 3.597
+ },
+ "verdict": {
+  "H1_gold_as_defence": "ACCEPT",
+  "H2_gold_alone": "ACCEPT",
+  "alpha_per_hypothesis": 0.025
+ }
+}
