@@ -249,6 +249,15 @@ def report():
 
 
 def main(argv=None):
+    # Scheduled runs write to a cp1252 log on this machine; a Persian symbol
+    # in a print crashed the first one (2026-11-05). The batch file sets
+    # PYTHONIOENCODING too -- this covers anyone running it without.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--since", help="catch up back to this Jalali date")
     parser.add_argument("--report", action="store_true")

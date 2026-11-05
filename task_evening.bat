@@ -12,6 +12,8 @@ rem
 rem Scheduled daily 19:00 by: schtasks /TN SIRAT-evening
 cd /d C:\SIRAT-AI
 set PY=C:\Users\gholizadeh-t\AppData\Local\Programs\Python\Python314\python.exe
+rem Persian in the output: without this a print of a symbol crashes the run.
+set PYTHONIOENCODING=utf-8
 echo ===== %date% %time% ===== >> logs\task_evening.log
 "%PY%" bootstrap.py >> logs\task_evening.log 2>&1
 "%PY%" examples\forward_prediction_log.py >> logs\task_evening.log 2>&1

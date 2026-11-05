@@ -11,6 +11,8 @@ rem
 rem Scheduled daily 09:00 by: schtasks /TN SIRAT-codal-backfill
 cd /d C:\SIRAT-AI
 set PY=C:\Users\gholizadeh-t\AppData\Local\Programs\Python\Python314\python.exe
+rem Persian in the output: without this a print of a symbol crashes the run.
+set PYTHONIOENCODING=utf-8
 echo ===== %date% %time% ===== >> logs\task_backfill.log
 rem 23.5 hours since 2026-11-05: a six-hour day left the queue (~21,000
 rem statements) idle eighteen hours out of twenty-four, and the campaign's
