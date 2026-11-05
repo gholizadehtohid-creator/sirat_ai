@@ -1268,3 +1268,39 @@ tr.is-capped { display: none; }
 /* The data banner is filled by the stock screen, which now loads with its
    tab; until then it would sit at the top reading "Loading data status…". */
 #banner:not(.is-live):not(.is-error) { display: none; }
+
+/* Card guides (2026-11-05): what the card says, what each number means and
+   how to use it, one click away instead of paragraphs in front of the data. */
+details.help {
+  margin: 6px 0 10px;
+  border: 1px solid var(--grid);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+details.help > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  list-style: none;
+}
+details.help > summary::-webkit-details-marker { display: none; }
+details.help > summary::before { content: "؟  "; font-weight: 700; }
+details.help[open] > summary { border-bottom: 1px solid var(--grid); }
+.help-body { padding: 4px 14px 12px; font-size: 13px; line-height: 1.9; }
+.help-body h4 { margin: 12px 0 4px; font-size: 14px; }
+.help-body ul, .help-body ol { margin: 4px 0; padding-inline-start: 20px; }
+.help-table { border-collapse: collapse; width: 100%; margin: 4px 0; }
+.help-table th, .help-table td {
+  border-bottom: 1px solid var(--grid);
+  padding: 4px 8px;
+  text-align: start;
+  vertical-align: top;
+}
+.help-warn {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-inline-start: 3px solid var(--status-warning);
+  background: var(--page);
+}
