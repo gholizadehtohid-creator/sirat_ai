@@ -3254,6 +3254,65 @@ async function loadAllocation(force = false) {
   }
 }
 
+/* ---------- cheapest way to fill each sleeve (opportunities.py) ----------
+   Fund price against its own ابطال NAV, and treasury-bill yield to maturity.
+   Neither is a forecast. */
+
+function renderOpportunities(rep) {
+  const labels = rep.sleeve_labels || {};
+
+  bulletList("opportunitiesSummary", rep.summary || []);
+
+  const fundRows = [];
+  for (const k of ["gold", "equity", "fixed", "equity_active"]) {
+    for (const f of (rep.funds || {})[k] || []) {
+      const flag = f.suspect
+        ? `<span class="badge neutral"><span class="dot"></span>بررسی در سایت صندوق</span>`
+        : f.notable
+          ? `<span class="badge good"><span class="dot"></span>زیر NAV</span>`
+          : "";
+      fundRows.push([esc(labels[k] || k), `<strong>${esc(f.symbol)}</strong>`,
+                     num(f.close, 0), num(f.nav_redeem, 0),
+                     `${signed(f.discount_pct, 2)} ${flag}`, money(f.traded_value)]);
+    }
+  }
+  $("opportunitiesFunds").innerHTML = fundRows.length
+    ? table(["بخش", "صندوق", "قیمت پایانی", "NAV ابطال", "فاصله از NAV",
+             "ارزش معاملات"], fundRows)
+    : '<div class="empty">NAV صندوق‌ها خوانده نشد</div>';
+
+  const bills = (rep.bills || {}).bills || [];
+  $("opportunitiesBills").innerHTML = bills.length
+    ? table(["اخزا", "سررسید", "روز مانده", "قیمت", "بازده سالانه تا سررسید",
+             "ارزش معاملات"],
+        bills.map(b => [`<strong>${esc(b.symbol)}</strong>`, esc(b.maturity_jalali || b.maturity),
+                        num(b.days, 0), num(b.price, 0),
+                        `${num(b.ytm_pct, 1)}٪` + (b.beats_fund
+                          ? ` <span class="badge good"><span class="dot"></span>بیشتر از ۲۰٪</span>` : ""),
+                        money(b.traded_value)]))
+    : `<div class="empty">اخزا خوانده نشد ${esc((rep.bills || {}).error || "")}</div>`;
+
+  bulletList("opportunitiesNotes", rep.notes || []);
+
+  banner("opportunitiesStatus", "opportunitiesStatusText", "is-live",
+    `${fundRows.length} صندوق و ${bills.length} سری اخزا، از آخرین قیمت پایانی TSETMC.`);
+}
+
+async function loadOpportunities(force = false) {
+  const btn = $("runOpportunitiesBtn");
+  if (btn) btn.disabled = true;
+
+  try {
+    renderOpportunities(await getJSON(`/api/opportunities${force ? "?refresh=1" : ""}`));
+  } catch (err) {
+    banner("opportunitiesStatus", "opportunitiesStatusText", "is-error",
+      `<strong>خوانده نشد.</strong> ${esc(err.message)}`);
+    console.error(err);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function loadAll() {
   // First because it is the cheapest (three indexed reads plus one session
   // probe) and the only panel whose value expires. A reader who opens the
@@ -3261,6 +3320,7 @@ async function loadAll() {
   // told whether the market is even trading.
   loadLive();
   loadAllocation();
+  loadOpportunities();
   loadRegime();
   loadIndices();
   loadSectors();
@@ -3593,6 +3653,7 @@ on("runFlowBtn", "click", () => loadMoneyflow(true));
 on("runRegimeBtn", "click", () => loadRegime(true));
 on("runPortfolioBtn", "click", () => loadPortfolio(true));
 on("runAllocationBtn", "click", () => loadAllocation(true));
+on("runOpportunitiesBtn", "click", () => loadOpportunities(true));
 on("runTechnicalBtn", "click", () => loadTechnical(true));
 on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
 on("runInflowBtn", "click", () => loadInflow(true));

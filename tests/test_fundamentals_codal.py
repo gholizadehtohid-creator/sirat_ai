@@ -720,6 +720,26 @@ class TestUndersizedFiling(unittest.TestCase):
         self.assertEqual(result.kind, codal.KIND_TRANSIENT)
         self.assertTrue(result.transient)
 
+    def test_codals_empty_export_is_settled_not_retried(self):
+        """Headings with no table: Codal's own empty export, not a throttle.
+
+        Read as a throttle, five of these at the head of the backfill queue
+        stopped every campaign from 2026-09 to 2026-11-05.
+        """
+
+        body = ("<html><head><style>table { font-family:Tahoma }</style>"
+                "</head><body><div><hr><h3>\nصورت سود و زیان\n</h3><hr></div>"
+                "<div ng-app='codalApp'><!-- ngRepeat: sheet in "
+                "ctrl.datasource.sheets --></div><div><h3>ترازنامه</h3></div>"
+                "</body></html>").encode("utf-8")
+
+        self.assertLess(len(body), codal.MIN_FILING_BYTES)
+
+        result = self._client_returning(body).fetch_sheets("http://x/f")
+
+        self.assertEqual(result.kind, codal.KIND_BAD)
+        self.assertIn("empty statement export", result.error)
+
     def test_the_threshold_sits_between_measured_extremes(self):
         """Calibration, not a guess: 3 KB throttle vs 177 KB smallest filing."""
 

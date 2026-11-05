@@ -167,6 +167,35 @@
     <ul class="evidence" id="allocationNotes" style="margin-top:12px"></ul>
   </div>
 
+  <!-- How to fill each part of the allocation as cheaply as possible today.
+       Facts, not forecasts: a fund's price against its own NAV, and a bill's
+       fixed yield to maturity. See opportunities.py. -->
+  <div class="card">
+    <div class="card-head">
+      <h2>ارزان‌ترین راه پر کردن هر بخش</h2>
+      <div class="top-actions">
+        <button id="runOpportunitiesBtn">↻ به‌روزرسانی</button>
+      </div>
+    </div>
+    <p class="hint">
+      بدون پیش‌بینی: کدام صندوق امروز زیر ارزش دارایی‌اش (NAV) معامله
+      می‌شود، و اوراق خزانه (اخزا) اگر تا سررسید نگه داشته شود چند درصد قطعی
+      می‌دهد.
+    </p>
+
+    <div id="opportunitiesStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="opportunitiesStatusText">در حال بارگذاری… (حدود یک دقیقه)</div>
+    </div>
+
+    <ul class="evidence" id="opportunitiesSummary" style="margin-top:12px"></ul>
+
+    <div class="table-wrap" id="opportunitiesFunds" style="margin-top:16px"></div>
+
+    <div class="table-wrap" id="opportunitiesBills" style="margin-top:16px"></div>
+
+    <ul class="evidence" id="opportunitiesNotes" style="margin-top:12px"></ul>
+  </div>
+
   <div class="section-title">سبد پیشنهادی — Risk-managed portfolio</div>
 
   <div class="card">

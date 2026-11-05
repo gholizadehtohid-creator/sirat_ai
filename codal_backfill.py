@@ -743,6 +743,11 @@ def _reason_key(error):
     if "no table at all" in text:
         return "not a statement document (firewall or error page)"
 
+    # Kept as its own key so these can be re-tried in one query if Codal ever
+    # starts filling them.
+    if "empty statement export" in text:
+        return "empty statement export (Codal holds no tables for it)"
+
     return text[:70] or "unknown"
 
 

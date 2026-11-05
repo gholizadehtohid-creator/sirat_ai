@@ -94,6 +94,11 @@ KIND_BAD = "bad"                # the response arrived and made no sense
 # document, which is a transient condition, not an unreadable filing.
 MIN_FILING_BYTES = 20_000
 
+# A heading naming a financial statement. Its presence with no <table> marks
+# Codal's empty export (see fetch_sheets), which no block page imitates.
+EMPTY_EXPORT_HEADING = re.compile(
+    r"<h\d[^>]*>\s*(?:صورت|ترازنامه)", re.UNICODE)
+
 
 class CodalResult:
     """Uniform return type. `ok` means the caller got usable data."""
@@ -530,6 +535,22 @@ class CodalClient:
         sheets = split_sheets(text)
 
         if not sheets:
+
+            # Codal's own empty export: the statement headings with no table
+            # under any of them. Found 2026-11-05 at the head of the backfill
+            # queue, where it had been read as a ~3 KB throttle page since
+            # September -- the same five filings failed every morning, the
+            # campaign backed off after them, and nothing behind them was ever
+            # fetched. Not a throttle: the same filings came back empty on
+            # three requests that day while neighbours fetched in between
+            # returned full statements. A firewall page carries no statement
+            # headings, so this cannot swallow one.
+            if "<table" not in text.lower() and EMPTY_EXPORT_HEADING.search(text):
+                return CodalResult(
+                    error=(f"empty statement export: headings but no tables "
+                           f"({len(body)} bytes)"),
+                    kind=KIND_BAD,
+                )
 
             # A body far too small to be a statement did not fail to parse --
             # it is not the statement. Under throttling Codal answers with a

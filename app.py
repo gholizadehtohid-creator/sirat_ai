@@ -720,6 +720,28 @@ def api_allocation():
         return handle_error(exc)
 
 
+@app.route("/api/opportunities")
+def api_opportunities():
+    """Fund discounts to NAV and treasury-bill yields. See opportunities.py.
+
+    Live network reads (~100 TSETMC requests), so memoised on the data
+    version: a re-render costs nothing, the refresh button costs a minute.
+    """
+
+    force = request.args.get("refresh") == "1"
+
+    key = cache_key("opportunities", data_version())
+
+    def build():
+        import opportunities
+        return opportunities.report()
+
+    try:
+        return jsonify(memoise(key, build, force=force))
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 @app.route("/api/intelligence")
 def api_intelligence():
     """Market-intelligence REPORT (news analysis). Read-only, memoised.
