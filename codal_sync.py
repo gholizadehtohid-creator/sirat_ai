@@ -438,7 +438,8 @@ def parse_portfolio_letter(client, letter):
 
     title = letter.get("title") or ""
 
-    got = client.fetch_sheets(letter.get("excel_url"))
+    got = client.fetch_sheets(letter.get("excel_url"),
+                              archive_key=letter.get("tracing_no"))
 
     if not got.ok:
         return None, f"{letter.get('tracing_no')}: {got.error}", got.kind
@@ -473,7 +474,8 @@ def parse_letter(client, letter):
 
     title = letter.get("title") or ""
 
-    got = client.fetch_sheets(letter.get("excel_url"))
+    got = client.fetch_sheets(letter.get("excel_url"),
+                              archive_key=letter.get("tracing_no"))
 
     if not got.ok:
         return None, f"{letter.get('tracing_no')}: {got.error}", got.kind
@@ -607,6 +609,13 @@ def run(limit=None, portfolio_codes=(), screened_codes=(), recheck_hours=None,
         _state["current"] = None
 
     _note(f"done: {checked} checked, {fetched} filings stored, {failed} failed")
+
+    if fetched:
+        try:
+            import fundamental_db
+            fundamental_db.sync_from_market_db()
+        except Exception as exc:                                # noqa: BLE001
+            _note(f"fundamental store sync failed: {exc}")
 
     cooldown = None
 

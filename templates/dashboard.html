@@ -1023,6 +1023,34 @@
     </div>
   </div>
 
+  <!-- Forward-looking read of the filed statements. fundamental_outlook.py:
+       the current fiscal year completed from last year's remaining months,
+       TTM, cash conversion, funding and working capital. Analysis, not a
+       tested signal -- the hint says so. -->
+  <div class="card">
+    <div class="card-head">
+      <h2>چشم‌انداز بنیادی — برآورد سال مالی جاری</h2>
+      <div class="top-actions">
+        <input id="outlookSymbol" placeholder="نماد، مثلاً فولاد" style="width:140px">
+        <button id="outlookLookupBtn">بررسی نماد</button>
+        <button id="runOutlookBtn" class="primary">▶ رتبه‌بندی</button>
+      </div>
+    </div>
+    <p class="hint">
+      ماه‌های باقی‌مانده‌ی سال مالی با همان ماه‌های سال قبل، رشدیافته به
+      نرخ رشد امسال و با حاشیه‌ی سود امسال، کامل می‌شود (نه دوبرابر کردن
+      گزارش شش‌ماهه). کنار آن: سود ۱۲ ماه گذشته، تبدیل سود به نقد، جریان نقد
+      آزاد، بدهی و پوشش هزینه‌ی مالی، رشد مطالبات در برابر فروش.
+      <strong>این تحلیل است، نه سیگنال آزموده‌شده</strong> — توان پیش‌بینی
+      بازده آن هنوز آزمون نشده است.
+    </p>
+    <div id="outlookStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="outlookStatusText">اجرا نشده.</div>
+    </div>
+    <div id="outlookDetail" style="margin-top:12px"></div>
+    <div class="table-wrap" id="outlookTable" style="margin-top:16px"></div>
+  </div>
+
   </details>
 
   <!-- ================= MONEY FLOW (حقیقی / حقوقی) ================= -->

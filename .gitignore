@@ -93,3 +93,8 @@ session.json
 .session_cache/
 token.json
 *.token
+
+# The raw Codal archive (codal.ARCHIVE_DIR): ~0.5 GB of gzipped statements,
+# re-downloadable and far too large for history. The parsed figures are in
+# the databases.
+data/codal_raw/

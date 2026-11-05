@@ -253,7 +253,33 @@ BALANCE_ITEMS = {
     "cash": (["موجودی نقد"], []),
     "inventory": (["موجودی مواد و کالا"], []),
     "capital": (["سرمایه"], ["افزایش سرمایه", "در جریان", "صرف"]),
-    "retained_earnings": (["سود انباشته"], []),
+    "retained_earnings": (["سود (زیان) انباشته", "سود(زیان) انباشته",
+                           "سود انباشته"], []),
+    # Added 2026-11-05 for the outlook (fundamental_outlook.py): working
+    # capital, debt and fixed assets. Current-era wording first, the
+    # pre-1398 ترازنامه wording after it.
+    "ppe": (["دارایی‌های ثابت مشهود", "داراییهای ثابت مشهود"], []),
+    "receivables": (
+        ["دریافتنی‌های تجاری و سایر دریافتنی‌ها",
+         "حسابها و اسناد دریافتنی تجاری", "دریافتنی‌های تجاری"],
+        ["بلندمدت", "بلند مدت", "هزینه"],
+    ),
+    "payables": (
+        ["پرداختنی‌های تجاری و سایر پرداختنی‌ها",
+         "حسابها و اسناد پرداختنی تجاری", "پرداختنی‌های تجاری"],
+        ["بلندمدت", "بلند مدت"],
+    ),
+    "borrowings_short": (
+        ["تسهیلات مالی", "تسهیلات مالی دریافتی"],
+        ["بلندمدت", "بلند مدت"],
+    ),
+    "borrowings_long": (
+        ["تسهیلات مالی بلندمدت", "تسهیلات مالی دریافتی بلندمدت",
+         "تسهیلات مالی بلند مدت"],
+        [],
+    ),
+    "dividends_payable": (["سود سهام پرداختنی"], []),
+    "advances_received": (["پیش‌دریافت‌ها", "پیش دریافتها"], []),
 }
 
 CASHFLOW_ITEMS = {
@@ -270,6 +296,17 @@ CASHFLOW_ITEMS = {
     ),
     "financing_cash_flow": (
         ["جریان خالص ورود (خروج) نقد حاصل از فعالیتهای تامین مالی"], []
+    ),
+    # Filed negative (an outflow); kept with its sign.
+    "capex": (
+        ["پرداخت‌های نقدی برای خرید دارایی‌های ثابت مشهود",
+         "وجوه پرداختی بابت خرید دارایی‌های ثابت مشهود",
+         "وجوه پرداختی جهت خرید دارایی‌های ثابت مشهود"],
+        [],
+    ),
+    "dividends_paid": (
+        ["پرداخت‌های نقدی بابت سود سهام", "سود سهام پرداختی"],
+        ["دریافت"],
     ),
 }
 
@@ -632,6 +669,9 @@ def summarise(items):
         "total_assets", "current_assets", "total_liabilities",
         "current_liabilities", "equity", "equity_owners", "cash", "inventory",
         "operating_cash_flow", "investing_cash_flow", "financing_cash_flow",
+        "cogs", "finance_cost", "pretax_profit", "retained_earnings", "ppe",
+        "receivables", "payables", "borrowings_short", "borrowings_long",
+        "dividends_payable", "advances_received", "capex", "dividends_paid",
     ]
 
     out = {key: _finite((items or {}).get(key)) for key in keys}

@@ -742,6 +742,44 @@ def api_opportunities():
         return handle_error(exc)
 
 
+@app.route("/api/outlook")
+def api_outlook():
+    """Forward-looking read of filed statements. See fundamental_outlook.py.
+
+    ?symbol=فولاد returns one company in full; without it, the ranking.
+    """
+
+    import fundamental_outlook
+    import persian
+
+    symbol = (request.args.get("symbol") or "").strip()
+    force = request.args.get("refresh") == "1"
+
+    try:
+        if symbol:
+            match = None
+            wanted = persian.normalize(symbol)
+            for row in database.load_instruments(equities_only=True):
+                if persian.normalize(row.get("symbol_fa") or "") == wanted:
+                    match = row
+                    break
+            if not match:
+                return jsonify({"error": "نماد پیدا نشد: %s" % symbol}), 404
+            code = str(match["ins_code"])
+            result = fundamental_outlook.analyse(
+                code, price=fundamental_outlook.latest_prices().get(code))
+            if not result:
+                return jsonify({"error": "صورت مالی ثبت‌شده‌ای برای %s نیست"
+                                % symbol}), 404
+            result.update(symbol=match.get("symbol_fa"), name=match.get("name_fa"))
+            return jsonify(result)
+
+        key = cache_key("outlook", data_version())
+        return jsonify(memoise(key, fundamental_outlook.screen, force=force))
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 @app.route("/api/intelligence")
 def api_intelligence():
     """Market-intelligence REPORT (news analysis). Read-only, memoised.

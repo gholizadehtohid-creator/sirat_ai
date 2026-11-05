@@ -3313,6 +3313,96 @@ async function loadOpportunities(force = false) {
   }
 }
 
+/* ---------- fundamental outlook (fundamental_outlook.py) ----------
+   The current fiscal year completed from last year's remaining months,
+   plus cash, funding and working-capital checks. Analysis, not a signal. */
+
+const OUTLOOK_METHOD = {
+  year_completed: "تکمیل سال با ماه‌های سال قبل",
+  next_year_trend: "سال بعد با رشد و حاشیه‌ی امسال",
+  annualised: "سالانه‌سازی ساده (سال قبل در دست نیست)",
+};
+
+function pctCell(v, digits = 1) {
+  return v == null ? "—" : `${num(v, digits)}٪`;
+}
+
+function renderOutlookDetail(r) {
+  const v = r.valuation || {}, g = r.growth || {}, mg = r.margins || {};
+  const c = r.cash || {}, b = r.balance || {}, l = r.latest || {};
+  const rows = [
+    ["آخرین صورت مالی", `${esc(l.period_end)} — ${l.months} ماهه` +
+      (l.audited ? " (حسابرسی‌شده)" : " (حسابرسی‌نشده)")],
+    ["روش برآورد", esc(OUTLOOK_METHOD[r.method] || "برآورد ممکن نیست")],
+    ["رشد فروش / سود (نسبت به همان دوره‌ی سال قبل)",
+      `${pctCell(g.revenue_pct)} / ${pctCell(g.profit_pct)} — تورم مبنا ${pctCell(g.inflation_pct, 0)}`],
+    ["حاشیه سود ناخالص / عملیاتی / خالص",
+      `${pctCell(mg.gross_pct)} / ${pctCell(mg.operating_pct)} / ${pctCell(mg.net_pct)}` +
+      (mg.net_prev_pct != null ? ` (سال قبل ${pctCell(mg.net_prev_pct)})` : "")],
+    ["سود هر سهم: ۱۲ ماه گذشته / برآورد سال جاری",
+      `${num((r.ttm || {}).eps, 0)} / ${num((r.forward || {}).eps, 0)} ریال`],
+    ["P/E گذشته / آینده‌نگر", `${num(v.pe_ttm, 1)} / ${num(v.pe_forward, 1)}`],
+    ["بازده سود برآوردی", pctCell(v.earnings_yield_forward_pct)],
+    ["P/B و ROE دوازده‌ماهه", `${num(v.pb, 2)} / ${pctCell(v.roe_ttm_pct)}`],
+    ["تبدیل سود به نقد عملیاتی", c.cash_conversion == null ? "—" : `${num(c.cash_conversion, 2)} برابر`],
+    ["بازده جریان نقد آزاد", pctCell(v.fcf_yield_pct)],
+    ["بدهی به حقوق صاحبان سهام / پوشش هزینه مالی",
+      `${num(b.debt_to_equity, 2)} / ${b.interest_cover == null ? "—" : num(b.interest_cover, 1) + " برابر"}`],
+    ["دوره وصول مطالبات", b.receivable_days == null ? "—" : `${num(b.receivable_days, 0)} روز`],
+  ];
+  const flags = (r.flags || []).map(f => `<li>⚠ ${esc(f)}</li>`).join("");
+  const pos = (r.positives || []).map(f => `<li>✓ ${esc(f)}</li>`).join("");
+  $("outlookDetail").innerHTML =
+    `<h3>${esc(r.symbol || "")} <span class="hint">${esc(r.name || "")}</span></h3>` +
+    table(["شاخص", "مقدار"], rows) +
+    `<ul class="evidence" style="margin-top:8px">${flags}${pos}</ul>`;
+}
+
+function renderOutlook(rep) {
+  const rows = (rep.ranked || []).map(r => {
+    const v = r.valuation || {}, g = r.growth || {};
+    return [`<strong>${esc(r.symbol)}</strong>`, esc(r.sector || ""),
+      `${esc(r.latest.period_end)} (${r.latest.months}م)`,
+      pctCell(g.revenue_pct), num(v.pe_ttm, 1), num(v.pe_forward, 1),
+      pctCell(v.earnings_yield_forward_pct),
+      (r.flags || []).map(esc).join("<br>") || "—"];
+  });
+  $("outlookTable").innerHTML = rows.length
+    ? table(["نماد", "صنعت", "آخرین دوره", "رشد فروش", "P/E گذشته",
+             "P/E آینده‌نگر", "بازده سود برآوردی", "هشدار"], rows)
+    : '<div class="empty">هنوز شرکتی با داده‌ی کافی برای برآورد نیست</div>';
+  const x = rep.excluded || {};
+  banner("outlookStatus", "outlookStatusText", "is-live",
+    `${rep.count} شرکت رتبه‌بندی شد (بیشترین بازده سود برآوردی اول). ` +
+    `کنار گذاشته: ${x.no_estimate || 0} بدون صورت مالی سال قبل (در حال جمع‌آوری از کدال)، ` +
+    `${x.stale || 0} با صورت مالی کهنه، ${x.flags || 0} با بیش از یک هشدار، ` +
+    `${x.loss || 0} زیان‌ده، ${x.no_filing || 0} بدون صورت مالی. ` +
+    `معیار مقایسه: نرخ بدون ریسک ${num(rep.bar_pct, 0)}٪.`);
+}
+
+async function loadOutlook(force = false) {
+  const btn = $("runOutlookBtn");
+  if (btn) btn.disabled = true;
+  try {
+    renderOutlook(await getJSON(`/api/outlook${force ? "?refresh=1" : ""}`));
+  } catch (err) {
+    banner("outlookStatus", "outlookStatusText", "is-error",
+      `<strong>محاسبه نشد.</strong> ${esc(err.message)}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function lookupOutlook() {
+  const sym = ($("outlookSymbol").value || "").trim();
+  if (!sym) return;
+  try {
+    renderOutlookDetail(await getJSON(`/api/outlook?symbol=${encodeURIComponent(sym)}`));
+  } catch (err) {
+    $("outlookDetail").innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+  }
+}
+
 async function loadAll() {
   // First because it is the cheapest (three indexed reads plus one session
   // probe) and the only panel whose value expires. A reader who opens the
@@ -3654,6 +3744,8 @@ on("runRegimeBtn", "click", () => loadRegime(true));
 on("runPortfolioBtn", "click", () => loadPortfolio(true));
 on("runAllocationBtn", "click", () => loadAllocation(true));
 on("runOpportunitiesBtn", "click", () => loadOpportunities(true));
+on("runOutlookBtn", "click", () => loadOutlook(true));
+on("outlookLookupBtn", "click", lookupOutlook);
 on("runTechnicalBtn", "click", () => loadTechnical(true));
 on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
 on("runInflowBtn", "click", () => loadInflow(true));

@@ -997,6 +997,91 @@ def coverage():
     }
 
 
+def sync_from_market_db(verbose=False):
+    """Carry only the filings this store has not seen yet. Cheap; run often.
+
+    Found 2026-11-05: this store was last written on 2026-08-14 while the
+    collectors kept filling sirat_market.db, so the analysis read a
+    three-month-old snapshot. The one-off import below was never scheduled.
+    This is the incremental form, called after every collection round.
+
+    A filing is imported once (the `imported_letters` ledger). Within a
+    company-period the most recently PUBLISHED letter wins -- the backfill
+    delivers old letters after new ones, and an unaudited 1398 release
+    arriving today must not overwrite its audited successor.
+    """
+
+    import database
+
+    create_database()
+
+    conn = _connect()
+    conn.execute("""CREATE TABLE IF NOT EXISTS imported_letters (
+        tracing_no TEXT PRIMARY KEY, imported_at TEXT)""")
+    seen = {row[0]: row[1] or "" for row in conn.execute(
+        "SELECT tracing_no, imported_at FROM imported_letters")}
+    current = {(r[0], r[1], r[2]): r[3] or "" for r in conn.execute(
+        "SELECT ins_code, period_end, period_months, published_at FROM metrics")}
+    conn.close()
+
+    # New, or re-parsed since it was carried (codal_backfill.reparse_latest
+    # re-reads a filing for line items added after its first parse).
+    fresh = [row for row in database.load_codal_filings()
+             if row.get("tracing_no")
+             and (str(row["tracing_no"]) not in seen
+                  or (row.get("updated_at") or "") > seen[str(row["tracing_no"])])]
+
+    imported = superseded = empty = 0
+    done = []
+
+    for row in sorted(fresh, key=lambda r: r.get("published_at") or ""):
+        key = (str(row.get("ins_code")), str(row.get("period_end")),
+               row.get("period_months"))
+        published = row.get("published_at") or ""
+
+        if current.get(key, "") > published and                 str(row["tracing_no"]) not in seen:
+            superseded += 1
+        elif save_metrics({
+            "ins_code": row.get("ins_code"),
+            "period_end": row.get("period_end"),
+            "period_months": row.get("period_months"),
+            "tracing_no": row.get("tracing_no"),
+            "title": row.get("title"),
+            "published_at": published or None,
+            "audited": row.get("audited"),
+            "consolidated": row.get("consolidated"),
+            "items": row.get("items") or {},
+            "ratios": row.get("ratios") or {},
+            "source": "market-db",
+        }):
+            imported += 1
+            current[key] = published
+        else:
+            empty += 1
+
+        # The SOURCE row's own timestamp, so the next comparison is between
+        # two values in one clock and one format (this module's _now() is
+        # local time, the market database's is UTC).
+        done.append((str(row["tracing_no"]), row.get("updated_at") or ""))
+
+    if done:
+        conn = _connect()
+        conn.executemany(
+            "INSERT OR REPLACE INTO imported_letters VALUES (?, ?)", done)
+        conn.commit()
+        conn.close()
+
+    result = {"new": len(fresh), "imported": imported,
+              "superseded": superseded, "empty": empty}
+
+    if verbose:
+        print("fundamental store: %(new)d new letters, %(imported)d imported, "
+              "%(superseded)d older than what is stored, %(empty)d empty"
+              % result)
+
+    return result
+
+
 def import_from_market_db(limit=None, verbose=True):
     """Seed this store from the filings already parsed into sirat_market.db.
 

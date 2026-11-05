@@ -51,7 +51,9 @@ error string, the same contract as providers/base.py, so a Codal outage
 degrades the fundamental view instead of taking down a scan.
 """
 
+import gzip
 import io
+import os
 import re
 import threading
 import time
@@ -474,7 +476,7 @@ class CodalClient:
 
     # ---- statements -------------------------------------------------------
 
-    def fetch_sheets(self, excel_url):
+    def fetch_sheets(self, excel_url, archive_key=None):
         """Download one filing and split it into named sheets.
 
         Returns {sheet name: [DataFrame, ...]}. A sheet can hold more than one
@@ -485,18 +487,34 @@ class CodalClient:
         if not excel_url:
             return CodalResult(error="filing has no Excel URL", kind=KIND_BAD)
 
-        try:
-            response = self._get(excel_url, timeout=(
-                settings.TIMEOUT_CONNECT, max(settings.TIMEOUT_READ, 60)
-            ))
-            body = response.content
-        except Exception as exc:
-            return CodalResult(error=f"{type(exc).__name__}: {str(exc)[:160]}",
-                               kind=classify(exc))
+        # A filing never changes once published (a correction is a new letter
+        # with its own tracing number), so a document already in the archive
+        # is read from disk and never downloaded again -- re-parsing after an
+        # extractor improvement costs nothing.
+        body = archive_read(archive_key) if archive_key else None
 
-        if not body:
-            return CodalResult(error="filing returned an empty body",
-                               kind=KIND_TRANSIENT)
+        if body is None:
+            try:
+                response = self._get(excel_url, timeout=(
+                    settings.TIMEOUT_CONNECT, max(settings.TIMEOUT_READ, 60)
+                ))
+                body = response.content
+            except Exception as exc:
+                return CodalResult(
+                    error=f"{type(exc).__name__}: {str(exc)[:160]}",
+                    kind=classify(exc))
+
+            if not body:
+                return CodalResult(error="filing returned an empty body",
+                                   kind=KIND_TRANSIENT)
+
+            if archive_key and _archivable(body):
+                archive_write(archive_key, body)
+
+        return self.parse_body(body)
+
+    def parse_body(self, body):
+        """Split one downloaded (or archived) filing into named sheets."""
 
         # The era split. Old filings are genuine OLE2 workbooks and decoding
         # one as UTF-8 yields garbage with no <table> in it -- which the HTML
@@ -695,6 +713,67 @@ def split_sheets(text):
 # The OLE2 compound-document signature. Every genuine legacy .xls starts with
 # these eight bytes; no HTML response can, so this is the era test.
 XLS_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+
+# ==============================
+# THE RAW ARCHIVE
+# ==============================
+#
+# Every statement document as Codal served it, gzipped, one file per tracing
+# number. Without it, every improvement to the extractor meant downloading
+# ~20,000 filings again through a firewall that blocks for hours. Lives
+# beside the databases, not inside them: ~5 GB raw, ~0.5 GB compressed, and
+# a file that is written once and read rarely does not belong in SQLite.
+
+ARCHIVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "data", "codal_raw")
+
+
+def _archive_path(key):
+    key = re.sub(r"[^0-9A-Za-z_-]", "_", str(key))
+    return os.path.join(ARCHIVE_DIR, key[-2:].rjust(2, "0"), key + ".gz")
+
+
+def _archivable(body):
+    """Only real documents: a legacy workbook or HTML that carries a table.
+
+    A throttle page or Codal's empty export is not kept, so a later attempt
+    still goes to the network instead of re-reading the failure from disk.
+    """
+
+    if body[:8] == XLS_MAGIC:
+        return True
+
+    return b"<table" in body.lower()
+
+
+def archive_read(key):
+    """The archived document for one tracing number, or None."""
+
+    try:
+        with gzip.open(_archive_path(key), "rb") as handle:
+            return handle.read() or None
+    except (OSError, EOFError):
+        return None
+
+
+def archive_write(key, body):
+    """Store one document; atomic, so a crash never leaves half a file."""
+
+    path = _archive_path(key)
+
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temp = path + ".tmp"
+        with gzip.open(temp, "wb", compresslevel=6) as handle:
+            handle.write(body)
+        os.replace(temp, path)
+    except OSError:
+        pass                 # an archive failure must never fail the fetch
+
+
+def archive_has(key):
+    return os.path.exists(_archive_path(key))
 
 # Section boundaries inside the flat grid, matched on normalised text with
 # every space removed -- the old era writes "صورت سود وزیان" where the new one

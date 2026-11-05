@@ -751,6 +751,98 @@ def _reason_key(error):
     return text[:70] or "unknown"
 
 
+# The line items fundamental_outlook.py needs, added 2026-11-05. A stored
+# filing parsed before then has none of them.
+OUTLOOK_ITEMS = ("ppe", "receivables", "borrowings_short", "capex")
+
+
+def reparse_latest(per_company=2, deadline=None, verbose=True, client=None):
+    """Re-read each company's newest filings parsed before the new items.
+
+    Goes through the raw archive, so a document already there costs nothing;
+    otherwise it is downloaded once and archived. Stops on the same transient
+    streak as fetch(), so a throttled host is waited out, not hammered.
+    """
+
+    client = client or codal.CodalClient()
+
+    conn = database._connect()
+    rows = conn.execute("""
+        SELECT f.ins_code, f.tracing_no, f.published_at, f.items,
+               l.excel_url, l.title
+        FROM codal_filings f
+        JOIN codal_letters l ON l.tracing_no = f.tracing_no
+        WHERE l.excel_url IS NOT NULL AND l.excel_url <> ''
+        ORDER BY f.ins_code, f.published_at DESC
+    """).fetchall()
+    conn.close()
+
+    queue, taken = [], {}
+    for ins_code, tracing_no, published_at, items, excel_url, title in rows:
+        if taken.get(ins_code, 0) >= per_company:
+            continue
+        taken[ins_code] = taken.get(ins_code, 0) + 1
+        if any('"%s"' % key in (items or "") for key in OUTLOOK_ITEMS):
+            continue
+        queue.append({"ins_code": ins_code, "tracing_no": tracing_no,
+                      "published_at": published_at, "excel_url": excel_url,
+                      "title": title})
+
+    if verbose:
+        print("reparse: %d filings lack the outlook items" % len(queue),
+              flush=True)
+
+    started = time.monotonic()
+    done = failed = consecutive = 0
+
+    for item in queue:
+        if deadline is not None and time.monotonic() - started > deadline:
+            break
+
+        record, error, kind = codal_sync.parse_letter(client, item)
+
+        if error:
+            failed += 1
+            if kind == codal.KIND_TRANSIENT:
+                consecutive += 1
+                if consecutive >= config.CODAL_ABORT_AFTER_FAILURES:
+                    if verbose:
+                        print("reparse: pausing 30m after %d transient failures"
+                              % consecutive, flush=True)
+                    time.sleep(1800)
+                    consecutive = 0
+            continue
+
+        consecutive = 0
+        record["tracing_no"] = item["tracing_no"]
+        database.save_codal_filing(item["ins_code"], record,
+                                   published_at=item["published_at"])
+        database.save_codal_financials(item["ins_code"], record)
+        done += 1
+
+        if verbose and done % 100 == 0:
+            print("reparse: %d done, %d failed" % (done, failed), flush=True)
+            _sync_store()
+
+    _sync_store(verbose)
+
+    if verbose:
+        print("reparse: %d re-read, %d failed" % (done, failed), flush=True)
+
+    return {"queued": len(queue), "done": done, "failed": failed}
+
+
+def _sync_store(verbose=False):
+    """New filings -> the fundamental store the analysis reads. Never raises."""
+
+    try:
+        import fundamental_db
+        fundamental_db.sync_from_market_db(verbose=verbose)
+    except Exception as exc:                                    # noqa: BLE001
+        if verbose:
+            print("  fundamental store sync failed: %s" % exc, flush=True)
+
+
 # ==============================
 # A CAMPAIGN: HOURS, NOT ONE BATCH
 # ==============================
@@ -867,6 +959,11 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
             wait = 60
 
         totals["pauses"] += 1
+
+        # The analysis reads sirat_fundamentals.db, not this database; carry
+        # each round's new filings across while the campaign waits anyway.
+        if got["stored"]:
+            _sync_store(verbose)
 
         if verbose:
             print("campaign: round %d done (%d letters, %d filings so far); "
@@ -1021,6 +1118,10 @@ def main(argv=None):
     parser.add_argument("--seed", action="store_true",
                         help="carry already-parsed filings into codal_filings "
                              "and exit")
+    parser.add_argument("--reparse-latest", type=int, default=None,
+                        metavar="N",
+                        help="re-read each company's N newest stored filings "
+                             "that predate the outlook line items, then exit")
     parser.add_argument("--refresh", action="store_true",
                         help="re-search companies already searched")
     parser.add_argument("--delay", type=float, default=None,
@@ -1053,6 +1154,12 @@ def main(argv=None):
         until = "%04d/%02d/%02d" % today if today else "1499/12/29"
 
     client = codal.CodalClient(delay=args.delay) if args.delay else None
+
+    if args.reparse_latest:
+        reparse_latest(per_company=args.reparse_latest, verbose=verbose,
+                       client=client,
+                       deadline=(args.minutes * 60 if args.minutes else None))
+        return 0
 
     if args.hours:
         campaign(args.since, until, hours=args.hours, batch=args.batch,
