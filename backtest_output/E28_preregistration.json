@@ -1,0 +1,39 @@
+{
+  "experiment_id": "E28-gold-sleeve",
+
+  "question": "E27 accepted holding the equity market over a 20% fixed-income fund. Does a gold sleeve (Tehran-listed gold funds) improve on that, either as the defensive sleeve of a static mix or on its own?",
+
+  "researcher": "Claude, at the user's request of 2026-11-05",
+
+  "written_before": "Only the gold funds' date ranges had been seen when this was written (fetched 2026-11-05 with count=3000: طلا from 2017-06-10, زر 2017-10-07, گوهر 2017-12-05, عیار 2018-06-02, ten more from 2020-12 onward). No gold return, level or chart had been computed or looked at.",
+
+  "data": {
+    "gold_sleeve": "equal-weight average of the daily returns of every gold fund (gold.gold_fund_codes()) that has at least 60 sessions of history on that date. A fund's daily return with |r| > 20% is treated as a data error and dropped (Tehran funds trade inside daily bands; the count dropped is reported). Fund prices are net of the fund's own fees, so no extra drag.",
+    "equity_sleeve": "TEDPIX with E27's 1.5%/yr drag",
+    "fixed_income": "20%/yr per session, as E27",
+    "window": "first session on which the gold sleeve exists (60 sessions after 2017-06-10) .. 2026-11-04. One window: there is no earlier gold history to hold out, and the overlap with windows other experiments spent is declared, not avoided."
+  },
+
+  "costs": "Rebalancing trades are charged half of the 1.039% round trip on the fraction of the book traded. Rebalance every 60 sessions to the target weights.",
+
+  "hypotheses": {
+    "H1_gold_as_defence": "70% equity / 30% gold has a higher Sharpe (excess over the 20% fund, 20-session blocks) than 70% equity / 30% fixed income. Memmel one-sided test.",
+    "H2_gold_alone": "100% gold sleeve has a higher mean 20-session return than the 20% fund. One-sided t-test."
+  },
+
+  "test": {
+    "alpha": "0.05 / 2 = 0.025 per hypothesis",
+    "accept": "p < 0.025"
+  },
+
+  "also_reported_not_tested": "100% equity, 50/50 equity/gold, 50/50 equity/fixed income, correlation of equity and gold blocks, max drawdowns, the dropped-return count.",
+
+  "decision_rule": "An accepted H1 adds gold as the panel's defensive sleeve in place of (part of) fixed income; a rejected H1 leaves fixed income as the default. H2 decides only whether the panel may describe gold as beating fixed income. The 70/30 and 60-session values are conventional and fixed here; no other weights or cadences are tried under this ID.",
+
+  "declared_limits": "About nine years and ~115 blocks: power is limited, and a gold sleeve's rial return is mostly the rial's devaluation, which came in steps (2018, 2020, 2022-2025), so blocks are not independent in the way the tests assume. Nominal, not real. 2023-2026 overlaps windows spent by other experiments.",
+
+  "expected_failure": [
+    "H1 fails: gold and Tehran equities both move with the dollar rate, so gold diversifies less than fixed income does and the 70/30 gold mix has a lower Sharpe",
+    "H2 fails: the devaluation steps are a handful of events; between them gold drifts below 20%/yr and 115 blocks cannot separate the means at 0.025"
+  ]
+}
