@@ -12,4 +12,7 @@ rem Scheduled daily 09:00 by: schtasks /TN SIRAT-codal-backfill
 cd /d C:\SIRAT-AI
 set PY=C:\Users\gholizadeh-t\AppData\Local\Programs\Python\Python314\python.exe
 echo ===== %date% %time% ===== >> logs\task_backfill.log
-"%PY%" codal_backfill.py --hours 6 --priority-date 1399/01/01 >> logs\task_backfill.log 2>&1
+rem 23.5 hours since 2026-11-05: a six-hour day left the queue (~21,000
+rem statements) idle eighteen hours out of twenty-four, and the campaign's
+rem own back-off already handles Codal's firewall. Ends before the next 09:00.
+"%PY%" codal_backfill.py --hours 23.5 --priority-date 1399/01/01 >> logs\task_backfill.log 2>&1
