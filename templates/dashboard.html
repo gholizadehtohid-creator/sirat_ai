@@ -138,6 +138,35 @@
        of it -- this section used to sit tenth of eleven, so the one thing a
        reader opens the page for was the last thing they reached. -->
 
+  <!-- The allocation comes first because it is the only advice on this page
+       that passed a preregistered test (E27, E28). The stock basket below it
+       did not, and is labelled paper-only. See allocation.py. -->
+  <div class="section-title">تخصیص دارایی — Asset allocation</div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>چقدر در سهام، طلا و درآمد ثابت؟</h2>
+      <div class="top-actions">
+        <button id="runAllocationBtn">↻ به‌روزرسانی</button>
+      </div>
+    </div>
+    <p class="hint">
+      تنها توصیه‌ی این پنل که آزمون از پیش ثبت‌شده را گذرانده: در بازار
+      <em>ماندن</em> از بیرون ماندن بهتر بود (E27)، و صندوق طلا بخش دفاعی بهتری
+      از درآمد ثابت بود (E28). چند معامله در سال، با دست — بدون نیاز به API.
+    </p>
+
+    <div id="allocationStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="allocationStatusText">در حال بارگذاری…</div>
+    </div>
+
+    <div class="table-wrap" id="allocationTable" style="margin-top:16px"></div>
+
+    <div class="table-wrap" id="allocationFunds" style="margin-top:16px"></div>
+
+    <ul class="evidence" id="allocationNotes" style="margin-top:12px"></ul>
+  </div>
+
   <div class="section-title">سبد پیشنهادی — Risk-managed portfolio</div>
 
   <div class="card">

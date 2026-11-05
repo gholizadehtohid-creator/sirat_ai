@@ -85,7 +85,7 @@ const state = {
   screen: null, indices: null, sectors: null,
   regime: null, portfolio: null, flow: null,
   fundamentals: null, codal: null, technical: null, topTechnical: null,
-  gold: null, inflow: null, intel: null, smartMoney: null
+  gold: null, inflow: null, intel: null, smartMoney: null, allocation: null
 };
 
 /* ---------- helpers ---------- */
@@ -3180,12 +3180,87 @@ document.addEventListener("visibilitychange", () => {
 // Market first, then sectors, then the screen, then the basket the screen
 // feeds -- the order an analyst reads them in, and the order the page is laid
 // out in. The portfolio waits for the screen because it is built from it.
+/* ---------- asset allocation (E27, E28) ----------
+   The one section built on results that passed a preregistered test. Every
+   history figure is recomputed server-side from the stored series; the
+   experiments' frozen numbers live in backtest_output/E27/E28_results.json. */
+
+function renderAllocation(rep) {
+  state.allocation = rep;
+
+  const h = rep.history;
+  const labels = rep.sleeve_labels || {};
+
+  const rows = rep.profiles.map(p => {
+    const st = h ? h.profiles[p.key] : null;
+    const weights = Object.entries(p.weights)
+      .filter(([, w]) => w > 0)
+      .map(([k, w]) => `${w}٪ ${esc(labels[k] || k)}`).join("<br>");
+    const amounts = Object.entries(p.amounts || {})
+      .map(([k, v]) => `${money(v)} ${esc(labels[k] || k)}`).join("<br>");
+    const ev = p.evidence === "tested"
+      ? `<span class="badge good"><span class="dot"></span>آزموده‌شده</span>`
+      : `<span class="badge neutral"><span class="dot"></span>توصیفی</span>`;
+    return [
+      `<strong>${esc(p.label)}</strong><br>${ev}`,
+      weights,
+      amounts,
+      st ? `${num(st.cagr_pct, 1)}٪` : "n/a",
+      st ? signed(st.max_drawdown_pct, 1) : "n/a",
+      st ? signed(st.worst_12m_pct, 1) : "n/a",
+      `<span class="hint">${esc(p.evidence_text)}</span>`,
+    ];
+  });
+
+  $("allocationTable").innerHTML = table(
+    ["ترکیب", "وزن‌ها", "مبلغ (ریال)", "بازده سالانه",
+     "بیشترین افت", "بدترین ۱۲ ماه", "شواهد"], rows);
+
+  const c = rep.candidates || {};
+  const fundRows = [];
+  for (const k of ["equity", "gold", "fixed"]) {
+    for (const f of c[k] || []) {
+      fundRows.push([esc(labels[k] || k), `<strong>${esc(f.symbol)}</strong>`,
+                     esc(f.name), money(f.value)]);
+    }
+  }
+  $("allocationFunds").innerHTML = fundRows.length
+    ? table(["بخش", "نماد", "نام", "ارزش معاملات آخرین جلسه"], fundRows)
+    : "";
+
+  bulletList("allocationNotes", [rep.rebalance.text, ...(rep.notes || [])]);
+
+  banner("allocationStatus", "allocationStatusText", h ? "is-live" : "",
+    h ? `سابقه‌ی ${esc(h.from)} تا ${esc(h.to)} — صندوق درآمد ثابت در همین ` +
+        `دوره ${num(h.fixed_income.cagr_pct, 0)}٪ در سال فرض شده است.`
+      : "سابقه‌ی شاخص یا صندوق‌های طلا در دیتابیس نیست — ارقام تاریخی " +
+        "محاسبه نشد.");
+}
+
+async function loadAllocation(force = false) {
+  const btn = $("runAllocationBtn");
+  if (btn) btn.disabled = true;
+
+  try {
+    const rep = await getJSON(`/api/allocation?${query()}${force ? "&refresh=1" : ""}`);
+    renderAllocation(rep);
+  } catch (err) {
+    state.allocation = null;
+    banner("allocationStatus", "allocationStatusText", "is-error",
+      `<strong>تخصیص محاسبه نشد.</strong> ${esc(err.message)}`);
+    console.error(err);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function loadAll() {
   // First because it is the cheapest (three indexed reads plus one session
   // probe) and the only panel whose value expires. A reader who opens the
   // page during a session should not watch the basket build before being
   // told whether the market is even trading.
   loadLive();
+  loadAllocation();
   loadRegime();
   loadIndices();
   loadSectors();
@@ -3197,6 +3272,7 @@ async function loadAll() {
 }
 
 function rerender() {
+  if (state.allocation) renderAllocation(state.allocation);
   if (state.regime) renderRegime(state.regime);
   if (state.indices) renderIndices(state.indices);
   if (state.sectors) renderSectors(state.sectors);
@@ -3516,6 +3592,7 @@ on("runFundBtn", "click", () => loadFundamentals(true));
 on("runFlowBtn", "click", () => loadMoneyflow(true));
 on("runRegimeBtn", "click", () => loadRegime(true));
 on("runPortfolioBtn", "click", () => loadPortfolio(true));
+on("runAllocationBtn", "click", () => loadAllocation(true));
 on("runTechnicalBtn", "click", () => loadTechnical(true));
 on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
 on("runInflowBtn", "click", () => loadInflow(true));

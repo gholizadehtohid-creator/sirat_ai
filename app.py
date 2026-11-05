@@ -697,6 +697,29 @@ def api_import_gold():
         return handle_error(exc)
 
 
+@app.route("/api/allocation")
+def api_allocation():
+    """Stocks / gold / fixed income: the allocation E27 and E28 support.
+
+    Shown above the stock basket because it is the only advice in the panel
+    that passed a preregistered test. See allocation.py.
+    """
+
+    args = wanted_portfolio_args()
+    force = request.args.get("refresh") == "1"
+
+    key = cache_key("allocation", data_version(), args["equity"])
+
+    def build():
+        import allocation
+        return allocation.plan(equity=args["equity"])
+
+    try:
+        return jsonify(memoise(key, build, force=force))
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 @app.route("/api/intelligence")
 def api_intelligence():
     """Market-intelligence REPORT (news analysis). Read-only, memoised.

@@ -15,3 +15,8 @@ set PY=C:\Users\gholizadeh-t\AppData\Local\Programs\Python\Python314\python.exe
 echo ===== %date% %time% ===== >> logs\task_evening.log
 "%PY%" bootstrap.py >> logs\task_evening.log 2>&1
 "%PY%" examples\forward_prediction_log.py >> logs\task_evening.log 2>&1
+rem Gold funds are not equities, so the history step never fetches them;
+rem until 2026-11-05 only a panel button did, and they went stale from 08-29
+rem while the allocation now leans on them (E28). 60 bars covers any gap the
+rem evening schedule can leave, at 14 requests.
+"%PY%" -c "import gold; gold.fetch_history(count=60, verbose=False)" >> logs\task_evening.log 2>&1
