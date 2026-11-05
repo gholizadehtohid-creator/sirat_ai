@@ -178,6 +178,16 @@ WATCH_CHECK_SAMPLE = 12
 # history endpoint. Rial prices are integers, so this is rounding only.
 PY_TOLERANCE = 0.0005
 
+# A name the market watch does not list at all is delisted or suspended for
+# good: on 2026-11-05 all 73 equities behind the session were absent, newest
+# bars from 2025-07 to 2026-09. They are re-read this often, not every run --
+# a name that reopens comes back onto the watch and is fetched at once.
+ABSENT_RECHECK_DAYS = 7
+
+# Fewer watch rows than this means a partial answer, not a market: absence
+# from it proves nothing.
+WATCH_MIN_ROWS = 300
+
 
 def _weekdays_after(date_text, until):
     """Sat..Wed calendar days after `date_text` up to and including `until`.
@@ -323,7 +333,7 @@ def update_history(full_count=300, verbose=True, progress=None):
     """
 
     import market_session
-    from datetime import date
+    from datetime import date, timedelta
 
     provider = get_provider()
 
@@ -382,6 +392,30 @@ def update_history(full_count=300, verbose=True, progress=None):
 
     from_watch = {}
     deferred = set()
+    snapshot = None
+
+    if owed:
+        report(0, 1, "reading the market watch")
+        snapshot = provider.get_market_snapshot()
+        if not snapshot.ok:
+            note("market watch unreadable: %s" % snapshot.error)
+
+    listed = None
+
+    if snapshot is not None and snapshot.ok             and len(snapshot.data) >= WATCH_MIN_ROWS:
+        listed = set(snapshot.data["ins_code"].astype(str))
+
+    absent = set()
+
+    if listed is not None:
+        checked = database.history_checked_dates()
+        cutoff = (date.today() - timedelta(days=ABSENT_RECHECK_DAYS)).isoformat()
+        unlisted = [c for c in owed if c not in listed]
+        absent = {c for c in unlisted if checked.get(c, "") > cutoff}
+        if unlisted:
+            note("%d names behind are not on the market watch; %d checked in "
+                 "the last %d days are skipped"
+                 % (len(unlisted), len(absent), ABSENT_RECHECK_DAYS))
 
     if owed and session and closed:
         tedpix = config.INDICES["TEDPIX"]["insCode"]
@@ -414,9 +448,6 @@ def update_history(full_count=300, verbose=True, progress=None):
         if previous:
             one_behind = [c for c in owed if newest[c][0] == previous]
 
-            report(0, 1, "reading the market watch")
-            snapshot = provider.get_market_snapshot()
-
             if snapshot.ok:
                 from_watch = _watch_bars(snapshot.data, one_behind, newest,
                                          session)
@@ -436,8 +467,6 @@ def update_history(full_count=300, verbose=True, progress=None):
                 elif not agrees:
                     note("market watch REJECTED -- every name goes per-symbol")
                     from_watch = {}
-            else:
-                note("market watch unreadable: %s" % snapshot.error)
         else:
             note("index history does not yet hold %s -- per-symbol tail fetch"
                  % session)
@@ -454,7 +483,7 @@ def update_history(full_count=300, verbose=True, progress=None):
     by_count = {}
 
     for code in owed:
-        if code in from_watch or code in deferred:
+        if code in from_watch or code in deferred or code in absent:
             continue
         gap = _weekdays_after(newest[code][0], today)
         count = min(full_count, gap + TAIL_MARGIN)
@@ -471,6 +500,7 @@ def update_history(full_count=300, verbose=True, progress=None):
 
     pending = sum(len(v) for v in by_count.values())
     done_so_far = [0]
+    swept = []
 
     def on_item(done, total, _item):
         report(done_so_far[0] + done, pending, "fetching missing bars")
@@ -487,13 +517,20 @@ def update_history(full_count=300, verbose=True, progress=None):
 
             if frame is not None and database.save_history(code, frame) > 0:
                 stats["full" if code in fresh else "tail"] += 1
+                if listed is not None and code not in listed:
+                    swept.append(code)
             else:
                 stats["failed"] += 1
+
+    if swept:
+        database.mark_history_checked(swept, date.today().isoformat())
 
     stored = stats["watch"] + stats["tail"] + stats["full"]
 
     stats["deferred"] = len(deferred)
-    stats["ok"] = stored > 0 or (not set(owed) - deferred and not fresh)
+    stats["absent"] = len(absent)
+    stats["ok"] = stored > 0 or (not set(owed) - deferred - absent
+                                 and not fresh)
 
     note("history: %d current, %d from the market watch, %d by tail fetch, "
          "%d full, %d failed (%d requests instead of %d)"
@@ -543,12 +580,19 @@ def import_indices(verbose=True, progress=None):
     return stored
 
 
-def import_client_type(limit=None, ins_codes=None, verbose=True, progress=None):
+def import_client_type(limit=None, ins_codes=None, verbose=True, progress=None,
+                       incremental=False):
     """Fetch and store the daily حقیقی/حقوقی split for equities.
 
     One request per symbol, like sectors -- there is no bulk client-type route.
     Unlike sectors, this has to be repeated: sector membership changes when a
     company relists, whereas the flow series gains a row every session.
+
+    `incremental` asks only the names that traded since their flow series
+    ends (database.newest_flow_owed). The endpoint returns a name's whole
+    series and cannot be asked for less, so the saving is in names, not rows.
+    GetClientTypeAll is one call for the market but carries no rial values,
+    which moneyflow and the E21 log both read, so it cannot stand in.
     """
 
     provider = get_provider()
@@ -564,6 +608,26 @@ def import_client_type(limit=None, ins_codes=None, verbose=True, progress=None):
     if not ins_codes:
         print("No equities stored. Run --universe first.")
         return 0
+
+    if incremental:
+        from datetime import date, timedelta
+
+        owed = database.newest_flow_owed(ins_codes)
+        # Names the history step found off the market watch do not trade, so
+        # they gain no flow; their endpoint answers nothing at all.
+        cutoff = (date.today()
+                  - timedelta(days=ABSENT_RECHECK_DAYS)).isoformat()
+        owed -= {c for c, day in database.history_checked_dates().items()
+                 if day > cutoff}
+        skipped = len(ins_codes) - len(owed)
+        ins_codes = [c for c in ins_codes if str(c) in owed]
+        if verbose:
+            print(f"Flow: {skipped} equities already hold their last traded "
+                  f"session; {len(ins_codes)} owed.")
+        if not ins_codes:
+            # Nothing owed is success, not failure: bootstrap reads a 0 as
+            # "the step failed".
+            return True
 
     if verbose:
         print(f"Fetching client-type history for {len(ins_codes)} equities via "

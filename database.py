@@ -190,6 +190,16 @@ def create_database():
     # because the per-participant average is the whole point -- a billion rials
     # from one buyer and a billion from a thousand are different events, and a
     # table holding only the values cannot distinguish them afterwards.
+    # When a name the market watch no longer lists was last asked for its
+    # history. Without it, every delisted equity costs a request on every
+    # run for a series that never moves (seed_import.ABSENT_RECHECK_DAYS).
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS history_checked (
+        ins_code    TEXT PRIMARY KEY,
+        checked_on  TEXT NOT NULL
+    )
+    """)
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS client_type_history (
         ins_code                    TEXT NOT NULL,
@@ -1928,6 +1938,76 @@ def newest_bars(ins_codes=None):
         for code, date, close in rows
         if wanted is None or str(code) in wanted
     }
+
+
+def history_checked_dates():
+    """{ins_code: 'YYYY-MM-DD'} -- when each unlisted name was last read."""
+
+    create_database()
+
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT ins_code, checked_on FROM history_checked").fetchall()
+    conn.close()
+
+    return {str(code): day for code, day in rows}
+
+
+def mark_history_checked(ins_codes, day):
+    create_database()
+
+    conn = _connect()
+    conn.executemany(
+        "INSERT OR REPLACE INTO history_checked (ins_code, checked_on) "
+        "VALUES (?, ?)", [(str(c), day) for c in ins_codes])
+    conn.commit()
+    conn.close()
+
+
+def newest_flow_owed(ins_codes=None):
+    """Equities whose flow series ends before their newest TRADED bar.
+
+    Flow rows exist only for sessions a name traded (the provider drops
+    zero-turnover rows), so a name whose last trade is already in its flow
+    series has nothing new to fetch -- it was the whole equity universe, one
+    request each, on every run. Names with no flow at all are owed too.
+
+    Run it after the price history is brought up to date: the bars are what
+    say a session happened for that name.
+    """
+
+    create_database()
+
+    conn = _connect()
+
+    rows = conn.execute("""
+        SELECT p.ins_code, p.traded, f.flowed
+        FROM (SELECT ins_code, MAX(date) AS traded
+              FROM price_history WHERE volume > 0 GROUP BY ins_code) p
+        LEFT JOIN (SELECT ins_code, MAX(date) AS flowed
+                   FROM client_type_history GROUP BY ins_code) f
+          ON f.ins_code = p.ins_code
+    """).fetchall()
+
+    conn.close()
+
+    wanted = None if ins_codes is None else {str(c) for c in ins_codes}
+
+    owed = {str(code) for code, traded, flowed in rows
+            if flowed is None or flowed < traded}
+
+    if wanted is None:
+        return owed
+
+    # A name with bars but no traded one (19 on 2026-11-05: listed at 1000,
+    # never dealt) has no flow to fetch. Only a name with no bars at all is
+    # unknown -- the history step has not reached it -- and is asked.
+    conn = _connect()
+    known = {str(code) for (code,) in conn.execute(
+        "SELECT DISTINCT ins_code FROM price_history")}
+    conn.close()
+
+    return {c for c in wanted if c in owed or c not in known}
 
 
 def newest_equity_bar():

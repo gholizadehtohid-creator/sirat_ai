@@ -523,7 +523,8 @@ def _fetch_sectors(on_item):
 
 def _fetch_flow(on_item):
     import seed_import
-    return bool(seed_import.import_client_type(verbose=False, progress=on_item))
+    return bool(seed_import.import_client_type(verbose=False, progress=on_item,
+                                               incremental=True))
 
 
 def _fetch_codal(on_item):

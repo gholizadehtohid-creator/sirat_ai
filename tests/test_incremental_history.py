@@ -323,6 +323,131 @@ class IncrementalHistoryTests(unittest.TestCase):
 
         self.assertEqual(stats["watch"], 3)
 
+    def add_delisted(self, code, newest="2026-09-01"):
+        conn = database._connect()
+        conn.execute("INSERT INTO instruments (ins_code, symbol_fa, "
+                     "is_equity) VALUES (?, ?, 1)", (code, "n" + code))
+        conn.commit()
+        conn.close()
+        database.save_history(code, bars(["2026-08-31", newest]))
+
+    def test_an_unlisted_name_is_read_once_then_left_for_a_week(self):
+        """Delisted names were one wasted request each, on every run."""
+
+        from datetime import date, timedelta
+
+        self.add_delisted("7")
+        self.add_delisted("8")
+        database.mark_history_checked(
+            ["8"], (date.today() - timedelta(days=2)).isoformat())
+
+        history = {c: self.full_history() for c in ("1", "2", "3")}
+        history["7"] = history["8"] = bars(["2026-08-31", "2026-09-01"])
+
+        saved = seed_import.WATCH_MIN_ROWS
+        seed_import.WATCH_MIN_ROWS = 1
+        try:
+            provider = FakeProvider(
+                watch={c: watch_row() for c in ("1", "2", "3")},
+                history=history)
+            stats = self.run_with(provider)
+        finally:
+            seed_import.WATCH_MIN_ROWS = saved
+
+        fetched = {c for codes, _ in provider.requests for c in codes}
+
+        self.assertIn("7", fetched)          # never checked: read
+        self.assertNotIn("8", fetched)       # checked two days ago: skipped
+        self.assertEqual(stats["absent"], 1)
+        self.assertTrue(stats["ok"])
+
+        checked = database.history_checked_dates()
+        self.assertEqual(checked["7"], date.today().isoformat())
+        self.assertNotIn("1", checked)       # listed names are never marked
+
+    def test_a_short_watch_proves_nothing_about_absence(self):
+        """A partial answer must not make every missing name 'delisted'."""
+
+        from datetime import date
+
+        self.add_delisted("8")
+        database.mark_history_checked(["8"], date.today().isoformat())
+
+        history = {c: self.full_history() for c in ("1", "2", "3")}
+        history["8"] = bars(["2026-08-31", "2026-09-01"])
+
+        provider = FakeProvider(
+            watch={c: watch_row() for c in ("1", "2", "3")}, history=history)
+        self.run_with(provider)                    # 3 rows < WATCH_MIN_ROWS
+
+        fetched = {c for codes, _ in provider.requests for c in codes}
+        self.assertIn("8", fetched)
+
+
+class FlowOwedTests(unittest.TestCase):
+    """Flow is fetched only for names that traded since their series ends."""
+
+    def setUp(self):
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        self.original = database.DATABASE_NAME
+        database.DATABASE_NAME = self.path
+        database.create_database()
+
+    def tearDown(self):
+        database.DATABASE_NAME = self.original
+        os.unlink(self.path)
+
+    def flow(self, code, dates):
+        database.save_client_type_history(code, pd.DataFrame({
+            "date": pd.to_datetime(dates),
+            "individual_buy_value": 1.0, "institutional_buy_value": 1.0}))
+
+    def test_owed_names(self):
+        database.save_history("current", bars([PREVIOUS, SESSION]))
+        self.flow("current", [PREVIOUS, SESSION])
+
+        database.save_history("behind", bars([PREVIOUS, SESSION]))
+        self.flow("behind", [PREVIOUS])
+
+        database.save_history("never", bars([SESSION]))
+
+        # Its newest bar did not trade, so there is no flow row to have.
+        frame = bars([PREVIOUS, SESSION])
+        frame.loc[1, "volume"] = 0.0
+        database.save_history("halted", frame)
+        self.flow("halted", [PREVIOUS])
+
+        # Listed at a price, never dealt: no traded bar, no flow to have.
+        frame = bars([SESSION])
+        frame["volume"] = 0.0
+        database.save_history("untraded", frame)
+
+        owed = database.newest_flow_owed(
+            ["current", "behind", "never", "halted", "untraded", "unknown"])
+
+        self.assertEqual(owed, {"behind", "never", "unknown"})
+
+    def test_nothing_owed_costs_no_request_and_is_not_a_failure(self):
+        database.save_history("1", bars([SESSION]))
+        self.flow("1", [SESSION])
+
+        class NoCalls:
+            name = "fake"
+
+            def get_client_type_histories(self, codes, progress=None):
+                raise AssertionError("nothing was owed")
+
+        saved = seed_import.get_provider
+        seed_import.get_provider = NoCalls
+        try:
+            result = seed_import.import_client_type(
+                ins_codes=["1"], verbose=False, incremental=True)
+        finally:
+            seed_import.get_provider = saved
+
+        self.assertTrue(result)
+
 
 if __name__ == "__main__":
     unittest.main()
