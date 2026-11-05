@@ -258,8 +258,18 @@ def main(argv=None):
         report()
         return 0
 
+    import time
     import codal_monthly
+
+    # A routine poll that finds the lock taken just leaves -- the next one is
+    # a quarter-hour away. A catch-up must not: it waits its turn (up to an
+    # hour), or a poll that happened to be running would skip the backlog.
     lock = codal_monthly._single_instance("codal_watch.lock")
+    waited = 0
+    while lock is None and args.since and waited < 3600:
+        time.sleep(30)
+        waited += 30
+        lock = codal_monthly._single_instance("codal_watch.lock")
     if lock is None:
         print("watch: another poll is running")
         return 0
