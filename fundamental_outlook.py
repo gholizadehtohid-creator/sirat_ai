@@ -560,9 +560,13 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     prices = latest_prices()
 
     ranked, excluded = [], {"no_filing": 0, "stale": 0, "no_estimate": 0,
-                            "flags": 0, "loss": 0}
+                            "flags": 0, "loss": 0, "halted": 0}
+    halted = database.halted_codes()
 
     for code, inst in instruments.items():
+        if code in halted:
+            excluded["halted"] += 1
+            continue
         result = analyse(code, price=prices.get(code), today=today)
         if not result:
             excluded["no_filing"] += 1

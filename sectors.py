@@ -411,6 +411,14 @@ def analyse_all(params=None, approve_score=None, bars=None, min_members=None,
     reports = []
     skipped = 0
 
+    # Halted members leave the sector before it is aggregated: a company
+    # frozen for months would hold its sector's median at a price and P/E
+    # nobody can trade at.
+    halted = database.halted_codes()
+    for group in grouped.values():
+        group["members"] = [m for m in group["members"]
+                            if m["ins_code"] not in halted]
+
     for name, group in grouped.items():
 
         if len(group["members"]) < min_members:

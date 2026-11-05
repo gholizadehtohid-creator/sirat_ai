@@ -1827,6 +1827,45 @@ def load_client_type_tail(ins_codes, sessions):
     }
 
 
+def halted_codes(days=None):
+    """{ins_code: last traded date} for symbols halted longer than `days`.
+
+    "Traded" means a bar with volume: a halted symbol keeps getting bars at
+    its frozen close with zero volume, so the newest bar's date says nothing.
+    The clock is the market's newest session, not today's date -- a holiday
+    or a late fetch must not halt the whole market. A symbol with bars but
+    none traded is halted (date None); one with no bars at all is unknown
+    and left out of this map, so missing history is never mistaken for a
+    halt.
+    """
+
+    from datetime import date
+
+    if days is None:
+        from config import HALT_EXCLUDE_DAYS as days
+
+    create_database()
+    conn = _connect()
+    newest = conn.execute("SELECT MAX(date) FROM price_history").fetchone()[0]
+    rows = conn.execute("""
+        SELECT ins_code, MAX(CASE WHEN volume > 0 THEN date END)
+        FROM price_history GROUP BY ins_code
+    """).fetchall()
+    conn.close()
+
+    if not newest:
+        return {}
+
+    market = date.fromisoformat(str(newest)[:10])
+    out = {}
+    for code, last in rows:
+        if not last:
+            out[str(code)] = None
+        elif (market - date.fromisoformat(str(last)[:10])).days > days:
+            out[str(code)] = str(last)[:10]
+    return out
+
+
 def load_history_tail(ins_codes, sessions):
     """The most recent `sessions` price bars for each of many instruments.
 

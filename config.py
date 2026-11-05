@@ -383,6 +383,13 @@ MIN_HISTORY_BARS = 60
 # A symbol whose last bar is older than this is stale (suspended/halted).
 MAX_STALE_DAYS = 15
 
+# Halted for longer than this (no session with volume, counted back from the
+# market's newest session) and a symbol is left out of every technical and
+# fundamental list and lookup -- its price, indicators and P/E describe a
+# market that no longer exists (user request, 2026-11-05). See
+# database.halted_codes().
+HALT_EXCLUDE_DAYS = 30
+
 # Fundamental score weights (sum = 100). Weights of components that cannot be
 # computed are redistributed across the rest, and the coverage is reported.
 FUND_WEIGHT_VALUATION = 30      # P/E band

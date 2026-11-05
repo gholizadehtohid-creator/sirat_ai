@@ -766,6 +766,12 @@ def api_outlook():
             if not match:
                 return jsonify({"error": "نماد پیدا نشد: %s" % symbol}), 404
             code = str(match["ins_code"])
+            halted = database.halted_codes().get(code, False)
+            if halted is not False:
+                return jsonify({"error": "نماد %s %s معامله نشده (متوقف) و "
+                                         "تحلیل نمی‌شود."
+                                % (symbol, "از %s" % halted if halted
+                                   else "هیچ‌گاه")}), 404
             result = fundamental_outlook.analyse(
                 code, price=fundamental_outlook.latest_prices().get(code))
             if not result:
@@ -948,7 +954,11 @@ def _fundamental_report(top):
 
     instruments = database.load_instruments(equities_only=True)
 
-    by_code = {str(r["ins_code"]): r for r in instruments}
+    # Halted over a month: no current price, so no current valuation either.
+    halted = database.halted_codes()
+
+    by_code = {str(r["ins_code"]): r for r in instruments
+               if str(r["ins_code"]) not in halted}
 
     snapshot = database.load_snapshot()
 
@@ -1008,6 +1018,7 @@ def _fundamental_report(top):
             "strong": sum(1 for r in rows if r["score"] >= 80),
             "weak": sum(1 for r in rows if r["score"] < 45),
             "stale": len(stale),
+            "halted": len(halted),
         },
         "stale_months": config.CODAL_STALE_MONTHS,
         "median_score": (sorted(scored)[len(scored) // 2] if scored else None),

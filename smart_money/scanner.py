@@ -457,7 +457,11 @@ def scan(top=20, min_turnover=MIN_TURNOVER, params=None, persist=True,
 
     instruments = database.load_instruments(equities_only=True)
     by_code = {str(r["ins_code"]): r for r in instruments}
-    codes = list(by_code)
+    # Halted longer than config.HALT_EXCLUDE_DAYS: its bars are a frozen
+    # close, and a last bar that traded heavily months ago would pass the
+    # turnover floor on stale data (user request, 2026-11-05).
+    halted = database.halted_codes()
+    codes = [c for c in by_code if c not in halted]
 
     frames = database.load_history_tail(codes, SCAN_BARS)
 
@@ -472,6 +476,7 @@ def scan(top=20, min_turnover=MIN_TURNOVER, params=None, persist=True,
 
     counts = {
         "universe": len(codes),
+        "halted": len(halted),
         "no_data": 0,
         "illiquid": 0,
         "dirty_data": 0,
