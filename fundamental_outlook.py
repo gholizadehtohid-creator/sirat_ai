@@ -215,8 +215,16 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     periods through them.
     """
 
+    rows_from_store = rows is None
     if rows is None:
         rows = fundamental_db.load_metrics(ins_code, limit=periods)
+
+    # A halted symbol's last close can be months or years old; a P/E on it
+    # is not today's valuation (دتهران read 0.02 on a 2018 price). Report
+    # the halt, value nothing.
+    halted = halted_since(ins_code) if price and rows_from_store else None
+    if halted:
+        price = None
     ps = _periods(rows)
 
     if not ps:
@@ -382,6 +390,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     def flag(text):
         flags.append(text)
 
+    if halted:
+        flag("نماد از %s معامله نشده (متوقف)؛ قیمت روز ندارد، پس P/E و بازده سود محاسبه نشد"
+             % ("مدت‌ها پیش" if halted == "never" else halted))
+
     if age_months is not None and age_months > STALE_MONTHS:
         flag("آخرین صورت مالی %d ماه پیش تمام شده؛ برآوردها کهنه است" % age_months)
     if growth_rev is not None:
@@ -488,6 +500,38 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
 
 def _round(x, digits=2):
     return None if x is None else round(x, digits)
+
+
+_MARKET_DATE = []
+
+
+def halted_since(ins_code):
+    """The last date the symbol traded, if that was over a week before the
+    market's newest session; None for a symbol that trades normally.
+
+    The outlook prices a company at its last stored close. For a halted
+    symbol that close is weeks or months old (بتهران, دتهران, شتهران on
+    2026-11-05), and a P/E on it would read as today's.
+    """
+
+    from datetime import date
+
+    conn = database._connect()
+    if not _MARKET_DATE:
+        _MARKET_DATE.append(conn.execute(
+            "SELECT MAX(date) FROM price_history").fetchone()[0])
+    last = conn.execute(
+        "SELECT MAX(date) FROM price_history WHERE ins_code = ? AND volume > 0",
+        (str(ins_code),)).fetchone()[0]
+    conn.close()
+
+    newest = _MARKET_DATE[0]
+    if not newest:
+        return None
+    if not last:
+        return "never"
+    gap = (date.fromisoformat(newest[:10]) - date.fromisoformat(last[:10])).days
+    return last[:10] if gap > 7 else None
 
 
 def latest_prices():

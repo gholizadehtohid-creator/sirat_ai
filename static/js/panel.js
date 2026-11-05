@@ -2154,6 +2154,19 @@ function fundBadge(status) {
   return `<span class="badge ${cls}"><span class="dot"></span>${esc(status)}</span>`;
 }
 
+// An empty P/E said nothing about why. Three different facts sit behind it,
+// and the reader asked (2026-11-05, about the تهران symbols).
+function peCell(x) {
+  if (x.pe != null) return num(x.pe, 1);
+  if (x.eps_annual != null && x.eps_annual <= 0) {
+    return '<span class="hint" title="سود هر سهم منفی است؛ P/E برای شرکت زیان‌ده معنا ندارد">زیان‌ده</span>';
+  }
+  if (x.market_cap == null) {
+    return '<span class="hint" title="نماد امروز معامله نشده یا متوقف است، پس قیمت روز ندارد">بدون قیمت</span>';
+  }
+  return '<span class="hint" title="P/E بالای ۶۰ — سود نسبت به قیمت ناچیز است">بالای ۶۰</span>';
+}
+
 function fundRows(list) {
   return table(
     ["نماد", "صنعت", "بنیاد", "امتیاز", "پوشش", "P/E", "P/B", "ROE",
@@ -2179,7 +2192,7 @@ function fundRows(list) {
         coverCls
           ? `<span class="badge ${coverCls}"><span class="dot"></span>${covered}%</span>`
           : `${covered}%`,
-        num(x.pe, 1),
+        peCell(x),
         num(x.pb, 1),
         x.roe == null ? "—" : `${num(x.roe, 0)}%`,
         x.net_margin == null ? "—" : `${num(x.net_margin, 0)}%`,
