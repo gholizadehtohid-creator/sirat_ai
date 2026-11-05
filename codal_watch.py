@@ -9,15 +9,22 @@ WHY A FEED AND NOT A SWEEP
 A statement published today used to wait for codal_sync to reach its company
 -- 25 companies a run, so up to a month (found 2026-11-05). Codal's search
 without a symbol is the whole market's announcement feed, newest first, and
-it takes the same `LetterCode` filter as a company search. So one request
-per letter type sees everything published since the last poll:
+every hit carries its LetterCode. The poll keeps two of them:
 
   ن-10  financial statements      -> codal_filings / codal_financials,
                                      then the fundamental store
   ن-30  monthly activity reports  -> monthly_reports
 
+The feed is read UNFILTERED and the letter codes are picked out here. The
+search accepts a `LetterCode` parameter, but a market-wide filtered query
+is one Codal's server cannot answer: from the evening of 2026-11-05 every
+one ran past a 20-second read timeout (25 s with curl), while the same
+feed unfiltered answered in 0.3 s and a filtered query for one symbol in
+8 s. It was not a block on us -- the host served everything else. Four
+and a half hours of polls found nothing because of it.
+
 A poll pages back only until it reaches a letter it has already seen, so a
-quiet quarter-hour costs two ~16 KB requests. Every document goes through
+quiet quarter-hour costs one ~16 KB request. Every document goes through
 the raw archive (codal.ARCHIVE_DIR), and a filing is never fetched twice.
 
 Companies outside today's equity universe are recorded as seen and skipped.
@@ -35,10 +42,12 @@ import config
 import database
 import fundamental_db
 import persian
+import settings
 
 FEEDS = ("ن-10", "ن-30")
-MAX_PAGES_POLL = 5            # 100 letters per type per poll is ample
+MAX_PAGES_POLL = 5            # 100 letters of every type, ~1.5 days of the feed
 CATCH_UP_GAP_SECONDS = 10     # between pages of a --since catch-up
+FEED_READ_TIMEOUT = 60        # seconds; see _page
 
 
 def _now():
@@ -82,21 +91,34 @@ def _universe():
     return out
 
 
-def _page(client, letter_code, page):
-    params = dict(client.SEARCH_DEFAULTS)
-    params.update({"PageNumber": str(page), "LetterCode": letter_code})
-    payload = client._get(config.CODAL_SEARCH_URL, params=params).json()
+def _page(client, page):
+    """One page of the whole market's feed, every letter type.
+
+    Only PageNumber and search -- not client.SEARCH_DEFAULTS. Those sixteen
+    parameters are what a company search sends, and market-wide they put
+    the query on a path Codal's backend answers slowly or not at all: on
+    2026-11-05 the full set (and `Mains=true` alone) timed out at 25 s,
+    while the bare form returned the same letters, the same Total, in
+    0.3-2 s on most tries. Even the bare form spiked to 10-30 s that
+    night, hence the longer read timeout.
+    """
+
+    params = {"PageNumber": str(page), "search": "true"}
+    payload = client._get(config.CODAL_SEARCH_URL, params=params,
+                          timeout=(settings.TIMEOUT_CONNECT,
+                                   FEED_READ_TIMEOUT)).json()
     return [dict(codal._letter_row(raw, raw.get("Symbol") or ""),
                  symbol=raw.get("Symbol") or "")
             for raw in payload.get("Letters") or []]
 
 
-def collect(client, letter_code, seen, since=None, pace=None):
-    """New letters of one type, newest first, stopping at known ground.
+def collect(client, seen, since=None, pace=None, codes=FEEDS):
+    """New letters of the watched types, newest first, stopping at known ground.
 
-    Without `since`, paging stops at the first page that holds a letter
-    already seen. With it (a Jalali date), paging continues until letters
-    are older than that date -- the catch-up mode.
+    Without `since`, paging stops at the first page that holds a watched
+    letter already seen; pages of other letter types alone do not stop it.
+    With `since` (a Jalali date), paging continues until letters are older
+    than that date -- the catch-up mode.
     """
 
     fresh = []
@@ -105,12 +127,11 @@ def collect(client, letter_code, seen, since=None, pace=None):
 
     while limit is None or page <= limit:
         try:
-            letters = _page(client, letter_code, page)
+            letters = _page(client, page)
         except Exception as exc:                                # noqa: BLE001
             if pace:
                 pace(codal.classify(exc) == codal.KIND_TRANSIENT)
-            print("watch: %s page %d failed: %s" % (letter_code, page, exc),
-                  flush=True)
+            print("watch: feed page %d failed: %s" % (page, exc), flush=True)
             break
         if pace:
             pace(False)
@@ -119,6 +140,8 @@ def collect(client, letter_code, seen, since=None, pace=None):
 
         hit_known = False
         for letter in letters:
+            if letter.get("letter_code") not in codes:
+                continue
             if letter["tracing_no"] in seen:
                 hit_known = True
                 continue
@@ -204,38 +227,37 @@ def poll(since=None, verbose=True, client=None):
     totals = {"new": 0, "stored": 0, "outside_universe": 0, "unreadable": 0,
               "retry_later": 0}
 
-    for letter_code in FEEDS:
-        fresh = collect(client, letter_code, seen, since=since, pace=pace)
-        if verbose:
-            print("watch: %s -- %d new letters" % (letter_code, len(fresh)),
-                  flush=True)
+    fresh = collect(client, seen, since=since, pace=pace)
+    if verbose:
+        for letter_code in FEEDS:
+            print("watch: %s -- %d new letters" % (letter_code, sum(
+                1 for l in fresh if l["letter_code"] == letter_code)), flush=True)
 
-        # Oldest first, so an interrupted catch-up has stored a contiguous
-        # stretch rather than a scatter.
-        for letter in reversed(fresh):
-            totals["new"] += 1
-            letter["letter_code"] = letter_code
-            inst = universe.get(persian.normalize(letter.get("symbol") or ""))
-            if not inst:
-                _mark(letter, None, "outside universe")
-                totals["outside_universe"] += 1
-                continue
+    # Oldest first, so an interrupted catch-up has stored a contiguous
+    # stretch rather than a scatter.
+    for letter in reversed(fresh):
+        totals["new"] += 1
+        inst = universe.get(persian.normalize(letter.get("symbol") or ""))
+        if not inst:
+            _mark(letter, None, "outside universe")
+            totals["outside_universe"] += 1
+            continue
 
-            database.save_codal_letters(str(inst["ins_code"]), [letter])
-            outcome = HANDLERS[letter_code](client, letter, inst)
-            pace(outcome is None)
+        database.save_codal_letters(str(inst["ins_code"]), [letter])
+        outcome = HANDLERS[letter["letter_code"]](client, letter, inst)
+        pace(outcome is None)
 
-            if outcome is None:
-                totals["retry_later"] += 1
-                continue
-            _mark(letter, str(inst["ins_code"]), outcome)
-            if outcome == "stored":
-                totals["stored"] += 1
-                if verbose:
-                    print("  + %s %s" % (letter.get("symbol"), letter["title"][:70]),
-                          flush=True)
-            elif outcome.startswith("unreadable"):
-                totals["unreadable"] += 1
+        if outcome is None:
+            totals["retry_later"] += 1
+            continue
+        _mark(letter, str(inst["ins_code"]), outcome)
+        if outcome == "stored":
+            totals["stored"] += 1
+            if verbose:
+                print("  + %s %s" % (letter.get("symbol"), letter["title"][:70]),
+                      flush=True)
+        elif outcome.startswith("unreadable"):
+            totals["unreadable"] += 1
 
     if totals["stored"]:
         fundamental_db.sync_from_market_db()

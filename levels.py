@@ -36,7 +36,9 @@ predicts anything is a separate question, measured elsewhere.
 """
 
 import math
+import warnings
 
+import numpy as np
 import pandas as pd
 
 
@@ -81,23 +83,38 @@ def swings(df, depth=DEFAULT_DEPTH):
     lows = frame["low"] if "low" in frame.columns else frame["close"]
     dates = frame["date"] if "date" in frame.columns else pd.Series(frame.index)
 
+    # Vectorised over sliding windows. The loop this replaces sliced pandas
+    # per bar -- three million .iloc calls for one v2 scan of the market,
+    # two-thirds of the three minutes /api/portfolio took (2026-11-05).
+    # Same rule, same NaN handling: the window extreme skips NaN (as
+    # Series.max did) and the centre must itself be finite.
+    high_values = pd.to_numeric(highs, errors="coerce").to_numpy(dtype=float)
+    low_values = pd.to_numeric(lows, errors="coerce").to_numpy(dtype=float)
+    width = depth * 2 + 1
+    centre = slice(depth, len(frame) - depth)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)   # all-NaN windows
+        window_high = np.nanmax(
+            np.lib.stride_tricks.sliding_window_view(high_values, width), axis=1)
+        window_low = np.nanmin(
+            np.lib.stride_tricks.sliding_window_view(low_values, width), axis=1)
+
+    high = high_values[centre]
+    low = low_values[centre]
+    is_high = np.isfinite(high) & (high >= window_high)
+    is_low = ~is_high & np.isfinite(low) & (low <= window_low)
+
     found = []
 
-    for i in range(depth, len(frame) - depth):
-
-        window_high = highs.iloc[i - depth:i + depth + 1]
-        window_low = lows.iloc[i - depth:i + depth + 1]
-
-        high = _finite(highs.iloc[i])
-        low = _finite(lows.iloc[i])
-
-        if high is not None and high >= window_high.max():
+    for k in np.flatnonzero(is_high | is_low):
+        i = int(k) + depth
+        if is_high[k]:
             found.append({"index": i, "date": dates.iloc[i],
-                          "price": high, "kind": "high"})
-
-        elif low is not None and low <= window_low.min():
+                          "price": float(high[k]), "kind": "high"})
+        else:
             found.append({"index": i, "date": dates.iloc[i],
-                          "price": low, "kind": "low"})
+                          "price": float(low[k]), "kind": "low"})
 
     # Collapse consecutive pivots of the same kind, keeping the extreme one.
     # Two highs in a row is not a swing, it is one swing sampled twice.

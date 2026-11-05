@@ -66,6 +66,21 @@ MAX_AGE = {
     "codal": timedelta(hours=6),
 }
 
+# Wall-clock ceiling for the steps that are one or two requests. A read
+# timeout bounds each wait for the next byte, not a whole response, so a
+# server that trickles -- or a Retry-After the session obeys -- can hold a
+# request for hours: on 2026-11-04 the indices step (two requests, normally
+# under a second each) ran 19,453 s before failing, and history and flow
+# waited behind it. Past the ceiling the step is recorded as failed and the
+# run moves on; the stuck request is left to finish in a daemon thread.
+# History, flow, sectors and codal are hundreds of requests with their own
+# per-request pacing and legitimately take an hour or more, so no ceiling.
+STEP_DEADLINE_SECONDS = {
+    "universe": 15 * 60,
+    "snapshot": 15 * 60,
+    "indices": 15 * 60,
+}
+
 # Tehran Stock Exchange trades Saturday to Wednesday.
 TRADING_WEEKDAYS = {5, 6, 0, 1, 2}          # Sat, Sun, Mon, Tue, Wed
 
@@ -554,6 +569,38 @@ FETCHERS = {
 }
 
 
+class StepTimeout(Exception):
+    pass
+
+
+def _run_step(name, fetcher, on_item):
+    """fetcher(on_item), cut off at STEP_DEADLINE_SECONDS[name] if it has one."""
+
+    deadline = STEP_DEADLINE_SECONDS.get(name)
+    if not deadline:
+        return fetcher(on_item)
+
+    outcome = {}
+
+    def target():
+        try:
+            outcome["ok"] = fetcher(on_item)
+        except Exception as exc:                                # noqa: BLE001
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=target, name=f"bootstrap-{name}",
+                              daemon=True)
+    worker.start()
+    worker.join(deadline)
+
+    if worker.is_alive():
+        raise StepTimeout(f"no answer within {deadline // 60} min; "
+                          f"left running in the background")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome.get("ok")
+
+
 def ensure(force=False, only=None):
     """Fetch every missing or stale component, in dependency order.
 
@@ -628,7 +675,7 @@ def ensure(force=False, only=None):
         started = time.monotonic()
 
         try:
-            ok = FETCHERS[name](_set_item)
+            ok = _run_step(name, FETCHERS[name], _set_item)
             error = None
         except Exception as exc:
             ok = False
