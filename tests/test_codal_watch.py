@@ -30,7 +30,8 @@ class CollectTests(unittest.TestCase):
             calls.append(n)
             return PAGES.get(n, [])
 
-        with mock.patch.object(w, "_page", side_effect=page):
+        with mock.patch.object(w, "_page", side_effect=page), \
+                mock.patch.object(w.time, "sleep"):
             fresh = w.collect(None, "ن-10", seen, since=since)
         return [l["tracing_no"] for l in fresh], calls
 

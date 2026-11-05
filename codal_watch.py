@@ -27,6 +27,7 @@ codal_sync from the panel.
 
 import argparse
 import sys
+import time
 from datetime import datetime, timezone
 
 import codal
@@ -37,6 +38,7 @@ import persian
 
 FEEDS = ("ن-10", "ن-30")
 MAX_PAGES_POLL = 5            # 100 letters per type per poll is ample
+CATCH_UP_GAP_SECONDS = 10     # between pages of a --since catch-up
 
 
 def _now():
@@ -129,6 +131,12 @@ def collect(client, letter_code, seen, since=None, pace=None):
                               (letters[-1].get("published_at") or "")[:10] >= since):
             break
         page += 1
+        # A catch-up walks a hundred pages or more of the search host, the
+        # same host the quarter-hour polls need. Run back to back it earned
+        # a 429 at page 34 and blocked the polls for half an hour
+        # (2026-11-05), so it goes at a walking pace.
+        if since:
+            time.sleep(CATCH_UP_GAP_SECONDS)
 
     return fresh
 
