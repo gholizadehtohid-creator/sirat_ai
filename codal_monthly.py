@@ -177,6 +177,36 @@ def _status(ins_code, letters=None, error=None):
     conn.close()
 
 
+class Pacer:
+    """Batches of BATCH requests with a pause, and an escalating cool-off.
+
+    Three refusals in a row wait 15 minutes, each further one doubles it up
+    to 240: retrying inside codal.ir's throttle window renews the block.
+    """
+
+    def __init__(self, label, verbose=True):
+        self.label, self.verbose = label, verbose
+        self.in_batch = 0
+        self.refused = 0
+
+    def __call__(self, transient):
+        self.in_batch += 1
+        if transient:
+            self.refused += 1
+        else:
+            self.refused = 0
+        if self.refused >= 3:
+            wait = min(15 * 2 ** (self.refused - 3), 240) * 60
+            if self.verbose:
+                print("%s: throttled; waiting %dm" % (self.label, wait // 60),
+                      flush=True)
+            time.sleep(wait)
+            self.in_batch = 0
+        elif self.in_batch >= BATCH:
+            time.sleep(PAUSE_SECONDS)
+            self.in_batch = 0
+
+
 def run(hours=None, per_company=2, limit=None, verbose=True, client=None):
     """One paced pass over the companies that are due."""
 
@@ -194,25 +224,8 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None):
     if verbose:
         print("monthly: %d companies due" % len(companies), flush=True)
 
-    requests_in_batch = 0
-    refused = 0
     totals = {"checked": 0, "stored": 0, "unreadable": 0, "failed": 0}
-
-    def pace(transient):
-        nonlocal requests_in_batch, refused
-        requests_in_batch += 1
-        if transient:
-            refused += 1
-        if refused >= 3:
-            wait = min(15 * 2 ** (refused - 3), 240) * 60
-            if verbose:
-                print("monthly: throttled; waiting %dm" % (wait // 60), flush=True)
-            time.sleep(wait)
-            requests_in_batch = 0
-            refused = 2          # one more refusal doubles the next wait
-        elif requests_in_batch >= BATCH:
-            time.sleep(PAUSE_SECONDS)
-            requests_in_batch = 0
+    pace = Pacer("monthly", verbose)
 
     for inst in companies:
         if deadline and time.monotonic() > deadline:
@@ -228,8 +241,6 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None):
             if kind != codal.KIND_TRANSIENT:
                 _status(code, error=error)
             continue
-        if kind is None:
-            refused = 0
 
         totals["checked"] += 1
         database.save_codal_letters(code, letters)
@@ -246,7 +257,6 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None):
                 _fail(code, letter, got.error or "unreadable")
                 totals["unreadable"] += 1
                 continue
-            refused = 0
             record = monthly_reports.parse(got.data, letter["title"])
             if record:
                 store(code, letter, record)
@@ -313,12 +323,12 @@ def report():
         print("  %s  %d companies" % (month, count))
 
 
-def _single_instance():
+def _single_instance(name="codal_monthly.lock"):
     """An OS lock held for the life of the process, or None if taken."""
 
     import os
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs",
-                        "codal_monthly.lock")
+                        name)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     handle = open(path, "a+")
     try:

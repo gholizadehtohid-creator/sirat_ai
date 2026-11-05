@@ -832,6 +832,37 @@ def reparse_latest(per_company=2, deadline=None, verbose=True, client=None):
     return {"queued": len(queue), "done": done, "failed": failed}
 
 
+# New statements and monthly reports are picked up from Codal's market-wide
+# feed (codal_watch.py) every WATCH_SECONDS while a campaign runs. The
+# campaign is the one process scheduled ~23.5 hours a day, so it carries the
+# watch; a separate quarter-hour task would be better still (see
+# task_watch.bat) and shares the same lock, so the two never overlap.
+WATCH_SECONDS = 15 * 60
+_last_watch = [0.0]
+
+
+def _watch_due(verbose=False):
+    """Poll the feed if a quarter-hour has passed. Never raises."""
+
+    if time.monotonic() - _last_watch[0] < WATCH_SECONDS:
+        return
+    _last_watch[0] = time.monotonic()
+
+    try:
+        import codal_monthly
+        import codal_watch
+        lock = codal_monthly._single_instance("codal_watch.lock")
+        if lock is None:
+            return                      # a catch-up or another poll is running
+        try:
+            codal_watch.poll(verbose=verbose)
+        finally:
+            lock.close()
+    except Exception as exc:                                    # noqa: BLE001
+        if verbose:
+            print("  feed watch failed: %s" % exc, flush=True)
+
+
 def _sync_store(verbose=False):
     """New filings -> the fundamental store the analysis reads. Never raises."""
 
@@ -932,10 +963,18 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
 
         paused = paused or got["throttled"]
 
+        _watch_due(verbose)
+
         if not left and got["pending"] == 0:
+            # The history is complete, but the campaign is the process that
+            # runs 23.5 hours a day -- so it keeps watching the feed for new
+            # filings every quarter-hour until its hours are spent.
             if verbose:
-                print("campaign: nothing left to discover or download",
-                      flush=True)
+                print("campaign: nothing left to discover or download; "
+                      "watching the feed until the deadline", flush=True)
+            while time.monotonic() + WATCH_SECONDS < deadline:
+                time.sleep(WATCH_SECONDS)
+                _watch_due(verbose)
             break
 
         if time.monotonic() >= deadline:
