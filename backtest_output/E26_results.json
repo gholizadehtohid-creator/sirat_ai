@@ -1,0 +1,40 @@
+{
+ "preregistration": "backtest_output/E26_preregistration.json",
+ "run_on": "2026-11-05",
+ "script": "examples/basket_random_null.py (500 draws, seed 20261105)",
+ "raw": "backtest_output/basket_null/null_{E26,base}_<window>[_hold20].json",
+ "arms": {
+  "E26": "stop 3.0 ATR, floor 6%, refill every 5 sessions, idle cash credited",
+  "baseline": "stop 2.0 ATR, floor 3%, refill every 20 sessions, idle cash credited"
+ },
+ "windows": {
+  "2024-09-01..2025-12-31": {
+   "total_return_pct": {"E26": 32.69, "baseline": 24.03, "uncredited_v2_reported_earlier": -0.86},
+   "benchmarks_pct": {"tedpix": 92.85, "tedpix_equal_weight": 67.8, "risk_free": 32.36},
+   "average_cash_pct": {"E26": 56.62, "baseline": 80.17},
+   "trades": {"E26": 105},
+   "selection_percentile_vs_random": {
+    "engine_exits": {"E26": 16.8, "baseline": 18.8},
+    "hold_20": {"E26": 15.2, "baseline": 49.8}
+   },
+   "E26_beats_baseline": true
+  },
+  "2026-01-01..2026-11-04": {
+   "total_return_pct": {"E26": -1.96, "baseline": 4.89, "uncredited_v2_reported_earlier": -9.37},
+   "benchmarks_pct": {"tedpix": 94.37, "tedpix_equal_weight": 101.66, "risk_free": 18.73},
+   "average_cash_pct": {"E26": 56.36, "baseline": 85.57},
+   "trades": {"E26": 100, "baseline": 44},
+   "selection_percentile_vs_random": {
+    "engine_exits": {"E26": 0.0, "baseline": 1.4},
+    "hold_20": {"E26": 0.6, "baseline": 23.6}
+   },
+   "E26_beats_baseline": false
+  }
+ },
+ "verdict": "REVERT. E26 beat the baseline in 2024-09..2025-12 but not in 2026, and the rule required both. V2_STOP_ATR_MULTIPLE, V2_MIN_STOP_PCT and V2_REBALANCE_SESSIONS are back at 2.0, 3% and 20. The idle-cash credit and the panel's fixed-income note stay, as preregistered.",
+ "reading": [
+  "Wider stops and weekly refills did what they were meant to mechanically: cash fell from 80-86% to ~56% and trades more than doubled. The extra exposure went into picks that were worse than random (0-17th percentile), so in 2026 it lost money.",
+  "Every arm trails the index by 60-95 points in both windows. In 2024-09..2025-12 the best arm (+32.7%) only matched the risk-free rate (+32.4%).",
+  "Both windows were spent before E26; the 2024-25 improvement is in-sample and is not evidence of an edge."
+ ]
+}

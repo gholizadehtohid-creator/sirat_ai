@@ -532,11 +532,13 @@ class PlanTest(unittest.TestCase):
 
         reading = dict(self.READING, close=1000.0, atr=20.0, atr_pct=2.0)
 
-        # Stop at the 6% floor (E26), so target 1 sits 15% up; resistance at
-        # 13% trims it and still leaves 13/6 = 2.17 >= MIN_RISK_REWARD. (At
-        # 9%, the overhead this test used with the old 3% floor, the trimmed
-        # target no longer pays for the stop and the BUY is refused.)
-        signal = trade_manager.plan(reading, self._buy(), overhead_pct=13.0)
+        # The overhead is placed relative to whatever the stop floor is, so
+        # this holds at 3% (shipped) and at E26's reverted 6% alike: target 1
+        # sits 2.5R up, resistance at ~2.17R trims it and still pays for it.
+        stop_pct = max(config.V2_MIN_STOP_PCT,
+                       config.V2_STOP_ATR_MULTIPLE * reading["atr_pct"])
+        overhead = 2.17 * stop_pct
+        signal = trade_manager.plan(reading, self._buy(), overhead_pct=overhead)
 
         self.assertEqual(signal["action"], factor_engine.BUY)
         self.assertTrue(signal["target_capped"])

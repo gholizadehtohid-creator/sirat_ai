@@ -1,0 +1,39 @@
+{
+ "window": [
+  "2024-09-01",
+  "2025-12-31"
+ ],
+ "label": "E26",
+ "arm": {
+  "v2_stop_atr": 3.0,
+  "v2_min_stop_pct": 6.0,
+  "v2_rebalance": 5,
+  "credit_idle_cash": true
+ },
+ "strategy_return_pct": 32.69,
+ "benchmarks_pct": {
+  "tedpix": 92.85,
+  "tedpix_equal_weight": 67.8,
+  "risk_free": 32.36
+ },
+ "exposure": {
+  "average_cash_pct": 56.62,
+  "average_positions": 5.2,
+  "sessions_fully_in_cash": 65
+ },
+ "selection": {
+  "trades": 105,
+  "hold": 20,
+  "real_weighted_trade_return_pct": 1.817,
+  "real_hit_rate_pct": 49.5,
+  "null_mean_pct": 2.825,
+  "null_p5_p50_p95_pct": [
+   1.234,
+   2.832,
+   4.311
+  ],
+  "percentile_of_real": 15.2,
+  "draws": 500,
+  "seed": 20261105
+ }
+}

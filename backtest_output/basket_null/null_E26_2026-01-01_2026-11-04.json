@@ -1,0 +1,39 @@
+{
+ "window": [
+  "2026-01-01",
+  "2026-11-04"
+ ],
+ "label": "E26",
+ "arm": {
+  "v2_stop_atr": 3.0,
+  "v2_min_stop_pct": 6.0,
+  "v2_rebalance": 5,
+  "credit_idle_cash": true
+ },
+ "strategy_return_pct": -1.96,
+ "benchmarks_pct": {
+  "tedpix": 94.37,
+  "tedpix_equal_weight": 101.66,
+  "risk_free": 18.73
+ },
+ "exposure": {
+  "average_cash_pct": 56.36,
+  "average_positions": 4.95,
+  "sessions_fully_in_cash": 2
+ },
+ "selection": {
+  "trades": 100,
+  "hold": "engine exits",
+  "real_weighted_trade_return_pct": -0.793,
+  "real_hit_rate_pct": 42.0,
+  "null_mean_pct": 1.879,
+  "null_p5_p50_p95_pct": [
+   0.482,
+   1.873,
+   3.361
+  ],
+  "percentile_of_real": 0.0,
+  "draws": 500,
+  "seed": 20261105
+ }
+}

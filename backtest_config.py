@@ -279,10 +279,10 @@ DEFAULT_END = None
 # every signal measurement in this project was made over.
 REBALANCE_SESSIONS = 20
 
-# The v2 book is refilled weekly (E26). Its stops free capital between
-# monthly rebalances that then sat idle; the live panel can be re-run any day,
-# so a monthly refill also understated how it is used. v1 keeps 20.
-V2_REBALANCE_SESSIONS = 5
+# E26 tried a weekly refill (5) with wider stops; it lost to the monthly book
+# in 2026 and the preregistered rule reverted it (2026-11-05). The idle-cash
+# credit below was kept: it corrects a measurement, not the strategy.
+V2_REBALANCE_SESSIONS = 20
 
 # Stops and targets are checked EVERY session regardless of the rebalance
 # schedule. A risk rule that only fires on rebalance day is not a risk rule.

@@ -1183,8 +1183,14 @@ RISK_MAX_STOP_PCT = 18.0
 # bought, and the book then waited in cash for the next rebalance. Two full
 # bands is the distance risk_engine already falls back to without an ATR.
 # Separate names so v1 and every report measured on 2.0 / 3% are untouched.
-V2_STOP_ATR_MULTIPLE = 3.0
-V2_MIN_STOP_PCT = 2 * PRICE_BAND_PCT
+#
+# REVERTED by E26's preregistered rule (2026-11-05): 3.0 ATR / 6% with a
+# weekly refill beat the old values in 2024-09..2025-12 (+32.7% vs +24.0%)
+# but lost in 2026 (-2.0% vs +4.9%); keeping them required both windows.
+# Selection stayed below random either way (17th and 0th percentile).
+# The names stay so a future experiment can move them without new plumbing.
+V2_STOP_ATR_MULTIPLE = STOP_ATR_MULTIPLE
+V2_MIN_STOP_PCT = RISK_MIN_STOP_PCT
 
 # Risk score floor for a position to be opened at all.
 RISK_MIN_SCORE = 35
