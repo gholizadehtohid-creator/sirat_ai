@@ -223,7 +223,10 @@ def main(argv=None):
         "arm": {"v2_stop_atr": config.V2_STOP_ATR_MULTIPLE,
                 "v2_min_stop_pct": config.V2_MIN_STOP_PCT,
                 "v2_rebalance": cfg.v2_rebalance_sessions,
-                "credit_idle_cash": cfg.credit_idle_cash},
+                # engine.run() turns the credit on for v2 from this switch;
+                # cfg.credit_idle_cash is the global default and stays off.
+                "credit_idle_cash": bool(cfg.credit_idle_cash
+                                         or cfg.v2_credit_idle_cash)},
         "strategy_return_pct": benchmarks.get("strategy_return_pct"),
         "benchmarks_pct": {k: v.get("return_pct") for k, v in benchmarks.items()
                            if isinstance(v, dict)},

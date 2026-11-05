@@ -1,0 +1,44 @@
+{
+  "experiment_id": "E27-market-exposure-allocation",
+
+  "question": "The v2 basket lost money in 2024-09..2026-11 while the index rose ~93% a year; its selection is at or below random and it held 80-85% cash. The one family the research catalog lists as NEVER tested is plain allocation between the equity market and a fixed-income fund (E1/E4 tested a four-signal TIMING engine, which lost to its own static exposure-matched control). Does holding the market, with or without a simple trend rule, beat a fixed-income fund after costs?",
+
+  "researcher": "Claude, at the user's request of 2026-11-05 ('investigate every way to make the bot profitable')",
+
+  "why_this_and_not_more": "Every stock-selection family in this repository has been rejected (E1-E25, none promoted) and every historical window since 2023-03 is spent. Index-level tests are the one place left with (a) a long unspent history -- TEDPIX from 2008-12, never used for an allocation question -- and (b) no survivorship bias, because the index contains the companies that later delisted. Two hypotheses, not twenty, so the correction for trying is small and stated.",
+
+  "data": {
+    "equity": "TEDPIX (32097828799138957), daily close from index_history. TEDPIX is the price-and-dividend index, so dividends are included.",
+    "equal_weight": "TEDPIX_EW (67130298613737946) from 2014-03, reported, not tested (price index, shorter history)",
+    "fixed_income": "a fixed-income fund at a constant 20%/yr, accrued per session (240/yr). Iranian deposit and fixed-income yields ran roughly 15-23% over 2008-2026; no historical series is in the database, so 15% and 25% are reported as sensitivity and the decision is read at 20%.",
+    "windows": {
+      "primary": "2009-01-01..2023-02-28 -- never used by any experiment for an allocation question",
+      "secondary": "2023-03-01..2026-11-04 -- spent by E19/E21 for OTHER hypotheses; used only to check the primary result's direction"
+    }
+  },
+
+  "costs": {
+    "switch": "1.039% per full equity<->fixed-income round trip (backtest_config round trip; conservative for an index fund)",
+    "holding": "1.5%/yr drag on the equity sleeve for an index fund's fees and tracking error (assumed; no measurement in the database)"
+  },
+
+  "hypotheses": {
+    "H1_passive": "Always 100% in the equity index (after the holding drag). Claim: annualised return exceeds the 20% fixed-income fund in the primary window.",
+    "H2_trend": "100% equity while TEDPIX's close is above its 200-session simple moving average, else 100% fixed income. Signal read at a session's close, switch executed at the NEXT session's close, switch cost charged. Claim: higher Sharpe (excess over the 20% fund) than H1 AND a smaller maximum drawdown than H1, in the primary window."
+  },
+
+  "test": {
+    "statistic": "monthly (20-session) returns. H1: one-sided t-test of mean(monthly H1 - monthly fund) > 0. H2: one-sided test of mean(monthly H2 - monthly H1) on the Sharpe claim via the Jobson-Korkie/Memmel statistic, plus the drawdown comparison as stated.",
+    "alpha": "0.05 / 2 = 0.025 per hypothesis (Bonferroni over the two)",
+    "accept": "the primary-window test passes at 0.025 AND the secondary window points the same way (no significance required there)"
+  },
+
+  "decision_rule": "An accepted hypothesis becomes a recommendation the panel can make (an allocation, executed by the user by hand a few times a year -- it needs no order API). A rejected one is recorded and not retried with other parameters. Nothing here changes the v2 stock-picking engine.",
+
+  "declared_limits": "Beating a fixed-income fund in nominal rials is not beating inflation (87.9% y/y in 2026; no CPI series is in the database), and the report says so. A trend rule's 200-session length is the conventional value, chosen before looking; no other length will be tried under this ID. The 20% fund rate and 1.5% drag are assumptions, not measurements.",
+
+  "expected_failure": [
+    "H1 fails: Tehran equity returns 2009-2023 include long flat-to-falling stretches (2014-2016, after the 2020 bubble) during which a 20% fund wins, and monthly volatility is high enough that 14 years may not separate the means at 0.025",
+    "H2 fails: E1/E4 found timing pro-cyclical here (exposure preceded lower returns, rho -0.126); a 200-session rule may whipsaw in a market with 3% daily limits and long trading halts, and switch costs eat the drawdown saving"
+  ]
+}
