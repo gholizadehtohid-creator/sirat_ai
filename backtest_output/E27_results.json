@@ -1,0 +1,134 @@
+{
+ "preregistration": "backtest_output/E27_preregistration.json",
+ "windows": {
+  "primary": {
+   "range": [
+    "2009-01-03",
+    "2023-02-28"
+   ],
+   "sessions": 3419,
+   "blocks": 170,
+   "fund_20pct": {
+    "total_pct": 1242.8,
+    "cagr_pct": 20.0,
+    "vol_pct": 0.0,
+    "sharpe_vs_fund": null,
+    "max_drawdown_pct": 0.0
+   },
+   "H1_passive": {
+    "total_pct": 17076.0,
+    "cagr_pct": 43.51,
+    "vol_pct": 16.33,
+    "sharpe_vs_fund": 1.178,
+    "max_drawdown_pct": -47.91
+   },
+   "H2_trend": {
+    "total_pct": 20906.1,
+    "cagr_pct": 45.55,
+    "vol_pct": 15.1,
+    "sharpe_vs_fund": 1.355,
+    "max_drawdown_pct": -41.92,
+    "time_in_equity_pct": 78.6,
+    "switches": 42
+   },
+   "H1_test": {
+    "t": 2.444,
+    "p_one_sided": 0.00727,
+    "mean_monthly_excess_pct": 1.851
+   },
+   "H2_test": {
+    "z_memmel": 0.883,
+    "p_one_sided": 0.18863,
+    "monthly_sharpe_H2": 0.2059,
+    "monthly_sharpe_H1": 0.188,
+    "rho": 0.966,
+    "smaller_drawdown": true
+   },
+   "H1_vs_fund_sensitivity": {
+    "15%": {
+     "t": 2.918,
+     "p_one_sided": 0.00176
+    },
+    "25%": {
+     "t": 1.987,
+     "p_one_sided": 0.02346
+    }
+   },
+   "equal_weight_index_buy_hold": {
+    "total_pct": 5287.9,
+    "cagr_pct": 55.73,
+    "vol_pct": 16.07,
+    "sharpe_vs_fund": 1.704,
+    "max_drawdown_pct": -40.56,
+    "from": "2014-03-19"
+   }
+  },
+  "secondary": {
+   "range": [
+    "2023-03-01",
+    "2026-11-04"
+   ],
+   "sessions": 882,
+   "blocks": 44,
+   "fund_20pct": {
+    "total_pct": 95.4,
+    "cagr_pct": 20.0,
+    "vol_pct": 0.0,
+    "sharpe_vs_fund": null,
+    "max_drawdown_pct": 0.0
+   },
+   "H1_passive": {
+    "total_pct": 307.6,
+    "cagr_pct": 46.57,
+    "vol_pct": 18.57,
+    "sharpe_vs_fund": 1.171,
+    "max_drawdown_pct": -26.65
+   },
+   "H2_trend": {
+    "total_pct": 233.2,
+    "cagr_pct": 38.75,
+    "vol_pct": 17.23,
+    "sharpe_vs_fund": 0.929,
+    "max_drawdown_pct": -28.51,
+    "time_in_equity_pct": 79.5,
+    "switches": 16
+   },
+   "H1_test": {
+    "t": 1.455,
+    "p_one_sided": 0.07282,
+    "mean_monthly_excess_pct": 2.024
+   },
+   "H2_test": {
+    "z_memmel": -1.043,
+    "p_one_sided": 0.85147,
+    "monthly_sharpe_H2": 0.1761,
+    "monthly_sharpe_H1": 0.2219,
+    "rho": 0.96,
+    "smaller_drawdown": false
+   },
+   "H1_vs_fund_sensitivity": {
+    "15%": {
+     "t": 1.714,
+     "p_one_sided": 0.04331
+    },
+    "25%": {
+     "t": 1.206,
+     "p_one_sided": 0.11385
+    }
+   },
+   "equal_weight_index_buy_hold": {
+    "total_pct": 307.7,
+    "cagr_pct": 46.84,
+    "vol_pct": 17.15,
+    "sharpe_vs_fund": 1.264,
+    "max_drawdown_pct": -27.34,
+    "from": "2023-03-01"
+   }
+  }
+ },
+ "verdict": {
+  "H1_passive": "ACCEPT",
+  "H2_trend": "REJECT",
+  "alpha_per_hypothesis": 0.025
+ }
+}
