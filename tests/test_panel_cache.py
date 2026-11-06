@@ -87,5 +87,30 @@ class PanelCacheTests(unittest.TestCase):
             self.assertEqual(app._cache["k"]["value"]["value"], 1)
 
 
+class BrokenStderr(object):
+    def write(self, text):
+        raise OSError(22, "Invalid argument")
+
+    def flush(self):
+        raise OSError(22, "Invalid argument")
+
+
+class ErrorHandlerTests(unittest.TestCase):
+
+    def test_an_api_error_is_json_even_without_a_console(self):
+        """A panel started with no console has an unusable stderr; the error
+        handler printed to it, raised OSError itself, and the page got an
+        HTML 500 instead of the message."""
+
+        app.invalidate()
+        with mock.patch.object(app.moneyflow, "market_daily",
+                               side_effect=ValueError("boom")), \
+                mock.patch.object(sys, "stderr", BrokenStderr()):
+            response = app.app.test_client().get("/api/marketflow?refresh=1")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("ValueError: boom", response.get_json()["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

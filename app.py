@@ -21,7 +21,6 @@ line for research on individual names.
 import sys
 import threading
 import time
-import traceback
 from datetime import datetime, timezone
 
 from flask import (Flask, copy_current_request_context, has_request_context,
@@ -294,7 +293,10 @@ def full_scan_disabled():
 def handle_error(exc):
     """Return JSON on API routes so the panel can surface the real message."""
 
-    traceback.print_exc()
+    # To the log file, not stderr: a panel started without a console has an
+    # invalid stderr, print_exc then raised OSError inside this handler, and
+    # the API answered an HTML 500 in place of the JSON message.
+    log.error("unhandled error on %s", request.path, exc_info=exc)
 
     if request.path.startswith("/api/"):
         return jsonify({"error": f"{type(exc).__name__}: {exc}"}), 500

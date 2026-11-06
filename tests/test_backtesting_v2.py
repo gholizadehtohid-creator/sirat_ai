@@ -1206,6 +1206,27 @@ class BackfillQueue(unittest.TestCase):
         self.assertIn("B2", after, "settling one filing must not settle the "
                                    "rest of the company's queue")
 
+    def test_a_filing_that_keeps_failing_transiently_goes_to_the_back(self):
+        """The thirteen-hour stall, pinned.
+
+        Five filings at the head answered HTTP 500 every round; a 500 is
+        transient, so nothing settled them, and every round fetched the same
+        five and backed off as if throttled. A transient failure still must
+        not settle a filing -- it goes behind every untried one instead.
+        """
+
+        head = [item["tracing_no"] for item in
+                self.codal_backfill.pending("1402/01/01", "1405/12/29")]
+
+        self.codal_backfill.record_retry(head[0], "x", "HTTPError: 500")
+
+        after = [item["tracing_no"] for item in
+                 self.codal_backfill.pending("1402/01/01", "1405/12/29")]
+
+        self.assertEqual(sorted(after), sorted(head), "nothing is settled")
+        self.assertEqual(after[-1], head[0])
+        self.assertEqual(after[0], head[1])
+
     def test_the_failure_table_reports_why(self):
         """'7 unparseable' is not actionable; a reason breakdown is."""
 

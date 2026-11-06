@@ -138,8 +138,67 @@ def _ensure_state_table():
     )
     """)
 
+    # FILINGS THAT FAILED IN A WAY WORTH RETRYING -- AND THAT STILL MUST NOT
+    # HOLD THE HEAD OF THE QUEUE.
+    #
+    # A transient failure settles nothing, rightly: a 429 or a timeout says
+    # nothing about the document. But some documents answer HTTP 500 every
+    # time -- Codal's exporter fails on them -- and a 500 is classed transient.
+    # Observed 2026-11-06: the same five filings at the head of the queue
+    # answered 500 for thirteen hours, every round read "5 of 5 refused", the
+    # campaign backed off to four hours at a time as if throttled, and a
+    # filing further down downloaded in under a second. Anything recorded here
+    # is retried only after every untried filing.
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS codal_backfill_retries (
+        tracing_no TEXT PRIMARY KEY,
+        ins_code   TEXT,
+        last_error TEXT,
+        attempts   INTEGER DEFAULT 1,
+        last_tried TEXT
+    )
+    """)
+
     conn.commit()
     conn.close()
+
+
+def record_retry(tracing_no, ins_code, error):
+    """Note a transient failure, so the filing goes behind the untried ones."""
+
+    database.create_database()
+    _ensure_state_table()
+
+    conn = database._connect()
+
+    conn.execute("""
+    INSERT INTO codal_backfill_retries
+        (tracing_no, ins_code, last_error, attempts, last_tried)
+    VALUES (?, ?, ?, 1, ?)
+    ON CONFLICT (tracing_no) DO UPDATE SET
+        last_error = excluded.last_error,
+        attempts = codal_backfill_retries.attempts + 1,
+        last_tried = excluded.last_tried
+    """, (str(tracing_no), str(ins_code), str(error)[:200], _now()))
+
+    conn.commit()
+    conn.close()
+
+
+def retried_filings():
+    """Tracing number -> transient failures so far."""
+
+    database.create_database()
+    _ensure_state_table()
+
+    conn = database._connect()
+
+    rows = conn.execute(
+        "SELECT tracing_no, attempts FROM codal_backfill_retries").fetchall()
+
+    conn.close()
+
+    return {str(row[0]): int(row[1] or 0) for row in rows}
 
 
 def record_failure(tracing_no, ins_code, reason):
@@ -602,7 +661,12 @@ def pending(since, until, per_company=None, priority_date=None):
             item.setdefault("priority", 1)
             work.append(item)
 
-    work.sort(key=lambda item: (item.get("priority", 1), item["rank"],
+    # Retried filings last, the least-tried of them first: one document Codal
+    # cannot export must not stand in front of thousands it can.
+    retried = retried_filings()
+
+    work.sort(key=lambda item: (retried.get(item["tracing_no"], 0),
+                                item.get("priority", 1), item["rank"],
                                 _day(item["published_at"])))
 
     return work
@@ -672,11 +736,15 @@ def fetch(since, until, limit=None, per_company=None, verbose=True,
             if kind == codal.KIND_TRANSIENT:
                 failed += 1
                 consecutive += 1
+                record_retry(item["tracing_no"], item["ins_code"], error)
                 if consecutive >= config.CODAL_ABORT_AFTER_FAILURES:
                     throttled = True
                     if verbose:
+                        # The reason, so a run of server errors on a few
+                        # documents is not read for hours as a throttle.
                         print("  pausing: %d consecutive transient failures"
-                              % consecutive, flush=True)
+                              " (last: %s)" % (consecutive, str(error)[:120]),
+                              flush=True)
                     break
                 continue
 
