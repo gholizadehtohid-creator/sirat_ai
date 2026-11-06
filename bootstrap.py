@@ -291,25 +291,28 @@ def _indices_state():
     wanted = [spec["insCode"] for spec in config.INDICES.values()]
     have = [code for code in wanted if code in coverage]
 
-    newest = None
+    # The STALEST index decides. Taking the newest let one current index hide
+    # another: the equal-weight series sat at 2026-10-31 while the status
+    # read "newest 2026-11-04", current, nothing to fetch (found 2026-11-06).
+    oldest = None
     for code in have:
         stamp = _parse(coverage[code]["last_date"])
-        if stamp and (newest is None or stamp > newest):
-            newest = stamp
+        if stamp and (oldest is None or stamp < oldest):
+            oldest = stamp
 
-    missed = sessions_behind(newest)
+    missed = sessions_behind(oldest)
 
     detail = f"{len(have)}/{len(wanted)} indices stored"
 
-    if newest is not None:
-        detail += f", newest {newest.date()}"
+    if oldest is not None:
+        detail += f", all through {oldest.date()}"
         if missed:
             detail += f" ({missed} session(s) behind)"
 
     return {
         "present": len(have) == len(wanted),
         "detail": detail,
-        "updated_at": newest,
+        "updated_at": oldest,
         "behind": bool(missed),
     }
 
