@@ -742,6 +742,33 @@ def api_opportunities():
         return handle_error(exc)
 
 
+@app.route("/api/announcements")
+def api_announcements():
+    """Codal's important announcements of the last days. See codal_announcements.py.
+
+    A read of the store the feed watch fills -- no network, no cache.
+    ?days=3 (1-30), ?kind=agm|capital|material|halt|board.
+    """
+
+    import codal_announcements
+
+    try:
+        days = max(1, min(30, int(request.args.get("days", 3))))
+    except ValueError:
+        days = 3
+    kind = request.args.get("kind") or None
+    if kind and kind not in codal_announcements.KINDS:
+        kind = None
+
+    try:
+        rows = codal_announcements.recent(days=days, kind=kind)
+        return jsonify({"days": days, "kind": kind, "count": len(rows),
+                        "kinds": codal_announcements.KIND_LABELS,
+                        "rows": rows})
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 @app.route("/api/outlook")
 def api_outlook():
     """Forward-looking read of filed statements. See fundamental_outlook.py.

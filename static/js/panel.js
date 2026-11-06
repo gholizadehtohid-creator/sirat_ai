@@ -3342,6 +3342,43 @@ async function loadOpportunities(force = false) {
   }
 }
 
+/* ---------- Codal announcements (codal_announcements.py) ----------
+   What the feed watch kept of the letters that move a price on the day.
+   A read of the store: no network, so it loads with the summary tab. */
+
+async function loadAnnouncements() {
+  const kind = ($("announcementsKind") || {}).value || "";
+  const days = ($("announcementsDays") || {}).value || "3";
+  try {
+    const d = await getJSON(`/api/announcements?days=${encodeURIComponent(days)}` +
+      (kind ? `&kind=${encodeURIComponent(kind)}` : ""));
+    renderAnnouncements(d);
+  } catch (err) {
+    banner("announcementsStatus", "announcementsStatusText", "is-error",
+      `<strong>خوانده نشد.</strong> ${esc(err.message)}`);
+    console.error(err);
+  }
+}
+
+function renderAnnouncements(d) {
+  const rows = d.rows || [];
+  banner("announcementsStatus", "announcementsStatusText", rows.length ? "is-live" : "",
+    rows.length
+      ? `${num(rows.length, 0)} اطلاعیه در ${num(d.days, 0)} روز اخیر`
+      : `در ${num(d.days, 0)} روز اخیر اطلاعیه‌ای از این نوع ثبت نشده است.`);
+  const body = rows.map(r => `<tr>
+      <td>${esc((r.published_at || "").slice(0, 16))}</td>
+      <td><strong>${esc(r.symbol || "")}</strong></td>
+      <td>${esc(r.kind_label || r.kind || "")}</td>
+      <td>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || "")}</a>`
+                  : esc(r.title || "")}</td>
+    </tr>`).join("");
+  $("announcementsTable").innerHTML = rows.length ? `<table>
+      <thead><tr><th>زمان انتشار</th><th>نماد</th><th>نوع</th><th>عنوان</th></tr></thead>
+      <tbody>${body}</tbody></table>` : "";
+  capRows("announcementsTable", 15);
+}
+
 /* ---------- fundamental outlook (fundamental_outlook.py) ----------
    The current fiscal year completed from last year's remaining months,
    plus cash, funding and working-capital checks. Analysis, not a signal. */
@@ -3373,6 +3410,8 @@ function renderOutlookDetail(r) {
       `${num((r.ttm || {}).eps, 0)} / ${num((r.forward || {}).eps, 0)} ریال`],
     ["P/E گذشته / آینده‌نگر", `${num(v.pe_ttm, 1)} / ${num(v.pe_forward, 1)}`],
     ["بازده سود برآوردی", pctCell(v.earnings_yield_forward_pct)],
+    ["سود نقدی آخرین مجمع / بازده نقدی", v.dps == null ? "— (مجمع ثبت‌شده‌ای در دست نیست)" :
+      `${num(v.dps, 0)} ریال (سال مالی ${esc(v.dividend_fiscal_year)}) / ${pctCell(v.dividend_yield_pct)}`],
     ["P/B و ROE دوازده‌ماهه", `${num(v.pb, 2)} / ${pctCell(v.roe_ttm_pct)}`],
     ["تبدیل سود به نقد عملیاتی", c.cash_conversion == null ? "—" : `${num(c.cash_conversion, 2)} برابر`],
     ["بازده جریان نقد آزاد", pctCell(v.fcf_yield_pct)],
@@ -3476,7 +3515,8 @@ async function lookupOutlook() {
 
 const TAB_LOADERS = {
   // Live first in the summary too: the "today" card's market line reads it.
-  summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities()],
+  summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities(),
+            () => loadAnnouncements()],
   stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
   live: [() => loadLive()],
   analysis: [() => loadRegime(), () => loadIndices(), () => loadSectors(),
@@ -3929,6 +3969,8 @@ on("runRegimeBtn", "click", () => loadRegime(true));
 on("runPortfolioBtn", "click", () => loadPortfolio(true));
 on("runAllocationBtn", "click", () => loadAllocation(true));
 on("runOpportunitiesBtn", "click", () => loadOpportunities(true));
+on("announcementsKind", "change", () => loadAnnouncements());
+on("announcementsDays", "change", () => loadAnnouncements());
 on("runOutlookBtn", "click", () => loadOutlook(true));
 on("outlookLookupBtn", "click", lookupOutlook);
 on("runTechnicalBtn", "click", () => loadTechnical(true));

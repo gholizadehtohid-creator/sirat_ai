@@ -38,13 +38,16 @@ import time
 from datetime import datetime, timezone
 
 import codal
+import codal_announcements
 import config
 import database
 import fundamental_db
 import persian
 import settings
 
-FEEDS = ("ن-10", "ن-30")
+# Statements, monthly reports, and since 2026-11-06 the announcements a
+# manual trader acts on (codal_announcements.KINDS).
+FEEDS = ("ن-10", "ن-30") + codal_announcements.CODES
 # 200 letters of every type. A quiet day fills ~3 pages, but polls are two
 # hours apart and a month-end deadline day publishes several times that.
 MAX_PAGES_POLL = 10
@@ -216,6 +219,14 @@ def handle_monthly(client, letter, inst):
 
 
 HANDLERS = {"ن-10": handle_statement, "ن-30": handle_monthly}
+for _code in codal_announcements.CODES:
+    HANDLERS[_code] = codal_announcements.handle
+
+# Handlers that put a request on Codal for every letter, and so are paced.
+# An announcement is a row from the feed itself, except an annual AGM's
+# decisions, whose page is fetched for the dividend.
+NETWORK_CODES = ("ن-10", "ن-30", persian.normalize(
+    codal_announcements.ANNUAL_AGM_DECISIONS))
 
 
 def poll(since=None, verbose=True, client=None):
@@ -231,9 +242,12 @@ def poll(since=None, verbose=True, client=None):
 
     fresh = collect(client, seen, since=since, pace=pace)
     if verbose:
-        for letter_code in FEEDS:
+        for letter_code in ("ن-10", "ن-30"):
             print("watch: %s -- %d new letters" % (letter_code, sum(
                 1 for l in fresh if l["letter_code"] == letter_code)), flush=True)
+        print("watch: announcements -- %d new letters" % sum(
+            1 for l in fresh if l["letter_code"] in codal_announcements.CODES),
+            flush=True)
 
     # Oldest first, so an interrupted catch-up has stored a contiguous
     # stretch rather than a scatter.
@@ -245,15 +259,20 @@ def poll(since=None, verbose=True, client=None):
             totals["outside_universe"] += 1
             continue
 
-        database.save_codal_letters(str(inst["ins_code"]), [letter])
+        networked = letter["letter_code"] in NETWORK_CODES
+        if letter["letter_code"] in ("ن-10", "ن-30"):
+            # codal_letters is the statement/monthly ledger the per-company
+            # paths read; announcements live in their own table.
+            database.save_codal_letters(str(inst["ins_code"]), [letter])
         outcome = HANDLERS[letter["letter_code"]](client, letter, inst)
-        pace(outcome is None)
+        if networked:
+            pace(outcome is None)
 
         if outcome is None:
             totals["retry_later"] += 1
             continue
         _mark(letter, str(inst["ins_code"]), outcome)
-        if outcome == "stored":
+        if outcome.startswith("stored"):
             totals["stored"] += 1
             if verbose:
                 print("  + %s %s" % (letter.get("symbol"), letter["title"][:70]),

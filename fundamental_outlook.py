@@ -206,18 +206,28 @@ def monthly_reads(ins_code, fy_end_month, rows=None):
     return out
 
 
+_UNSET = object()
+
+
 def analyse(ins_code, price=None, periods=12, today=None, rows=None,
-            monthly_rows=None):
+            monthly_rows=None, dividend=_UNSET):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
     `monthly_rows` the monthly-report read; the tests pass hand-built
-    periods through them.
+    periods through them. `dividend` is the last AGM's
+    codal_announcements.latest_dividends() entry; screen() passes it so 800
+    companies cost one read.
     """
 
     rows_from_store = rows is None
     if rows is None:
         rows = fundamental_db.load_metrics(ins_code, limit=periods)
+    if dividend is _UNSET:
+        dividend = None
+        if rows_from_store:
+            import codal_announcements
+            dividend = codal_announcements.latest_dividends().get(str(ins_code))
 
     # A halted symbol's last close can be months or years old; a P/E on it
     # is not today's valuation (دتهران read 0.02 on a 2018 price). Report
@@ -334,6 +344,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     pe_ttm = _div(market_cap, ttm_net) if ttm_net and ttm_net > 0 else None
     pe_fwd = _div(market_cap, fwd_net) if fwd_net and fwd_net > 0 else None
     yield_fwd = _div(fwd_net, market_cap)
+
+    # Cash dividend of the last annual AGM (ن-52), against today's price.
+    dps = _f((dividend or {}).get("dps"))
+    dividend_yield = _div(dps, price) if dps is not None and price else None
 
     equity = _f(li.get("equity_owners")) or _f(li.get("equity"))
     pb = _div(market_cap, equity) if equity and equity > 0 else None
@@ -464,6 +478,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     elif yield_fwd is not None and yield_fwd > 0 and pe_fwd is not None:
         positives.append("بازده سود برآوردی %.0f٪ (P/E آینده‌نگر %.1f)"
                          % (yield_fwd * 100, pe_fwd))
+    if dividend_yield is not None and dps > 0:
+        positives.append("سود نقدی مجمع سال %s: %s ریال هر سهم — بازده نقدی %.1f٪"
+                         % (dividend["fiscal_year_end"], format(int(round(dps)), ","),
+                            dividend_yield * 100))
 
     return {
         "ins_code": str(ins_code),
@@ -486,7 +504,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                       "pe_ttm": _round(pe_ttm), "pe_forward": _round(pe_fwd),
                       "earnings_yield_forward_pct": _pct(yield_fwd),
                       "pb": _round(pb), "roe_ttm_pct": _pct(roe_ttm),
-                      "fcf_yield_pct": _pct(fcf_yield)},
+                      "fcf_yield_pct": _pct(fcf_yield),
+                      "dps": dps,
+                      "dividend_fiscal_year": (dividend or {}).get("fiscal_year_end"),
+                      "dividend_yield_pct": _pct(dividend_yield)},
         "cash": {"cash_conversion": _round(cash_conversion), "fcf": fcf,
                  "capex": capex, "payout_pct": _pct(payout)},
         "balance": {"debt": debt, "net_debt": net_debt,
@@ -564,12 +585,15 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     ranked, excluded = [], {"no_filing": 0, "stale": 0, "no_estimate": 0,
                             "flags": 0, "loss": 0, "halted": 0}
     halted = database.halted_codes()
+    import codal_announcements
+    dividends = codal_announcements.latest_dividends()
 
     for code, inst in instruments.items():
         if code in halted:
             excluded["halted"] += 1
             continue
-        result = analyse(code, price=prices.get(code), today=today)
+        result = analyse(code, price=prices.get(code), today=today,
+                         dividend=dividends.get(code))
         if not result:
             excluded["no_filing"] += 1
             continue

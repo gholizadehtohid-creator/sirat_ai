@@ -166,6 +166,53 @@
     </details>
   </div>
 
+  <!-- Codal letters that move a price on the day: AGMs and dividends,
+       capital increases, material disclosures, halts, management changes.
+       Filled by the feed watch every two hours. See codal_announcements.py. -->
+  <div class="card">
+    <div class="card-head">
+      <h2>اطلاعیه‌های مهم کدال</h2>
+      <div class="top-actions">
+        <select id="announcementsKind" aria-label="نوع اطلاعیه">
+          <option value="">همه</option>
+          <option value="agm">مجمع و سود</option>
+          <option value="capital">افزایش سرمایه</option>
+          <option value="material">اطلاعات بااهمیت</option>
+          <option value="halt">توقف و تعلیق نماد</option>
+          <option value="board">تغییر مدیریت</option>
+        </select>
+        <select id="announcementsDays" aria-label="بازه">
+          <option value="1">۱ روز</option>
+          <option value="3" selected>۳ روز</option>
+          <option value="7">۷ روز</option>
+          <option value="30">۳۰ روز</option>
+        </select>
+      </div>
+    </div>
+    <details class="help">
+      <summary>راهنما: این کارت چه می‌گوید؟</summary>
+      <div class="help-body">
+        <p>اطلاعیه‌هایی از کدال که معمولاً همان روز روی قیمت اثر می‌گذارند، برای
+        سهم‌هایی که بات تحلیل می‌کند. هر ۲ ساعت به‌روز می‌شود. روی عنوان بزنید
+        تا متن کامل در کدال باز شود.</p>
+        <table class="help-table">
+          <tr><th>نوع</th><th>چه چیزی را نشان می‌دهد</th></tr>
+          <tr><td>مجمع و سود</td><td>دعوت و تصمیمات مجمع، سود نقدی هر سهم، زمان‌بندی پرداخت سود</td></tr>
+          <tr><td>افزایش سرمایه</td><td>پیشنهاد هیئت مدیره، نظر حسابرس، مصوبه‌ی مجمع فوق‌العاده، پذیره‌نویسی و ثبت</td></tr>
+          <tr><td>اطلاعات بااهمیت</td><td>افشای اطلاعات بااهمیت، شفاف‌سازی شایعه یا نوسان قیمت، کنفرانس اطلاع‌رسانی</td></tr>
+          <tr><td>توقف و تعلیق نماد</td><td>اطلاعیه‌های بورس درباره‌ی بسته شدن یا تعلیق نماد</td></tr>
+          <tr><td>تغییر مدیریت</td><td>تغییر اعضای هیئت مدیره یا مدیر عامل</td></tr>
+        </table>
+        <p class="help-warn">این فهرست خبر است، نه سیگنال خرید یا فروش. قبل از تصمیم،
+        متن کامل اطلاعیه را بخوانید.</p>
+      </div>
+    </details>
+    <div id="announcementsStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="announcementsStatusText">در حال بارگذاری…</div>
+    </div>
+    <div class="table-wrap" id="announcementsTable" style="margin-top:12px"></div>
+  </div>
+
   </section>
 
   <section class="tab-panel" data-tab="stocks">

@@ -51,12 +51,12 @@ class CollectTests(unittest.TestCase):
         self.assertEqual(calls, [1, 2, 3])
 
     def test_the_feed_is_unfiltered_so_other_letter_types_are_dropped(self):
-        # The market-wide feed carries every letter type. Only statements and
-        # monthly reports are kept, and a seen letter of another type (here a
-        # board notice, ن-45) is not "known ground" for the watch.
-        pages = {1: [letter(9, 14, "ن-45"), letter(8, 14, "ن-30"),
-                     letter(7, 13, "ن-45")],
-                 2: [letter(6, 12), letter(5, 11), letter(4, 10, "ن-45")]}
+        # The market-wide feed carries every letter type. Only the watched
+        # codes (codal_watch.FEEDS) are kept, and a seen letter of another type (here an
+        # audit-committee notice, ن-41) is not "known ground" for the watch.
+        pages = {1: [letter(9, 14, "ن-41"), letter(8, 14, "ن-30"),
+                     letter(7, 13, "ن-41")],
+                 2: [letter(6, 12), letter(5, 11), letter(4, 10, "ن-41")]}
         fresh, calls = self.run_collect(seen={"7", "5"}, pages=pages)
         self.assertEqual(fresh, ["8", "6"])
         self.assertEqual(calls, [1, 2])
