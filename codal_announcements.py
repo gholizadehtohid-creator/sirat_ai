@@ -286,20 +286,26 @@ def _agm_letters(client, symbol):
             for raw in payload.get("Letters") or []]
 
 
-def backfill_dividends(limit=None, verbose=True, client=None):
+def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
     """The newest annual AGM's DPS for every equity that has none stored.
 
     Newest-published letter first: for its fiscal year it is the amendment
-    if there is one. Stops at the first transient failure (429, timeout)
-    rather than retrying inside the throttle window, which renews it.
+    if there is one. A refused search skips that company (the next run
+    retries it) and is paced by codal_monthly.Pacer: three refusals in a
+    row wait 15 minutes, doubling, because retrying inside Codal's throttle
+    window renews it. The first version stopped at the first refusal and
+    covered 5 companies on a day the search host dropped connections.
     """
 
     import time
 
+    import codal_monthly
     import database
 
     ensure_tables()
     client = client or codal.CodalClient()
+    pace = codal_monthly.Pacer("dps", verbose)
+    deadline = time.monotonic() + hours * 3600
     have = latest_dividends()
     halted = database.halted_codes()
     todo = [r for r in database.load_instruments(equities_only=True)
@@ -307,8 +313,12 @@ def backfill_dividends(limit=None, verbose=True, client=None):
     if limit:
         todo = todo[:limit]
 
-    stored = searched = 0
+    stored = searched = refused = 0
+    stopped = False
     for inst in todo:
+        if time.monotonic() > deadline:
+            stopped = True
+            break
         symbol = inst.get("symbol_raw") or inst.get("symbol_fa")
         if not symbol:
             continue
@@ -318,27 +328,31 @@ def backfill_dividends(limit=None, verbose=True, client=None):
         try:
             letters = _agm_letters(client, symbol)
         except Exception as exc:                                # noqa: BLE001
+            refused += 1
             if verbose:
-                print("dps: search refused at %s (%s); stopping" % (
+                print("dps: search refused at %s (%s)" % (
                     symbol, type(exc).__name__), flush=True)
-            break
+            pace(True)
+            continue
+        pace(False)
         for letter in letters:
             if not letter.get("tracing_no"):
                 continue
             outcome = handle(client, letter, inst)
-            if outcome is None:
-                if verbose:
-                    print("dps: page refused at %s; stopping" % symbol, flush=True)
-                return {"searched": searched, "stored": stored, "stopped": True}
+            if outcome is None:                 # the page itself was refused
+                refused += 1
+                pace(True)
+                break
             if outcome.startswith("stored (DPS"):
                 stored += 1
                 if verbose:
                     print("  + %s %s" % (symbol, outcome), flush=True)
                 break                       # newest fiscal year is enough
     if verbose:
-        print("dps: %d companies searched, %d dividends stored" % (searched, stored),
-              flush=True)
-    return {"searched": searched, "stored": stored, "stopped": False}
+        print("dps: %d companies searched, %d dividends stored, %d refused"
+              % (searched, stored, refused), flush=True)
+    return {"searched": searched, "stored": stored, "refused": refused,
+            "stopped": stopped}
 
 
 def report():
@@ -365,9 +379,10 @@ def main(argv=None):
     parser.add_argument("--backfill-dps", action="store_true",
                         help="search each equity's last annual AGM for its DPS")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--hours", type=float, default=6.0)
     args = parser.parse_args(argv)
     if args.backfill_dps:
-        backfill_dividends(limit=args.limit)
+        backfill_dividends(limit=args.limit, hours=args.hours)
     report()
     return 0
 

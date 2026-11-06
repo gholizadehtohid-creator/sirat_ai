@@ -145,11 +145,21 @@ class BackfillTests(unittest.TestCase):
         self.assertEqual(result["stored"], 1)
         self.assertEqual(a.latest_dividends()["1"]["dps"], 55.0)
 
-    def test_a_refused_search_stops_the_run(self):
-        def refuse(*_):
-            raise TimeoutError("429")
-        result = self.run_backfill([], refuse)
-        self.assertEqual(result, {"searched": 1, "stored": 0, "stopped": False})
+    def test_a_refused_search_skips_that_company_and_goes_on(self):
+        calls = []
+
+        def letters(client, symbol):
+            calls.append(symbol)
+            if symbol == "x":
+                raise ConnectionError("dropped")
+            return [letter("2", "1405/05/01 10:00:00")]
+
+        result = self.run_backfill([PAGE], letters)
+        self.assertEqual(calls, ["x", "y"])
+        self.assertEqual(result, {"searched": 2, "stored": 1, "refused": 1,
+                                  "stopped": False})
+        self.assertNotIn("1", a.latest_dividends())
+        self.assertIn("2", a.latest_dividends())
 
 
 if __name__ == "__main__":
