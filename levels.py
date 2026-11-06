@@ -107,13 +107,23 @@ def swings(df, depth=DEFAULT_DEPTH):
 
     found = []
 
-    for k in np.flatnonzero(is_high | is_low):
-        i = int(k) + depth
+    picked = np.flatnonzero(is_high | is_low)
+    positions = picked + depth
+    # One vectorised take, not a .iloc per pivot: a datetime column boxes
+    # each element into the same Timestamp either way, but per element it was
+    # still a fifth of a market scan. Any other dtype keeps .iloc's scalars.
+    if pd.api.types.is_datetime64_any_dtype(dates.dtype):
+        pivot_dates = list(dates.iloc[positions])
+    else:
+        pivot_dates = [dates.iloc[int(i)] for i in positions]
+
+    for k, i, when in zip(picked, positions, pivot_dates):
+        i = int(i)
         if is_high[k]:
-            found.append({"index": i, "date": dates.iloc[i],
+            found.append({"index": i, "date": when,
                           "price": float(high[k]), "kind": "high"})
         else:
-            found.append({"index": i, "date": dates.iloc[i],
+            found.append({"index": i, "date": when,
                           "price": float(low[k]), "kind": "low"})
 
     # Collapse consecutive pivots of the same kind, keeping the extreme one.

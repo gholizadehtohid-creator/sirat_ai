@@ -67,8 +67,21 @@ def _connect():
     return conn
 
 
+_schema_ready = set()
+
+
 def create_database():
-    """Create the schema, migrating the old unconstrained table if present."""
+    """Create the schema, migrating the old unconstrained table if present.
+
+    Once per database file per process. Sixty-odd readers call this before
+    every query, and each call re-ran every CREATE ... IF NOT EXISTS and the
+    column migration: 1,701 times in one v2 scan of the market, a tenth of
+    its time (2026-11-06). The file must still exist for the shortcut to
+    hold, so a test that deletes and recreates its database gets a schema.
+    """
+
+    if DATABASE_NAME in _schema_ready and os.path.exists(DATABASE_NAME):
+        return
 
     conn = _connect()
     cursor = conn.cursor()
@@ -483,6 +496,8 @@ def create_database():
     _add_missing_columns(conn)
 
     conn.close()
+
+    _schema_ready.add(DATABASE_NAME)
 
 
 def _add_missing_columns(conn):

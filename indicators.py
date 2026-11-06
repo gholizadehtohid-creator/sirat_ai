@@ -12,9 +12,11 @@ date and silently recorded row numbers. `date` is kept as a real column here.
 
 import pandas as pd
 from ta.momentum import RSIIndicator
-from ta.trend import MACD, ADXIndicator
-from ta.volatility import AverageTrueRange, BollingerBands
+from ta.trend import MACD
+from ta.volatility import BollingerBands
 from ta.volume import OnBalanceVolumeIndicator
+
+import fast_ta
 
 from config import (
     ADX_WINDOW,
@@ -229,30 +231,20 @@ def _add_range_indicators(df, params):
             df[column] = float("nan")
         return
 
-    atr = AverageTrueRange(
-        high=df["high"],
-        low=df["low"],
-        close=df["close"],
-        window=params.get("atr_window", ATR_WINDOW)
-    )
-
-    df["ATR"] = atr.average_true_range()
+    # fast_ta: ta's own ATR and ADX, bit-identical, without its per-element
+    # pandas loops (tests/test_fast_ta.py holds the equality).
+    df["ATR"] = fast_ta.average_true_range(
+        df["high"], df["low"], df["close"],
+        window=params.get("atr_window", ATR_WINDOW))
 
     # ATR as a percentage of price is the comparable form: 400 rials of daily
     # range means something entirely different on a 2,000-rial share than on a
     # 90,000-rial one, and position sizing compares across the whole market.
     df["ATR_PCT"] = (df["ATR"] / df["close"].where(df["close"] > 0)) * 100
 
-    adx = ADXIndicator(
-        high=df["high"],
-        low=df["low"],
-        close=df["close"],
-        window=params.get("adx_window", ADX_WINDOW)
-    )
-
-    df["ADX"] = adx.adx()
-    df["DI_PLUS"] = adx.adx_pos()
-    df["DI_MINUS"] = adx.adx_neg()
+    df["ADX"], df["DI_PLUS"], df["DI_MINUS"] = fast_ta.adx(
+        df["high"], df["low"], df["close"],
+        window=params.get("adx_window", ADX_WINDOW))
 
 
 def _add_obv(df):

@@ -3526,9 +3526,24 @@ const TAB_LOADERS = {
 const loadedTabs = new Set();
 
 function loadTab(name, force = false) {
-  if (loadedTabs.has(name) && !force) return;
+  if (loadedTabs.has(name) && !force) return Promise.resolve();
   loadedTabs.add(name);
-  for (const run of TAB_LOADERS[name] || []) run();
+  return Promise.allSettled((TAB_LOADERS[name] || []).map(run => run()));
+}
+
+// The heavy tabs (a full-market scan is a minute or more) are loaded in the
+// background, one tab at a time, once the tab on screen has its data -- so
+// opening them later is instant. The page requests exactly what opening
+// the tab would, with the same settings, so it lands in the same server
+// cache entry. A tab opened mid-prefetch is not requested twice.
+const PREFETCH_ORDER = ["summary", "stocks", "analysis", "live"];
+
+async function prefetchTabs(first) {
+  await loadTab(first);
+  for (const name of PREFETCH_ORDER) {
+    if (loadedTabs.has(name)) continue;
+    await loadTab(name);
+  }
 }
 
 function showTab(name) {
@@ -4159,4 +4174,5 @@ getJSON("/api/status").then(status => {
     try { first = localStorage.getItem("sirat-tab") || "summary"; } catch (e) { first = "summary"; }
   }
   showTab(first);
+  prefetchTabs(TAB_LOADERS[first] ? first : "summary");
 }

@@ -24,7 +24,8 @@ import time
 import traceback
 from datetime import datetime, timezone
 
-from flask import Flask, jsonify, render_template, request
+from flask import (Flask, copy_current_request_context, has_request_context,
+                   jsonify, render_template, request)
 
 import advisor
 import bootstrap
@@ -71,26 +72,88 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 CACHE_TTL = 300
 
+# Past CACHE_TTL an entry is still SERVED, up to this age, while a fresh
+# one is computed in the background: a full-market scan is one to two
+# minutes, and every return to a tab after five minutes used to cost that
+# wait again (2026-11-06). The answer is at most one computation old. Older
+# than this -- a panel left open overnight -- it is recomputed while the
+# caller waits. A new data_version is a new key, never a stale hit, so a
+# finished fetch is still never answered from before it.
+CACHE_STALE_GRACE = 2 * 3600
+
 _cache = {}
 _cache_lock = threading.Lock()
+_inflight = {}                  # key -> Event set when its computation ends
+
+
+def _compute(key, producer):
+    """producer(), stored under key; concurrent callers share one run.
+
+    The tabs load in parallel and the panel now prefetches them, so the same
+    scan could be asked for twice at once -- two full-market scans fighting
+    over one GIL. The second caller waits for the first's answer instead.
+    """
+
+    with _cache_lock:
+        event = _inflight.get(key)
+        owner = event is None
+        if owner:
+            event = _inflight[key] = threading.Event()
+
+    if not owner:
+        event.wait()
+        with _cache_lock:
+            hit = _cache.get(key)
+        if hit is not None:
+            return hit["value"]
+        return producer()               # the first run failed; try ourselves
+
+    try:
+        value = producer()
+        with _cache_lock:
+            _cache[key] = {"at": time.time(), "value": value}
+        return value
+    finally:
+        with _cache_lock:
+            _inflight.pop(key, None)
+        event.set()
+
+
+def _refresh_in_background(key, producer):
+    with _cache_lock:
+        if key in _inflight:
+            return
+
+    # A producer may read flask.request; the copy keeps it readable after
+    # the request that triggered the refresh has been answered.
+    if has_request_context():
+        producer = copy_current_request_context(producer)
+
+    def run():
+        try:
+            _compute(key, producer)
+        except Exception as exc:                                # noqa: BLE001
+            log.warning("background refresh of %s failed: %s",
+                        str(key).split("|")[0], exc)
+
+    threading.Thread(target=run, name="cache-refresh", daemon=True).start()
 
 
 def memoise(key, producer, force=False):
-    """Cache `producer()` under `key` for CACHE_TTL seconds."""
-
-    now = time.time()
+    """`producer()` under `key`: fresh for CACHE_TTL, then stale-while-refresh."""
 
     with _cache_lock:
         hit = _cache.get(key)
-        if hit and not force and (now - hit["at"]) < CACHE_TTL:
+
+    if hit is not None and not force:
+        age = time.time() - hit["at"]
+        if age < CACHE_TTL:
+            return hit["value"]
+        if age < CACHE_STALE_GRACE:
+            _refresh_in_background(key, producer)
             return hit["value"]
 
-    value = producer()
-
-    with _cache_lock:
-        _cache[key] = {"at": now, "value": value}
-
-    return value
+    return _compute(key, producer)
 
 
 def invalidate():
