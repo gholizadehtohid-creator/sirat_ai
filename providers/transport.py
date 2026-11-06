@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
+from urllib3 import exceptions as urllib3_exceptions
 
 import settings
 
@@ -278,6 +279,85 @@ def maybe_rebind(host=None):
         return False
 
 
+class RequestDeadlineExceeded(requests.exceptions.ReadTimeout):
+    """The whole request ran past settings.REQUEST_DEADLINE."""
+
+
+class DeadlineSession(requests.Session):
+    """A Session whose every non-streamed request has a wall-clock ceiling.
+
+    requests' `timeout` bounds each socket wait, not the response: a body
+    arriving a few bytes at a time never trips it. So the body is read here
+    in chunks against a deadline counted from the start of the request. The
+    phase before the body (connect, retries, Retry-After) is bounded by the
+    retry policy -- see CappedRetry. A caller that asks for stream=True gets
+    the plain behaviour and owns its own reading.
+    """
+
+    deadline = None                     # seconds; None -> settings value
+
+    def request(self, method, url, *args, **kwargs):
+        if kwargs.get("stream") or len(args) > 10:
+            return super().request(method, url, *args, **kwargs)
+
+        limit = self.deadline or settings.REQUEST_DEADLINE
+        started = time.monotonic()
+        kwargs["stream"] = True
+        response = super().request(method, url, *args, **kwargs)
+
+        # read1, not iter_content: iter_content's read(n) blocks until n
+        # bytes or the end, so a trickle could hold one chunk past any
+        # deadline. read1 returns what has arrived, so the check below runs
+        # at least once per socket read (each bounded by the read timeout).
+        raw = response.raw
+        chunks = []
+        try:
+            while True:
+                try:
+                    chunk = raw.read1(64 * 1024, decode_content=True)
+                except urllib3_exceptions.ProtocolError as exc:
+                    raise requests.exceptions.ChunkedEncodingError(exc) from exc
+                except urllib3_exceptions.DecodeError as exc:
+                    raise requests.exceptions.ContentDecodingError(exc) from exc
+                except urllib3_exceptions.ReadTimeoutError as exc:
+                    raise requests.exceptions.ConnectionError(exc) from exc
+                except urllib3_exceptions.SSLError as exc:
+                    raise requests.exceptions.SSLError(exc) from exc
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                if time.monotonic() - started > limit:
+                    raise RequestDeadlineExceeded(
+                        "%s took over %.0fs in all (deadline)" % (url, limit))
+        except Exception:
+            response.close()
+            raise
+
+        response._content = b"".join(chunks)
+        response._content_consumed = True
+        raw.release_conn()
+        return response
+
+
+if Retry is not None:
+
+    class CappedRetry(Retry):
+        """Retry that never sleeps longer than settings.RETRY_AFTER_CAP.
+
+        urllib3 obeys a server's Retry-After verbatim before each retry, with
+        no upper bound, inside a call that no read timeout can interrupt.
+        """
+
+        def get_retry_after(self, response):
+            value = super().get_retry_after(response)
+            if value is None:
+                return None
+            return min(value, settings.RETRY_AFTER_CAP)
+
+else:
+    CappedRetry = None
+
+
 class SourceBoundAdapter(HTTPAdapter):
     """HTTPAdapter that forces every connection out of one local address."""
 
@@ -304,7 +384,7 @@ def build_session(headers=None, bind_source=True, host=None):
     something else pass their own host.
     """
 
-    session = requests.Session()
+    session = DeadlineSession()
 
     session.headers.update({
         "User-Agent": settings.USER_AGENT,
@@ -325,7 +405,7 @@ def build_session(headers=None, bind_source=True, host=None):
     session.verify = settings.VERIFY_TLS
 
     if Retry is not None:
-        retry = Retry(
+        retry = CappedRetry(
             total=settings.RETRIES,
             connect=settings.RETRIES,
             read=settings.RETRIES,

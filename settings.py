@@ -121,6 +121,17 @@ TIMEOUT_READ = _float("SIRAT_TIMEOUT_READ", 20.0)
 
 RETRIES = _int("SIRAT_RETRIES", 3)
 
+# Wall-clock ceiling on one whole request, body included. TIMEOUT_READ only
+# bounds each wait for the next bytes, so a response that trickles -- or a
+# server's Retry-After that the retry policy obeys -- could hold a request
+# for hours: on 2026-11-04 a two-request index fetch ran 5.4 hours, and the
+# session monitor sat silent through two trading sessions (11-03, 11-04).
+REQUEST_DEADLINE = _float("SIRAT_REQUEST_DEADLINE", 180.0)
+
+# Longest Retry-After the retry policy will honour, in seconds. A server
+# asking for longer is treated as down for this attempt, not waited on.
+RETRY_AFTER_CAP = _float("SIRAT_RETRY_AFTER_CAP", 30.0)
+
 # TSETMC returns 403 under load, not just 429 -- both must be retried.
 RETRY_STATUS = (403, 429, 500, 502, 503, 504)
 

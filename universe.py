@@ -139,14 +139,13 @@ def fetch_reference_list(session=None, url=None):
     obtainable with no proxy at all.
     """
 
-    import requests
-
     url = url or settings.UNIVERSE_URL
 
     close_after = session is None
 
     if session is None:
-        session = requests.Session()
+        from providers.transport import DeadlineSession
+        session = DeadlineSession()
         session.headers["User-Agent"] = settings.USER_AGENT
         if settings.proxies():
             session.proxies.update(settings.proxies())

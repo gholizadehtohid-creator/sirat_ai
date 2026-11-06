@@ -379,6 +379,59 @@ class ExitTimingTests(unittest.TestCase):
                          monitor.CLOSED_TICKS_BEFORE_EXIT - 1)
 
 
+class HardStopTests(unittest.TestCase):
+    """A run that only ever fails still ends with its day (2026-11-02..04)."""
+
+    def setUp(self):
+        self.path = temp_db()
+
+    def tearDown(self):
+        os.unlink(self.path)
+
+    def run_failing(self, times, limit=50):
+        mon = monitor.Monitor(db=self.path,
+                              provider=FakeProvider([[row("1")]]),
+                              verbose=False)
+
+        def tick():
+            raise ConnectionError("feed unreadable")
+
+        mon.tick = tick
+        clock_times = iter(times)
+        last = [None]
+
+        def clock():
+            last[0] = next(clock_times, last[0])
+            return last[0]
+
+        sleeps = []
+
+        def sleeper(seconds):
+            sleeps.append(seconds)
+            if len(sleeps) >= limit:
+                raise StopIteration
+
+        try:
+            mon.run(sleeper=sleeper, clock=clock)
+        except StopIteration:
+            return None
+        return len(sleeps)
+
+    def at(self, day, hour, minute=0):
+        return datetime(2026, 11, day, hour, minute, tzinfo=market_session.TEHRAN)
+
+    def test_errors_during_the_session_keep_it_running(self):
+        self.assertIsNone(self.run_failing([self.at(2, 10)]))
+
+    def test_errors_past_the_hard_stop_end_it(self):
+        self.assertEqual(self.run_failing(
+            [self.at(2, 17, 58), self.at(2, 17, 59), self.at(2, 18, 0)]), 1)
+
+    def test_a_run_that_reaches_the_next_day_ends(self):
+        self.assertEqual(self.run_failing(
+            [self.at(2, 11), self.at(2, 11), self.at(3, 9)]), 1)
+
+
 class FrozenFeedTests(unittest.TestCase):
     """Nothing changing during a live session is a signal, never a verdict."""
 

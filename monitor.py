@@ -122,6 +122,14 @@ CLOSED_TICKS_BEFORE_EXIT = 3
 # It only stops a pre-open silence from being mistaken for a closed day.
 EXIT_NOT_BEFORE = (9, 15)
 
+# A run belongs to one session day. Without this, a run whose ticks only
+# ever failed or hung never met the "closed" exit above: the 2026-11-02 run
+# was still alive, silent, through the 11-03 and 11-04 sessions -- neither
+# recorded -- because tomorrow's scheduled start found its own task still
+# "running". Past this local time, or on another date, the run ends whatever
+# the feed says; the next scheduled start owns the next session.
+HARD_STOP = (18, 0)
+
 # Consecutive polls returning NOTHING CHANGED, during a session established
 # as live, before the feed is called frozen. The delta cursor makes this
 # nearly free to detect: an unchanging market answers 644 bytes.
@@ -649,6 +657,7 @@ class Monitor:
     def _run(self, once, max_ticks, sleeper, clock):
         closed_streak = 0
         clock = clock or market_session.tehran_now
+        session_day = clock().date()
 
         while True:
             try:
@@ -660,8 +669,15 @@ class Monitor:
                          % (_now(), type(exc).__name__, str(exc)[:160]))
                 wait, outcome = UNREADABLE_BACKOFF_SECONDS, "error"
 
+            local = clock()
+
+            if (local.date() != session_day
+                    or (local.hour, local.minute) >= HARD_STOP):
+                self.say("%s  stopping: the run's session day (%s) is over"
+                         % (_now(), session_day))
+                return 0
+
             if outcome == "closed":
-                local = clock()
 
                 if (local.hour, local.minute) >= EXIT_NOT_BEFORE:
                     closed_streak += 1

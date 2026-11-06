@@ -17,7 +17,9 @@ rem the eleven weeks it was shut (MARKET_REGIME_AUDIT.md), so a calendar is
 rem exactly the thing that cannot be trusted here. It exits on three
 rem consecutive closed readings, but only readings from 09:15 on count
 rem (monitor.EXIT_NOT_BEFORE): before that, closed is just "not open yet".
-rem A holiday costs about 35 minutes of polling.
+rem A holiday costs about 35 minutes of polling. Whatever the feed says, a
+rem run ends at 18:00 or when the date changes (monitor.HARD_STOP): the
+rem 2026-11-02 run hung on and swallowed the 11-03 and 11-04 sessions.
 rem
 rem 08:40 Tehran is before the 09:00 open. The machine runs on +03:30 with no
 rem DST, so local time is used directly.
@@ -27,5 +29,7 @@ rem Battery settings matter and do not travel with this file -- see
 rem task_evening.bat and the 0x800710E0 note there.
 cd /d C:\SIRAT-AI
 set PY=C:\Users\gholizadeh-t\AppData\Local\Programs\Python\Python314\python.exe
+rem Persian in the output: without this a print of a symbol crashes the run.
+set PYTHONIOENCODING=utf-8
 echo ===== %date% %time% ===== >> logs\task_session.log
 "%PY%" monitor.py >> logs\task_session.log 2>&1
