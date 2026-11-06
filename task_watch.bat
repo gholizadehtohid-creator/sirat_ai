@@ -1,10 +1,11 @@
 @echo off
 rem Codal feed watch: new financial statements (ن-10) and monthly activity
-rem reports (ن-30) from the whole market, fetched within a quarter-hour of
+rem reports (ن-30) from the whole market, fetched within two hours of
 rem publication instead of whenever a per-company sweep reached the company
-rem (up to a month, found 2026-11-05). Two small requests when nothing is new.
+rem (up to a month, found 2026-11-05). One small request when nothing is new.
 rem
-rem Scheduled every 15 minutes by: schtasks /TN SIRAT-codal-watch
+rem Scheduled every 2 hours by: schtasks /TN SIRAT-codal-watch
+rem (every 15 minutes until 2026-11-06, when the user asked for less often)
 rem Battery settings live in Task Scheduler, not here (see the evening task).
 cd /d C:\SIRAT-AI
 set PY=C:\Users\gholizadeh-t\AppData\Local\Programs\Python\Python314\python.exe

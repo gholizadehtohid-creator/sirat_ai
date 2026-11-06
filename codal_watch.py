@@ -1,6 +1,6 @@
 """Watch Codal's market-wide feed and fetch new filings as they appear.
 
-    python codal_watch.py                      one poll (scheduled every 15 min)
+    python codal_watch.py                      one poll (scheduled every 2 hours)
     python codal_watch.py --since 1405/05/01   catch up: page back to a date
     python codal_watch.py --report
 
@@ -24,7 +24,7 @@ feed unfiltered answered in 0.3 s and a filtered query for one symbol in
 and a half hours of polls found nothing because of it.
 
 A poll pages back only until it reaches a letter it has already seen, so a
-quiet quarter-hour costs one ~16 KB request. Every document goes through
+quiet two hours cost one ~16 KB request. Every document goes through
 the raw archive (codal.ARCHIVE_DIR), and a filing is never fetched twice.
 
 Companies outside today's equity universe are recorded as seen and skipped.
@@ -45,7 +45,9 @@ import persian
 import settings
 
 FEEDS = ("ن-10", "ن-30")
-MAX_PAGES_POLL = 5            # 100 letters of every type, ~1.5 days of the feed
+# 200 letters of every type. A quiet day fills ~3 pages, but polls are two
+# hours apart and a month-end deadline day publishes several times that.
+MAX_PAGES_POLL = 10
 CATCH_UP_GAP_SECONDS = 10     # between pages of a --since catch-up
 FEED_READ_TIMEOUT = 60        # seconds; see _page
 
@@ -155,7 +157,7 @@ def collect(client, seen, since=None, pace=None, codes=FEEDS):
             break
         page += 1
         # A catch-up walks a hundred pages or more of the search host, the
-        # same host the quarter-hour polls need. Run back to back it earned
+        # same host the routine polls need. Run back to back it earned
         # a 429 at page 34 and blocked the polls for half an hour
         # (2026-11-05), so it goes at a walking pace.
         if since:
@@ -301,7 +303,7 @@ def main(argv=None):
     import codal_monthly
 
     # A routine poll that finds the lock taken just leaves -- the next one is
-    # a quarter-hour away. A catch-up must not: it waits its turn (up to an
+    # two hours away. A catch-up must not: it waits its turn (up to an
     # hour), or a poll that happened to be running would skip the backlog.
     lock = codal_monthly._single_instance("codal_watch.lock")
     waited = 0

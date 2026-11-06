@@ -835,14 +835,15 @@ def reparse_latest(per_company=2, deadline=None, verbose=True, client=None):
 # New statements and monthly reports are picked up from Codal's market-wide
 # feed (codal_watch.py) every WATCH_SECONDS while a campaign runs. The
 # campaign is the one process scheduled ~23.5 hours a day, so it carries the
-# watch; a separate quarter-hour task would be better still (see
-# task_watch.bat) and shares the same lock, so the two never overlap.
-WATCH_SECONDS = 15 * 60
+# watch; the separate SIRAT-codal-watch task (task_watch.bat) shares the
+# same lock, so the two never overlap. Two hours, as the scheduled task:
+# the user found a quarter-hour more often than needed (2026-11-06).
+WATCH_SECONDS = 2 * 60 * 60
 _last_watch = [0.0]
 
 
 def _watch_due(verbose=False):
-    """Poll the feed if a quarter-hour has passed. Never raises."""
+    """Poll the feed if WATCH_SECONDS have passed. Never raises."""
 
     if time.monotonic() - _last_watch[0] < WATCH_SECONDS:
         return
@@ -968,7 +969,7 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
         if not left and got["pending"] == 0:
             # The history is complete, but the campaign is the process that
             # runs 23.5 hours a day -- so it keeps watching the feed for new
-            # filings every quarter-hour until its hours are spent.
+            # filings every WATCH_SECONDS until its hours are spent.
             if verbose:
                 print("campaign: nothing left to discover or download; "
                       "watching the feed until the deadline", flush=True)

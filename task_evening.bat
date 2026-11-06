@@ -25,7 +25,7 @@ rem evening schedule can leave, at 14 requests.
 rem Monthly activity reports (ن-۳۰), since 2026-11-05. Only companies whose
 rem report for the last closed month is not yet stored are searched, so after
 rem the first pass this is a few dozen requests a night.
-rem Capped at 120 companies: the quarter-hour feed watch (codal_watch.py) is
+rem Capped at 120 companies: the two-hourly feed watch (codal_watch.py) is
 rem what brings new reports in; this only fills gaps, and 781 searches in one
 rem evening got the search host to block the watch itself (2026-11-05).
 "%PY%" codal_monthly.py --hours 1.5 --limit 120 >> logs\task_evening.log 2>&1
