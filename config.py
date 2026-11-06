@@ -707,14 +707,35 @@ NET_MARGIN_GOOD = 18.0
 NET_MARGIN_FAIR = 8.0
 NET_MARGIN_WEAK = 2.0
 
-# Growth bands are nominal and must be read against inflation: with ~40% CPI,
-# nominal revenue growth below that is a real-terms contraction. The bands say
-# so rather than rewarding a 25% grower for beating zero.
-INFLATION_RATE = 40.0
-GROWTH_EXCELLENT = 80.0
-GROWTH_GOOD = INFLATION_RATE
+# Growth bands are nominal and must be read against inflation: nominal
+# revenue growth below it is a real-terms contraction. The bands say so
+# rather than rewarding a 25% grower for beating zero.
+#
+# Statistical Centre of Iran, Mehr 1405 (published ~1405/08/06):
+#   12-month (annual average) inflation   76.8%   <- INFLATION_RATE
+#   point-to-point (Mehr on Mehr)         88.7%   <- INFLATION_POINT_RATE
+# Every growth the analysis compares is a period against the same period a
+# year earlier -- a fiscal year, a year-to-date, a monthly report's
+# year-to-date -- and the 12-month rate is the price change over such a
+# span, so it is the comparator. The point-to-point rate is shown beside it.
+# It was 40 until 2026-11-06, half the real figure, so nominal growth of
+# 40-77% read as real growth. Update both from the Centre's monthly release.
+INFLATION_RATE = 76.8
+INFLATION_POINT_RATE = 88.7
+INFLATION_AS_OF = "1405/07"
+
+# The fundamental BACKTESTS were run and registered with 40. History is not
+# re-scored at today's inflation: 2020-2023 filings faced ~40%, and moving
+# this would silently change registered results. backtesting/fundamental.py
+# passes it explicitly.
+BACKTEST_INFLATION_RATE = 40.0
+
+GROWTH_EXCELLENT = 80.0       # floor; live scoring raises it with inflation
 GROWTH_FAIR = 15.0
 GROWTH_WEAK = 0.0
+
+# "Far ahead of inflation" = at least this much REAL growth.
+GROWTH_EXCELLENT_REAL = 20.0
 
 # Price to sales / price to book, on TSE levels.
 PS_EXCELLENT = 1.0

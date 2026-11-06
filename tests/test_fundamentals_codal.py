@@ -380,17 +380,34 @@ class TestFundamentalScore(unittest.TestCase):
         self.assertIsNone(result["score"])
 
     def test_growth_bands_sit_on_inflation_not_zero(self):
-        """25% nominal growth is a real-terms contraction at ~40% inflation."""
+        """Nominal growth under inflation is a real-terms contraction."""
 
-        below, _ = fundamental_scoring._score_growth({
-            "revenue_growth": 25.0, "profit_growth": 25.0, "eps_growth": 25.0,
-        })
-        above, _ = fundamental_scoring._score_growth({
-            "revenue_growth": 55.0, "profit_growth": 55.0, "eps_growth": 55.0,
-        })
+        inflation = config.INFLATION_RATE
+
+        def score(growth):
+            return fundamental_scoring._score_growth({
+                "revenue_growth": growth, "profit_growth": growth,
+                "eps_growth": growth,
+            })[0]
+
+        below, above = score(inflation - 15), score(inflation + 5)
 
         self.assertLess(below, above)
         self.assertLess(below, 0.6)
+
+    def test_backtests_keep_the_bands_they_were_registered_with(self):
+        # 40% inflation, excellent from 80%: today's rate must not re-score
+        # history (config.BACKTEST_INFLATION_RATE).
+        def score(growth):
+            return fundamental_scoring._score_growth(
+                {"revenue_growth": growth, "profit_growth": growth,
+                 "eps_growth": growth},
+                inflation=config.BACKTEST_INFLATION_RATE)[0]
+
+        self.assertAlmostEqual(score(39), 0.45)
+        self.assertAlmostEqual(score(40), 0.8)
+        self.assertAlmostEqual(score(79), 0.8)
+        self.assertAlmostEqual(score(80), 1.0)
 
     def test_roe_below_the_policy_rate_is_not_rewarded(self):
         weak, _ = fundamental_scoring._score_profitability({"roe": 15.0})

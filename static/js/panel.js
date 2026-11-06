@@ -3365,7 +3365,7 @@ function renderOutlookDetail(r) {
       (l.audited ? " (حسابرسی‌شده)" : " (حسابرسی‌نشده)")],
     ["روش برآورد", esc(OUTLOOK_METHOD[r.method] || "برآورد ممکن نیست")],
     ["رشد فروش / سود (نسبت به همان دوره‌ی سال قبل)",
-      `${pctCell(g.revenue_pct)} / ${pctCell(g.profit_pct)} — تورم مبنا ${pctCell(g.inflation_pct, 0)}`],
+      `${pctCell(g.revenue_pct)} / ${pctCell(g.profit_pct)} — تورم مبنا ${pctCell(g.inflation_pct, 0)} (سالانه${g.inflation_as_of ? "، " + esc(g.inflation_as_of) : ""}؛ نقطه‌به‌نقطه ${pctCell(g.inflation_point_pct, 0)})`],
     ["حاشیه سود ناخالص / عملیاتی / خالص",
       `${pctCell(mg.gross_pct)} / ${pctCell(mg.operating_pct)} / ${pctCell(mg.net_pct)}` +
       (mg.net_prev_pct != null ? ` (سال قبل ${pctCell(mg.net_prev_pct)})` : "")],

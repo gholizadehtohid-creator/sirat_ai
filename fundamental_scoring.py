@@ -132,18 +132,31 @@ def _score_profitability(r):
     return _average(parts), notes
 
 
-def _score_growth(r):
-    """Revenue, profit and EPS growth, read against inflation."""
+def _score_growth(r, inflation=None):
+    """Revenue, profit and EPS growth, read against inflation.
+
+    `inflation` (percent) defaults to config.INFLATION_RATE, today's rate.
+    The backtests pass config.BACKTEST_INFLATION_RATE, which reproduces the
+    bands they were registered with exactly (excellent 80, good 40).
+    """
+
+    if inflation is None:
+        inflation = config.INFLATION_RATE
+
+    good = inflation
+    excellent = max(config.GROWTH_EXCELLENT,
+                    ((1 + inflation / 100.0)
+                     * (1 + config.GROWTH_EXCELLENT_REAL / 100.0) - 1) * 100.0)
 
     notes = []
     parts = []
 
     def growth_band(label, value):
         return _band(value, [
-            (config.GROWTH_EXCELLENT, 1.0,
+            (excellent, 1.0,
              lambda v: f"{label} {v:+.0f}% — far ahead of inflation"),
-            (config.GROWTH_GOOD, 0.8,
-             lambda v: f"{label} {v:+.0f}% — beats ~{config.INFLATION_RATE:.0f}% inflation"),
+            (good, 0.8,
+             lambda v: f"{label} {v:+.0f}% — beats ~{inflation:.0f}% inflation"),
             (config.GROWTH_FAIR, 0.45,
              lambda v: f"{label} {v:+.0f}% — growing, but shrinking in real terms"),
             (config.GROWTH_WEAK, 0.2, lambda v: f"{label} {v:+.0f}% — barely moving"),

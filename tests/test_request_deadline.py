@@ -26,10 +26,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         if self.path == "/slow":
             # A byte every 0.1 s: never idle long enough for a read timeout.
-            for byte in body:
-                self.wfile.write(bytes([byte]))
-                self.wfile.flush()
-                time.sleep(0.1)
+            # The client hangs up at its deadline; that is the test passing.
+            try:
+                for byte in body:
+                    self.wfile.write(bytes([byte]))
+                    self.wfile.flush()
+                    time.sleep(0.1)
+            except ConnectionError:
+                pass
         else:
             self.wfile.write(body)
 

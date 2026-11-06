@@ -49,6 +49,7 @@ sensitivity analysis like every other parameter, so its influence is measured
 rather than asserted.
 """
 
+import functools
 import math
 
 import config
@@ -323,8 +324,11 @@ def pillars(trend_weight=None):
     return [
         ("Profitability", config.FUND_WEIGHT_PROFIT,
          fundamental_scoring._score_profitability),
+        # History is scored at the inflation the backtests were registered
+        # with, not today's (config.BACKTEST_INFLATION_RATE).
         ("Growth", config.FUND_WEIGHT_GROWTH,
-         fundamental_scoring._score_growth),
+         functools.partial(fundamental_scoring._score_growth,
+                           inflation=config.BACKTEST_INFLATION_RATE)),
         ("Valuation", config.FUND_WEIGHT_VALUE,
          fundamental_scoring._score_valuation),
         ("Financial health", config.FUND_WEIGHT_HEALTH, _score_health_v2),
