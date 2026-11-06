@@ -29,3 +29,7 @@ rem Capped at 120 companies: the two-hourly feed watch (codal_watch.py) is
 rem what brings new reports in; this only fills gaps, and 781 searches in one
 rem evening got the search host to block the watch itself (2026-11-05).
 "%PY%" codal_monthly.py --hours 1.5 --limit 120 >> logs\task_evening.log 2>&1
+rem News for the intelligence report (gold, oil, dollar, TSE). Only the panel
+rem button collected it, and the report sat on 2026-09-17 for seven weeks
+rem (found 2026-11-06). ~23 RSS feeds, ~15 s; report-only, never a signal.
+"%PY%" -c "from event_intelligence import intelligence as ei; r = ei.collect(); print('news: %%d sources ok, %%d failed, %%d new articles' %% (r['sources_ok'], r['sources_failed'], r['inserted']))" >> logs\task_evening.log 2>&1
