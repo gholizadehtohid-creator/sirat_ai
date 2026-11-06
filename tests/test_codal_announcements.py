@@ -108,5 +108,49 @@ class StoreTests(unittest.TestCase):
                                        {"ins_code": "123"}))
 
 
+class BackfillTests(unittest.TestCase):
+
+    def setUp(self):
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        os.unlink(self.path)
+        self.previous = fundamental_db.set_path(self.path)
+        a.ensure_tables()
+
+    def tearDown(self):
+        fundamental_db.set_path(self.previous)
+        if os.path.exists(self.path):
+            os.unlink(self.path)
+
+    def run_backfill(self, pages, letters):
+        instruments = [{"ins_code": "1", "symbol_raw": "x"},
+                       {"ins_code": "2", "symbol_raw": "y"}]
+        client = mock.Mock()
+        client._get.side_effect = lambda url, **kw: mock.Mock(
+            content=pages.pop(0).encode("utf-8"))
+        with mock.patch.object(a, "_agm_letters", side_effect=letters), \
+                mock.patch("time.sleep"), \
+                mock.patch("database.load_instruments", return_value=instruments), \
+                mock.patch("database.halted_codes", return_value={}), \
+                mock.patch.object(a.codal, "archive_read", return_value=None), \
+                mock.patch.object(a.codal, "archive_write"):
+            return a.backfill_dividends(verbose=False, client=client)
+
+    def test_a_letter_without_dps_falls_through_to_the_next(self):
+        no_row = "<table><tr><td>x</td></tr></table>"
+        result = self.run_backfill(
+            [no_row, PAGE],
+            [[letter("1", "1405/05/01 10:00:00"), letter("2", "1404/05/01 10:00:00")],
+             []])
+        self.assertEqual(result["stored"], 1)
+        self.assertEqual(a.latest_dividends()["1"]["dps"], 55.0)
+
+    def test_a_refused_search_stops_the_run(self):
+        def refuse(*_):
+            raise TimeoutError("429")
+        result = self.run_backfill([], refuse)
+        self.assertEqual(result, {"searched": 1, "stored": 0, "stopped": False})
+
+
 if __name__ == "__main__":
     unittest.main()

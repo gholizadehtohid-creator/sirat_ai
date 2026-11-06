@@ -1,6 +1,9 @@
 """Codal announcements a manual trader acts on, and the dividend per share.
 
     python codal_announcements.py --report       what is stored, by kind
+    python codal_announcements.py --backfill-dps [--limit N]
+                                                 last annual AGM's DPS, one
+                                                 search per equity lacking it
 
 The quarter-hour -- now two-hourly -- feed watch (codal_watch.py) already
 reads every letter Codal publishes and kept only statements (ن-10) and
@@ -259,6 +262,85 @@ def latest_dividends():
     return out
 
 
+# ==============================
+# DIVIDEND BACKFILL -- one search per company
+# ==============================
+# The feed watch only sees AGMs from the day it started. Walking the feed
+# back to the AGM season is the wrong tool: the market feed carries ~14
+# pages a day, so 333 pages reached back 23 days (2026-11-06) and the
+# season (Farvardin-Mordad) is ~3,000 pages away. One Symbol + LetterCode
+# search per company returns its annual-AGM letters directly.
+
+BACKFILL_GAP_SECONDS = 8          # between companies; the search host throttles
+
+
+def _agm_letters(client, symbol):
+    import config
+
+    params = dict(client.SEARCH_DEFAULTS)
+    params.update({"Symbol": symbol, "LetterCode": ANNUAL_AGM_DECISIONS,
+                   "PageNumber": "1"})
+    payload = client._get(config.CODAL_SEARCH_URL, params=params).json()
+    return [dict(codal._letter_row(raw, symbol), symbol=symbol,
+                 letter_code=ANNUAL_AGM_DECISIONS)
+            for raw in payload.get("Letters") or []]
+
+
+def backfill_dividends(limit=None, verbose=True, client=None):
+    """The newest annual AGM's DPS for every equity that has none stored.
+
+    Newest-published letter first: for its fiscal year it is the amendment
+    if there is one. Stops at the first transient failure (429, timeout)
+    rather than retrying inside the throttle window, which renews it.
+    """
+
+    import time
+
+    import database
+
+    ensure_tables()
+    client = client or codal.CodalClient()
+    have = latest_dividends()
+    halted = database.halted_codes()
+    todo = [r for r in database.load_instruments(equities_only=True)
+            if str(r["ins_code"]) not in have and str(r["ins_code"]) not in halted]
+    if limit:
+        todo = todo[:limit]
+
+    stored = searched = 0
+    for inst in todo:
+        symbol = inst.get("symbol_raw") or inst.get("symbol_fa")
+        if not symbol:
+            continue
+        if searched:
+            time.sleep(BACKFILL_GAP_SECONDS)
+        searched += 1
+        try:
+            letters = _agm_letters(client, symbol)
+        except Exception as exc:                                # noqa: BLE001
+            if verbose:
+                print("dps: search refused at %s (%s); stopping" % (
+                    symbol, type(exc).__name__), flush=True)
+            break
+        for letter in letters:
+            if not letter.get("tracing_no"):
+                continue
+            outcome = handle(client, letter, inst)
+            if outcome is None:
+                if verbose:
+                    print("dps: page refused at %s; stopping" % symbol, flush=True)
+                return {"searched": searched, "stored": stored, "stopped": True}
+            if outcome.startswith("stored (DPS"):
+                stored += 1
+                if verbose:
+                    print("  + %s %s" % (symbol, outcome), flush=True)
+                break                       # newest fiscal year is enough
+    if verbose:
+        print("dps: %d companies searched, %d dividends stored" % (searched, stored),
+              flush=True)
+    return {"searched": searched, "stored": stored, "stopped": False}
+
+
 def report():
     ensure_tables()
     conn = fundamental_db._connect()
@@ -280,7 +362,12 @@ def main(argv=None):
             pass
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--report", action="store_true")
-    parser.parse_args(argv)
+    parser.add_argument("--backfill-dps", action="store_true",
+                        help="search each equity's last annual AGM for its DPS")
+    parser.add_argument("--limit", type=int)
+    args = parser.parse_args(argv)
+    if args.backfill_dps:
+        backfill_dividends(limit=args.limit)
     report()
     return 0
 
