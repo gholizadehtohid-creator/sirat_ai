@@ -11,5 +11,7 @@ cd /d C:\SIRAT-AI
 set PY=C:\Users\gholizadeh-t\AppData\Local\Programs\Python\Python314\python.exe
 rem Persian in the output: without this a print of a symbol crashes the run.
 set PYTHONIOENCODING=utf-8
+rem Bounded: past 2 MB the log becomes .log.1 (log_rotate.py).
+"%PY%" log_rotate.py logs\task_watch.log
 echo ===== %date% %time% ===== >> logs\task_watch.log
 "%PY%" codal_watch.py >> logs\task_watch.log 2>&1

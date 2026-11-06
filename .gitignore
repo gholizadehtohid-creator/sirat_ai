@@ -41,7 +41,11 @@ backtest_output/cache/
 # experiment5b_arms.csv 1.3 MB. All regenerable from the database.
 backtest_output/factor_panel.csv
 backtest_output/swing_observations.csv
+backtest_output/swing_observations.pre-fix.csv
 backtest_output/experiment5b_arms.csv
+# examples/basket_random_null.py's cache of whole backtest runs (hours each
+# to rebuild); the null_*.json beside them are the record and are tracked.
+backtest_output/basket_null/*.pkl
 backtest_output/*.png
 backtest_output/*.html
 

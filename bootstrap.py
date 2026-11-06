@@ -952,6 +952,13 @@ if __name__ == "__main__":
     # either.
     start_background(force=force)
 
+    # Redirected to a file (the scheduled tasks), "\r" does not rewrite a
+    # line, it appends one: twice a second for a two-hour history fetch, and
+    # task_evening.log grew to 530 KB of progress bars. A file gets one line
+    # per step instead.
+    interactive = sys.stdout.isatty()
+    last_step = None
+
     while True:
 
         snapshot = progress()
@@ -965,19 +972,25 @@ if __name__ == "__main__":
         count = (f" {item['done']}/{item['total']}"
                  if item and item.get("total") else "")
 
-        filled = int(overall["percent"] / 4)
-        bar = "#" * filled + "." * (25 - filled)
+        if interactive:
+            filled = int(overall["percent"] / 4)
+            bar = "#" * filled + "." * (25 - filled)
 
-        sys.stdout.write(
-            f"\r  [{bar}] {overall['percent']:5.1f}%  "
-            f"step {overall['step_number']}/{overall['steps_total']}  "
-            f"{step}{count}      "
-        )
-        sys.stdout.flush()
+            sys.stdout.write(
+                f"\r  [{bar}] {overall['percent']:5.1f}%  "
+                f"step {overall['step_number']}/{overall['steps_total']}  "
+                f"{step}{count}      "
+            )
+            sys.stdout.flush()
+        elif overall["step_number"] != last_step:
+            last_step = overall["step_number"]
+            print(f"  step {overall['step_number']}/{overall['steps_total']}  "
+                  f"{step}  ({datetime.now():%H:%M:%S})", flush=True)
 
         time.sleep(0.5)
 
-    sys.stdout.write("\r" + " " * 78 + "\r")
+    if interactive:
+        sys.stdout.write("\r" + " " * 78 + "\r")
 
     results = progress()["steps"]
 
