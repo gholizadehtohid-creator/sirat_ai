@@ -1144,6 +1144,26 @@ def api_moneyflow():
     return jsonify(_with_autofetch(report, "flow", "universe"))
 
 
+@app.route("/api/marketflow")
+def api_marketflow():
+    """Net individual (حقیقی) money into the whole market, session by session.
+
+    moneyflow.market_daily: one sum per session over every equity, plus the
+    last session, 5/20-session sums, the current run and the typical range.
+    """
+
+    sessions = max(10, min(request.args.get("sessions", 60, type=int) or 60, 250))
+    force = request.args.get("refresh") == "1"
+    key = cache_key("marketflow", data_version(), sessions)
+
+    try:
+        report = memoise(key, lambda: moneyflow.market_daily(sessions=sessions),
+                         force=force)
+        return jsonify(_with_autofetch(report or {}, "flow", "universe"))
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 def _with_autofetch(report, *components):
     """Attach bootstrap state, and start a fetch if a component is missing.
 

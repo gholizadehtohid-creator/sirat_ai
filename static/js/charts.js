@@ -556,12 +556,15 @@ export function lineChart(container, opts) {
 export function divergingBar(container, opts) {
   const {
     data, labelKey = "label", valueKey = "value",
-    height: h = 240, format = (v) => fmt(v, 2), tooltip = null
+    height: h = 240, format = (v) => fmt(v, 2), tooltip = null,
+    // Sixty sessions of dates cannot all fit under their bars; every Nth,
+    // plus the last, can. 1 (the default) labels every bar, as before.
+    labelEvery = 1, padLeft = 52
   } = opts;
 
   if (!data.length) { container.innerHTML = '<div class="empty">No data</div>'; return; }
 
-  const padL = 52, padR = 14, padT = 14, padB = 34;
+  const padL = padLeft, padR = 14, padT = 14, padB = 34;
   const width = Math.max(container.clientWidth || 520, 320);
   const plotW = width - padL - padR;
   const plotH = h - padT - padB;
@@ -609,10 +612,13 @@ export function divergingBar(container, opts) {
       x: padL + i * slot, y: padT, width: slot, height: plotH, fill: "transparent"
     }, svg);
 
-    axisText(svg, padL + i * slot + slot / 2, h - 12, d[labelKey], {
-      "text-anchor": "middle", "font-size": 11.5,
-      fill: tok("--text-secondary"), "font-weight": 550
-    });
+    if (labelEvery <= 1 || i % labelEvery === 0 ||
+        (i === data.length - 1 && i % labelEvery >= labelEvery / 2)) {
+      axisText(svg, padL + i * slot + slot / 2, h - 12, d[labelKey], {
+        "text-anchor": "middle", "font-size": 11.5,
+        fill: tok("--text-secondary"), "font-weight": 550
+      });
+    }
 
     const html = tooltip ? tooltip(d)
       : `<div class="t-title">${d[labelKey]}</div>

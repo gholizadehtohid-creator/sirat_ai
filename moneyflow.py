@@ -543,3 +543,109 @@ def aggregate(readings):
         "inflow_count": len(inflow),
         "breadth_pct": len(inflow) / len(usable) * 100.0,
     }
+
+
+# ==============================
+# THE MARKET, SESSION BY SESSION
+# ==============================
+# analyse_market() answers "which names is retail money going into over the
+# last week". The question a trader asks first is simpler: did real money
+# come into the market today, and is it still coming? That is one number per
+# session -- net individual flow summed over every equity -- and its run.
+#
+# At MARKET level zero is roughly neutral, unlike per symbol (where the
+# median share runs ~+4.8% because حقوقی sell to retail most weeks): over
+# 621 sessions from 2024 the median market day was -1.2 trillion rials
+# (-3.8% of individual buying) and 40% of days were net inflow (measured
+# 2026-11-06). The typical range is reported beside every reading anyway,
+# so a "+" is read against what a normal day looks like.
+
+# A day whose stored rows cover far fewer symbols than usual is a fetch that
+# stopped part-way, not a market that went quiet: one such day read -1305%.
+PARTIAL_DAY_SHARE = 0.6
+
+
+def market_daily(sessions=60, baseline=250):
+    """Net individual (حقیقی) money per session, summed over all equities.
+
+    Returns the last `sessions` complete sessions, oldest first, and a
+    summary: the last session, 5- and 20-session sums, the run of same-sign
+    days, and the typical range over `baseline` sessions. Rials throughout.
+    """
+
+    import statistics
+
+    import database
+
+    codes = [str(r["ins_code"])
+             for r in database.load_instruments(equities_only=True)]
+    if not codes:
+        return None
+
+    database.create_database()
+    conn = database._connect()
+    try:
+        dates = [row[0] for row in conn.execute(
+            "SELECT DISTINCT date FROM client_type_history "
+            "ORDER BY date DESC LIMIT ?", (baseline + 5,))]
+        if not dates:
+            return None
+        placeholders = ",".join("?" * len(codes))
+        rows = conn.execute(f"""
+            SELECT date,
+                   SUM(individual_buy_value - individual_sell_value),
+                   SUM(individual_buy_value + institutional_buy_value),
+                   COUNT(*),
+                   SUM(CASE WHEN individual_buy_value > individual_sell_value
+                            THEN 1 ELSE 0 END)
+            FROM client_type_history
+            WHERE date >= ? AND ins_code IN ({placeholders})
+              AND individual_buy_value IS NOT NULL
+              AND individual_sell_value IS NOT NULL
+            GROUP BY date ORDER BY date""", [min(dates)] + codes).fetchall()
+    finally:
+        conn.close()
+
+    days = [{"date": str(d)[:10], "net_individual": float(net or 0.0),
+             "turnover": float(turnover or 0.0), "symbols": int(n),
+             "inflow_count": int(pos or 0)}
+            for d, net, turnover, n, pos in rows]
+    if not days:
+        return None
+
+    usual = statistics.median(d["symbols"] for d in days)
+    complete = [d for d in days if d["symbols"] >= usual * PARTIAL_DAY_SHARE]
+    partial = len(days) - len(complete)
+
+    for d in complete:
+        d["net_pct"] = (d["net_individual"] / d["turnover"] * 100.0
+                        if d["turnover"] else None)
+        d["breadth_pct"] = d["inflow_count"] / d["symbols"] * 100.0
+
+    nets = [d["net_individual"] for d in complete]
+    last = complete[-1]
+
+    streak = 0
+    sign = last["net_individual"] > 0
+    for d in reversed(complete):
+        if (d["net_individual"] > 0) != sign:
+            break
+        streak += 1
+
+    def quantile(values, q):
+        ordered = sorted(values)
+        return ordered[min(len(ordered) - 1, int(q * len(ordered)))]
+
+    return {
+        "sessions": complete[-sessions:],
+        "last": last,
+        "sum_5": sum(nets[-5:]),
+        "sum_20": sum(nets[-20:]),
+        "streak": {"days": streak, "direction": "in" if sign else "out"},
+        "typical": {"sessions": len(nets),
+                    "median": statistics.median(nets),
+                    "p20": quantile(nets, 0.2), "p80": quantile(nets, 0.8),
+                    "inflow_day_share": sum(1 for v in nets if v > 0) / len(nets)},
+        "partial_days_skipped": partial,
+        "scope": "equities",
+    }

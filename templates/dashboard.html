@@ -97,6 +97,45 @@
     <p class="hint" id="todayHint"></p>
   </div>
 
+  <!-- Net individual money into the whole equity market, one bar per
+       session, from the daily حقیقی/حقوقی data. See moneyflow.market_daily. -->
+  <div class="card">
+    <div class="card-head">
+      <h2>ورود و خروج پول حقیقی به بازار</h2>
+      <div class="top-actions">
+        <select id="marketflowSessions" aria-label="بازه">
+          <option value="20">۲۰ جلسه</option>
+          <option value="60" selected>۶۰ جلسه</option>
+          <option value="120">۱۲۰ جلسه</option>
+        </select>
+      </div>
+    </div>
+    <details class="help">
+      <summary>راهنما: این کارت چه می‌گوید؟</summary>
+      <div class="help-body">
+        <p>هر ستون یک روز معاملاتی است: خرید سهامداران حقیقی (اشخاص) منهای فروش آن‌ها،
+        جمع روی همه‌ی سهام بازار، به میلیارد تومان. سبز یعنی پول حقیقی وارد شد، قرمز
+        یعنی خارج شد. چون هر سهمی که حقیقی خریده حقوقی فروخته، خروج پول حقیقی همان
+        خرید حقوقی‌هاست — یک واقعیت، نه دو نشانه.</p>
+        <table class="help-table">
+          <tr><th>عدد</th><th>چطور بخوانید</th></tr>
+          <tr><td>آخرین جلسه</td><td>خالص پول حقیقی روز آخرِ ثبت‌شده و درصدش از ارزش معاملات</td></tr>
+          <tr><td>۵ و ۲۰ جلسه</td><td>جمع خالص؛ جهت چند روز اخیر مهم‌تر از یک روز است</td></tr>
+          <tr><td>روند</td><td>چند روز پشت‌سرهم پول در یک جهت حرکت کرده</td></tr>
+          <tr><td>نمادهای با ورود پول</td><td>پول در چند درصد سهم‌ها وارد شده — ورود پول در یکی دو سهم بزرگ با ورود پول در کل بازار فرق دارد</td></tr>
+          <tr><td>روز عادی</td><td>محدوده‌ی معمول یک سال اخیر؛ عدد امروز را با این بسنجید، نه با صفر</td></tr>
+        </table>
+        <p class="help-warn">داده بعد از پایان هر جلسه کامل می‌شود (کار خودکار عصر)، و فقط سهام را
+        می‌شمارد، نه صندوق‌ها. این گزارش است، نه سیگنال خرید یا فروش.</p>
+      </div>
+    </details>
+    <div id="marketflowStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="marketflowStatusText">در حال بارگذاری…</div>
+    </div>
+    <div class="kpi-row" id="marketflowKpis"></div>
+    <div class="chart" id="marketflowChart" style="margin-top:12px"></div>
+  </div>
+
   <!-- ================= SUGGESTED PORTFOLIO =================
        The answer comes first. Everything below it is the evidence that
        produced it, and evidence belongs after the conclusion, not in front

@@ -85,7 +85,8 @@ const state = {
   screen: null, indices: null, sectors: null,
   regime: null, portfolio: null, flow: null,
   fundamentals: null, codal: null, technical: null, topTechnical: null,
-  gold: null, inflow: null, intel: null, smartMoney: null, allocation: null
+  gold: null, inflow: null, intel: null, smartMoney: null, allocation: null,
+  marketflow: null
 };
 
 /* ---------- helpers ---------- */
@@ -3342,6 +3343,83 @@ async function loadOpportunities(force = false) {
   }
 }
 
+/* ---------- market money flow (moneyflow.market_daily) ----------
+   Net individual money into the whole equity market, one bar per session.
+   Rials from the server; shown in billion tomans, the unit the market
+   quotes this figure in. */
+
+const toBillionToman = v => v / 1e10;
+
+function tomanCell(v) {
+  if (v == null) return "—";
+  const b = Math.round(toBillionToman(v));
+  const cls = b > 0 ? "up" : b < 0 ? "down" : "";
+  return `<span class="${cls}">${b > 0 ? "+" : ""}${b.toLocaleString("fa-IR")}</span>`;
+}
+
+function faDay(iso, withYear = false) {
+  try {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString("fa-IR-u-ca-persian",
+      withYear ? { year: "numeric", month: "2-digit", day: "2-digit" }
+               : { month: "2-digit", day: "2-digit" });
+  } catch (e) { return iso; }
+}
+
+async function loadMarketflow() {
+  const sessions = ($("marketflowSessions") || {}).value || "60";
+  try {
+    state.marketflow = await getJSON(`/api/marketflow?sessions=${encodeURIComponent(sessions)}`);
+    renderMarketflow(state.marketflow);
+  } catch (err) {
+    banner("marketflowStatus", "marketflowStatusText", "is-error",
+      `<strong>خوانده نشد.</strong> ${esc(err.message)}`);
+    console.error(err);
+  }
+}
+
+function renderMarketflow(d) {
+  if (!d || !d.last) {
+    banner("marketflowStatus", "marketflowStatusText", "is-error",
+      "<strong>داده‌ی حقیقی/حقوقی موجود نیست.</strong> بعد از دریافت عصرگاهی پر می‌شود." +
+      bootstrapNote(d || {}));
+    tiles("marketflowKpis", []);
+    $("marketflowChart").innerHTML = "";
+    return;
+  }
+  const last = d.last, typ = d.typical || {}, st = d.streak || {};
+  const days = (d.sessions || []);
+  banner("marketflowStatus", "marketflowStatusText", "is-live",
+    `آخرین جلسه‌ی ثبت‌شده ${faDay(last.date, true)} — ${num(last.symbols, 0)} سهم` +
+    (d.partial_days_skipped ? ` · ${num(d.partial_days_skipped, 0)} روز با داده‌ی ناقص کنار گذاشته شد` : ""));
+
+  tiles("marketflowKpis", [
+    { k: "آخرین جلسه (میلیارد تومان)", v: tomanCell(last.net_individual),
+      sub: `${signed(last.net_pct, 1)} از ارزش معاملات` },
+    { k: "۵ جلسه‌ی اخیر", v: tomanCell(d.sum_5), sub: "جمع خالص پول حقیقی" },
+    { k: "۲۰ جلسه‌ی اخیر", v: tomanCell(d.sum_20), sub: "جمع خالص پول حقیقی" },
+    { k: "روند", v: `${Number(st.days || 0).toLocaleString("fa-IR")} روز`,
+      sub: st.direction === "in" ? "پشت‌سرهم ورود پول" : "پشت‌سرهم خروج پول" },
+    { k: "نمادهای با ورود پول",
+      v: `${Math.round(last.breadth_pct || 0).toLocaleString("fa-IR")}٪`,
+      sub: `${last.inflow_count.toLocaleString("fa-IR")} از ${last.symbols.toLocaleString("fa-IR")} سهم در آخرین جلسه` },
+    { k: "روز عادی (یک سال اخیر)", v: tomanCell(typ.median),
+      sub: `میانه؛ ۶۰٪ روزها بین ${tomanCell(typ.p20)} و ${tomanCell(typ.p80)}` },
+  ]);
+
+  const data = days.map(x => ({
+    label: faDay(x.date), value: toBillionToman(x.net_individual), day: x,
+  }));
+  divergingBar($("marketflowChart"), {
+    data, height: 240, padLeft: 64,
+    labelEvery: Math.max(1, Math.ceil(data.length / 12)),
+    format: v => Math.round(v).toLocaleString("fa-IR"),
+    tooltip: p => `<div class="t-title">${esc(faDay(p.day.date, true))}</div>
+      <div class="t-row"><span>خالص حقیقی</span><b>${Math.round(p.value).toLocaleString("fa-IR")} میلیارد تومان</b></div>
+      <div class="t-row"><span>از ارزش معاملات</span><b>${num(p.day.net_pct, 1)}٪</b></div>
+      <div class="t-row"><span>نمادهای با ورود پول</span><b>${num(p.day.inflow_count, 0)} از ${num(p.day.symbols, 0)}</b></div>`,
+  });
+}
+
 /* ---------- Codal announcements (codal_announcements.py) ----------
    What the feed watch kept of the letters that move a price on the day.
    A read of the store: no network, so it loads with the summary tab. */
@@ -3516,7 +3594,7 @@ async function lookupOutlook() {
 const TAB_LOADERS = {
   // Live first in the summary too: the "today" card's market line reads it.
   summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities(),
-            () => loadAnnouncements()],
+            () => loadMarketflow(), () => loadAnnouncements()],
   stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
   live: [() => loadLive()],
   analysis: [() => loadRegime(), () => loadIndices(), () => loadSectors(),
@@ -3657,6 +3735,7 @@ function renderToday() {
 function rerender() {
   if (state.allocation) renderAllocation(state.allocation);
   if (state.opportunities) renderOpportunities(state.opportunities);
+  if (state.marketflow) renderMarketflow(state.marketflow);
   if (state.regime) renderRegime(state.regime);
   if (state.indices) renderIndices(state.indices);
   if (state.sectors) renderSectors(state.sectors);
@@ -3985,6 +4064,7 @@ on("runPortfolioBtn", "click", () => loadPortfolio(true));
 on("runAllocationBtn", "click", () => loadAllocation(true));
 on("runOpportunitiesBtn", "click", () => loadOpportunities(true));
 on("announcementsKind", "change", () => loadAnnouncements());
+on("marketflowSessions", "change", () => loadMarketflow());
 on("announcementsDays", "change", () => loadAnnouncements());
 on("runOutlookBtn", "click", () => loadOutlook(true));
 on("outlookLookupBtn", "click", lookupOutlook);
