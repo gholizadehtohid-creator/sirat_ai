@@ -48,6 +48,7 @@ the rest of the project already applies.
 """
 
 import argparse
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -181,8 +182,27 @@ def record_retry(tracing_no, ins_code, error):
         last_tried = excluded.last_tried
     """, (str(tracing_no), str(ins_code), str(error)[:200], _now()))
 
+    attempts = conn.execute(
+        "SELECT attempts FROM codal_backfill_retries WHERE tracing_no = ?",
+        (str(tracing_no),)).fetchone()[0]
+
     conn.commit()
     conn.close()
+
+    return int(attempts or 0)
+
+
+# A document Codal's exporter answers 500 for this many times is settled as
+# unreadable. Going to the back was not enough on its own: by 2026-11-08 the
+# queue WAS the back -- 47 of 48 left had answered 500 twice -- so every round
+# fetched five of them and backed off four hours as if throttled, holding up
+# any new filing behind them. Only a server error settles; a 429, a timeout or
+# a dropped connection says nothing about the document and never does.
+SERVER_ERROR_SETTLE_ATTEMPTS = 3
+
+
+def is_server_error(error):
+    return bool(re.search(r"\b50\d Server Error", str(error or "")))
 
 
 def retried_filings():
@@ -733,10 +753,19 @@ def fetch(since, until, limit=None, per_company=None, verbose=True,
 
         if error:
 
+            attempts = (record_retry(item["tracing_no"], item["ins_code"], error)
+                        if kind == codal.KIND_TRANSIENT else 0)
+
+            if (is_server_error(error)
+                    and attempts >= SERVER_ERROR_SETTLE_ATTEMPTS):
+                # Falls through to the unreadable branch below: counted,
+                # settled, and not taken for a throttle.
+                error = "server error 500 (Codal cannot export it)"
+                kind = codal.KIND_BAD
+
             if kind == codal.KIND_TRANSIENT:
                 failed += 1
                 consecutive += 1
-                record_retry(item["tracing_no"], item["ins_code"], error)
                 if consecutive >= config.CODAL_ABORT_AFTER_FAILURES:
                     throttled = True
                     if verbose:

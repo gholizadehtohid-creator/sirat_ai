@@ -1227,6 +1227,44 @@ class BackfillQueue(unittest.TestCase):
         self.assertEqual(after[-1], head[0])
         self.assertEqual(after[0], head[1])
 
+    def fetch_failing(self, error):
+        """One fetch of B1 alone, answered with a transient `error`."""
+
+        from unittest import mock
+        import codal
+
+        item = {"ins_code": "bare", "tracing_no": "B1", "excel_url": "u3",
+                "title": "oldest", "published_at": "1402/07/01 10:00:00"}
+
+        with mock.patch.object(self.codal_backfill, "pending",
+                               return_value=[item]), \
+                mock.patch.object(
+                    self.codal_backfill.codal_sync, "parse_letter",
+                    return_value=(None, error, codal.KIND_TRANSIENT)):
+            return self.codal_backfill.fetch("1402/01/01", "1405/12/29",
+                                             verbose=False, client=object())
+
+    def test_a_document_codal_cannot_export_is_settled_on_the_third_500(self):
+        """By 2026-11-08 the queue's back WAS the queue: 47 of 48 left had
+        answered 500 twice, and each round backed off four hours on them."""
+
+        server = "B1: HTTPError: 500 Server Error: Internal Server Error"
+
+        for _ in range(self.codal_backfill.SERVER_ERROR_SETTLE_ATTEMPTS - 1):
+            self.assertEqual(self.fetch_failing(server)["failed"], 1)
+            self.assertNotIn("B1", self.codal_backfill.settled_failures())
+
+        result = self.fetch_failing(server)
+
+        self.assertEqual((result["failed"], result["unparseable"]), (0, 1))
+        self.assertIn("B1", self.codal_backfill.settled_failures())
+
+    def test_a_dropped_connection_never_settles_a_filing(self):
+        for _ in range(self.codal_backfill.SERVER_ERROR_SETTLE_ATTEMPTS + 2):
+            self.fetch_failing("B1: ConnectionError: Max retries exceeded")
+
+        self.assertEqual(self.codal_backfill.settled_failures(), set())
+
     def test_the_failure_table_reports_why(self):
         """'7 unparseable' is not actionable; a reason breakdown is."""
 
