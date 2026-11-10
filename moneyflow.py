@@ -413,12 +413,49 @@ def analyse(df, window=None, min_sessions=None):
 # WHOLE-MARKET AGGREGATE
 # ==============================
 
+def _current_from(frames, window):
+    """The oldest session a reading must reach to describe the market now.
+
+    The market's newest `window` sessions, read off the stored flow rows
+    themselves rather than the clock -- a holiday or a late fetch must not age
+    the whole market, the rule database.halted_codes follows for price bars. A
+    reading whose window ends before the oldest of them shares not one session
+    with the window every current reading measures: it is another week's flow.
+    The threshold is therefore the flow window itself, config.FLOW_WINDOW (one
+    trading week) unless the caller asked for another. None when nothing is
+    dated.
+    """
+
+    stamps = [frame["date"] for frame in frames.values()
+              if frame is not None and "date" in frame.columns]
+
+    if not stamps:
+        return None
+
+    sessions = sorted(pd.concat(stamps, ignore_index=True)
+                      .dropna().dt.normalize().unique(), reverse=True)
+
+    if not sessions:
+        return None
+
+    return str(pd.Timestamp(sessions[min(window, len(sessions)) - 1]).date())
+
+
 def analyse_market(limit=None, top=15, window=None, min_sessions=None):
     """Whole-market flow from stored client-type data.
 
     Reads only what is cached, so this answers instantly and identically with
     the network down -- the fetch that fills the table is bootstrap's job, not
     this function's.
+
+    Only readings of the CURRENT market are ranked or summed into the market
+    figures. A halted share, and one whose stored flow ends before this
+    week's window (_current_from), both still hold a scorable window -- the
+    last one before they went quiet -- and on 2026-11-11 such windows held
+    the #1 outflow (وسگلستا, ending 2021-07-31) and two of the strongest
+    buyers (سباقر 2025-01, تکیمیا 2024-11): 88 of 779 scored windows ended
+    before 2026-10-25, 43 of them above the liquidity floor. Both kinds are
+    left out and counted.
     """
 
     import database
@@ -429,16 +466,26 @@ def analyse_market(limit=None, top=15, window=None, min_sessions=None):
 
     by_code = {str(r["ins_code"]): r for r in instruments}
 
-    codes = list(by_code)
+    # Halted over config.HALT_EXCLUDE_DAYS: the rule technical.analyse and
+    # the fundamental report already apply. Its window is whatever traded
+    # before the halt, however long ago that was.
+    halted = database.halted_codes()
+
+    codes = [code for code in by_code if code not in halted]
+
+    halted_count = len(by_code) - len(codes)
 
     if limit:
         codes = codes[:limit]
 
     frames = database.load_client_type_tail(codes, config.FLOW_BASELINE_WINDOW)
 
+    current_from = _current_from(frames, window)
+
     scored = []
     readings = []
     insufficient = 0
+    stale = 0
 
     for code in codes:
 
@@ -454,6 +501,14 @@ def analyse_market(limit=None, top=15, window=None, min_sessions=None):
             continue
 
         reading = result["reading"]
+
+        # Trading, but its stored flow stops before the market's newest
+        # `window` sessions -- a fetch that has not reached it, or a name that
+        # has not traded for a week or more. Its reading is not this week's.
+        if (current_from is not None
+                and (reading["last_date"] or "") < current_from):
+            stale += 1
+            continue
 
         readings.append(reading)
 
@@ -495,11 +550,16 @@ def analyse_market(limit=None, top=15, window=None, min_sessions=None):
         "baseline_window": config.FLOW_BASELINE_WINDOW,
         "min_turnover": floor,
         "coverage": coverage,
+        # Readings whose window ends before this session were left out as
+        # stale (see _current_from).
+        "current_from": current_from,
         "counts": {
             "considered": len(codes),
             "scored": len(scored),
             "liquid": len(liquid),
             "insufficient": insufficient,
+            "halted": halted_count,
+            "stale": stale,
         },
         "market": aggregate(readings),
         # The market aggregate is every scored name; these two lists are the

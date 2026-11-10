@@ -123,8 +123,10 @@ def _stop_distance_pct(row):
 
     volatility = metrics.get("volatility_60")
 
+    # The inverse of fundamentals.from_history's annualisation, so it must use
+    # the same session count or the stop drifts from the daily figure.
     if volatility and volatility > 0 and math.isfinite(volatility):
-        daily = volatility / math.sqrt(250)
+        daily = volatility / math.sqrt(config.TRADING_DAYS_PER_YEAR)
         return daily * config.STOP_ATR_MULTIPLE
 
     return None
@@ -163,7 +165,7 @@ def _trail_distance_pct(row):
     volatility = metrics.get("volatility_60")
 
     if volatility and volatility > 0 and math.isfinite(volatility):
-        return (volatility / math.sqrt(250)) * multiple
+        return (volatility / math.sqrt(config.TRADING_DAYS_PER_YEAR)) * multiple
 
     return None
 

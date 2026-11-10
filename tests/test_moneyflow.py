@@ -365,5 +365,96 @@ class TestHelpers(unittest.TestCase):
         )
 
 
+class TestAnalyseMarketIsCurrent(unittest.TestCase):
+    """The whole-market card ranks this week's flow, not a dead share's last.
+
+    On 2026-11-11 the #1 outflow was وسگلستا, whose window ended 2021-07-31,
+    and two of the strongest buyers were windows from 2024-11 and 2025-01:
+    every stored window scored, however old, and fed the market KPIs too.
+    """
+
+    CALENDAR = pd.bdate_range(end="2026-11-10", periods=20)
+
+    def setUp(self):
+        import tempfile
+
+        import database
+
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        self.original = database.DATABASE_NAME
+        database.DATABASE_NAME = self.path
+        database.create_database()
+
+        newest = str(self.CALENDAR[-1].date())
+        cal = self.CALENDAR
+
+        # (code, flow sessions, individual buy, individual sell, institutional
+        # buy, price bars as (date, volume)). Turnover clears the liquidity
+        # floor everywhere, so only currency decides who is listed.
+        names = [
+            # trades and is fetched up to the newest session
+            ("live", cal, 6e9, 3e9, 2e9, [(newest, 1000)]),
+            # last traded in July 2021, frozen zero-volume bars since: halted
+            ("halted", pd.bdate_range(end="2021-07-30", periods=12),
+             1e9, 9e9, 9e9, [("2021-07-30", 1000), (newest, 0)]),
+            # trades, but its stored flow stops six sessions back: stale
+            ("stale", cal[-18:-6], 1e9, 9e9, 9e9, [(newest, 1000)]),
+            # stops four sessions back -- still inside this week's window
+            ("recent", cal[-16:-4], 2e9, 6e9, 8e9, [(newest, 1000)]),
+        ]
+
+        conn = database._connect()
+        for code, days, buy, sell, inst_buy, prices in names:
+            conn.execute("INSERT INTO instruments (ins_code, symbol_fa, "
+                         "is_equity) VALUES (?, ?, 1)", (code, "n" + code))
+            for day in days:
+                conn.execute(
+                    "INSERT INTO client_type_history (ins_code, date, "
+                    "individual_buy_value, individual_sell_value, "
+                    "institutional_buy_value, institutional_sell_value, "
+                    "individual_buy_count, individual_sell_count) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 100, 300)",
+                    (code, str(day.date()), buy, sell, inst_buy,
+                     buy + inst_buy - sell))
+            for day, volume in prices:
+                conn.execute("INSERT INTO price_history (ins_code, date, close, "
+                             "volume) VALUES (?, ?, 1000, ?)", (code, day, volume))
+        conn.commit()
+        conn.close()
+
+    def tearDown(self):
+        import database
+
+        database.DATABASE_NAME = self.original
+        os.unlink(self.path)
+
+    @staticmethod
+    def listed(report):
+        return {row["ins_code"] for key in ("inflow", "outflow", "strongest_power")
+                for row in report[key]}
+
+    def test_halted_and_stale_windows_are_neither_ranked_nor_summed(self):
+        report = moneyflow.analyse_market(top=15)
+
+        self.assertEqual(self.listed(report), {"live", "recent"})
+        self.assertEqual(report["market"]["instruments"], 2)
+        self.assertEqual(report["counts"]["halted"], 1)
+        self.assertEqual(report["counts"]["stale"], 1)
+        self.assertEqual(report["counts"]["scored"], 2)
+        # The oldest session a window must reach: the 5th newest, one week.
+        self.assertEqual(report["current_from"], str(self.CALENDAR[-5].date()))
+
+    def test_the_staleness_threshold_is_the_window_being_measured(self):
+        """Asked for ten sessions, a window six sessions old still overlaps."""
+
+        report = moneyflow.analyse_market(top=15, window=10)
+
+        self.assertEqual(self.listed(report), {"live", "recent", "stale"})
+        self.assertEqual(report["counts"]["stale"], 0)
+        self.assertEqual(report["counts"]["halted"], 1)
+        self.assertEqual(report["current_from"], str(self.CALENDAR[-10].date()))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -14,6 +14,18 @@ bit, NaN for NaN, including ta's quirks: the zero warm-up values instead of
 NaN, the last smoothed element left at 0, and the DI series shifted by
 `window`. tests/test_fast_ta.py holds that equality against ta itself; if
 ta is upgraded, that test is what says whether this still matches.
+
+ONE DELIBERATE DEPARTURE: a series too short for the seed. ta writes its
+first ATR at index window - 1 and its first ADX `window` places into a series
+already shortened by window - 1, so it raises (IndexError, or ValueError for
+a negative array size) below `window` bars for ATR and below 2 * window for
+ADX. Inside a whole-market scan that exception is not one name's problem: it
+escapes top_technical / best_technical_inflow / gold_list and the route
+answers 500 for every name, because one fresh listing made the list. Here
+those lengths return all-NaN instead -- "not enough bars for this
+indicator", the same absent column calculate_indicators already writes for a
+series with no high/low range, which every caller handles. Every length ta
+can compute is untouched.
 """
 
 import numpy as np
@@ -22,8 +34,18 @@ from ta.trend import _get_min_max
 from ta.utils import IndicatorMixin
 
 
+def _undefined(close, name):
+    """All-NaN on close's index: too few bars for the indicator to exist."""
+
+    return pd.Series(np.nan, index=close.index, dtype=float, name=name)
+
+
 def average_true_range(high, low, close, window=14):
     """ta.volatility.AverageTrueRange(...).average_true_range()."""
+
+    # ta raises here: its seed is written at index window - 1.
+    if len(close) < window:
+        return _undefined(close, "atr")
 
     close_shift = close.shift(1)
     true_range = IndicatorMixin._true_range(high, low, close_shift)
@@ -57,6 +79,12 @@ def adx(high, low, close, window=14):
 
     if window == 0:
         raise ValueError("window may not be 0")
+
+    # ta raises below this: the smoothed series is len - (window - 1) long and
+    # its first ADX is written at index `window` of it.
+    if len(close) < 2 * window:
+        return (_undefined(close, "adx"), _undefined(close, "adx_pos"),
+                _undefined(close, "adx_neg"))
 
     close_shift = close.shift(1)
     pdm = _get_min_max(high, close_shift, "max")

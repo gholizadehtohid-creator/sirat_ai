@@ -229,6 +229,32 @@ class TestRiskSizing(unittest.TestCase):
         self.assertEqual(result["positions"][0]["stop_source"],
                          "realised volatility")
 
+    def test_the_volatility_fallback_turns_back_into_the_daily_figure(self):
+        """fundamentals annualises volatility_60 and this de-annualises it.
+
+        The two must use one session count, or the fallback stop drifts from
+        the daily move it is meant to be a multiple of.
+        """
+
+        import numpy as np
+        import pandas as pd
+
+        import fundamentals
+
+        rng = np.random.default_rng(9)
+        close = 1000.0 * np.cumprod(1 + rng.normal(0, 0.015, 120))
+        bars = pd.DataFrame({"date": pd.bdate_range(end="2026-11-10", periods=120),
+                             "close": close, "high": close * 1.01,
+                             "low": close * 0.99, "volume": 1e6, "value": 1e10})
+
+        metrics = fundamentals.from_history(bars, as_of="2026-11-10")
+        daily_pct = bars["close"].pct_change().tail(60).dropna().std() * 100
+
+        stop = portfolio._stop_distance_pct(
+            {"metrics": {"volatility_60": metrics["volatility_60"]}})
+
+        self.assertAlmostEqual(stop, daily_pct * config.STOP_ATR_MULTIPLE, places=9)
+
 
 class TestSelectionMode(unittest.TestCase):
     """Ranking by flow once the technical gate is cleared.

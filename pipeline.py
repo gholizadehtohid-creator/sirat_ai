@@ -25,6 +25,7 @@ import moneyflow
 import scoring
 import screening
 import settings
+from backtest import back_adjust
 from indicators import DEFAULT_PARAMS, calculate_indicators
 from providers import get_provider
 from ranking import rank_stocks
@@ -261,6 +262,14 @@ def run_scan(
             row["technical_status"] = "NO DATA"
             final.append(row)
             continue
+
+        # Back-adjusted first, as the v2 frame (data_pipeline.frame) and the
+        # panel's Technical tab are: stored bars are raw, and a capital
+        # increase inside the window reads as a crash -- MAs above the price,
+        # RSI near zero, an ATR the size of the adjustment -- which then
+        # sizes the stop through _risk_inputs. Anchored at the newest bar, so
+        # the last close is unchanged.
+        history, _events = back_adjust(history)
 
         enriched = calculate_indicators(history, params)
 

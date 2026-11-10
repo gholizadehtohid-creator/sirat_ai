@@ -34,6 +34,19 @@ POINT-IN-TIME IS NOT CLAIMED HERE
 This is a LIVE dashboard read of the latest bars. It uses whatever
 `price_history` holds now. The governed research path loads its own data
 through the PIT layer; keeping this separate is the point.
+
+BACK-ADJUSTED, LIKE THE V2 FRAME
+---------------------------------
+`price_history` is raw: a capital increase or a fund's unit split drops the
+quote overnight by the adjustment factor and nothing in the feed marks it.
+Every read here back-adjusts first, with the same backtest.back_adjust the v2
+frame builder (data_pipeline.frame) applies. Measured 2026-11-11 on raw bars,
+طلا's -89.9% unit split of 2026-11-02 read RSI 7.5, a 50-session average nine
+times the price, an ATR of 57% of price and resistances 516-607% overhead;
+adjusted, RSI 36.4, ATR 2.46% and resistances +0.4/+4.3/+10.8%. گوهر, split
+on 2026-09-28, called HOLD on raw bars and SELL on adjusted ones. The
+adjustment anchors at the newest bar, so today's close -- and every distance
+measured from it -- is unchanged.
 """
 
 import math
@@ -45,6 +58,7 @@ import levels
 import ranking
 import risk_engine
 import trade_manager
+from backtest import back_adjust
 
 
 # The fields worth surfacing as "current reading" numbers, mapped to the
@@ -104,6 +118,21 @@ def _day(value):
         return value.strftime("%Y-%m-%d")
     except Exception:                                          # noqa: BLE001
         return None
+
+
+def _adjusted(bars):
+    """Stored bars with corporate-action gaps scaled out (see module doc).
+
+    Safe on the trailing windows loaded here: back_adjust scales backwards from
+    the newest bar, so adjusting a tail equals adjusting the whole series and
+    slicing it (data_pipeline.load_bars verified this on 396 symbols). A series
+    with no gap past PRICE_ADJUST_THRESHOLD comes back with its prices
+    untouched, so ordinary names read exactly as before.
+    """
+
+    adjusted, _events = back_adjust(bars)
+
+    return adjusted
 
 
 def resolve_symbol(symbol):
@@ -801,7 +830,7 @@ def analyse(symbol, params=None, bars=SERIES_BARS):
         return {"error": "no price history", "symbol": symbol,
                 "ins_code": ins_code}
 
-    frame = indicators.calculate_indicators(history, params)
+    frame = indicators.calculate_indicators(_adjusted(history), params)
 
     if frame.empty:
         return {"error": "not enough bars for indicators", "symbol": symbol,
@@ -938,7 +967,7 @@ def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
 
         considered += 1
 
-        enriched = indicators.calculate_indicators(frame, params)
+        enriched = indicators.calculate_indicators(_adjusted(frame), params)
         if enriched.empty:
             no_data += 1
             continue
@@ -1165,7 +1194,7 @@ def best_technical_inflow(top=15, params=None, min_turnover=MIN_TURNOVER,
 
         liquid += 1
 
-        enriched = indicators.calculate_indicators(frame, params)
+        enriched = indicators.calculate_indicators(_adjusted(frame), params)
         if enriched.empty:
             continue
 

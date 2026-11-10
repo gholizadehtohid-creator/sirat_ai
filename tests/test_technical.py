@@ -461,5 +461,190 @@ class BestTechnicalInflowTests(unittest.TestCase):
         self.assertEqual(scores, sorted(scores, reverse=True))
 
 
+class AdjustedBarsTests(unittest.TestCase):
+    """Every technical read back-adjusts before computing, as the v2 frame does.
+
+    Built on a throwaway database: one name with an unmarked 1:10 unit split
+    fifteen sessions before the end (طلا's, on 2026-11-02, read RSI 7.5 and an
+    ATR of 57% of price on raw bars), one with no gap at all, and one listed
+    ten sessions ago -- too young for ATR and ADX, which used to raise inside
+    fast_ta and take a whole-market card down with it.
+    """
+
+    @staticmethod
+    def bars(n, seed, split_at=None):
+        import numpy as np
+        import pandas as pd
+
+        rng = np.random.default_rng(seed)
+        moves = np.clip(rng.normal(0.0005, 0.015, n), -0.03, 0.03)
+        close = 10_000.0 * np.cumprod(1.0 + moves)
+        if split_at is not None:
+            close[split_at:] *= 0.1
+        return pd.DataFrame({
+            "date": pd.bdate_range(end="2026-11-10", periods=n),
+            "open": close,
+            "high": close * (1 + rng.uniform(0.002, 0.02, n)),
+            "low": close * (1 - rng.uniform(0.002, 0.02, n)),
+            "close": close,
+            "volume": 1_000_000.0,
+            "value": 2e10,
+            "trades": 500.0,
+        })
+
+    def setUp(self):
+        import tempfile
+
+        import database
+
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        self.original = database.DATABASE_NAME
+        database.DATABASE_NAME = self.path
+        database.create_database()
+
+        self.raw = {
+            "split": self.bars(240, 1, split_at=225),
+            "plain": self.bars(240, 2),
+            "young": self.bars(10, 3),
+        }
+
+        conn = database._connect()
+        for code, frame in self.raw.items():
+            conn.execute("INSERT INTO instruments (ins_code, symbol_fa, name_fa, "
+                         "kind, is_equity) VALUES (?, ?, ?, 'equity', 1)",
+                         (code, "T" + code, code))
+            for row in frame.itertuples(index=False):
+                conn.execute(
+                    "INSERT INTO price_history (ins_code, date, open, high, low, "
+                    "close, volume, value, trades) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (code, row.date.strftime("%Y-%m-%d"), row.open, row.high,
+                     row.low, row.close, row.volume, row.value, row.trades))
+        conn.commit()
+        conn.close()
+
+        import indicators
+        self.need = (indicators.required_bars(indicators.DEFAULT_PARAMS)
+                     + technical.SERIES_BARS)
+
+    def tearDown(self):
+        import database
+
+        database.DATABASE_NAME = self.original
+        os.unlink(self.path)
+
+    def test_the_technical_tab_reads_back_adjusted_bars(self):
+        import database
+        import indicators
+        from backtest import back_adjust
+
+        raw = database.load_history_by_inscode("split", limit=self.need)
+        adjusted, events = back_adjust(raw)
+        self.assertEqual(len(events), 1)
+
+        want = indicators.calculate_indicators(adjusted).iloc[-1]
+        shipped = indicators.calculate_indicators(raw).iloc[-1]
+
+        rep = technical.analyse("Tsplit")
+
+        # The newest bar is the anchor: today's price is never rescaled.
+        self.assertEqual(rep["latest"]["close"], float(raw["close"].iloc[-1]))
+        for key, column in technical.LATEST_FIELDS:
+            self.assertEqual(rep["latest"][key], technical._finite(want[column]),
+                             key)
+
+        # ...and what it replaced really was the split, not the market: an ATR
+        # ten times too wide and a 50-session average far above the price.
+        self.assertGreater(shipped["ATR_PCT"], 10 * want["ATR_PCT"])
+        self.assertGreater(shipped["MA_SLOW"], 3 * rep["latest"]["close"])
+        for level in rep["levels"]["resistances"]:
+            self.assertLess(level["distance_pct"], 50)
+        json.dumps(rep, ensure_ascii=False, allow_nan=False)
+
+    def test_a_name_with_no_gap_reads_exactly_as_before(self):
+        """Adjusting a series with no corporate action changes nothing at all."""
+
+        import database
+        import indicators
+        import pandas as pd
+        from backtest import back_adjust
+
+        raw = database.load_history_by_inscode("plain", limit=self.need)
+        adjusted, events = back_adjust(raw)
+
+        self.assertEqual(events, [])
+        pd.testing.assert_frame_equal(indicators.calculate_indicators(adjusted),
+                                      indicators.calculate_indicators(raw),
+                                      check_exact=True)
+
+        want = indicators.calculate_indicators(raw).iloc[-1]
+        rep = technical.analyse("Tplain")
+        for key, column in technical.LATEST_FIELDS:
+            self.assertEqual(rep["latest"][key], technical._finite(want[column]),
+                             key)
+
+    def test_every_whole_market_card_hands_the_indicators_continuous_bars(self):
+        import config
+        import indicators
+        import numpy as np
+        from unittest import mock
+
+        real = indicators.calculate_indicators
+        seen = []
+
+        def spy(df, params=None):
+            seen.append(df["close"].astype(float).to_numpy())
+            return real(df, params)
+
+        split_close = float(self.raw["split"]["close"].iloc[-1])
+        limit = config.PRICE_ADJUST_THRESHOLD / 100.0
+
+        for name, run in (
+                ("top_technical", lambda: technical.top_technical(top=10)),
+                ("best_technical_inflow",
+                 lambda: technical.best_technical_inflow(top=10)),
+                ("analyse", lambda: technical.analyse("Tsplit"))):
+            with self.subTest(path=name):
+                seen.clear()
+                with mock.patch.object(indicators, "calculate_indicators", spy):
+                    run()
+                self.assertTrue(any(c[-1] == split_close for c in seen),
+                                "%s never analysed the split name" % name)
+                for closes in seen:
+                    moves = np.abs(closes[1:] / closes[:-1] - 1.0)
+                    self.assertLessEqual(moves.max(), limit, name)
+
+    def test_the_top_list_ranks_the_split_name_on_adjusted_bars(self):
+        import database
+        import indicators
+        import ranking
+        from backtest import back_adjust
+
+        tail = database.load_history_tail(["split"], technical.SCAN_BARS)["split"]
+        want = ranking.rank_stocks(
+            indicators.calculate_indicators(back_adjust(tail)[0]))
+        raw = ranking.rank_stocks(indicators.calculate_indicators(tail))
+
+        row = next(r for r in technical.top_technical(top=10)["top"]
+                   if r["ins_code"] == "split")
+
+        self.assertEqual((row["score"], row["rsi"]), (want["score"], want["rsi"]))
+        self.assertNotEqual(row["rsi"], raw["rsi"])
+
+    def test_a_ten_bar_listing_does_not_take_the_cards_down(self):
+        top = technical.top_technical(top=10)
+        inflow = technical.best_technical_inflow(top=10)
+        rep = technical.analyse("Tyoung")
+
+        self.assertEqual(top["counts"]["universe"], 3)
+        self.assertEqual(inflow["counts"]["liquid"], 3)
+        self.assertNotIn("error", rep)
+        # Too young for a true range: absent, never a fabricated zero.
+        self.assertIsNone(rep["latest"]["atr"])
+        self.assertIsNone(rep["latest"]["adx"])
+        for payload in (top, inflow, rep):
+            json.dumps(payload, ensure_ascii=False, allow_nan=False)
+
+
 if __name__ == "__main__":
     unittest.main()

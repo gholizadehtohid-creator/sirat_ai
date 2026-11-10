@@ -20,6 +20,7 @@ import pandas as pd
 
 import config
 import nav
+from backtest import back_adjust
 
 
 def _finite(value):
@@ -104,14 +105,33 @@ def from_history(df, as_of=None):
     if "volume" in frame.columns and frame["volume"].notna().any():
         out["avg_volume_20"] = _finite(frame["volume"].tail(20).mean())
 
-    # Realised volatility, annualised over ~250 TSE sessions.
-    if len(frame) >= 20:
-        returns = frame["close"].pct_change().tail(60).dropna()
+    # Everything below reads the PRICE PATH, so it reads it back-adjusted --
+    # backtest.back_adjust, the helper the v2 frame (data_pipeline.frame)
+    # uses. Stored bars are raw, and a capital increase inside the window
+    # reads as a crash. Measured 2026-11-11: 57 of 697 live equities carried
+    # one inside the 61-bar window and 55 of them landed in a different
+    # Stability band; تپسی read 175.8% volatility and -72.6% over 60 sessions
+    # against 6.4% and +83.2% adjusted. Anchored at the newest bar, so the
+    # last close is unchanged, and a series with no gap comes back untouched.
+    #
+    # Liquidity above stays on raw bars on purpose: traded value is what
+    # actually changed hands, and back_adjust leaves volume alone for the
+    # same reason.
+    prices, _events = back_adjust(frame)
+
+    # Realised volatility, annualised over config.TRADING_DAYS_PER_YEAR -- the
+    # session count config fixes for every annualised figure, and the one
+    # risk.py, swing_advisor and the v2 strategy annualise with. sqrt(250)
+    # here read every name 2% more volatile than they do. portfolio.py
+    # de-annualises this number with the same constant.
+    if len(prices) >= 20:
+        returns = prices["close"].pct_change().tail(60).dropna()
         if len(returns) >= 10:
-            out["volatility_60"] = _finite(returns.std() * math.sqrt(250) * 100)
+            out["volatility_60"] = _finite(
+                returns.std() * math.sqrt(config.TRADING_DAYS_PER_YEAR) * 100)
 
     # Where the price sits in its own 52-week range (0 = low, 1 = high).
-    window = frame["close"].tail(250)
+    window = prices["close"].tail(250)
     if len(window) >= 20:
         low, high = _finite(window.min()), _finite(window.max())
         if low is not None and high is not None and high > low and last_close:
@@ -131,13 +151,13 @@ def from_history(df, as_of=None):
     # percent of headroom that is arithmetic rather than resistance.
     window = getattr(config, "HEADROOM_WINDOW", 120)
 
-    if "high" in frame.columns and len(frame) > window and last_close:
-        ceiling = _finite(frame["high"].iloc[-(window + 1):-1].max())
+    if "high" in prices.columns and len(prices) > window and last_close:
+        ceiling = _finite(prices["high"].iloc[-(window + 1):-1].max())
         if ceiling is not None and last_close > 0:
             out["headroom_pct"] = round((ceiling - last_close) / last_close * 100, 2)
 
-    if len(frame) >= 61:
-        past = _finite(frame["close"].iloc[-61])
+    if len(prices) >= 61:
+        past = _finite(prices["close"].iloc[-61])
         if past and past > 0 and last_close:
             out["return_60d"] = round((last_close - past) / past * 100, 2)
 
