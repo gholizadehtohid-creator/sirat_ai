@@ -4,6 +4,9 @@
     python codal_announcements.py --backfill-dps [--limit N]
                                                  last annual AGM's DPS, one
                                                  search per equity lacking it
+    python codal_announcements.py --repair-stale-dps [--apply]
+                                                 re-open companies holding an
+                                                 older year's DPS (dry run)
 
 The quarter-hour -- now two-hourly -- feed watch (codal_watch.py) already
 reads every letter Codal publishes and kept only statements (ن-10) and
@@ -163,23 +166,46 @@ def store_dividend(ins_code, fiscal_end, parsed, letter):
     conn.close()
 
 
-def fetch_dividend(client, letter):
-    """Parse DPS from the letter's page; archived so it is fetched once."""
+def _fetch_dividend(client, letter):
+    """(parsed, error, kind) for one annual-AGM page; kind is codal's KIND_*.
+
+    Only a decision form without the row is a settled "no DPS". A reply
+    that is not the form at all -- no PropertyName cell anywhere, as in a
+    firewall or throttle page served with HTTP 200 -- and a 5xx are
+    transient. Both used to settle: غچین's 1613971 was stored as "no
+    DividendPerShare row" at 10:07Z on 2026-11-06, and the same page gave
+    DPS 130 at 15:24Z. A genuine form carries ~20 PropertyName rows (all
+    695 archived pages, 110-330 KB).
+    """
 
     key = "agm-%s" % letter["tracing_no"]
     body = codal.archive_read(key)
     if body is None:
         url = _letter_url(letter)
         if not url:
-            return None, "no page"
+            return None, "no page", codal.KIND_BAD
         try:
             body = client._get(url).content
         except Exception as exc:                                # noqa: BLE001
-            return None, "%s: %s" % (type(exc).__name__, str(exc)[:80])
+            return (None, "%s: %s" % (type(exc).__name__, str(exc)[:80]),
+                    codal.classify(exc))
         if b"DividendPerShare" in body:
             codal.archive_write(key, body)
-    parsed = parse_dividend(body.decode("utf-8", errors="replace"))
-    return parsed, None if parsed else "no DividendPerShare row"
+    html = body.decode("utf-8", errors="replace")
+    parsed = parse_dividend(html)
+    if parsed:
+        return parsed, None, codal.KIND_OK
+    if "PropertyName" not in html:
+        return (None, "not a decision page (%d bytes)" % len(body),
+                codal.KIND_TRANSIENT)
+    return None, "no DividendPerShare row", codal.KIND_BAD
+
+
+def fetch_dividend(client, letter):
+    """Parse DPS from the letter's page; archived so it is fetched once."""
+
+    parsed, error, _kind = _fetch_dividend(client, letter)
+    return parsed, error
 
 
 def handle(client, letter, inst):
@@ -199,11 +225,13 @@ def handle(client, letter, inst):
         return "stored"
 
     fiscal_end = fiscal_year_end(letter.get("title"))
-    parsed, error = fetch_dividend(client, letter)
+    parsed, error, kind = _fetch_dividend(client, letter)
     if parsed and fiscal_end:
         store_dividend(code, fiscal_end, parsed, letter)
         return "stored (DPS %.0f)" % parsed["dps"]
-    if error and ("Timeout" in error or "Connection" in error or "429" in error):
+    # By codal.classify, not by sniffing the message: "Timeout",
+    # "Connection" and "429" let a 500 through as settled.
+    if kind == codal.KIND_TRANSIENT:
         return None
     return "stored (no DPS: %s)" % (error or "no fiscal year in title")
 
@@ -335,8 +363,20 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
             pace(True)
             continue
         pace(False)
+        # The newest FISCAL YEAR's letters only (an amendment, then the
+        # original), not simply the newest-published letter. Falling
+        # through to an older year after a "no DPS", or taking an older
+        # year's late amendment (دفرا: FY1403's, published after FY1404's
+        # decision), stored that year's DPS as the company's latest -- and
+        # a company with a DPS is never searched again: 17 showed a
+        # dividend one to three years old next to a newer decision on file
+        # (2026-11-11). With none for the newest year it stays due.
+        newest = max((fiscal_year_end(letter.get("title")) or ""
+                      for letter in letters), default="")
         for letter in letters:
             if not letter.get("tracing_no"):
+                continue
+            if (fiscal_year_end(letter.get("title")) or "") != newest:
                 continue
             outcome = handle(client, letter, inst)
             if outcome is None:                 # the page itself was refused
@@ -353,6 +393,86 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
               % (searched, stored, refused), flush=True)
     return {"searched": searched, "stored": stored, "refused": refused,
             "stopped": stopped}
+
+
+def stale_dividends():
+    """{ins_code: (newest decision's fiscal year, [stored rows])} for every
+    company whose stored DPS is for an older fiscal year than an annual-AGM
+    decision on file -- the older-year fall-through backfill_dividends no
+    longer does. Decisions on file: the announcements table, and the letter
+    index the per-company sync fills (sirat_market.db)."""
+
+    import database
+
+    ensure_tables()
+    code = persian.normalize(ANNUAL_AGM_DECISIONS)
+    conn = fundamental_db._connect()
+    titles = conn.execute("SELECT ins_code, title FROM announcements "
+                          "WHERE letter_code = ?", (code,)).fetchall()
+    stored = conn.execute("SELECT ins_code, fiscal_year_end, dps, tracing_no "
+                          "FROM dividends").fetchall()
+    conn.close()
+
+    database.create_database()
+    mconn = database._connect()
+    titles += mconn.execute("SELECT ins_code, title FROM codal_letters "
+                            "WHERE letter_code = ?", (code,)).fetchall()
+    mconn.close()
+
+    decided = {}
+    for ins_code, title in titles:
+        year = fiscal_year_end(title)
+        if year and year > decided.get(str(ins_code), ""):
+            decided[str(ins_code)] = year
+
+    rows = {}
+    for row in stored:
+        rows.setdefault(str(row[0]), []).append(row)
+
+    return {ins_code: (decided[ins_code], held)
+            for ins_code, held in rows.items()
+            if ins_code in decided
+            and max(r[1] or "" for r in held) < decided[ins_code]}
+
+
+def reopen_stale_dividends(apply=False, verbose=True):
+    """Make the stale_dividends() companies due again. Dry run unless `apply`.
+
+    A company with any DPS stored is never searched again, so the older
+    year's rows are deleted; the next `--backfill-dps` run then reads only
+    the newest year's decision. Idempotent.
+    """
+
+    import database
+
+    stale = stale_dividends()
+    names = {str(r["ins_code"]): r.get("symbol_fa")
+             for r in database.load_instruments(equities_only=False)}
+    rows = sum(len(held) for _year, held in stale.values())
+
+    if verbose:
+        print("dps: %d companies hold an older fiscal year's DPS than an "
+              "annual-AGM decision on file (%d rows)%s"
+              % (len(stale), rows, "" if apply else " -- dry run, nothing "
+                 "written; --apply deletes them"), flush=True)
+        for ins_code, (year, held) in sorted(stale.items()):
+            newest_held = max(held, key=lambda r: r[1] or "")
+            print("  %-10s %s  stored FY %s DPS %s  | newest decision FY %s"
+                  % (names.get(ins_code) or "?", ins_code, newest_held[1],
+                     newest_held[2], year), flush=True)
+
+    if apply and stale:
+        conn = fundamental_db._connect()
+        for ins_code, (year, _held) in stale.items():
+            conn.execute("DELETE FROM dividends WHERE ins_code = ? AND "
+                         "fiscal_year_end < ?", (ins_code, year))
+        conn.commit()
+        conn.close()
+        if verbose:
+            print("dps: deleted; now run  python codal_announcements.py "
+                  "--backfill-dps", flush=True)
+
+    return {"companies": len(stale), "rows": rows, "applied": bool(apply)}
 
 
 def report():
@@ -380,7 +500,16 @@ def main(argv=None):
                         help="search each equity's last annual AGM for its DPS")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--hours", type=float, default=6.0)
+    parser.add_argument("--repair-stale-dps", action="store_true",
+                        help="list companies whose DPS is for an older fiscal "
+                             "year than an AGM decision on file (dry run)")
+    parser.add_argument("--apply", action="store_true",
+                        help="with --repair-stale-dps: delete those rows so "
+                             "the next --backfill-dps reads the newest year")
     args = parser.parse_args(argv)
+    if args.repair_stale_dps:
+        reopen_stale_dividends(apply=args.apply)
+        return 0
     if args.backfill_dps:
         backfill_dividends(limit=args.limit, hours=args.hours)
     report()

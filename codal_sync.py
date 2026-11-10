@@ -359,6 +359,16 @@ def sync_company(client, instrument, max_statements=2):
             continue
 
         if record:
+            # The per-filing table too, as the backfill and the watch do.
+            # Without it a filing this sync parsed reached the panel but
+            # neither the fundamental store (which imports from
+            # codal_filings) nor the backfill's record of what it holds, so
+            # the backfill downloaded it again (found 2026-11-11).
+            record["tracing_no"] = letter["tracing_no"]
+            database.save_codal_filing(ins_code, record,
+                                       published_at=letter.get("published_at"))
+            # Refused if the period already holds a newer release; the two
+            # newest pending are taken newest first (save_codal_financials).
             database.save_codal_financials(ins_code, record)
             stored += 1
 

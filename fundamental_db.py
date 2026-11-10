@@ -1039,7 +1039,14 @@ def sync_from_market_db(verbose=False):
                row.get("period_months"))
         published = row.get("published_at") or ""
 
-        if current.get(key, "") > published and                 str(row["tracing_no"]) not in seen:
+        # No exemption for a letter already carried. Re-parsing the release
+        # the store holds passes anyway (same stamp); re-parsing an OLDER one
+        # (codal_backfill --reparse-latest reads each company's newest
+        # filings, which can include a superseded release of a period) is
+        # exactly what must not displace the newer. The exemption allowed
+        # that: --reparse-latest 4 would have put 20 older releases back,
+        # 8 would have put 64 (2026-11-11).
+        if current.get(key, "") > published:
             superseded += 1
         elif save_metrics({
             "ins_code": row.get("ins_code"),

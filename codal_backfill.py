@@ -349,6 +349,140 @@ def purge_subsidiaries(verbose=True):
     return result
 
 
+def superseded_periods():
+    """codal_financials rows holding an older release than codal_filings has.
+
+    [(held row, newest filing)] -- the damage the always-replace upsert did
+    before save_codal_financials compared publication times (2026-11-11). A
+    row whose own release cannot be dated is left alone: nothing proves it
+    older, and it may be a filing that never reached codal_filings.
+    """
+
+    import financials
+
+    database.create_database()
+
+    conn = database._connect()
+
+    held = conn.execute("""
+        SELECT f.ins_code, f.period_end, f.period_months, f.tracing_no,
+               f.title, COALESCE(NULLIF(g.published_at, ''),
+                                 NULLIF(l.published_at, ''))
+        FROM codal_financials f
+        LEFT JOIN codal_filings g ON g.tracing_no = f.tracing_no
+        LEFT JOIN codal_letters l ON l.tracing_no = f.tracing_no
+    """).fetchall()
+
+    filings = conn.execute("""
+        SELECT tracing_no, ins_code, period_end, period_months, published_at,
+               title, audited, consolidated, items, ratios
+        FROM codal_filings
+        WHERE published_at IS NOT NULL AND published_at <> ''
+    """).fetchall()
+
+    conn.close()
+
+    newest = {}
+
+    for row in filings:
+        if financials.subsidiary_of(row[5]):
+            continue
+        key = (str(row[1]), row[2], row[3])
+        if key not in newest or (row[4], str(row[0])) > (newest[key][4],
+                                                          str(newest[key][0])):
+            newest[key] = row
+
+    out = []
+
+    for ins_code, period_end, months, tracing_no, title, published in held:
+        best = newest.get((str(ins_code), period_end, months))
+        if (best is None or not published or str(best[0]) == str(tracing_no)
+                or best[4] <= published):
+            continue
+        out.append(({"ins_code": str(ins_code), "period_end": period_end,
+                     "period_months": months, "tracing_no": str(tracing_no),
+                     "title": title, "published_at": published},
+                    {"ins_code": str(best[1]), "period_end": best[2],
+                     "period_months": best[3], "tracing_no": str(best[0]),
+                     "published_at": best[4], "title": best[5],
+                     "audited": None if best[6] is None else bool(best[6]),
+                     "consolidated": bool(best[7]),
+                     "items": database._loads(best[8]),
+                     "ratios": database._loads(best[9])}))
+
+    return out
+
+
+def repair_superseded(apply=False, verbose=True):
+    """Put each period's newest release back in codal_financials.
+
+    Dry run unless `apply`. Every release is in codal_filings with its
+    figures, so nothing is downloaded; the fundamental store already holds
+    the newest release and is not touched. Idempotent: a repaired row holds
+    the newest release and is not listed again.
+    """
+
+    stale = superseded_periods()
+
+    latest = {}
+    conn = database._connect()
+    for ins_code, period_end, months in conn.execute(
+            "SELECT ins_code, period_end, period_months FROM codal_financials"):
+        key = (period_end or "", months or 0)
+        if key > latest.get(str(ins_code), ("", 0)):
+            latest[str(ins_code)] = key
+    names = {str(r[0]): r[1] for r in conn.execute(
+        "SELECT ins_code, symbol_fa FROM instruments")}
+    conn.close()
+
+    def kind(held, best):
+        if "اصلاحیه" in (best["title"] or ""):
+            return "original -> its correction"
+        if "حسابرسی شده" in (best["title"] or "") and \
+                "حسابرسی نشده" in (held["title"] or ""):
+            return "unaudited -> audited"
+        if ("تلفیقی" in (best["title"] or "")) != \
+                ("تلفیقی" in (held["title"] or "")):
+            return "the other basis (consolidated/separate)"
+        return "a later release"
+
+    kinds, on_latest = {}, []
+    for held, best in stale:
+        name = kind(held, best)
+        kinds[name] = kinds.get(name, 0) + 1
+        if latest.get(held["ins_code"]) == (held["period_end"] or "",
+                                            held["period_months"] or 0):
+            on_latest.append((held, best))
+
+    written = 0
+    if apply:
+        for _held, best in stale:
+            written += database.save_codal_financials(best["ins_code"], best)
+
+    result = {"superseded": len(stale), "latest_period": len(on_latest),
+              "by_kind": kinds, "written": written, "applied": bool(apply)}
+
+    if verbose:
+        print("repair: %d periods in codal_financials hold an older release "
+              "than codal_filings has; %d are the company's latest period%s"
+              % (len(stale), len(on_latest), "" if apply else
+                 " -- dry run, nothing written (--apply rewrites them)"),
+              flush=True)
+        for name, count in sorted(kinds.items(), key=lambda kv: -kv[1]):
+            print("    %4d  %s" % (count, name), flush=True)
+        examples = on_latest + [pair for pair in stale if pair not in on_latest]
+        for held, best in examples[:8]:
+            print("  %-8s %s %sm  held %s (%s)  newest %s (%s)"
+                  % (names.get(held["ins_code"]) or held["ins_code"],
+                     held["period_end"], held["period_months"],
+                     held["tracing_no"], held["published_at"],
+                     best["tracing_no"], best["published_at"]), flush=True)
+        if apply:
+            print("repair: %d rows rewritten" % written, flush=True)
+
+    return result
+
+
 def record_failure(tracing_no, ins_code, reason):
     """Settle one filing as unreadable, so the queue moves past it."""
 
@@ -1421,6 +1555,12 @@ def main(argv=None):
     parser.add_argument("--purge-subsidiaries", action="store_true",
                         help="remove stored subsidiary statements, restore "
                              "the issuer's own periods, and exit")
+    parser.add_argument("--repair-superseded", action="store_true",
+                        help="list codal_financials periods holding an older "
+                             "release than codal_filings has, and exit "
+                             "(dry run; --apply rewrites them)")
+    parser.add_argument("--apply", action="store_true",
+                        help="with --repair-superseded: write the repair")
     parser.add_argument("--refresh", action="store_true",
                         help="re-search companies already searched")
     parser.add_argument("--delay", type=float, default=None,
@@ -1438,6 +1578,10 @@ def main(argv=None):
 
     if args.purge_subsidiaries:
         purge_subsidiaries(verbose=verbose)
+        return 0
+
+    if args.repair_superseded:
+        repair_superseded(apply=args.apply, verbose=verbose)
         return 0
 
     if args.seed:

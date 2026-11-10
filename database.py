@@ -1275,8 +1275,61 @@ def known_tracing_numbers(ins_code):
     return {str(r[0]) for r in rows}
 
 
+# A letter's publication stamp, from the per-filing table or else the letter
+# index (every path lists a letter there before parsing it). Codal's own
+# "1405/08/05 11:12:49" form, which sorts as a string: Jalali, zero-padded,
+# fixed-width (codal_backfill._day says why that is safe here and only here).
+_PUBLISHED = ("COALESCE("
+              "NULLIF((SELECT published_at FROM codal_filings "
+              "WHERE tracing_no = {t}), ''), "
+              "NULLIF((SELECT published_at FROM codal_letters "
+              "WHERE tracing_no = {t}), ''))")
+
+
+def _published_at(conn, tracing_no, given=None):
+    """When a filing was published: `given` if stated, else what is on file."""
+
+    if given:
+        return str(given)
+
+    if not tracing_no:
+        return None
+
+    row = conn.execute("SELECT " + _PUBLISHED.format(t="?"),
+                       (str(tracing_no), str(tracing_no))).fetchone()
+
+    return row[0] if row else None
+
+
+def _not_older(table):
+    """An upsert's DO UPDATE condition: the incoming release (its stamp bound
+    twice as ?) replaces the held one unless it was published EARLIER.
+
+    The same letter always may (a re-parse), and so may anything undated on
+    either side -- nothing proves it older, and refusing it would freeze the
+    row on a missing stamp.
+    """
+
+    held = _PUBLISHED.format(t="%s.tracing_no" % table)
+
+    return ("excluded.tracing_no IS %s.tracing_no OR ? IS NULL OR %s IS NULL "
+            "OR ? >= %s" % (table, held, held))
+
+
 def save_codal_financials(ins_code, record):
-    """Upsert one company-period of parsed financials."""
+    """Upsert one company-period of parsed financials.
+
+    The newest-PUBLISHED release of a period wins, whatever order the
+    releases are written in. Found 2026-11-11: the upsert always replaced, so
+    the release written last won, and that is often the older one -- the
+    backfill walks history oldest-first after the watch has stored the
+    current filing, a watch catch-up reached the original a day after its
+    correction, and the daily sync writes its two newest filings newest
+    first. 531 periods held a superseded release, 74 of them a company's
+    latest (ملت 1405/06/31 held 1614602, not the correction 1619771), while
+    the fundamental store, which already ranked by publication, held the
+    right one. Returns 1 if the row was written, 0 if it held a newer one.
+    """
 
     if not record or not record.get("period_end"):
         return 0
@@ -1285,7 +1338,11 @@ def save_codal_financials(ins_code, record):
 
     conn = _connect()
 
-    conn.execute("""
+    tracing_no = record.get("tracing_no")
+    tracing_no = None if tracing_no is None else str(tracing_no)
+    published = _published_at(conn, tracing_no, record.get("published_at"))
+
+    cursor = conn.execute("""
     INSERT INTO codal_financials
         (ins_code, period_end, period_months, tracing_no, title, audited,
          consolidated, items, ratios, updated_at)
@@ -1295,19 +1352,23 @@ def save_codal_financials(ins_code, record):
         audited = excluded.audited, consolidated = excluded.consolidated,
         items = excluded.items, ratios = excluded.ratios,
         updated_at = excluded.updated_at
-    """, (
+    WHERE %s
+    """ % _not_older("codal_financials"), (
         str(ins_code), record["period_end"], record.get("period_months"),
-        record.get("tracing_no"), record.get("title"),
+        tracing_no, record.get("title"),
         _flag(record.get("audited")), 1 if record.get("consolidated") else 0,
         json.dumps(record.get("items") or {}, ensure_ascii=False),
         json.dumps(record.get("ratios") or {}, ensure_ascii=False),
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        published, published,
     ))
+
+    written = cursor.rowcount
 
     conn.commit()
     conn.close()
 
-    return 1
+    return 1 if written else 0
 
 
 def save_codal_filing(ins_code, record, published_at=None):
@@ -1472,7 +1533,13 @@ def load_codal_financials(ins_code, limit=None):
 
 
 def save_codal_portfolio(ins_code, record):
-    """Upsert one company-period of portfolio totals from letter ن-۳۱."""
+    """Upsert one company-period of portfolio totals from letter ن-۳۱.
+
+    A correction replaces the original, never the reverse (see
+    save_codal_financials): codal_sync parses one unparsed ن-۳۱ per run,
+    newest first, so the run after a correction is parsed reaches the
+    original of the same month. Returns 1 if written, 0 if refused.
+    """
 
     if not record or not record.get("period_end"):
         return 0
@@ -1481,7 +1548,11 @@ def save_codal_portfolio(ins_code, record):
 
     conn = _connect()
 
-    conn.execute("""
+    tracing_no = record.get("tracing_no")
+    tracing_no = None if tracing_no is None else str(tracing_no)
+    published = _published_at(conn, tracing_no, record.get("published_at"))
+
+    cursor = conn.execute("""
     INSERT INTO codal_portfolio
         (ins_code, period_end, tracing_no, title, listed_cost, listed_market,
          listed_unrealised, unlisted_cost, holdings, updated_at)
@@ -1493,18 +1564,22 @@ def save_codal_portfolio(ins_code, record):
         listed_unrealised = excluded.listed_unrealised,
         unlisted_cost = excluded.unlisted_cost,
         holdings = excluded.holdings, updated_at = excluded.updated_at
-    """, (
-        str(ins_code), record["period_end"], record.get("tracing_no"),
+    WHERE %s
+    """ % _not_older("codal_portfolio"), (
+        str(ins_code), record["period_end"], tracing_no,
         record.get("title"), record.get("listed_cost"),
         record.get("listed_market"), record.get("listed_unrealised"),
         record.get("unlisted_cost"), record.get("holdings"),
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        published, published,
     ))
+
+    written = cursor.rowcount
 
     conn.commit()
     conn.close()
 
-    return 1
+    return 1 if written else 0
 
 
 def load_codal_portfolio_latest(ins_codes=None):

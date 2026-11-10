@@ -25,6 +25,18 @@ PAGE = """
 """
 
 
+# The decision form with its rows but no DividendPerShare among them: a
+# settled "no DPS", unlike a reply that is not the form at all.
+FORM_WITHOUT_DPS = "\n".join(line for line in PAGE.splitlines()
+                             if "DividendPerShare" not in line)
+
+# What the firewall serves with HTTP 200 instead of the page.
+NOT_THE_FORM = ("<html><head><title>Request Rejected</title></head><body>The "
+                "requested URL was rejected.</body></html>")
+
+OLDER_YEAR = "تصمیمات مجمع عمومی عادی سالیانه دوره ۱۲ ماهه منتهی به ۱۴۰۳/۱۲/۳۰"
+
+
 def letter(tracing, published, code="ن-52",
            title="تصمیمات مجمع عمومی عادی سالیانه دوره ۱۲ ماهه منتهی به ۱۴۰۴/۱۲/۲۹"):
     return {"tracing_no": tracing, "letter_code": code, "title": title,
@@ -107,6 +119,29 @@ class StoreTests(unittest.TestCase):
             self.assertIsNone(a.handle(client, letter("4", "1405/05/01 10:00:00"),
                                        {"ins_code": "123"}))
 
+    def test_a_reply_that_is_not_the_form_is_left_for_the_next_poll(self):
+        # غچین's 1613971 was settled "no DividendPerShare row" at 10:07Z on
+        # 2026-11-06; the same page gave DPS 130 at 15:24Z.
+        self.assertIsNone(self.handle(letter("5", "1405/08/04 14:58:27"),
+                                      page=NOT_THE_FORM))
+        self.assertNotIn("123", a.latest_dividends())
+
+    def test_a_server_error_is_left_for_the_next_poll(self):
+        import requests
+
+        error = requests.HTTPError("500 Server Error: Internal Server Error",
+                                   response=mock.Mock(status_code=500))
+        client = mock.Mock()
+        client._get.side_effect = error
+        with mock.patch.object(a.codal, "archive_read", return_value=None):
+            self.assertIsNone(a.handle(client, letter("6", "1405/05/01 10:00:00"),
+                                       {"ins_code": "123"}))
+
+    def test_the_form_without_the_row_is_a_settled_no_dps(self):
+        self.assertEqual(self.handle(letter("7", "1405/05/01 10:00:00"),
+                                     page=FORM_WITHOUT_DPS),
+                         "stored (no DPS: no DividendPerShare row)")
+
 
 class BackfillTests(unittest.TestCase):
 
@@ -137,13 +172,42 @@ class BackfillTests(unittest.TestCase):
             return a.backfill_dividends(verbose=False, client=client)
 
     def test_a_letter_without_dps_falls_through_to_the_next(self):
-        no_row = "<table><tr><td>x</td></tr></table>"
+        # Two letters for one fiscal year -- an amendment without the row,
+        # then the original. (The page was "<table>...x...</table>", which
+        # is not the decision form at all and is now retried, not settled.)
         result = self.run_backfill(
-            [no_row, PAGE],
+            [FORM_WITHOUT_DPS, PAGE],
             [[letter("1", "1405/05/01 10:00:00"), letter("2", "1404/05/01 10:00:00")],
              []])
         self.assertEqual(result["stored"], 1)
         self.assertEqual(a.latest_dividends()["1"]["dps"], 55.0)
+
+    def test_an_older_year_never_stands_in_for_the_newest(self):
+        result = self.run_backfill(
+            [FORM_WITHOUT_DPS, PAGE],
+            [[letter("1", "1405/05/01 10:00:00"),
+              letter("2", "1404/05/01 10:00:00", title=OLDER_YEAR)], []])
+        self.assertEqual(result["stored"], 0)
+        self.assertNotIn("1", a.latest_dividends())
+
+    def test_a_late_amendment_of_an_older_year_does_not_stand_in(self):
+        # دفرا: FY1403's amendment was published (1405/08/10) after the
+        # FY1404 decision (1405/04/01); the newest-published letter won.
+        result = self.run_backfill(
+            [PAGE],
+            [[letter("1", "1405/08/10 16:57:25", title=OLDER_YEAR + "(اصلاحیه)"),
+              letter("2", "1405/04/01 16:07:12")], []])
+        self.assertEqual(result["stored"], 1)
+        self.assertEqual(a.latest_dividends()["1"]["fiscal_year_end"],
+                         "1404/12/29")
+
+    def test_a_reply_that_is_not_the_form_leaves_the_company_due(self):
+        result = self.run_backfill(
+            [NOT_THE_FORM, PAGE],
+            [[letter("1", "1405/05/01 10:00:00"), letter("2", "1404/05/01 10:00:00")],
+             []])
+        self.assertEqual((result["stored"], result["refused"]), (0, 1))
+        self.assertNotIn("1", a.latest_dividends())
 
     def test_a_refused_search_skips_that_company_and_goes_on(self):
         calls = []
@@ -160,6 +224,52 @@ class BackfillTests(unittest.TestCase):
                                   "stopped": False})
         self.assertNotIn("1", a.latest_dividends())
         self.assertIn("2", a.latest_dividends())
+
+
+class ReopenTests(unittest.TestCase):
+    """The repair for the 16 companies the older-year fall-through left."""
+
+    def setUp(self):
+        import database
+
+        self.database = database
+        handle, self.market = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        os.unlink(self.path)
+        self.original = database.DATABASE_NAME
+        database.DATABASE_NAME = self.market
+        self.previous = fundamental_db.set_path(self.path)
+        database.create_database()
+        a.ensure_tables()
+
+        stale = letter("10", "1404/05/01 10:00:00", title=OLDER_YEAR)
+        a.store_dividend("1", "1403/12/30", {"dps": 40.0}, stale)
+        a.store_announcement(letter("11", "1405/05/01 10:00:00"), "1", "agm")
+        current = letter("12", "1405/05/01 10:00:00")
+        a.store_dividend("2", "1404/12/29", {"dps": 55.0}, current)
+        a.store_announcement(current, "2", "agm")
+
+    def tearDown(self):
+        self.database.DATABASE_NAME = self.original
+        fundamental_db.set_path(self.previous)
+        for path in (self.market, self.path):
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_a_dry_run_lists_and_deletes_nothing(self):
+        result = a.reopen_stale_dividends(verbose=False)
+        self.assertEqual((result["companies"], result["rows"]), (1, 1))
+        self.assertIn("1", a.latest_dividends())
+
+    def test_apply_reopens_only_the_stale_company_once(self):
+        a.reopen_stale_dividends(apply=True, verbose=False)
+        again = a.reopen_stale_dividends(apply=True, verbose=False)
+
+        self.assertNotIn("1", a.latest_dividends())
+        self.assertEqual(a.latest_dividends()["2"]["dps"], 55.0)
+        self.assertEqual(again["companies"], 0)
 
 
 if __name__ == "__main__":
