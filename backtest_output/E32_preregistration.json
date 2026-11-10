@@ -1,0 +1,30 @@
+{
+  "experiment_id": "E32-forward-fundamental-quality",
+  "question": "Would buying the companies whose forward-looking fundamentals are BEST -- profit rising, sales outgrowing others, margins widening, profit turning into cash -- regardless of their price, have made money, and more than holding every eligible company? The user's request of 2026-11-10: 'check buying the stocks that had better forward-looking fundamentals too'.",
+  "researcher": "Claude, at the user's request of 2026-11-10",
+  "how_this_differs_from_E30": "E30 ranked by forward earnings YIELD -- cheapness, profit against price. This ranks by the QUALITY and DIRECTION of the business with no price in the score at all. The two can disagree completely: a fast-improving company is often expensive.",
+  "multiple_testing": "This is the third hypothesis tested on the 2021-06..2026-10 window today (E30, E31 rejected). The significance threshold is Bonferroni-corrected for three: p < 0.0167, not 0.05.",
+  "data_execution_costs_dates": "Identical to E30 (backtest_output/E30_preregistration.json), imported from examples/outlook_backtest.py: point-in-time filings, the same eligible set (which already requires a positive forward estimate, at most one flag and no suspect figures), buy at the D+1 close, no buys into a buy queue, 1.039% per round trip on turnover, decisions every 21 sessions.",
+  "score_on_decision_session_D": {
+    "components": {
+      "forward_profit_growth": "the outlook's forward-year profit over its trailing-twelve-month profit, minus 1 (owners' share both sides); missing when the trailing profit is not positive",
+      "sales_growth": "revenue growth against the same period a year earlier, same-basis (the outlook's growth.revenue_pct)",
+      "margin_change": "net margin now minus net margin in the same period a year earlier, in points",
+      "cash_conversion": "operating cash flow over profit, twelve months where the statements allow (the outlook's cash.cash_conversion)"
+    },
+    "combination": "each component converted to its percentile rank among the eligible companies on D (0 worst, 1 best); a missing component counts as 0.5; the score is the plain mean of the four ranks. No weights, nothing fitted.",
+    "portfolio": "the 10 highest scores, equal weight"
+  },
+  "benchmarks": "B1 every eligible company equal weight (the control), TEDPIX (reported), 1,000 random ten-name books from the same eligible list compared gross of costs -- all exactly as E30.",
+  "hypothesis": {"H1": "The top-10 quality portfolio beats B1."},
+  "decision_rule": {
+    "ACCEPT": "all of: (1) one-sided Newey-West p < 0.0167, (2) random-null percentile >= 90, (3) positive mean excess in both halves of the decision dates",
+    "REJECT": "otherwise",
+    "no_retuning": "the four components, the equal-rank combination, N=10 and the cadence are fixed. Each component alone, and N=20, are reported as diagnostics and cannot change the decision."
+  },
+  "declared_limits": [
+    "All of E30's: survivorship, no monthly reports, shares from capital lines, dividends under 12% not added back, nominal returns.",
+    "Third test on the same window (see multiple_testing)."
+  ],
+  "expected_failure": "Quality and growth are the factors most widely known and most fully priced; and E30 found the eligible companies' returns close to flat across the top four-fifths of the outlook. A REJECT is the likelier outcome."
+}
