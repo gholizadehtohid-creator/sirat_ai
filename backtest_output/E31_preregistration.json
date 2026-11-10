@@ -1,0 +1,41 @@
+{
+  "experiment_id": "E31-laggard-quality-flow-turn",
+  "question": "Does a stock that has lagged the market, whose fundamentals are sound and cheap, and whose retail selling has just stopped, go on to beat the market? The user's request of 2026-11-10: 'the bot should say which stock has fallen behind the market and has a better future, and say buy it'.",
+  "researcher": "Claude, at the user's request of 2026-11-10 ('yes, do it')",
+  "prior_evidence_declared": [
+    "factor_research.json (2008-2024, out of sample before 2024-09): over the next 20 sessions the bottom fifth by 20-session return earned 2.9% against 4.4% for the top fifth; low RSI 0.8% against 3.4%. Laggards on their own have LAGGED in this market.",
+    "E30 (2026-11-10, same window): ranking by forward earnings yield did not beat the eligible companies (p 0.24); the top four fifths earned alike, the lowest-yield fifth lagged. The fundamental condition below (yield at or above the median) was chosen KNOWING that -- it is the one data-informed choice here and is declared as such.",
+    "So this test asks whether the two extra conditions -- cheap on the outlook, and retail selling exhausted -- turn a losing laggard into a winning one."
+  ],
+  "data": "As E30 (backtest_output/E30_preregistration.json): point-in-time filings through backtesting/pit.py, back-adjusted prices for returns, printed prices for valuation, the same eligibility and the same execution. Client-type flow from client_type_history (full history from 2008, 667-727 equities a year in the window), the decision session's own figures included (published after its close, before the decision).",
+  "window": "decisions every 21 sessions from 2021-06-01 to 2026-10-31, the same dates as E30",
+  "definitions_on_decision_session_D": {
+    "eligible_E": "exactly E30's eligible set: liquid operating companies traded on D with a point-in-time outlook estimate, newest period <= 7 months old, positive forward earnings yield, not suspect, at most one flag",
+    "F_cheap_and_sound": "forward earnings yield at or above the median of E",
+    "L_laggard": "back-adjusted return over the last 60 sessions (D-60 close to D close) in the bottom third of E, AND below TEDPIX's return over the same 60 sessions",
+    "S_selling_stopped": "net retail share = sum(individual buy - individual sell) / sum(individual buy + institutional buy). Over sessions D-59..D-5 it is in the bottom HALF of E (at or below E's median) (retail was leaving, measured against the market rather than against zero, which is not neutral here); AND over the last 5 sessions D-4..D it is at or above the median of E's last-5 figures (retail selling has stopped)",
+    "basket": "F and L and S. Equal weight; if more than 10 names qualify, the 10 highest forward earnings yields"
+  },
+  "execution_and_costs": "as E30: buy at the close of D+1, no buys into a buy queue, hold to the next decision's D+1, 1.039% per round trip on the changed fraction of the book",
+  "thin_periods": "a period with fewer than 3 qualifying, buyable names holds the control (B1) instead and its excess is zero by construction. The number of periods with a real basket is reported.",
+  "benchmarks": {
+    "B1_eligible_ew": "every eligible company, equal weight (the control; as E30)",
+    "B2_tedpix": "reported",
+    "B4_random_null": "1,000 random baskets of the SAME size as the strategy's in each real-basket period, drawn from E's buyable names, compared gross of costs"
+  },
+  "hypothesis": {
+    "H1": "The F+L+S basket beats B1."
+  },
+  "test": "as E30: one-sided Newey-West t-test (2 lags) on per-period log excess returns net of each book's costs; random-null percentile of the cumulative gross return over the real-basket periods; mean excess in the first and the second half of the decision dates",
+  "decision_rule": {
+    "ACCEPT": "all of: (1) at least 24 periods with a real basket, (2) p < 0.05, (3) random-null percentile >= 90, (4) positive mean excess in both halves",
+    "REJECT": "otherwise",
+    "no_retuning": "the thirds, the median, the 60/5 session spans, the 3-name minimum and the 10-name cap are fixed here. Diagnostics -- L alone, L+F, L+S, F alone -- are reported and cannot change the decision. A rejected H1 is not re-run with other spans under this ID."
+  },
+  "declared_limits": [
+    "All of E30's: survivorship, no monthly reports, shares from capital lines, dividends under 12% not added back, nominal returns.",
+    "The window is the one E30 used. E30 tested a different hypothesis, but its finding about the lowest-yield fifth shaped condition F (declared above)."
+  ],
+  "expected_failure": "Laggards have lagged here (prior evidence). The likeliest outcome is that the extra conditions leave too few names or do not reverse the effect: REJECT.",
+  "feasibility_change_before_any_return": "A smoke run that computed basket SIZES only (no return of any kind) found 1, 2 and 3 names on 2021-06-01, 2024-02-17 and 2026-10-10 with S's first leg at the bottom third. It was widened to the bottom half before the first return was computed, to give the hypothesis a basket at all. Nothing else was changed."
+}
