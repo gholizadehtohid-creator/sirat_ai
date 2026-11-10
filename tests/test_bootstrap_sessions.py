@@ -172,6 +172,44 @@ class EnsureTests(unittest.TestCase):
 
         self.assertEqual(fetched, ["indices", "history"])
 
+    def test_new_bars_override_a_recent_flow_attempt(self):
+        """Flow tried at 21:33 against yesterday's bars stays owed once
+        today's bars land at 23:31 -- the earlier attempt does not excuse it."""
+
+        stored = {"bars_today": False}
+        fetched = []
+
+        def history_state():
+            return {"present": True, "detail": "", "updated_at": None,
+                    "behind": not stored["bars_today"]}
+
+        def flow_state():
+            return {"present": True, "detail": "", "updated_at": None,
+                    "behind": stored["bars_today"]}
+
+        def fetch_history(_on):
+            stored["bars_today"] = True
+            fetched.append("history")
+            return True
+
+        def fetch_flow(_on):
+            fetched.append("flow")
+            return True
+
+        recent = datetime.now(timezone.utc) - timedelta(minutes=5)
+        steps = [("history", history_state, ()), ("flow", flow_state, ())]
+        with mock.patch.object(bootstrap, "STEPS", steps), \
+                mock.patch.dict(bootstrap.FETCHERS, {"history": fetch_history,
+                                                     "flow": fetch_flow}), \
+                mock.patch.object(bootstrap, "_last_fetch",
+                                  side_effect=lambda name: None if name == "history" else recent), \
+                mock.patch.object(bootstrap, "_mark_fetched"), \
+                mock.patch.object(bootstrap, "_step_detail", return_value=""), \
+                mock.patch.object(bootstrap, "_forward_log"):
+            bootstrap.ensure()
+
+        self.assertEqual(fetched, ["history", "flow"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -164,6 +164,10 @@ def _index_has_today():
 # The components that gain one row per trading session.
 SESSION_COMPONENTS = ("indices", "history", "flow")
 
+# What a fresh fetch of each component changes the answer for: today's index
+# bar says a session happened; new bars say which names owe flow.
+DOWNSTREAM = {"indices": ("history", "flow"), "history": ("flow",)}
+
 # A failed step waits this long before being attempted again.
 RETRY_COOLDOWN = timedelta(minutes=10)
 
@@ -795,9 +799,19 @@ def ensure(force=False, only=None):
             satisfied.add(name)
             _mark_fetched(name)
             # Today's index bar is what tells the bar and flow probes that a
-            # session happened today; they were read before it was stored.
-            if name == "indices":
+            # session happened today, and new bars are what tell the flow
+            # import which names are owed; both were read before this fetch
+            # stored anything. So look again, and a downstream component left
+            # behind is fetched in THIS run even if it was attempted recently:
+            # that attempt worked from the older data (2026-11-10: flow tried
+            # at 21:33 against 11-09 bars, then "recent" when 11-10 landed).
+            if name in DOWNSTREAM:
                 report = status(fresh=True)
+                for later in DOWNSTREAM[name]:
+                    if later not in report:
+                        continue
+                    if report[later]["behind"] and not report[later]["retry_in_seconds"]:
+                        report[later]["needs_fetch"] = True
                 with _lock:
                     _state["planned"] = [
                         n for n, _p, _r in STEPS
