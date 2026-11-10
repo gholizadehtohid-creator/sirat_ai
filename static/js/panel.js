@@ -3660,6 +3660,7 @@ function renderHoldings(rep) {
     { k: "نکته‌ها", v: num(warn.length, 0), sub: warn.length ? "فهرست زیر" : "موردی نیست" },
   ]);
   $("holdingsWarnings").innerHTML = warn.map(w => `<li>⚠ ${esc(w)}</li>`).join("");
+  renderHoldingsRisk(rep.risk);
 
   const body = rows.map(r => {
     if (r.error) {
@@ -3668,10 +3669,14 @@ function renderHoldings(rep) {
     }
     const o = r.outlook || {};
     const flags = o.flags || [];
+    // A move past the price band is a capital increase, a unit split or a
+    // reopening: shown, but not in the colour of a day's gain or loss.
     const chg = r.halted_since
       ? `<span class="down">متوقف از ${esc(r.halted_since)}</span>`
       : (r.change_pct == null ? "—"
-        : signed(r.change_pct, 2, "٪"));
+        : r.change_beyond_band
+          ? `<span class="hint" title="بیش از دامنه‌ی نوسان روزانه: احتمالاً افزایش سرمایه، تقسیم واحد یا بازگشایی نماد — نه سود یا زیان واقعی">⚠ ${num(r.change_pct, 1)}٪</span>`
+          : signed(r.change_pct, 2, "٪"));
     const flagCell = !r.equity ? '<span class="hint">صندوق</span>'
       : (flags.length
         ? `<span class="down" title="${esc(flags.join("\n"))}">⚠ ${num(flags.length, 0)}</span>` +
@@ -3703,6 +3708,42 @@ function renderHoldings(rep) {
     `${num(rows.length, 0)} نماد بررسی شد` + (rep.as_of ? ` — قیمت‌ها تا ${faDay(rep.as_of, true)}` : "") + ".");
 }
 
+function renderHoldingsRisk(risk) {
+  const box = $("holdingsRisk");
+  if (!box) return;
+  if (!risk) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  if (!risk.available) {
+    tiles("holdingsRiskKpis", []);
+    $("holdingsRiskNote").textContent = risk.reason || "سابقه‌ی کافی برای محاسبه‌ی ریسک نیست.";
+    return;
+  }
+  const vol = risk.volatility || {};
+  const v = risk.var || {};
+  const dd = risk.drawdown || {};
+  const b = risk.beta || {};
+  tiles("holdingsRiskKpis", [
+    { k: "نوسان سالانه", v: vol.annualised_pct == null ? "—" : `${num(vol.annualised_pct, 0)}٪`,
+      sub: vol.undiversified_pct == null ? "" : `اگر همه هم‌جهت بودند ${num(vol.undiversified_pct, 0)}٪` },
+    { k: `بتا نسبت به ${esc(risk.benchmark || "شاخص کل")}`, v: b.beta == null ? "—" : num(b.beta, 2),
+      sub: "۱ یعنی هم‌اندازه‌ی بازار" },
+    { k: "زیان یک روز بد (۹۵٪)", v: v.historical_rials == null ? "—" : `${money(v.historical_rials)} ریال`,
+      sub: v.historical_pct == null ? ""
+        : `${num(Math.abs(v.historical_pct), 1)}٪ سبد؛ بدترین روز ${num(Math.abs(v.worst_day_pct), 1)}٪` },
+    { k: "بیشترین افت", v: dd.max_drawdown_pct == null ? "—" : `${num(Math.abs(dd.max_drawdown_pct), 0)}٪`,
+      sub: dd.current_pct == null ? ""
+        : (dd.current_pct < -0.5 ? `اکنون ${num(Math.abs(dd.current_pct), 0)}٪ زیر قله` : "اکنون نزدیک قله") },
+  ]);
+  const notes = [`${num(risk.sessions, 0)} جلسه‌ی مشترک، ${num(risk.names_measured, 0)} نماد`];
+  if (risk.average_correlation != null) {
+    notes.push(`میانگین همبستگی دوبه‌دو ${num(risk.average_correlation, 2)}`);
+  }
+  if ((risk.names_dropped || []).length) {
+    notes.push(`بدون سابقه‌ی کافی: ${esc(risk.names_dropped.join("، "))}`);
+  }
+  $("holdingsRiskNote").innerHTML = notes.join(" · ") + ".";
+}
+
 async function loadHoldings(force = false) {
   const text = holdingsText();
   if (!text.trim()) {
@@ -3710,6 +3751,7 @@ async function loadHoldings(force = false) {
     $("holdingsKpis").innerHTML = "";
     $("holdingsWarnings").innerHTML = "";
     $("holdingsTable").innerHTML = "";
+    renderHoldingsRisk(null);
     banner("holdingsStatus", "holdingsStatusText", "",
       "فهرستی ثبت نشده است. نمادهایی را که دارید بنویسید و «ذخیره و بررسی» را بزنید.");
     return;
@@ -3724,6 +3766,12 @@ async function loadHoldings(force = false) {
       body: JSON.stringify({ list: text, refresh: force }),
     }));
   } catch (err) {
+    // Nothing of the previous answer stays under the error: it was for the
+    // list as it was, and may not be the list now.
+    $("holdingsKpis").innerHTML = "";
+    $("holdingsWarnings").innerHTML = "";
+    $("holdingsTable").innerHTML = "";
+    renderHoldingsRisk(null);
     banner("holdingsStatus", "holdingsStatusText", "is-error",
       `<strong>بررسی نشد.</strong> ${esc(err.message)}`);
   }
@@ -3790,7 +3838,15 @@ function renderValuation(rep) {
     `${cheaper ? "ارزان‌تر" : "گران‌تر"} از ` +
     `${num(cheaper ? 100 - rep.percentile : rep.percentile, 0)}٪ ماه‌های ` +
     `${faDay(rep.since, true)} تا امروز. ` +
-    "زمینه‌ای برای تصمیم تخصیص، نه سیگنال آزموده‌شده.");
+    "زمینه‌ای برای تصمیم تخصیص، نه سیگنال آزموده‌شده." +
+    // Coverage is part of the number: a reader comparing 423 companies today
+    // with 489 last month should see it, not infer it.
+    (now.left_out != null
+      ? ` <span class="hint">حساب‌شده روی ${num(now.companies, 0)} شرکت؛ ` +
+        `${num(now.left_out, 0)} شرکت بدون سود ۱۲ ماهه‌ی قابل اتکا` +
+        (now.halted != null ? ` و ${num(now.halted, 0)} نماد متوقف` : "") +
+        " کنار گذاشته شدند.</span>"
+      : ""));
 }
 
 async function loadValuation() {

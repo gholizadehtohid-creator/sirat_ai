@@ -133,6 +133,13 @@
     </div>
     <div class="kpi-row" id="holdingsKpis"></div>
     <ul class="evidence" id="holdingsWarnings"></ul>
+    <!-- The book's own risk, by the same arithmetic as the basket's risk
+         card (risk.py). Only with quantities: weights need values. -->
+    <div id="holdingsRisk" class="holdings-risk hidden">
+      <h3 class="holdings-subhead">ریسک این سبد، با وزن‌های امروز</h3>
+      <div class="kpi-row" id="holdingsRiskKpis"></div>
+      <p class="hint" id="holdingsRiskNote"></p>
+    </div>
     <div class="table-wrap" id="holdingsTable" style="margin-top:12px"></div>
     <details class="help">
       <summary>راهنما: این کارت چه می‌گوید؟</summary>
@@ -149,6 +156,15 @@
           <tr><td>سود نقدی</td><td>سود نقدی هر سهم در آخرین مجمع و بازده آن به قیمت امروز</td></tr>
           <tr><td>آخرین اطلاعیه</td><td>تازه‌ترین اطلاعیه‌ی مهم کدال در ۹۰ روز اخیر</td></tr>
         </table>
+        <p><strong>ریسک این سبد</strong> (وقتی تعداد سهم‌ها را نوشته باشید) با همان
+        حساب کارت ریسک سبد پیشنهادی ساخته می‌شود، برای وزن‌های امروز شما در حدود
+        یک سال اخیر: <em>نوسان سالانه</em> (و اینکه اگر همه‌ی نمادها هم‌جهت بودند
+        چقدر می‌شد — فاصله‌ی این دو، اثر تنوع است)، <em>بتا</em> نسبت به شاخص کل
+        (۱ یعنی هم‌اندازه‌ی بازار بالا و پایین می‌رود)، <em>زیان یک روز بد</em>
+        (در ۵٪ بدترین روزها دست‌کم این‌قدر، به ریال) و <em>بیشترین افت</em> از یک
+        قله. روز افزایش سرمایه کنار گذاشته می‌شود تا زیان ساختگی ۴۰ درصدی حساب
+        نشود. دامنه‌ی نوسان روزانه دنباله‌ی توزیع را می‌بُرد، پس این اعداد کفِ ریسک
+        واقعی‌اند، نه سقف آن.</p>
         <p>هشدار تمرکز وقتی می‌آید که یک نماد بیش از ۲۰٪ یا یک صنعت بیش از ۴۰٪ سبد
         باشد. این کارت چیزی پیشنهاد نمی‌کند؛ همان اعدادی را نشان می‌دهد که بقیه‌ی پنل
         برای هر نماد دارد، کنار هم.</p>

@@ -142,6 +142,35 @@ def _traded_recently(data, code, decision, days=None):
     return (pd.Timestamp(decision) - pd.Timestamp(traded.iloc[-1])).days <= days
 
 
+def _latest_with_ttm(analyse, history, newest):
+    """The outlook of the newest filing, or of the one before it when the
+    newest cannot give a trailing year.
+
+    The store keeps one version of each period, the latest public: last
+    year's 6-month statement is held as the audited CONSOLIDATED one, which
+    arrives months after the period, while this year's newest 6-month is
+    still the first, SEPARATE release. The two cannot be netted, so the
+    trailing year is missing the month the 6-month reports land -- 48
+    companies without one on 10-10, 113 on 11-10, the difference leaving
+    the newest points only (found 2026-11-11). The filing before it still
+    gives one: the figure the company was counted with a month earlier,
+    and STALE_MONTHS still bounds how old it may be.
+    """
+
+    import fundamental_outlook as fo
+
+    result = analyse(history)
+    if not result or result["kind"] != fo.OPERATING             or result["ttm"]["profit"] is not None:
+        return result
+    earlier = [r for r in history if r is not newest]
+    if not earlier:
+        return result
+    again = analyse(earlier)
+    if again and again["kind"] == fo.OPERATING             and again["ttm"]["profit"] is not None:
+        return again
+    return result
+
+
 def point(data, decision):
     """The market's aggregate trailing P/E on session `decision`, or None."""
 
@@ -170,11 +199,16 @@ def point(data, decision):
         if shares is None:
             skipped += 1
             continue
-        result = fo.analyse(
-            code, price=data.valuation_price(code, decision), rows=_rows(history),
-            today=_jalali(decision), monthly_rows=[], dividend=None,
-            shares=shares, sector=inst["sector"],
-            portfolio=None, opportunity=no_hurdle)
+        price = data.valuation_price(code, decision)
+
+        def analyse(rows, code=code, price=price, shares=shares,
+                    sector=inst["sector"]):
+            return fo.analyse(
+                code, price=price, rows=_rows(rows), today=_jalali(decision),
+                monthly_rows=[], dividend=None, shares=shares, sector=sector,
+                portfolio=None, opportunity=no_hurdle)
+
+        result = _latest_with_ttm(analyse, history, newest)
         if not result or result["kind"] != fo.OPERATING:
             continue
         age = result["latest"]["age_months"]

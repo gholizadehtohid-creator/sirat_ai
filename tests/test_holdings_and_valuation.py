@@ -64,6 +64,43 @@ class SummaryTests(unittest.TestCase):
         self.assertFalse(any("تمرکز" in w for w in out["warnings"]))
 
 
+class BookRiskTests(unittest.TestCase):
+    """The reader's own book through the basket's risk arithmetic."""
+
+    def test_valued_rows_become_positions(self):
+        import risk
+        seen = {}
+
+        def analyse(positions, equity=None):
+            seen["positions"], seen["equity"] = positions, equity
+            return {"available": True, "sessions": 120, "names_measured": 2,
+                    "names_dropped": [], "volatility": {"annualised_pct": 30.0},
+                    "var": {"historical_pct": -2.0, "historical_rials": 2.0},
+                    "drawdown": {"max_drawdown_pct": -20.0}, "beta": {"beta": 0.9},
+                    "benchmark": "شاخص کل", "correlation": {"average": 0.4},
+                    "concentration": {"hhi": 0.5}, "notes": []}
+
+        rows = [{"symbol": "الف", "ins_code": "1", "value": 60.0, "sector": "فلزات"},
+                {"symbol": "ب", "ins_code": "2", "value": 40.0, "sector": None},
+                {"symbol": "پ", "ins_code": "3", "value": None},
+                {"symbol": "ت", "error": "نماد پیدا نشد"}]
+        with mock.patch.object(risk, "analyse", side_effect=analyse):
+            out = holdings._risk(rows, 100.0)
+        self.assertEqual([p["symbol"] for p in seen["positions"]], ["الف", "ب"])
+        self.assertEqual(seen["equity"], 100.0)
+        self.assertEqual(seen["positions"][1]["sector_name"], "بدون صنعت")
+        self.assertTrue(out["available"])
+        self.assertEqual(out["average_correlation"], 0.4)
+
+    def test_no_quantities_means_no_risk(self):
+        self.assertIsNone(holdings._risk([{"symbol": "الف", "ins_code": "1", "value": None}], None))
+
+    def test_a_move_past_the_band_is_marked(self):
+        self.assertTrue(holdings._beyond_band(-40.0))
+        self.assertFalse(holdings._beyond_band(2.9))
+        self.assertFalse(holdings._beyond_band(None))
+
+
 class ValuationSummaryTests(unittest.TestCase):
 
     def setUp(self):
@@ -135,6 +172,46 @@ class RouteTests(unittest.TestCase):
             r = self.client.get("/api/valuation")
         self.assertEqual(r.status_code, 200)
         self.assertFalse(r.get_json()["available"])
+
+
+class LatestWithTtmTests(unittest.TestCase):
+    """A newest filing that cannot give a trailing year (found 2026-11-11)."""
+
+    def outlook(self, ttm, kind=None):
+        import fundamental_outlook as fo
+        return {"kind": kind or fo.OPERATING, "ttm": {"profit": ttm}}
+
+    def test_the_filing_before_gives_the_trailing_year(self):
+        newest, older = {"p": "1405/06/31"}, {"p": "1405/03/31"}
+        seen = []
+
+        def analyse(rows):
+            seen.append(list(rows))
+            return self.outlook(None if newest in rows else 7.0)
+
+        out = mv._latest_with_ttm(analyse, [older, newest], newest)
+        self.assertEqual(out["ttm"]["profit"], 7.0)
+        self.assertEqual(seen[1], [older])
+
+    def test_a_newest_filing_with_a_trailing_year_is_used_as_is(self):
+        calls = []
+
+        def analyse(rows):
+            calls.append(rows)
+            return self.outlook(5.0)
+
+        newest = {"p": "n"}
+        self.assertEqual(mv._latest_with_ttm(analyse, [{"p": "o"}, newest], newest)
+                         ["ttm"]["profit"], 5.0)
+        self.assertEqual(len(calls), 1)
+
+    def test_financials_and_hopeless_cases_are_returned_unchanged(self):
+        import fundamental_outlook as fo
+        newest = {"p": "n"}
+        fin = self.outlook(None, kind=fo.FINANCIAL)
+        self.assertIs(mv._latest_with_ttm(lambda rows: fin, [newest], newest), fin)
+        none = self.outlook(None)
+        self.assertIs(mv._latest_with_ttm(lambda rows: none, [{"p": "o"}, newest], newest), none)
 
 
 class _Bars:

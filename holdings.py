@@ -37,6 +37,10 @@ MANY_FLAGS = 2
 
 ANNOUNCEMENT_DAYS = 90
 
+# A day's move past what the price band permits is a capital increase, a
+# unit split or a reopening -- not a day's gain or loss to report as one.
+BAND_EXCESS_PCT = None      # None: config.CORPORATE_ACTION_THRESHOLD
+
 
 def parse(text):
     """'فولاد 1000, شپنا' -> [('فولاد', 1000.0), ('شپنا', None)].
@@ -111,6 +115,7 @@ def review(entries):
             "value": close * quantity if close and quantity else None,
             "halted_since": halted.get(code),
         }
+        row["change_beyond_band"] = _beyond_band(row["change_pct"])
         if row["equity"] and code not in halted:
             outlook = fo.analyse(code, price=close, dividend=dividends.get(code),
                                  shares=shares.get(code), sector=row["sector"],
@@ -139,7 +144,57 @@ def review(entries):
                                                 ins_code=code, limit=3)]
         rows.append(row)
 
-    return _summarise(rows)
+    book = _summarise(rows)
+    book["risk"] = _risk(rows, book["total_value"])
+    return book
+
+
+def _beyond_band(change_pct):
+    """True when a day's change is more than the price band allows."""
+
+    import config
+
+    limit = BAND_EXCESS_PCT if BAND_EXCESS_PCT is not None         else config.CORPORATE_ACTION_THRESHOLD
+    return change_pct is not None and abs(change_pct) > limit
+
+
+def _risk(rows, total):
+    """The book's own risk, by the arithmetic the basket's risk card uses.
+
+    Volatility, beta to the index, a bad day's loss in rials and the deepest
+    fall -- all of them for TODAY's weights carried back over the last
+    sessions, which is what the reader holds now, not what they held then.
+    risk.returns_matrix drops a capital-increase day instead of reading it as
+    a 40% loss. None without quantities: weights need values.
+    """
+
+    import risk
+
+    positions = [{"ins_code": r["ins_code"], "symbol": r["symbol"],
+                  "position_value": r["value"],
+                  "sector_name": r.get("sector") or "بدون صنعت"}
+                 for r in rows if r.get("value") and r.get("ins_code")]
+    if not positions or not total:
+        return None
+    report = risk.analyse(positions, equity=total)
+    if not report.get("available"):
+        return {"available": False, "reason": report.get("reason"),
+                "notes": report.get("notes") or []}
+    corr = report.get("correlation") or {}
+    return {
+        "available": True,
+        "sessions": report.get("sessions"),
+        "names_measured": report.get("names_measured"),
+        "names_dropped": report.get("names_dropped") or [],
+        "volatility": report.get("volatility"),
+        "var": report.get("var"),
+        "drawdown": report.get("drawdown"),
+        "beta": report.get("beta"),
+        "benchmark": report.get("benchmark"),
+        "average_correlation": corr.get("average"),
+        "concentration": report.get("concentration"),
+        "notes": report.get("notes") or [],
+    }
 
 
 def _summarise(rows):
