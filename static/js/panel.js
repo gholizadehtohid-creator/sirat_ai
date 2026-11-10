@@ -104,7 +104,13 @@ async function getJSON(url, opts) {
     // renders and then fails -- indistinguishable from a broken feature unless
     // the message says otherwise. (Windows lets a second `python app.py` bind
     // a port the first one already holds, so the stale copy is not obvious.)
-    if (/NotFound|404/.test(message)) {
+    //
+    // Matched on the PREFIX app.handle_error gives an unknown route -- werkzeug's
+    // NotFound as "NotFound: 404 Not Found: ..." -- and on nothing looser. A bare
+    // /NotFound|404/ also caught FileNotFoundError, ModuleNotFoundError and an
+    // upstream "404 Client Error", and replaced each real cause with advice to
+    // restart a panel that was not stale.
+    if (/^NotFound: 404/.test(message)) {
       throw new Error(
         `این نسخه‌ی در حال اجرای پنل، مسیر ${url.split("?")[0]} را نمی‌شناسد — ` +
         `یعنی کدِ پایتونش قدیمی‌تر از این صفحه است. پنل را ببندید و دوباره ` +
@@ -290,7 +296,7 @@ function renderBanner(rep) {
     `${counts.universe} نماد، ${rep.have_history || 0} نماد دارای سابقه‌ی قیمت` +
     (snap.rows ? `، تصویر بنیادی ${snap.rows} سطر (${snap.captured_at})`
                : `، بدون تصویر بنیادی — EPS و P/E در دسترس نیست`) +
-    `. برای دریافت مجدد «↻ Refresh data» را بزنید.`;
+    `. برای دریافت مجدد «به‌روزرسانی داده‌ها» را بزنید.`;
 }
 
 /* ---------- market regime ---------- */
@@ -298,9 +304,16 @@ function renderBanner(rep) {
 function renderRegime(rep) {
   state.regime = rep;
 
+  // Under the v2 engine this payload is regime_engine.assess(): the same keys
+  // plus the trading mode it derives -- and the mode, not the vote, is what
+  // sizes and gates the book. v1 sends no mode_label, and its banner stays
+  // word for word what it was. Unavailable carries a mode too (cash only, no
+  // new entries), which is worth saying beside the reason.
+  const mode = rep?.mode_label ? ` حالت معاملاتی: ${esc(rep.mode_label)}.` : "";
+
   if (!rep || !rep.available) {
     banner("regimeStatus", "regimeStatusText", "is-error",
-      `<strong>وضعیت بازار قابل تشخیص نیست.</strong> ${esc(rep?.reason || "")}`);
+      `<strong>وضعیت بازار قابل تشخیص نیست.</strong> ${esc(rep?.reason || "")}` + mode);
     tiles("regimeKpis", []);
     $("participationChart").innerHTML = '<div class="empty">داده‌ای نیست</div>';
     bulletList("regimeEvidence", []);
@@ -310,7 +323,7 @@ function renderRegime(rep) {
   banner("regimeStatus", "regimeStatusText", "is-live",
     `<strong>${esc(rep.label)}</strong> — رأی‌گیری ${rep.votes.bull} صعودی، ` +
     `${rep.votes.bear} نزولی، ${rep.votes.sideways} خنثی. ` +
-    `سقف سرمایه‌گذاری روی ${rep.max_invested_pct}٪ تنظیم شد.`);
+    `سقف سرمایه‌گذاری روی ${rep.max_invested_pct}٪ تنظیم شد.` + mode);
 
   const cap = rep.cap_weighted || {};
   const ew = rep.equal_weighted || {};
@@ -323,7 +336,10 @@ function renderRegime(rep) {
       sub: rep.volatility_regime || "—"
     },
     { k: "نقد هدف", v: `${rep.cash_target_pct}%`, sub: `حداکثر ${rep.max_invested_pct}% سرمایه‌گذاری` },
-    { k: "اطمینان", v: rep.confidence, sub: "سهم رأی اکثریت" },
+    // regime.py sends the majority's share of the votes as a 0-1 fraction.
+    // Printed bare it read "1" in a row of percentage tiles.
+    { k: "اطمینان", v: rep.confidence == null ? "—" : `${num(rep.confidence * 100, 0)}%`,
+      sub: "سهم رأی اکثریت" },
     {
       k: "مشارکت بازار",
       v: part.above_slow_ma_pct != null ? `${part.above_slow_ma_pct}%` : "—",
@@ -369,6 +385,7 @@ async function loadRegime(force = false) {
       rep.available ? rep.label : (rep.reason || "نامشخص"),
       rep.available ? rep.regime : "");
   } catch (err) {
+    state.regime = null;
     banner("regimeStatus", "regimeStatusText", "is-error",
       `<strong>تشخیص وضعیت بازار شکست خورد.</strong> ${esc(err.message)}`);
     setTask("regime", "failed", err.message);
@@ -926,8 +943,18 @@ function renderIndices(rep) {
   const breadth = rep.breadth;
 
   if (breadth) {
+    // Shortest window first, the order indices.py builds them in. Flask sorts
+    // JSON keys, so the object arrives as 1d, 20d, 5d, 60d, and drawing it in
+    // arrival order put the 20-day bar between the 1-day and the 5-day. A
+    // window this list does not know still gets drawn, after the four it does.
+    const spreads = breadth.spreads || {};
+    const order = ["1d", "5d", "20d", "60d"];
+    const keys = [...order.filter(k => k in spreads),
+                  ...Object.keys(spreads).filter(k => !order.includes(k))];
+
     divergingBar($("breadthChart"), {
-      data: Object.entries(breadth.spreads)
+      data: keys
+        .map(k => [k, spreads[k]])
         .filter(([, v]) => v !== null)
         .map(([k, v]) => ({ label: k, value: v })),
       format: (v) => `${v > 0 ? "+" : ""}${fmt(v, 1)}pp`
@@ -952,6 +979,7 @@ async function loadIndices(force = false) {
       ok ? `${ok} سری شاخص امتیازدهی شد` : "هیچ سری شاخصی ذخیره نشده",
       `${ok}/${(rep.indices || []).length}`);
   } catch (err) {
+    state.indices = null;
     banner("capIndexStatus", "capIndexStatusText", "is-error",
       `<strong>تحلیل شاخص شکست خورد.</strong> ${esc(err.message)}`);
     setTask("indices", "failed", err.message);
@@ -1533,12 +1561,18 @@ function renderSmartMoney(rep) {
 
     // P/E as a RELATION, which is what the reader is asked to judge. The raw
     // pair is kept in the title so the claim can be checked, not just trusted.
+    //
+    // The word carries the direction and the number only the size of the gap.
+    // pe_vs_sector is a DISCOUNT -- (sector - pe) / sector, positive when
+    // cheaper (smart_money/scanner.py) -- so printed signed it contradicted the
+    // word: قشهد at P/E 8.3 against a median of 7.6 read «بیشتر از گروه (−9%)».
     const pe = (r.pe == null || r.sector_pe == null)
       ? "n/a"
       : `<span class="${r.pe < r.sector_pe ? "up" : "down"}" ` +
         `title="P/E ${num(r.pe, 1)} در برابر میانه صنعت ${num(r.sector_pe, 1)}">` +
-        `${r.pe < r.sector_pe ? "کمتر" : "بیشتر"} از گروه ` +
-        `(${signed(r.pe_vs_sector, 0)})</span>`;
+        `${r.pe < r.sector_pe ? "کمتر" : "بیشتر"} از گروه` +
+        (r.pe_vs_sector == null ? "" : ` (${num(Math.abs(r.pe_vs_sector), 0)}٪)`) +
+        `</span>`;
 
     const smart = r.code_to_code
       ? `<span class="badge warning"><span class="dot"></span>کد به کد ` +
@@ -2131,6 +2165,7 @@ async function loadSectors(force = false) {
       n ? `${n} صنعت تحلیل شد` : ((rep.warnings || [])[0] || "داده‌ی صنعت نیست"),
       n ? String(n) : "");
   } catch (err) {
+    state.sectors = null;
     banner("sectorStatus", "sectorStatusText", "is-error",
       `<strong>تحلیل صنایع شکست خورد.</strong> ${esc(err.message)}`);
     setTask("sectors", "failed", err.message);
@@ -2313,6 +2348,7 @@ async function loadFundamentals(force = false) {
       n ? `${n} شرکت امتیاز گرفت` : "هنوز صورت مالی‌ای ذخیره نشده",
       n ? String(n) : "");
   } catch (err) {
+    state.fundamentals = null;
     banner("fundStatus", "fundStatusText", "is-error",
       `<strong>تحلیل بنیادی شکست خورد.</strong> ${esc(err.message)}`);
     setTask("fundamentals", "failed", err.message);
@@ -2480,6 +2516,7 @@ async function loadMoneyflow(force = false) {
       n ? `${n} نماد سنجیده شد` : "داده‌ی حقیقی/حقوقی نیست",
       n ? String(n) : "");
   } catch (err) {
+    state.flow = null;
     banner("flowStatus", "flowStatusText", "is-error",
       `<strong>تحلیل جریان پول شکست خورد.</strong> ${esc(err.message)}`);
     setTask("flow", "failed", err.message);
@@ -2668,6 +2705,7 @@ async function loadScreen(force = false) {
       `${rep.counts.technically_analysed} از ${rep.counts.universe} تحلیل شد`,
       `${rep.counts.technically_analysed}/${rep.counts.universe}`);
   } catch (err) {
+    state.screen = null;
     if (!scanLocked(err, "screenStatus", "screenStatusText", "screen",
                     "غربال اجرا نشد — تنظیمات است، نه خطا.")) {
       banner("screenStatus", "screenStatusText", "is-error",
@@ -2682,18 +2720,56 @@ async function loadScreen(force = false) {
 
 /* ---------- suggested portfolio ---------- */
 
+// Everything a book is drawn into, blanked as one list so the two failure
+// paths -- a payload that says it failed, and a request that never answered --
+// cannot drift apart. A basket left standing under either was sized for the
+// equity of the run that built it, not the one just applied.
+function clearPortfolio() {
+  tiles("portfolioKpis", []);
+  $("portfolioTable").innerHTML = "";
+  $("allocationChart").innerHTML = '<div class="empty">سبدی نیست</div>';
+  $("riskTable").innerHTML = "";
+  bulletList("riskNotes", []);
+  bulletList("portfolioNotes", []);
+}
+
+// The min-score box is read by the v1 book only. v2 builds on its own floor --
+// SWING_BUY_SCORE plus the regime's entry_floor, reported back as
+// settings.min_score -- so under v2 the box took a number and ignored it,
+// which reads as a setting that worked. Off under v2, naming the floor in
+// force; on again for v1. Its value is left alone: v1 still wants it.
+// panel.css greys only a disabled BUTTON, and its input colours override the
+// browser's disabled ones, so the input gets the same 0.5 inline.
+function syncMinScore(rep) {
+  const input = $("minScoreInput");
+  if (!input || !rep) return;
+
+  const v2 = rep.engine === "v2";
+  const floor = rep.portfolio?.settings?.min_score;
+  const why = v2
+    ? "در موتور v2 کف امتیاز را خود موتور تعیین می‌کند" +
+      (floor != null ? `: ${floor}` : "") +
+      " — این کادر فقط در موتور v1 خوانده می‌شود."
+    : "";
+
+  input.disabled = v2;
+  input.style.opacity = v2 ? "0.5" : "";
+  input.title = why;
+
+  // On the field as well, so the label explains it too: not every browser
+  // shows a tooltip for a disabled control.
+  const field = input.closest(".field");
+  if (field) field.title = why;
+}
+
 function renderPortfolio(rep) {
   state.portfolio = rep;
+  syncMinScore(rep);
 
   if (!rep || !rep.ok) {
     banner("portfolioStatus", "portfolioStatusText", "is-error",
       `<strong>ساخت سبد انجام نشد.</strong> ${esc(rep?.error || "")}`);
-    tiles("portfolioKpis", []);
-    $("portfolioTable").innerHTML = "";
-    $("allocationChart").innerHTML = '<div class="empty">سبدی نیست</div>';
-    $("riskTable").innerHTML = "";
-    bulletList("riskNotes", []);
-    bulletList("portfolioNotes", []);
+    clearPortfolio();
     return;
   }
 
@@ -2895,6 +2971,11 @@ async function loadPortfolio(force = false) {
         : (rep.error || "ساخته نشد"),
       n ? String(n) : "");
   } catch (err) {
+    // No book came back, so none is drawn. Kept in state, the last one was
+    // repainted by the next rerender() -- after an apply with a new equity, a
+    // basket sized for the old equity, green again after one tab switch.
+    state.portfolio = null;
+    clearPortfolio();
     if (!scanLocked(err, "portfolioStatus", "portfolioStatusText", "portfolio",
                     "سبد ساخته نشد — تنظیمات است، نه خطا.")) {
       banner("portfolioStatus", "portfolioStatusText", "is-error",
@@ -3064,10 +3145,13 @@ function renderBootstrap(p) {
     bar.classList.add(absent.length ? "is-error" : "is-behind");
     bar.setAttribute("aria-valuenow", String(Math.round(ready / order.length * 100)));
     $("loadPct").textContent = `${ready}/${order.length}`;
+    // The button is named as the page labels it (#loadFetchBtn). This line
+    // used to send the reader to an English "Fetch what is missing or stale"
+    // that appears nowhere on a Persian page.
     $("loadStage").textContent = [
-      absent.length ? `Never downloaded: ${names(absent)}` : "",
-      stale.length ? `Out of date: ${names(stale)}` : ""
-    ].filter(Boolean).join("  ·  ") + " — press “Fetch what is missing or stale”.";
+      absent.length ? `هرگز دریافت نشده: ${names(absent)}` : "",
+      stale.length ? `کهنه: ${names(stale)}` : ""
+    ].filter(Boolean).join("  ·  ") + " — دکمه‌ی «دریافت داده‌های ناقص یا کهنه» را بزنید.";
 
   } else {
     fill.style.width = "100%";
@@ -3331,12 +3415,19 @@ function renderOpportunities(rep) {
 async function loadOpportunities(force = false) {
   const btn = $("runOpportunitiesBtn");
   if (btn) btn.disabled = true;
+  state.opportunitiesFailed = false;
 
   try {
     renderOpportunities(await getJSON(`/api/opportunities${force ? "?refresh=1" : ""}`));
   } catch (err) {
+    // The slot goes with the failure (see rerender). The today card reads the
+    // same slot, and with it empty would show "reading prices…" for a read
+    // that has already failed; the flag lets it say so instead.
+    state.opportunities = null;
+    state.opportunitiesFailed = true;
     banner("opportunitiesStatus", "opportunitiesStatusText", "is-error",
       `<strong>خوانده نشد.</strong> ${esc(err.message)}`);
+    renderToday();
     console.error(err);
   } finally {
     if (btn) btn.disabled = false;
@@ -3371,6 +3462,7 @@ async function loadMarketflow() {
     state.marketflow = await getJSON(`/api/marketflow?sessions=${encodeURIComponent(sessions)}`);
     renderMarketflow(state.marketflow);
   } catch (err) {
+    state.marketflow = null;
     banner("marketflowStatus", "marketflowStatusText", "is-error",
       `<strong>خوانده نشد.</strong> ${esc(err.message)}`);
     console.error(err);
@@ -3980,9 +4072,15 @@ function renderToday() {
     const s = live.session || {};
     const open = s.trading === true ? "باز است" : s.trading === false ? "بسته است" : "نامعلوم";
     const c = live.counts || {};
+    // The counts are one capture of the order book, and the collector runs
+    // only in session, so out of session they are the last session's (one
+    // recording: 57 hours old) -- dated here the way the live tab dates the
+    // same numbers, with the same marker.
+    const age = ageTag(live.queues?.age_minutes);
     $("todayMarket").innerHTML =
       `بازار <strong>${open}</strong>` +
-      (c.buy != null ? ` · صف خرید <strong>${c.buy}</strong> و صف فروش <strong>${c.sell}</strong>` : "");
+      (c.buy != null ? ` · صف خرید <strong>${c.buy}</strong> و صف فروش <strong>${c.sell}</strong>` +
+        (age ? ` — ${age}` : "") : "");
   }
 
   if (!rep) return;
@@ -3994,6 +4092,10 @@ function renderToday() {
   const bills = ((opp && opp.bills) || {}).bills || [];
 
   const cheapest = (sleeve) => (funds[sleeve] || []).find(f => !f.suspect);
+
+  // Nothing is in flight after a failed read; "reading…" would say otherwise.
+  const pending = state.opportunitiesFailed
+    ? "قیمت‌ها خوانده نشد" : "در حال خواندن قیمت‌ها…";
 
   const items = Object.entries(profile.weights).filter(([, w]) => w > 0).map(([sleeve, w]) => {
     let buy = "", why = "";
@@ -4017,7 +4119,7 @@ function renderToday() {
     return `<div class="today-item">
       <div class="pct">${w}٪ ${esc(labels[sleeve] || sleeve)}</div>
       <div class="amt">${Math.round((profile.amounts || {})[sleeve] || 0).toLocaleString("fa-IR")} <span class="pct">ریال</span></div>
-      <div class="buy">${buy || '<span class="hint">در حال خواندن قیمت‌ها…</span>'}</div>
+      <div class="buy">${buy || `<span class="hint">${pending}</span>`}</div>
       <div class="why">${why}</div>
     </div>`;
   });
@@ -4033,6 +4135,10 @@ function renderToday() {
     `<span class="hint">${esc(profile.evidence_text || "")}</span>`;
 }
 
+// Repaints whatever each slot holds, on every tab switch, resize, theme toggle
+// and evidence-section open. That is why each loader empties its slot when it
+// fails: a slot still holding the last good payload is painted straight back
+// over the failure's banner, marked live.
 function rerender() {
   if (state.allocation) renderAllocation(state.allocation);
   if (state.opportunities) renderOpportunities(state.opportunities);
@@ -4055,14 +4161,21 @@ function rerender() {
 
 /* ---------- import actions ---------- */
 
-async function withButton(btn, label, fn) {
+// A failure is reported in the banner of the section the button sits in. Every
+// one used to go to the screen's banner, inside a section that is collapsed by
+// default: with TSETMC unreachable /api/import/indices answers 502, and the
+// reason landed where nobody was looking while the button simply went back to
+// its label. The default is the screen's banner, which is where the universe
+// and snapshot imports live.
+async function withButton(btn, label, fn,
+                          statusId = "screenStatus", textId = "screenStatusText") {
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = label;
   try {
     await fn();
   } catch (err) {
-    banner("screenStatus", "screenStatusText", "is-error",
+    banner(statusId, textId, "is-error",
       `<strong>${esc(original)}:</strong> ${esc(err.message)}`);
   } finally {
     btn.disabled = false;
@@ -4090,7 +4203,7 @@ on("importIndicesBtn", "click", () =>
     await getJSON("/api/import/indices", { method: "POST" });
     await loadIndices(true);
     await loadRegime(true);
-  }));
+  }, "capIndexStatus", "capIndexStatusText"));
 
 // One request per symbol over the whole universe: slow enough that firing it
 // by accident deserves a confirmation.
@@ -4104,7 +4217,7 @@ on("importSectorsBtn", "click", () => {
   withButton($("importSectorsBtn"), "در حال دریافت…", async () => {
     await getJSON("/api/import/sectors", { method: "POST" });
     await loadSectors(true);
-  });
+  }, "sectorStatus", "sectorStatusText");
 });
 
 // Same cost shape as the sector import: one request per symbol across the
@@ -4121,7 +4234,7 @@ on("importFlowBtn", "click", () => {
     await loadMoneyflow(true);
     // The screen's combined score is tilted by flow, so it is now stale.
     await loadScreen(true);
-  });
+  }, "flowStatus", "flowStatusText");
 });
 
 // Codal downloads run in the background and are paced against a rate limit,
@@ -4148,7 +4261,7 @@ on("importCodalBtn", "click", () =>
           "چند دقیقه طول می‌کشد و اسکن را متوقف نمی‌کند؛ برای دیدن پیشرفت " +
           "دوباره «تحلیل» را بزنید."
         : "<strong>یک دریافت کدال از قبل در حال اجراست.</strong>");
-  }));
+  }, "fundStatus", "fundStatusText"));
 
 /* ---------- live session watch ----------
 
@@ -4412,6 +4525,10 @@ on("resetBtn", "click", () => {
 
 on("refreshBtn", "click", async () => {
   const btn = $("refreshBtn");
+  // The template's own label, read back as withButton does rather than
+  // restated: a copy here once put an English "↻ Refresh data" back on a
+  // Persian button after every refresh.
+  const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = "در حال دریافت…";
   try {
@@ -4421,7 +4538,7 @@ on("refreshBtn", "click", async () => {
     console.error(err);
   } finally {
     btn.disabled = false;
-    btn.textContent = "↻ Refresh data";
+    btn.textContent = original;
   }
 });
 
