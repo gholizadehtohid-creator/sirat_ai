@@ -53,9 +53,10 @@ def _net_share(rows):
                  - rows["individual_sell_value"].sum()) / turnover
 
 
-def _third(values, low=True):
+def _third(values):
+    """The bottom third's upper bound, or None for an empty date."""
     ordered = sorted(values)
-    return ordered[max(0, len(ordered) // 3 - 1)] if low else None
+    return ordered[max(0, len(ordered) // 3 - 1)] if ordered else None
 
 
 def _median(values):
