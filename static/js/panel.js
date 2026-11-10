@@ -89,6 +89,12 @@ const state = {
   marketflow: null
 };
 
+// rerender() repaints each section's banner from its analysis, which an import
+// failure leaves valid -- so the failure was wiped by the next tab switch. It
+// is kept here, laid back over the banner after every rerender, and dropped
+// when the same import is tried again.
+const importErrors = {};
+
 /* ---------- helpers ---------- */
 
 async function getJSON(url, opts) {
@@ -132,7 +138,7 @@ async function getJSON(url, opts) {
 
 function num(v, digits = 2) {
   return (v === null || v === undefined || Number.isNaN(v))
-    ? "n/a" : Number(v).toFixed(digits);
+    ? "—" : Number(v).toFixed(digits);
 }
 
 function badge(status, map = STATUS_CLASS) {
@@ -140,7 +146,7 @@ function badge(status, map = STATUS_CLASS) {
 }
 
 function signed(v, digits = 2, suffix = "%") {
-  if (v === null || v === undefined) return "n/a";
+  if (v === null || v === undefined) return "—";
   const cls = v > 0 ? "up" : v < 0 ? "down" : "";
   return `<span class="${cls}">${v > 0 ? "+" : ""}${v.toFixed(digits)}${suffix}</span>`;
 }
@@ -149,7 +155,7 @@ function signed(v, digits = 2, suffix = "%") {
 // A trillion tier is not decorative here: whole-market turnover is quadrillions
 // of rials, and without it the money-flow totals render as "1189993.49B".
 function money(v) {
-  if (v === null || v === undefined) return "n/a";
+  if (v === null || v === undefined) return "—";
   const a = Math.abs(v);
   const sign = v < 0 ? "-" : "";
   if (a >= 1e12) return `${sign}${(a / 1e12).toFixed(2)}T`;
@@ -831,7 +837,7 @@ function renderIndexCard(index, prefix, rep) {
       sub: badge(t.status || "NO DATA") },
     { k: "سیگنال تکنیکال", v: call,
       sub: sig.call ? `خالص ${signed(sig.net, 0, "")} از ${sig.total} رأی` : "بدون رأی" },
-    { k: "روند", v: t.trend || "n/a", sub: `RSI ${num(t.rsi, 1)}` },
+    { k: "روند", v: t.trend || "—", sub: `RSI ${num(t.rsi, 1)}` },
     { k: "۲۰ روزه", v: signed(r["20d"]), sub: "بازده" },
     { k: "۶۰ روزه", v: signed(r["60d"]), sub: "بازده" }
   ]);
@@ -1490,23 +1496,23 @@ const SM_V2_CLASS = { BUY: "good", HOLD: "neutral", SELL: "bad", AVOID: "bad" };
 // not in the T/B abbreviations money() uses for turnover. A reader who knows
 // this exchange knows instantly what "۱۲ همت" is and has to convert "120.00B".
 function hemat(v) {
-  return (v === null || v === undefined) ? "n/a"
+  return (v === null || v === undefined) ? "—"
     : `${(v / 1e13).toFixed(v < 1e13 ? 2 : 1)} همت`;
 }
 
 function smartMoneyFunnel(c) {
   tiles("smartMoneyFunnel", [
-    { k: "کل نمادها", v: c.universe ?? "n/a",
+    { k: "کل نمادها", v: c.universe ?? "—",
       sub: `${c.illiquid ?? 0} زیر کف نقدشوندگی` },
-    { k: "نقدشونده", v: c.liquid ?? "n/a",
+    { k: "نقدشونده", v: c.liquid ?? "—",
       sub: `${c.dirty_data ?? 0} با داده مخدوش` },
-    { k: "MFI بالای ۷۰", v: c.passed_mfi ?? "n/a",
+    { k: "MFI بالای ۷۰", v: c.passed_mfi ?? "—",
       sub: "شرط اول — به‌تنهایی عادی است" },
-    { k: "در کف محدوده", v: c.passed_range ?? "n/a",
+    { k: "در کف محدوده", v: c.passed_range ?? "—",
       sub: `${c.queue_locked ?? 0} در صف، حذف شد` },
-    { k: "هنوز حرکت نکرده", v: c.still_quiet ?? "n/a",
+    { k: "هنوز حرکت نکرده", v: c.still_quiet ?? "—",
       sub: `${c.already_moved ?? 0} قبلاً حرکت کرده بودند` },
-    { k: "واجد شرایط", v: c.qualified ?? "n/a",
+    { k: "واجد شرایط", v: c.qualified ?? "—",
       sub: `${c.with_code_to_code ?? 0} با کد به کد تأییدشده` }
   ]);
 }
@@ -1567,7 +1573,7 @@ function renderSmartMoney(rep) {
     // cheaper (smart_money/scanner.py) -- so printed signed it contradicted the
     // word: قشهد at P/E 8.3 against a median of 7.6 read «بیشتر از گروه (−9%)».
     const pe = (r.pe == null || r.sector_pe == null)
-      ? "n/a"
+      ? "—"
       : `<span class="${r.pe < r.sector_pe ? "up" : "down"}" ` +
         `title="P/E ${num(r.pe, 1)} در برابر میانه صنعت ${num(r.sector_pe, 1)}">` +
         `${r.pe < r.sector_pe ? "کمتر" : "بیشتر"} از گروه` +
@@ -1582,7 +1588,7 @@ function renderSmartMoney(rep) {
 
     const sup = r.support || {};
     const support = sup.price == null
-      ? "n/a"
+      ? "—"
       : `${num(sup.distance_pct, 1)}٪ بالای ${esc(sup.label || "حمایت")}` +
         (sup.touches ? ` (${sup.touches} بار تست)` : "");
 
@@ -2121,7 +2127,7 @@ function renderSectors(rep) {
         return [
           esc(s.sector_name),
           t.score,
-          t.trend || "n/a",
+          t.trend || "—",
           b ? `${b.pct_above_slow_ma}%` : "—",
           signed(t.returns ? t.returns["60d"] : null),
           esc(s.index_method || "—")
@@ -2648,7 +2654,7 @@ function renderScreen(rep) {
             `<strong>${r.overall_score ?? "—"}</strong>`,
             t.trend ?? "—",
             r.final_status ?? "—",
-            cr.pe != null ? num(cr.pe, 1) : (m.pe == null ? "n/a" : m.pe),
+            cr.pe != null ? num(cr.pe, 1) : (m.pe == null ? "—" : m.pe),
             cr.roe == null ? "—" : `${num(cr.roe, 0)}%`,
             signed(cr.revenue_growth, 0),
             divergence
@@ -2682,7 +2688,9 @@ function renderScreen(rep) {
     [
       ["فهرست نمادها", rep.counts.universe ? "✓ بارگذاری شد" : "✗ موجود نیست",
         `${rep.counts.universe} سهم عادی`],
-      ["سابقه‌ی قیمت", rep.have_history ? "◐ جزئی" : "✗ موجود نیست",
+      ["سابقه‌ی قیمت",
+        !rep.have_history ? "✗ موجود نیست"
+          : rep.have_history >= rep.counts.universe ? "✓ کامل" : "◐ جزئی",
         `${rep.have_history} از ${rep.counts.universe} سهم کندل ذخیره‌شده دارند`],
       ["تصویر بنیادی (EPS، P/E، ارزش بازار)",
         snap.rows ? "✓ بارگذاری شد" : "✗ موجود نیست",
@@ -2762,6 +2770,27 @@ function syncMinScore(rep) {
   if (field) field.title = why;
 }
 
+// The engines name the limit that sized a position in their own vocabulary
+// (risk_engine.BOUND_*, portfolio_engine.admit, portfolio.py, and advisor's
+// spread_ceiling); the «قید» column printed those identifiers as they came.
+// An unknown code is still shown as it came, so a new limit is never blank.
+const BINDING_LABELS = {
+  risk_budget: "بودجه‌ی ریسک", risk: "بودجه‌ی ریسک",
+  max_position_pct: "سقف وزن هر نماد", position_cap: "سقف وزن هر نماد",
+  "weight cap": "سقف وزن هر نماد",
+  adv_participation: "نقدشوندگی", liquidity: "نقدشوندگی",
+  sector_budget: "بودجه‌ی صنعت", sector_value: "سقف ارزشی صنعت",
+  "sector cap": "سقف صنعت",
+  regime_budget: "بودجه‌ی رژیم بازار", available_cash: "نقدینگی آزاد",
+  portfolio_room: "ظرفیت باقی‌مانده‌ی سبد", "cash floor": "کف نقدینگی",
+  below_min_position: "کمتر از حداقل موقعیت",
+  spread_ceiling: "سهم برابر از بودجه",
+};
+
+function bindingLabel(code) {
+  return code ? (BINDING_LABELS[code] || code) : "—";
+}
+
 function renderPortfolio(rep) {
   state.portfolio = rep;
   syncMinScore(rep);
@@ -2782,9 +2811,9 @@ function renderPortfolio(rep) {
   if (!positions.length) {
     banner("portfolioStatus", "portfolioStatusText", "is-error",
       `<strong>سبدی ساخته نشد.</strong> ${esc((basket.notes || [])[0] || "")}`);
-    tiles("portfolioKpis", []);
-    $("portfolioTable").innerHTML = "";
-    $("allocationChart").innerHTML = '<div class="empty">سبدی نیست</div>';
+    // clearPortfolio, so the previous book's risk table and notes go too: an
+    // empty book after a full one left the old risk table standing.
+    clearPortfolio();
     bulletList("portfolioNotes", basket.notes);
     return;
   }
@@ -2859,7 +2888,7 @@ function renderPortfolio(rep) {
       money(p.position_value),
       p.weight_pct != null ? `${p.weight_pct}%` : "—",
       p.risk_pct != null ? `${p.risk_pct}%` : "—",
-      esc(p.scaled_by || p.bound_by)
+      esc(bindingLabel(p.scaled_by || p.bound_by))
     ])
   );
 
@@ -3060,12 +3089,12 @@ function bootStep(p, name) {
       return {
         cls: "done",
         count: step.seconds != null ? `${step.seconds}s` : "",
-        note: step.detail || st.detail || "fetched"
+        note: step.detail || st.detail || "دریافت شد"
       };
     case "kept":
-      return { cls: "done", count: "", note: step.detail || "already current" };
+      return { cls: "done", count: "", note: step.detail || "به‌روز بود" };
     case "failed":
-      return { cls: "failed", count: "", note: step.detail || "failed" };
+      return { cls: "failed", count: "", note: step.detail || "ناموفق" };
     case "skipped":
     case "cooling-off":
       return { cls: "warn", count: "", note: step.detail || step.action };
@@ -3074,14 +3103,14 @@ function bootStep(p, name) {
   }
 
   if (p.running && (p.planned || []).includes(name)) {
-    return { cls: "queued", count: "", note: `queued — ${st.detail || ""}` };
+    return { cls: "queued", count: "", note: `در صف — ${st.detail || ""}` };
   }
 
   // Never run this session: report what is stored, not a fake outcome.
   return {
     cls: st.needs_fetch ? "warn" : st.present ? "done" : "queued",
     count: "",
-    note: st.detail || "not checked yet"
+    note: st.detail || "هنوز بررسی نشده"
   };
 }
 
@@ -3159,8 +3188,8 @@ function renderBootstrap(p) {
     bar.setAttribute("aria-valuenow", "100");
     $("loadPct").textContent = failed.length ? "!" : "✓";
     $("loadStage").textContent = failed.length
-      ? `Finished — ${failed.length} stage(s) failed; the rest is stored.`
-      : "همه‌ی داده‌ها موجود و به‌روز است — all data present and current.";
+      ? `پایان — ${failed.length} مرحله ناموفق بود؛ بقیه ذخیره شد.`
+      : "همه‌ی داده‌ها موجود و به‌روز است.";
   }
 
   // Recede only when there is genuinely nothing to look at. A panel reporting
@@ -3170,18 +3199,18 @@ function renderBootstrap(p) {
 
   const elapsed = clock(overall.elapsed_seconds);
   $("loadElapsed").textContent = elapsed
-    ? (running ? `${elapsed} elapsed` : `${elapsed} total`) : "";
+    ? (running ? `${elapsed} از شروع` : `کل زمان ${elapsed}`) : "";
 
   $("loadLog").textContent = (p.log || []).length
     ? p.log.map(l => `${(l.at || "").replace("T", " ").replace("+00:00", "")}  ${l.message}`).join("\n")
-    : "Nothing fetched this session.";
+    : "در این نوبت چیزی دریافت نشده است.";
 }
 
 function renderTasks() {
   if (!$("taskSteps")) return;
 
   $("taskSteps").innerHTML = TASKS.map((t) => {
-    const s = taskState[t.id] || { state: "queued", detail: "not started" };
+    const s = taskState[t.id] || { state: "queued", detail: "شروع نشده" };
     const cls = ["running", "done", "failed", "warn"].includes(s.state)
       ? s.state : "queued";
     return pill(cls, shortLabel(t.label), `${t.label}\n${s.detail || s.state}`,
@@ -3304,9 +3333,9 @@ function renderAllocation(rep) {
       `<strong>${esc(p.label)}</strong><br>${ev}`,
       weights,
       amounts,
-      st ? `${num(st.cagr_pct, 1)}٪` : "n/a",
-      st ? signed(st.max_drawdown_pct, 1) : "n/a",
-      st ? signed(st.worst_12m_pct, 1) : "n/a",
+      st ? `${num(st.cagr_pct, 1)}٪` : "—",
+      st ? signed(st.max_drawdown_pct, 1) : "—",
+      st ? signed(st.worst_12m_pct, 1) : "—",
       `<span class="hint">${esc(p.evidence_text)}</span>`,
     ];
   });
@@ -4157,6 +4186,7 @@ function rerender() {
   if (state.intel) renderIntelligence(state.intel);
   if (state.screen) renderScreen(state.screen);
   if (state.portfolio) renderPortfolio(state.portfolio);
+  for (const [id, e] of Object.entries(importErrors)) banner(id, e.textId, "is-error", e.html);
 }
 
 /* ---------- import actions ---------- */
@@ -4172,11 +4202,13 @@ async function withButton(btn, label, fn,
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = label;
+  delete importErrors[statusId];
   try {
     await fn();
   } catch (err) {
-    banner(statusId, textId, "is-error",
-      `<strong>${esc(original)}:</strong> ${esc(err.message)}`);
+    const html = `<strong>${esc(original)}:</strong> ${esc(err.message)}`;
+    importErrors[statusId] = { textId, html };
+    banner(statusId, textId, "is-error", html);
   } finally {
     btn.disabled = false;
     btn.textContent = original;
@@ -4372,11 +4404,11 @@ async function loadLive() {
   const q = rep.queues || {};
 
   tiles("liveKpis", [
-    { k: "صف خرید", v: counts.buy ?? "n/a",
-      sub: `از ${counts.instruments ?? "n/a"} سهم` },
-    { k: "صف فروش", v: counts.sell ?? "n/a",
-      sub: `از ${counts.instruments ?? "n/a"} سهم` },
-    { k: "نمادهای دارای گردش", v: s.traded ?? "n/a",
+    { k: "صف خرید", v: counts.buy ?? "—",
+      sub: `از ${counts.instruments ?? "—"} سهم` },
+    { k: "صف فروش", v: counts.sell ?? "—",
+      sub: `از ${counts.instruments ?? "—"} سهم` },
+    { k: "نمادهای دارای گردش", v: s.traded ?? "—",
       sub: "همین حالا، از روی تابلو" },
     { k: "آخرین عکس دفتر", v: q.age_minutes === null
         || q.age_minutes === undefined ? "—" : `${q.age_minutes.toFixed(0)}′`,
@@ -4556,7 +4588,7 @@ document.querySelectorAll(".toggle-table").forEach(btn => {
   const original = btn.textContent;
   btn.addEventListener("click", () => {
     const nowHidden = $(btn.dataset.target).classList.toggle("hidden");
-    btn.textContent = nowHidden ? original : "Hide";
+    btn.textContent = nowHidden ? original : "پنهان کردن";
   });
 });
 

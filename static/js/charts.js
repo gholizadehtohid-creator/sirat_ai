@@ -136,7 +136,7 @@ function niceTicks(min, max, count = 5) {
 }
 
 function fmt(v, digits = 1) {
-  if (v === null || v === undefined || Number.isNaN(v)) return "n/a";
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
   const a = Math.abs(v);
   if (a >= 1e9) return (v / 1e9).toFixed(1) + "B";
   if (a >= 1e6) return (v / 1e6).toFixed(1) + "M";
@@ -169,7 +169,7 @@ export function hBarChart(container, opts) {
     color = tok("--series-1"), tooltip = null
   } = opts;
 
-  if (!data.length) { container.innerHTML = '<div class="empty">No data</div>'; return; }
+  if (!data.length) { container.innerHTML = '<div class="empty">داده‌ای نیست</div>'; return; }
 
   const rowH = 30, gap = 8;
   const padL = 78, padR = 56, padT = 6, padB = 24;
@@ -234,7 +234,7 @@ export function stackedHBar(container, opts) {
     total = 100, format = (v) => fmt(v, 0), tooltip = null
   } = opts;
 
-  if (!rows.length) { container.innerHTML = '<div class="empty">No data</div>'; return; }
+  if (!rows.length) { container.innerHTML = '<div class="empty">داده‌ای نیست</div>'; return; }
 
   const rowH = 34, gap = 12, SEG_GAP = 2;
   const padL = 78, padR = 44, padT = 6, padB = 24;
@@ -329,7 +329,7 @@ export function lineChart(container, opts) {
   const points = data.filter(d =>
     series.some(s => isNum(d[s.key])) || (barKey && isNum(d[barKey])));
 
-  if (!points.length) { container.innerHTML = '<div class="empty">No data</div>'; return; }
+  if (!points.length) { container.innerHTML = '<div class="empty">داده‌ای نیست</div>'; return; }
 
   const padL = 54, padR = directLabel ? 62 : 18, padT = 12, padB = 30;
   const width = Math.max(container.clientWidth || 560, 320);
@@ -351,7 +351,7 @@ export function lineChart(container, opts) {
     if (barKey && isNum(d[barKey])) values.push(d[barKey]);
   }
 
-  if (!values.length) { container.innerHTML = '<div class="empty">No data</div>'; return; }
+  if (!values.length) { container.innerHTML = '<div class="empty">داده‌ای نیست</div>'; return; }
 
   let lo = Math.min(...values), hi = Math.max(...values);
 
@@ -567,7 +567,7 @@ export function divergingBar(container, opts) {
     labelEvery = 1, padLeft = 52
   } = opts;
 
-  if (!data.length) { container.innerHTML = '<div class="empty">No data</div>'; return; }
+  if (!data.length) { container.innerHTML = '<div class="empty">داده‌ای نیست</div>'; return; }
 
   const padL = padLeft, padR = 14, padT = 14, padB = 34;
   const width = Math.max(container.clientWidth || 520, 320);
