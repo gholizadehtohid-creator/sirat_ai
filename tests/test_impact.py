@@ -265,8 +265,11 @@ class ImportSafetyTests(unittest.TestCase):
         found = []
 
         for directory, _, files in os.walk(ROOT):
+            # .claude holds tool state, including git worktrees: whole copies
+            # of this repository, whose examples/ then read as "outside
+            # examples/" (21 false offenders on 2026-11-11).
             if any(part in directory for part in
-                   (".git", "__pycache__", "backtest_output", ".venv")):
+                   (".git", "__pycache__", "backtest_output", ".venv", ".claude")):
                 continue
 
             for name in files:
