@@ -105,3 +105,4 @@ data/codal_raw/
 logs/codal_watch.lock
 data/backups/
 data/bill_yield.json
+data/market_valuation.json

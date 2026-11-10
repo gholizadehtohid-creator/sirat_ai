@@ -24,6 +24,10 @@ rem until 2026-11-05 only a panel button did, and they went stale from 08-29
 rem while the allocation now leans on them (E28). 60 bars covers any gap the
 rem evening schedule can leave, at 14 requests.
 "%PY%" -c "import gold; gold.fetch_history(count=60, verbose=False)" >> logs\task_evening.log 2>&1
+rem The market's aggregate P/E, point-in-time, for the "cheap or dear" card
+rem (2026-11-10). Reads only what is stored; after the first build it adds
+rem the evening's session and any missing 21-session grid point.
+"%PY%" market_valuation.py --update --quiet >> logs\task_evening.log 2>&1
 rem Monthly activity reports (ن-۳۰), since 2026-11-05. Only companies whose
 rem report for the last closed month is not yet stored are searched, so after
 rem the first pass this is a few dozen requests a night.
