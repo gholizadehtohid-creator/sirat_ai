@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,14 +13,14 @@
   <header class="top">
     <div class="brand">SIRAT AI <span>مدیریت هوشمند سبد سهام بورس تهران</span></div>
     <div class="top-actions">
-      <button id="themeBtn" title="Toggle light / dark">◐ Theme</button>
-      <button id="refreshBtn" class="primary">↻ Refresh data</button>
+      <button id="themeBtn" title="تغییر حالت روشن / تیره">◐ حالت نمایش</button>
+      <button id="refreshBtn" class="primary">↻ به‌روزرسانی داده‌ها</button>
     </div>
   </header>
 
   <div id="banner" class="banner">
     <span class="icon">…</span>
-    <div id="bannerText">Loading data status…</div>
+    <div id="bannerText">در حال خواندن وضعیت داده‌ها…</div>
   </div>
 
   <!-- ================= DATA LOADING PROGRESS =================
@@ -31,8 +31,8 @@
 
     <div class="load-head">
       <div class="load-heading">
-        <div class="load-title">بارگذاری داده — Data loading</div>
-        <div class="load-stage" id="loadStage">Checking what is stored…</div>
+        <div class="load-title">بارگذاری داده</div>
+        <div class="load-stage" id="loadStage">در حال بررسی داده‌های ذخیره‌شده…</div>
       </div>
       <div class="load-meter">
         <div class="load-pct" id="loadPct">—</div>
@@ -41,23 +41,23 @@
     </div>
 
     <div class="bar" id="loadBarWrap" role="progressbar"
-         aria-valuemin="0" aria-valuemax="100" aria-label="Data loading progress">
+         aria-valuemin="0" aria-valuemax="100" aria-label="پیشرفت بارگذاری داده">
       <div class="bar-fill" id="loadBar"></div>
     </div>
 
     <div class="stage-group">
-      <div class="stage-label">دریافت از TSETMC — download stages</div>
+      <div class="stage-label">مراحل دریافت از بورس (TSETMC)</div>
       <ol class="steps" id="loadSteps"></ol>
     </div>
 
     <div class="stage-group">
-      <div class="stage-label">تحلیل — analysis stages</div>
+      <div class="stage-label">مراحل تحلیل</div>
       <ol class="steps" id="taskSteps"></ol>
     </div>
 
     <div class="load-foot">
-      <button type="button" class="link" id="loadLogBtn">Show log</button>
-      <button type="button" class="link" id="loadFetchBtn">Fetch what is missing or stale</button>
+      <button type="button" class="link" id="loadLogBtn">نمایش گزارش</button>
+      <button type="button" class="link" id="loadFetchBtn">دریافت داده‌های ناقص یا کهنه</button>
     </div>
 
     <pre class="load-log hidden" id="loadLog"></pre>
@@ -300,34 +300,34 @@
   <!-- Indicator windows: collapsed by default, they are tuning not filtering -->
   <div class="filters advanced hidden" id="advancedRow">
     <div class="field">
-      <label for="maFast">Fast MA</label>
+      <label for="maFast">میانگین متحرک کوتاه</label>
       <input id="maFast" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.ma_fast }}">
     </div>
     <div class="field">
-      <label for="maSlow">Slow MA</label>
+      <label for="maSlow">میانگین متحرک بلند</label>
       <input id="maSlow" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.ma_slow }}">
     </div>
     <div class="field">
-      <label for="rsiWin">RSI period</label>
+      <label for="rsiWin">دوره‌ی RSI</label>
       <input id="rsiWin" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.rsi_window }}">
     </div>
     <div class="field">
-      <label for="macdFast">MACD fast</label>
+      <label for="macdFast">MACD سریع</label>
       <input id="macdFast" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.macd_fast }}">
     </div>
     <div class="field">
-      <label for="macdSlow">MACD slow</label>
+      <label for="macdSlow">MACD کند</label>
       <input id="macdSlow" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.macd_slow }}">
     </div>
     <div class="field">
-      <label for="macdSignal">MACD signal</label>
+      <label for="macdSignal">سیگنال MACD</label>
       <input id="macdSignal" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.macd_signal }}">
     </div>
     <div class="field">
-      <label for="volumeMa">Volume MA</label>
+      <label for="volumeMa">میانگین حجم</label>
       <input id="volumeMa" type="number" min="{{ window_min }}" max="{{ window_max }}" value="{{ defaults.volume_ma }}">
     </div>
-    <button id="resetBtn" type="button">Reset periods</button>
+    <button id="resetBtn" type="button">بازگشت به پیش‌فرض</button>
   </div>
 
   <p class="warmup-note" id="warmupNote"></p>
@@ -348,7 +348,7 @@
     </p>
 
     <div id="portfolioStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="portfolioStatusText">Not run yet.</div>
+      <span class="icon">…</span><div id="portfolioStatusText">هنوز اجرا نشده.</div>
     </div>
 
     <div class="kpi-row" id="portfolioKpis"></div>
@@ -503,7 +503,7 @@
     </p>
 
     <div id="regimeStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="regimeStatusText">Not run yet.</div>
+      <span class="icon">…</span><div id="regimeStatusText">هنوز اجرا نشده.</div>
     </div>
 
     <div class="kpi-row" id="regimeKpis"></div>
@@ -828,7 +828,7 @@
     </p>
 
     <div id="capIndexStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="capIndexStatusText">Not run yet.</div>
+      <span class="icon">…</span><div id="capIndexStatusText">هنوز اجرا نشده.</div>
     </div>
 
     <div class="kpi-row" id="capIndexKpis"></div>
@@ -928,7 +928,7 @@
     </p>
 
     <div id="ewIndexStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="ewIndexStatusText">Not run yet.</div>
+      <span class="icon">…</span><div id="ewIndexStatusText">هنوز اجرا نشده.</div>
     </div>
 
     <div class="kpi-row" id="ewIndexKpis"></div>
@@ -1066,7 +1066,7 @@
     </details>
 
     <div id="sectorStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="sectorStatusText">Not run yet.</div>
+      <span class="icon">…</span><div id="sectorStatusText">هنوز اجرا نشده.</div>
     </div>
 
     <div class="grid-2" style="margin-top:16px">
@@ -1204,7 +1204,7 @@
     </details>
 
     <div id="fundStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="fundStatusText">Not run yet.</div>
+      <span class="icon">…</span><div id="fundStatusText">هنوز اجرا نشده.</div>
     </div>
 
     <div class="kpi-row" id="fundKpis"></div>
@@ -1390,7 +1390,7 @@
     </p>
 
     <div id="flowStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="flowStatusText">Not run yet.</div>
+      <span class="icon">…</span><div id="flowStatusText">هنوز اجرا نشده.</div>
     </div>
 
     <div class="kpi-row" id="flowKpis"></div>
@@ -1450,7 +1450,7 @@
     </p>
 
     <div id="screenStatus" class="banner" style="margin-top:4px">
-      <span class="icon">…</span><div id="screenStatusText">Not run yet.</div>
+      <span class="icon">…</span><div id="screenStatusText">هنوز اجرا نشده.</div>
     </div>
 
     <div class="kpi-row" id="screenKpis"></div>

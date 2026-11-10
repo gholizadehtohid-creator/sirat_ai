@@ -3157,7 +3157,7 @@ async function pollBootstrap(fast = false) {
     renderBootstrap(p);
     if (wasRunning && !bootRunning) afterBootstrap(p);
   } catch (err) {
-    $("loadStage").textContent = `Progress unavailable — ${err.message}`;
+    $("loadStage").textContent = `وضعیت پیشرفت در دسترس نیست — ${err.message}`;
     console.error(err);
   } finally {
     bootPolling = false;
@@ -3169,17 +3169,17 @@ async function pollBootstrap(fast = false) {
 
 on("loadLogBtn", "click", () => {
   const hidden = $("loadLog").classList.toggle("hidden");
-  $("loadLogBtn").textContent = hidden ? "Show log" : "Hide log";
+  $("loadLogBtn").textContent = hidden ? "نمایش گزارش" : "بستن گزارش";
 });
 
 on("loadFetchBtn", "click", async () => {
   const btn = $("loadFetchBtn");
   btn.disabled = true;
-  $("loadStage").textContent = "Starting the download…";
+  $("loadStage").textContent = "شروع دریافت…";
   try {
     await getJSON("/api/bootstrap", { method: "POST" });
   } catch (err) {
-    $("loadStage").textContent = `Could not start the fetch — ${err.message}`;
+    $("loadStage").textContent = `دریافت شروع نشد — ${err.message}`;
   } finally {
     btn.disabled = false;
     pollBootstrap(true);
@@ -3411,7 +3411,9 @@ function renderMarketflow(d) {
   }));
   divergingBar($("marketflowChart"), {
     data, height: 240, padLeft: 64,
-    labelEvery: Math.max(1, Math.ceil(data.length / 12)),
+    // About one date per 75px, at most twelve: on a phone twelve overlapped.
+    labelEvery: Math.max(1, Math.ceil(data.length / Math.min(12,
+      Math.max(3, Math.floor(($("marketflowChart").clientWidth || 900) / 75))))),
     format: v => Math.round(v).toLocaleString("fa-IR"),
     tooltip: p => `<div class="t-title">${esc(faDay(p.day.date, true))}</div>
       <div class="t-row"><span>خالص حقیقی</span><b>${Math.round(p.value).toLocaleString("fa-IR")} میلیارد تومان</b></div>
@@ -4307,6 +4309,11 @@ function gotoCard(target) {
   showTab(tab);
   const node = id && $(id);
   if (!node) return;
+  // The analysis tab folds its cards into <details>; a card inside a closed
+  // one has no box to scroll to, so every fold around it opens first.
+  for (let fold = node.closest("details"); fold; fold = fold.parentElement?.closest("details")) {
+    fold.open = true;
+  }
   const card = node.closest(".card") || node;
   // After the tab is laid out, or the scroll lands on a hidden element.
   requestAnimationFrame(() => {
@@ -4315,6 +4322,18 @@ function gotoCard(target) {
     void card.offsetWidth;
     card.classList.add("guide-flash");
   });
+  // A tab opened for the first time is still filling in above the card, and
+  // each table that lands pushes it down (1,491px in a test). Settle it
+  // again while that happens -- only if it has drifted, so a reader who has
+  // already scrolled on is not pulled back.
+  const settle = () => {
+    const top = card.getBoundingClientRect().top;
+    if (top > window.innerHeight * 0.5 || top < -40) {
+      card.scrollIntoView({ behavior: "auto", block: "start" });
+    }
+  };
+  setTimeout(settle, 900);
+  setTimeout(settle, 2200);
 }
 
 document.addEventListener("click", (ev) => {
