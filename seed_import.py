@@ -5,6 +5,10 @@
     python seed_import.py --history N       # daily bars for N screened symbols
     python seed_import.py --flow N          # حقیقی/حقوقی history for N symbols
     python seed_import.py --status          # what is stored right now
+    python seed_import.py --repair-universe [--apply]
+                                            # reconcile the universe with the
+                                            # stored market watch (dry run
+                                            # unless --apply)
 
 On a network that filters Iranian domains, --universe still works: the
 reference list is mirrored on GitHub. --snapshot and --history need a route to
@@ -23,7 +27,40 @@ import config
 import database
 import settings
 import universe
-from providers import get_provider
+from providers import LIVE, ProviderResult, get_provider
+
+
+def _live(result):
+    """Whether `result` is what the exchange answered just now.
+
+    The default provider is a chain whose floor is the offline adapter, and
+    that adapter answers from this database. Taken as a fetch, a dead network
+    stored the database's own rows back as new: at 21:04 on 2026-11-10, the
+    minute codal.ir failed to resolve, the snapshot step "fetched" 3,818 rows
+    and stamped them 17:34Z -- the 11-09 session, all 656 traded equities
+    identical to that day's bars -- and on 11-02 the history step reported
+    "fetched (328s)" while its newest bar stayed 10-31. Each false success
+    held off a retry for hours. Acquisition keeps only live answers; the
+    offline floor is for the panel's reading paths.
+    """
+
+    return result is not None and result.ok and result.provenance == LIVE
+
+
+def _only_live(result):
+    """`result` unchanged unless a fallback served it; then a failure."""
+
+    if result is None or not result.ok or result.provenance == LIVE:
+        return result
+
+    cause = "; ".join(result.warnings) or "no live provider answered"
+
+    return ProviderResult.failure(
+        result.source,
+        "no live answer -- %s served its stored copy (%s): %s"
+        % (result.source, result.provenance, cause[:200]),
+        result.warnings,
+    )
 
 
 def _reporter(progress):
@@ -62,6 +99,14 @@ def import_universe(url=None, verbose=True, progress=None):
 
     stats = universe.summarise(records)
 
+    # The reference list is stale (see reconcile_universe) and still calls a
+    # board-moved company's dead code an equity. Upserting it would make that
+    # code an equity again every week, beside the live one.
+    retired = {str(r["ins_code"]) for r in database.load_instruments()
+               if r.get("kind") == universe.SUPERSEDED}
+    if retired:
+        records = [r for r in records if r["ins_code"] not in retired]
+
     report(0, 1, f"storing {len(records)} instruments")
 
     written = database.save_instruments(records)
@@ -77,6 +122,188 @@ def import_universe(url=None, verbose=True, progress=None):
     return stats
 
 
+def reconcile_universe(snapshot=None, apply=False, verbose=True):
+    """Bring the instrument list in line with a live market watch.
+
+    The universe comes from a reference list on GitHub (UNIVERSE_URL) that
+    nothing checked against the exchange, and the weekly import re-serves it
+    unchanged (all 1,394 rows refreshed 2026-11-05). The 2026-11-09 watch
+    listed 98 traded main shares it lacks: 81 companies listed since it was
+    made (آکو, داروند, شتبریز, فکور, سیمکات, احیا ...), which therefore never
+    got a bar, a flow row or a screen; and 17 that changed board. A board move
+    re-issues the ISIN (IRO1KSIM0001 -> IRO7KSIM0001) and the insCode with
+    it, so فاسمین was followed on a code whose bars end 2026-06-10 while the
+    live one traded 123.6M shares that day, its filings kept landing on the
+    dead code, and the dead code was excluded as halted.
+
+    Main-share lines (universe.watch_record) the universe lacks are added.
+    A board move is RE-POINTED, NOT MIGRATED: the live code is added beside
+    the old one and the old row is retired -- kind SUPERSEDED, is_equity 0 --
+    with nothing keyed by it moved or deleted. Its bars, flow and filings are
+    the record of that listing; rewriting ins_code through price_history,
+    client_type_history, history_checked, the Codal tables and the
+    fundamental store would splice two listings into one series in a dozen
+    places, irreversibly. Every equity loop -- history, flow, sectors,
+    codal_sync, the Codal feed watch -- walks is_equity = 1, and the symbol
+    lookups now prefer the equity row (database.load_instruments), so from
+    the next run the live code is what gets bars and flow and what filings
+    land on. What stays behind is the history already parsed under the old
+    code; the retired row, same symbol and same ISIN company code, is the
+    link a reader needs to join the two.
+
+    A code is retired only on evidence: the watch lists a main share with the
+    same symbol and the same company code, and the old code is neither on
+    the watch nor traded in the newest stored session. A match on only one of
+    the two, or an old code still alive, is held back and reported.
+
+    `snapshot` is a watch frame (default: the stored one). Nothing is written
+    unless `apply`; a second run finds nothing to do. Returns the plan:
+    {"added": [record], "retired": [(old row, live record)],
+     "held": [(record, reason)], "applied": bool}.
+    """
+
+    if snapshot is None:
+        snapshot = database.load_snapshot()
+
+    plan = {"added": [], "retired": [], "held": [], "applied": False}
+
+    if snapshot is None or snapshot.empty or "isin" not in snapshot.columns:
+        return plan
+
+    on_watch = set(snapshot["ins_code"].astype(str))
+
+    lines = {}
+    for row in snapshot.to_dict("records"):
+        record = universe.watch_record(row.get("ins_code"), row.get("symbol_fa"),
+                                       row.get("name_fa"), row.get("isin"))
+        if record is not None:
+            lines.setdefault(record["ins_code"], record)
+
+    instruments = database.load_instruments()
+    known = {str(r["ins_code"]): r for r in instruments}
+    equities = [r for r in instruments if r.get("is_equity")]
+
+    by_symbol, by_company = {}, {}
+    for row in equities:
+        by_symbol.setdefault(row.get("symbol_fa") or "", []).append(row)
+        by_company.setdefault(universe.company_code(row.get("isin")),
+                              []).append(row)
+
+    traded, market = None, ""
+
+    for code, record in sorted(lines.items()):
+        mine = known.get(code)
+
+        if mine is not None and not mine.get("is_equity"):
+            continue                       # known under another kind: left be
+
+        company = universe.company_code(record["isin"])
+        rivals = [r for r in by_symbol.get(record["symbol_fa"], [])
+                  if str(r["ins_code"]) != code]
+
+        if not rivals:
+            renamed = [r for r in by_company.get(company, [])
+                       if str(r["ins_code"]) != code]
+            if mine is None and renamed:
+                plan["held"].append((record, "company %s is listed as %s (%s)"
+                                     % (company, renamed[0]["symbol_fa"],
+                                        renamed[0]["ins_code"])))
+            elif mine is None:
+                plan["added"].append(record)
+            continue
+
+        stranger = [r for r in rivals
+                    if universe.company_code(r.get("isin")) != company]
+        if stranger:
+            plan["held"].append((record, "symbol held by %s (%s)"
+                                 % (stranger[0]["ins_code"],
+                                    stranger[0].get("isin"))))
+            continue
+
+        if traded is None:
+            traded = _traded_dates([r["ins_code"] for r in equities])
+            market = max(traded.values(), default="")
+
+        alive = [r for r in rivals if str(r["ins_code"]) in on_watch
+                 or (market and traded.get(str(r["ins_code"]), "") >= market)]
+        if alive:
+            plan["held"].append((record, "%s is still listed or trading"
+                                 % alive[0]["ins_code"]))
+            continue
+
+        if mine is None:
+            plan["added"].append(record)
+        plan["retired"].extend((r, record) for r in rivals)
+
+    if apply and (plan["added"] or plan["retired"]):
+        # The live rows first: interrupted between the two writes, the next
+        # run still finds the old code beside a known live one and retires it.
+        database.save_instruments(plan["added"])
+        _retire_instruments([r["ins_code"] for r, _ in plan["retired"]])
+        plan["applied"] = True
+
+    if verbose or plan["applied"]:
+        # Unasked (the snapshot step), only the ASCII count line: a Persian
+        # symbol printed to a redirected cp1252 stream raises (depth.py).
+        _print_reconciliation(plan, apply, examples=8 if verbose else 0)
+
+    return plan
+
+
+def _retire_instruments(ins_codes):
+    """Stop treating these codes as equities (universe.SUPERSEDED)."""
+
+    if not ins_codes:
+        return
+
+    from datetime import datetime, timezone
+
+    database.create_database()
+
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    conn = database._connect()
+    try:
+        conn.executemany(
+            "UPDATE instruments SET is_equity = 0, kind = ?, updated_at = ? "
+            "WHERE ins_code = ?",
+            [(universe.SUPERSEDED, stamp, str(c)) for c in ins_codes])
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _print_reconciliation(plan, apply, examples=8):
+    added, retired, held = plan["added"], plan["retired"], plan["held"]
+
+    print(f"Universe against the market watch: {len(added)} main shares to "
+          f"add, {len(retired)} board-moved codes to retire, "
+          f"{len(held)} held back.")
+
+    for record in added[:examples]:
+        print(f"  + {record['symbol_fa']:<12} {record['ins_code']:>18}  "
+              f"{record['isin']}  {record['board']}")
+    if examples and len(added) > examples:
+        print(f"  ... and {len(added) - examples} more")
+
+    for old, new in retired[:examples]:
+        print(f"  ~ {old['symbol_fa']:<12} {old['ins_code']:>18} "
+              f"{old.get('isin')} -> {new['ins_code']} {new['isin']}")
+    if examples and len(retired) > examples:
+        print(f"  ... and {len(retired) - examples} more")
+
+    for record, reason in held[:examples]:
+        print(f"  ? {record['symbol_fa']:<12} {record['ins_code']:>18}  "
+              f"{reason}")
+    if examples and len(held) > examples:
+        print(f"  ... and {len(held) - examples} more")
+
+    if not apply and (added or retired):
+        print("Dry run: nothing written. Re-run with --apply to write.")
+    elif plan["applied"]:
+        print("Written.")
+
+
 def import_snapshot(verbose=True, progress=None):
     """Pull a whole-market snapshot (the fundamental screen's input)."""
 
@@ -89,7 +316,7 @@ def import_snapshot(verbose=True, progress=None):
 
     report(0, 1, f"requesting the market snapshot via {provider.name}")
 
-    result = provider.get_market_snapshot()
+    result = _only_live(provider.get_market_snapshot())
 
     if not result.ok:
         print(f"FAILED: {result.error}")
@@ -110,6 +337,13 @@ def import_snapshot(verbose=True, progress=None):
     if verbose:
         print(f"Stored snapshot for {written} instruments "
               f"(source: {result.source}, {result.provenance}).")
+
+    # The live watch is the only list here the exchange itself vouches for.
+    # A failure to reconcile must not cost the snapshot just stored.
+    try:
+        reconcile_universe(result.data, apply=True, verbose=verbose)
+    except Exception as exc:                                    # noqa: BLE001
+        print(f"universe reconciliation failed: {type(exc).__name__}: {exc}")
 
     return written
 
@@ -153,7 +387,7 @@ def import_history(limit=None, ins_codes=None, count=300, verbose=True,
     report(0, len(results), "storing bars")
 
     for done, (ins_code, result) in enumerate(results.items(), start=1):
-        if result.ok:
+        if _live(result):
             stored += database.save_history(ins_code, result.data) > 0
         else:
             failed += 1
@@ -178,15 +412,136 @@ WATCH_CHECK_SAMPLE = 12
 # history endpoint. Rial prices are integers, so this is rounding only.
 PY_TOLERANCE = 0.0005
 
-# A name the market watch does not list at all is delisted or suspended for
-# good: on 2026-11-05 all 73 equities behind the session were absent, newest
-# bars from 2025-07 to 2026-09. They are re-read this often, not every run --
-# a name that reopens comes back onto the watch and is fetched at once.
+# A name the market watch does not list at all is delisted or suspended: on
+# 2026-11-05 all 73 equities behind the session were absent, newest bars from
+# 2025-07 to 2026-09. Once its own bars agree -- it did not trade in the
+# newest session -- it is marked (history_checked) and re-read this often,
+# not every run. A name that reopens comes back onto the watch and is fetched
+# at once, and a mark the name has traded since no longer stands
+# (_still_absent).
+#
+# What the skip costs, and why it stays. The history endpoint publishes a bar
+# for every session a name is LISTED, so a halted name gained a zero-volume
+# bar at its frozen close every session: 745 equity bars a session until
+# 2026-11-07 and about 670 since, traded counts unchanged, because the ~72
+# halted names marked on 11-08 are skipped until 11-15. The re-read's tail
+# request spans the gap (gap + TAIL_MARGIN bars), so those rows arrive late
+# rather than never, and meanwhile nothing that decides reads them:
+# halted_codes, newest_flow_owed, fundamentals' stale_days and ranking's
+# untraded-bar check all go by volume > 0, and the name's own newest bar is a
+# zero-volume one either way. Keeping them current would cost ~70 requests a
+# run for rows that record no trade.
 ABSENT_RECHECK_DAYS = 7
 
-# Fewer watch rows than this means a partial answer, not a market: absence
-# from it proves nothing.
+# Fewer watch rows than this cannot be a whole market.
 WATCH_MIN_ROWS = 300
+
+# ...and a watch listing fewer than this share of the names that traded in
+# the newest stored session is a partial answer, whatever its size: absence
+# from it proves nothing. The row floor was no test of that. On 10-31 the
+# feed alternated between 1,022 and 3,451 rows in one afternoon, and a
+# 2,524-row answer read about 07:00 on 11-08 marked 128 equities absent, 38
+# of which traded that day (ملت 58.4M shares). Over every capture in
+# depth_manifest since 10-15, answers of 592-1,038 rows listed 78-81% of the
+# previous session's traders, pre-open and opening ones of 2,452-2,956 rows
+# 94.4-96.6%, whole ones 98.2-99.1%; a few in-session answers sat at
+# 97.5-97.8%, which is why a name is also never marked while its own bars
+# show it trading (update_history).
+WATCH_MIN_SHARE = 0.97
+
+
+def _traded_dates(ins_codes):
+    """{ins_code: newest date it traded}: a bar with volume, not any bar."""
+
+    database.create_database()
+
+    wanted = {str(c) for c in ins_codes}
+
+    conn = database._connect()
+    try:
+        rows = conn.execute(
+            "SELECT ins_code, MAX(date) FROM price_history "
+            "WHERE volume > 0 GROUP BY ins_code").fetchall()
+    finally:
+        conn.close()
+
+    return {str(code): str(day)[:10] for code, day in rows
+            if day and str(code) in wanted}
+
+
+def _newest_trade(frame):
+    """The newest date in a bar frame with volume, 'YYYY-MM-DD', or None."""
+
+    import pandas as pd
+
+    if frame is None or frame.empty or "volume" not in frame.columns:
+        return None
+
+    volume = pd.to_numeric(frame["volume"], errors="coerce").fillna(0)
+    dates = pd.to_datetime(frame.loc[volume > 0, "date"],
+                           errors="coerce").dropna()
+
+    return None if dates.empty else dates.max().strftime("%Y-%m-%d")
+
+
+def _still_absent(ins_codes, traded, grace_days=0):
+    """The names whose off-the-watch mark still stands.
+
+    Marked in the last ABSENT_RECHECK_DAYS and not traded on or after the day
+    of the mark. A trade since says the mark was wrong -- the watch it came
+    from was partial -- or that the name has reopened; either way it is
+    fetched like any other name. Until 2026-11-11 a mark stood for the whole
+    week regardless, and the flow step skipped every marked name: 72 that
+    traded since 11-08 had no flow for their last session, and traded bars
+    without a flow row went from none on 11-01..11-04 to 40, 45, 57 and 60
+    on 11-07..11-10.
+
+    `grace_days` also voids a mark whose name traded up to that many days
+    BEFORE it -- for the flow step, where the question is whether the
+    endpoint still has a session to answer for, not whether the name trades
+    again: 11 of those 72 traded until the session before their mark.
+    """
+
+    from datetime import date, timedelta
+
+    checked = database.history_checked_dates()
+    cutoff = (date.today() - timedelta(days=ABSENT_RECHECK_DAYS)).isoformat()
+
+    out = set()
+
+    for code in (str(c) for c in ins_codes):
+        mark = checked.get(code, "")
+        if mark <= cutoff:
+            continue
+        since = (date.fromisoformat(mark[:10])
+                 - timedelta(days=grace_days)).isoformat()
+        if traded.get(code, "") < since:
+            out.add(code)
+
+    return out
+
+
+def _watch_listing(frame, traded):
+    """(codes, listed, traders) for a market-watch answer.
+
+    `codes` is the set the watch lists when it is a whole market and None
+    when it is partial (WATCH_MIN_ROWS, WATCH_MIN_SHARE). `listed` of the
+    `traders` -- the names that traded in the newest stored session -- are
+    on it. With no such names there is nothing to judge it by, and it is
+    treated as partial.
+    """
+
+    codes = (set(frame["ins_code"].astype(str))
+             if "ins_code" in frame.columns else set())
+
+    newest = max(traded.values(), default=None)
+    traders = {code for code, day in traded.items() if day == newest}
+    listed = len(traders & codes)
+
+    whole = (len(frame) >= WATCH_MIN_ROWS and bool(traders)
+             and listed >= len(traders) * WATCH_MIN_SHARE)
+
+    return (codes if whole else None), listed, len(traders)
 
 
 def _weekdays_after(date_text, until):
@@ -284,7 +639,10 @@ def _watch_agrees(provider, bars, session, sample=WATCH_CHECK_SAMPLE):
     for code in picked:
         result = results.get(code)
 
-        if result is None or not result.ok:
+        # A stored copy served by the offline floor has no new bar, and would
+        # read as "the endpoint has not published yet" -- deferring every
+        # name over what was a network failure.
+        if not _live(result):
             continue
 
         frame = result.data
@@ -333,7 +691,7 @@ def update_history(full_count=300, verbose=True, progress=None):
     """
 
     import market_session
-    from datetime import date, timedelta
+    from datetime import date
 
     provider = get_provider()
 
@@ -356,6 +714,11 @@ def update_history(full_count=300, verbose=True, progress=None):
         return stats
 
     newest = database.newest_bars(codes)
+
+    # The newest session each name TRADED in, before this run stores
+    # anything: what the watch's completeness and every off-the-watch mark
+    # are judged by. Updated below as bars are stored.
+    traded = _traded_dates(codes)
 
     # One call decides whether this run costs ~13 requests or ~800, so a
     # transient failure on it (an HTTPError was seen 2026-10-31, gone on the
@@ -396,25 +759,27 @@ def update_history(full_count=300, verbose=True, progress=None):
 
     if owed:
         report(0, 1, "reading the market watch")
-        snapshot = provider.get_market_snapshot()
+        snapshot = _only_live(provider.get_market_snapshot())
         if not snapshot.ok:
             note("market watch unreadable: %s" % snapshot.error)
 
     listed = None
 
-    if snapshot is not None and snapshot.ok             and len(snapshot.data) >= WATCH_MIN_ROWS:
-        listed = set(snapshot.data["ins_code"].astype(str))
+    if snapshot is not None and snapshot.ok:
+        listed, seen, traders = _watch_listing(snapshot.data, traded)
+        if listed is None:
+            note("market watch (%d rows) lists %d of the %d names that "
+                 "traded last -- partial; absence from it proves nothing"
+                 % (len(snapshot.data), seen, traders))
 
     absent = set()
 
     if listed is not None:
-        checked = database.history_checked_dates()
-        cutoff = (date.today() - timedelta(days=ABSENT_RECHECK_DAYS)).isoformat()
         unlisted = [c for c in owed if c not in listed]
-        absent = {c for c in unlisted if checked.get(c, "") > cutoff}
+        absent = _still_absent(unlisted, traded)
         if unlisted:
-            note("%d names behind are not on the market watch; %d checked in "
-                 "the last %d days are skipped"
+            note("%d names behind are not on the market watch; %d marked in "
+                 "the last %d days and not traded since are skipped"
                  % (len(unlisted), len(absent), ABSENT_RECHECK_DAYS))
 
     if owed and session and closed:
@@ -431,7 +796,7 @@ def update_history(full_count=300, verbose=True, progress=None):
             # The index is the calendar: it is what says which session came
             # before this one. One call refreshes the whole series.
             result = provider.get_index_history(tedpix)
-            if result.ok:
+            if _live(result):
                 database.save_index_history(tedpix, result.data)
                 dates = index_dates()
 
@@ -475,7 +840,10 @@ def update_history(full_count=300, verbose=True, progress=None):
              % (session, state))
 
     for code, bar in from_watch.items():
-        stats["watch"] += database.save_history(code, bar) > 0
+        if database.save_history(code, bar) > 0:
+            stats["watch"] += 1
+            # Taken only from rows that traded (_watch_bars).
+            traded[code] = max(traded.get(code, ""), session)
 
     # ---- per symbol, sized to the gap ---------------------------------------
 
@@ -510,20 +878,33 @@ def update_history(full_count=300, verbose=True, progress=None):
         done_so_far[0] += len(group)
 
         for code, result in results.items():
-            frame = result.data if result.ok else None
+            frame = result.data if _live(result) else None
 
             if frame is not None and draft is not None:
                 frame = frame[frame["date"].dt.strftime("%Y-%m-%d") < draft]
 
             if frame is not None and database.save_history(code, frame) > 0:
                 stats["full" if code in fresh else "tail"] += 1
+                day = _newest_trade(frame)
+                if day and day > traded.get(code, ""):
+                    traded[code] = day
                 if listed is not None and code not in listed:
                     swept.append(code)
             else:
                 stats["failed"] += 1
 
     if swept:
-        database.mark_history_checked(swept, date.today().isoformat())
+        # Off the watch is not proof of not trading, so a name is marked only
+        # when its own bars agree: no trade in the newest session the market
+        # traded in. ملت was marked on 11-08 with a traded 11-07 bar in hand.
+        market = max(traded.values(), default="")
+        trading = [c for c in swept if traded.get(c, "") >= market]
+        swept = [c for c in swept if traded.get(c, "") < market]
+        if trading:
+            note("%d names off the market watch traded on %s -- not marked "
+                 "absent" % (len(trading), market))
+        if swept:
+            database.mark_history_checked(swept, date.today().isoformat())
 
     stored = stats["watch"] + stats["tail"] + stats["full"]
 
@@ -559,7 +940,7 @@ def import_indices(verbose=True, progress=None):
 
         report(done - 1, total, spec["name"])
 
-        result = provider.get_index_history(spec["insCode"])
+        result = _only_live(provider.get_index_history(spec["insCode"]))
 
         if not result.ok:
             print(f"  FAILED: {result.error}")
@@ -610,15 +991,15 @@ def import_client_type(limit=None, ins_codes=None, verbose=True, progress=None,
         return 0
 
     if incremental:
-        from datetime import date, timedelta
-
         owed = database.newest_flow_owed(ins_codes)
-        # Names the history step found off the market watch do not trade, so
-        # they gain no flow; their endpoint answers nothing at all.
-        cutoff = (date.today()
-                  - timedelta(days=ABSENT_RECHECK_DAYS)).isoformat()
-        owed -= {c for c, day in database.history_checked_dates().items()
-                 if day > cutoff}
+        # A name the history step marked off the market watch whose last
+        # trade is long past gains no flow, and its endpoint answers nothing
+        # at all. One that traded since its mark, or in the days before it,
+        # is owed like any other: skipping every marked name for the week
+        # left 72 equities without flow for their last session
+        # (_still_absent).
+        owed -= _still_absent(owed, _traded_dates(owed),
+                              grace_days=ABSENT_RECHECK_DAYS)
         skipped = len(ins_codes) - len(owed)
         ins_codes = [c for c in ins_codes if str(c) in owed]
         if verbose:
@@ -648,7 +1029,7 @@ def import_client_type(limit=None, ins_codes=None, verbose=True, progress=None,
     report(0, len(results), "storing flow history")
 
     for done, (ins_code, result) in enumerate(results.items(), start=1):
-        if result.ok:
+        if _live(result):
             # Only the recent tail is kept -- see config.FLOW_HISTORY_SESSIONS.
             # The exchange returns the whole series and cannot be asked for
             # less, so the trim happens here rather than at the provider.
@@ -708,7 +1089,7 @@ def import_sectors(limit=None, verbose=True, progress=None):
     failed = 0
 
     for ins_code, result in results.items():
-        if result.ok:
+        if _live(result):
             records.append(result.data)
         else:
             failed += 1
@@ -787,11 +1168,22 @@ def main():
     parser.add_argument("--status", action="store_true",
                         help="show what is stored locally")
     parser.add_argument("--url", help="override the universe URL")
+    parser.add_argument("--repair-universe", action="store_true",
+                        help="reconcile the universe with the stored market "
+                             "watch: add the main shares it lists and the "
+                             "universe lacks, retire board-moved codes "
+                             "(a dry run unless --apply)")
+    parser.add_argument("--apply", action="store_true",
+                        help="with --repair-universe: write the changes")
 
     args = parser.parse_args()
 
+    if args.apply and not args.repair_universe:
+        parser.error("--apply goes with --repair-universe")
+
     if not any([args.universe, args.snapshot, args.history, args.indices,
-                args.sectors is not None, args.flow is not None, args.status]):
+                args.sectors is not None, args.flow is not None, args.status,
+                args.repair_universe]):
         parser.print_help()
         return 1
 
@@ -813,6 +1205,12 @@ def main():
 
     if args.flow is not None:
         import_client_type(limit=args.flow or None)
+
+    if args.repair_universe:
+        info = database.snapshot_info()
+        print(f"Stored market watch: {info['rows']} rows, captured "
+              f"{info['captured_at'] or 'never'}.")
+        reconcile_universe(apply=args.apply, verbose=True)
 
     if args.status:
         show_status()

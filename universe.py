@@ -52,6 +52,23 @@ BOARD_FA = {
 
 ISIN_RE = re.compile(r"^IR([A-Z])([0-9A-Z])([A-Z0-9]{4})([0-9A-Z]{4})$")
 
+# The issue number of a company's ordinary share. The other equity issues on
+# the market watch -- 0002 and 0003, symbols spelled with a trailing 2 or 3
+# (شکربن3, رانفور2) -- are the same share on the block and wholesale boards,
+# not more companies: 424 such lines on the 2026-11-09 watch, against the 98
+# main shares the universe lacked.
+MAIN_SHARE_ISSUE = "0001"
+
+# The kind given to an instrument whose company now trades under another
+# code. A board move re-issues the ISIN (IRO1KSIM0001 -> IRO7KSIM0001) and
+# with it the insCode; the old row stays, as the record of that listing, but
+# is no longer an equity -- see seed_import.reconcile_universe.
+SUPERSEDED = "superseded"
+
+# The market watch spells with Arabic yeh and kaf; the reference list, and
+# Codal's search, with the Persian letters.
+_ARABIC_LETTERS = str.maketrans({"ي": "ی", "ى": "ی", "ك": "ک"})
+
 
 def classify(isin, symbol="", name=""):
     """Return (kind, board) for an instrument.
@@ -85,6 +102,63 @@ def classify(isin, symbol="", name=""):
 
 def is_equity(isin, symbol="", name=""):
     return classify(isin, symbol, name)[0] == "equity"
+
+
+def company_code(isin):
+    """The ISIN's four-character company mnemonic (IRO1KSIM0001 -> KSIM).
+
+    It survives a board move, which changes only the board character -- the
+    one thing that ties a re-issued listing to the company it was before.
+    """
+
+    match = ISIN_RE.match((isin or "").strip().upper())
+
+    return match.group(3) if match else None
+
+
+def exchange_spelling(symbol):
+    """A ticker as the exchange spells it, in Persian letters.
+
+    For `symbol_raw`, the spelling Codal is searched with. Only Arabic yeh and
+    kaf are folded: persian.normalize also turns آ into ا, which Codal answers
+    with an empty result (codal_sync.codal_symbol), so it is not used here.
+    """
+
+    text = (symbol or "").translate(persian.INVISIBLE)
+
+    return text.translate(_ARABIC_LETTERS).replace(" ", "").strip()
+
+
+def watch_record(ins_code, symbol, name, isin):
+    """An instruments row for a market-watch line that is a main share.
+
+    None for anything else: a fund, a bond, a derivative, a rights issue, a
+    block-trade board of a listed company, or a line without a usable ISIN.
+    """
+
+    isin = (isin or "").strip().upper()
+    code = str(ins_code or "").strip()
+
+    match = ISIN_RE.match(isin)
+
+    if not match or match.group(4) != MAIN_SHARE_ISSUE or not code.isdigit():
+        return None
+
+    kind, board = classify(isin, symbol, name)
+
+    if kind != "equity":
+        return None
+
+    return {
+        "ins_code": code,
+        "symbol_fa": persian.normalize_symbol(symbol),
+        "symbol_raw": exchange_spelling(symbol) or None,
+        "name_fa": persian.normalize(name),
+        "isin": isin,
+        "kind": kind,
+        "board": board,
+        "is_equity": 1,
+    }
 
 
 def parse_reference_list(payload):

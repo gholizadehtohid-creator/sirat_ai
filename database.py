@@ -827,7 +827,11 @@ def load_instruments(equities_only=False, limit=None):
     if equities_only:
         query += " WHERE is_equity = 1"
 
-    query += " ORDER BY symbol_fa"
+    # The equity row first among rows sharing a symbol: a board move leaves
+    # the retired code beside the live one (seed_import.reconcile_universe),
+    # and the symbol lookups -- market_data, technical, holdings -- take the
+    # first row they meet. Without this they met the older, dead one.
+    query += " ORDER BY symbol_fa, is_equity DESC"
 
     if limit:
         query += " LIMIT ?"

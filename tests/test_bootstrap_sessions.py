@@ -66,7 +66,7 @@ class ReadyTests(unittest.TestCase):
 
 class ProbeTests(unittest.TestCase):
 
-    def history_state(self, at, index_has_today):
+    def history_state(self, at, index_has_today, coverage=(None, 0, 0)):
         with frozen(at), \
                 mock.patch.object(bootstrap, "_index_has_today",
                                   return_value=index_has_today), \
@@ -74,7 +74,9 @@ class ProbeTests(unittest.TestCase):
                                   return_value={"with_history": 818, "equities": 818,
                                                 "total": 1394}), \
                 mock.patch.object(bootstrap.database, "newest_equity_bar",
-                                  return_value=datetime(2026, 11, 9)):
+                                  return_value=datetime(2026, 11, 9)), \
+                mock.patch.object(bootstrap, "_history_session_coverage",
+                                  return_value=coverage):
             return bootstrap._history_state()
 
     def test_bars_are_behind_this_evening_once_the_index_shows_the_session(self):
@@ -86,6 +88,69 @@ class ProbeTests(unittest.TestCase):
 
     def test_during_the_session_nothing_is_behind(self):
         self.assertFalse(self.history_state(TUESDAY_MORNING, index_has_today=True)["behind"])
+
+
+class HistoryCoverageTests(unittest.TestCase):
+    """One name's newest bar does not vouch for the other six hundred."""
+
+    history_state = ProbeTests.history_state
+
+    def test_a_thinly_covered_session_is_behind(self):
+        """The session's bars stored for 154 of 656 names: not current."""
+        state = self.history_state(TUESDAY_MORNING, index_has_today=False,
+                                   coverage=("2026-11-09", 656, 154))
+        self.assertTrue(state["behind"])
+        self.assertIn("154/656", state["detail"])
+
+    def test_a_fully_covered_session_is_current(self):
+        state = self.history_state(TUESDAY_MORNING, index_has_today=False,
+                                   coverage=("2026-11-09", 656, 655))
+        self.assertFalse(state["behind"])
+
+    def test_coverage_is_read_from_the_bars(self):
+        """Of the names that traded the session before, which hold the newest."""
+
+        import tempfile
+
+        import pandas as pd
+
+        handle, path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        saved = bootstrap.database.DATABASE_NAME
+        bootstrap.database.DATABASE_NAME = path
+        try:
+            database = bootstrap.database
+            database.create_database()
+            conn = database._connect()
+            conn.executemany(
+                "INSERT INTO instruments (ins_code, symbol_fa, is_equity) "
+                "VALUES (?, ?, ?)",
+                [("1", "a", 1), ("2", "b", 1), ("3", "c", 1), ("4", "d", 1),
+                 ("9", "fund", 0)])
+            conn.commit()
+            conn.close()
+            tedpix = bootstrap.config.INDICES["TEDPIX"]["insCode"]
+            database.save_index_history(tedpix, pd.DataFrame({
+                "date": pd.to_datetime(["2026-11-08", "2026-11-09"]),
+                "close": 1.0, "low": 1.0, "high": 1.0}))
+
+            def bar(code, day, volume):
+                database.save_history(code, pd.DataFrame({
+                    "date": pd.to_datetime([day]), "open": 1.0, "high": 1.0,
+                    "low": 1.0, "close": 1.0, "volume": volume}))
+
+            for code in ("1", "2", "3"):          # traded the session before
+                bar(code, "2026-11-08", 100.0)
+            bar("4", "2026-11-08", 0.0)           # halted: not counted
+            bar("9", "2026-11-08", 100.0)         # not an equity
+            bar("1", "2026-11-09", 100.0)         # only one fetch landed
+            bar("9", "2026-11-09", 100.0)
+
+            self.assertEqual(bootstrap._history_session_coverage(),
+                             ("2026-11-09", 3, 1))
+        finally:
+            bootstrap.database.DATABASE_NAME = saved
+            os.unlink(path)
 
 
 class FlowCoverageTests(unittest.TestCase):
@@ -108,6 +173,10 @@ class FlowCoverageTests(unittest.TestCase):
 
     def test_a_fully_covered_session_is_current(self):
         self.assertFalse(self.flow_state(652, 640)["behind"])
+
+    def test_a_session_missing_sixty_traded_names_is_behind(self):
+        """11-10: 592 of 652 -- through a 90% gate, after 100% since June."""
+        self.assertTrue(self.flow_state(652, 592)["behind"])
 
 
 class AttemptTests(unittest.TestCase):

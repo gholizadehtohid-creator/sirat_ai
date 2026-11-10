@@ -331,12 +331,69 @@ def _history_state():
         if missed:
             detail += f" ({missed} session(s) behind)"
 
+    # The newest bar of ANY equity says nothing about the rest, the flaw fixed
+    # for flow on 2026-11-10: update_history reports success when anything
+    # was stored, so a run whose fetch failed for most names read "newest
+    # <today>, current" and the names that failed waited for the next
+    # session. The newest session's coverage decides as well.
+    session, traded, held = _history_session_coverage(newest)
+    thin = bool(traded) and held < traded * HISTORY_SESSION_COVERAGE
+    if thin:
+        detail += (f"; session {session}: {held}/{traded} names that traded "
+                   f"the session before have its bar")
+
     return {
         "present": covered > 0 and covered >= equities * 0.9,
         "detail": detail,
         "updated_at": newest.replace(tzinfo=timezone.utc) if newest else None,
-        "behind": bool(missed),
+        "behind": bool(missed) or thin,
     }
+
+
+# Share of the equities that traded in the session before the newest one
+# which must hold a bar for the newest before the bars count as current.
+# Measured over every session from 2025-01 to 2026-11-07: 1.0000; 0.994 at
+# worst since, from names wrongly marked off the market watch.
+HISTORY_SESSION_COVERAGE = 0.97
+
+
+def _history_session_coverage(newest=None):
+    """(newest equity session, names that traded the session before it,
+    names among those holding a bar for it).
+
+    "The session before" is read off the index calendar, not price_history:
+    a MAX over two million bars costs ~2 s on every probe, the index lookup
+    milliseconds. A session before it with no trades -- the 2026 closure --
+    gives no names, and nothing to judge.
+    """
+
+    if newest is None:
+        newest = database.newest_equity_bar()
+    if newest is None:
+        return None, 0, 0
+
+    session = newest.strftime("%Y-%m-%d")
+    tedpix = config.INDICES["TEDPIX"]["insCode"]
+
+    conn = database._connect()
+    try:
+        previous = conn.execute(
+            "SELECT MAX(date) FROM index_history WHERE ins_code = ? "
+            "AND date < ?", (tedpix, session)).fetchone()[0]
+        if not previous:
+            return session, 0, 0
+        traded, held = conn.execute("""
+            SELECT COUNT(p.ins_code), COUNT(b.ins_code)
+            FROM instruments i
+            JOIN price_history p
+              ON p.ins_code = i.ins_code AND p.date = ? AND p.volume > 0
+            LEFT JOIN price_history b
+              ON b.ins_code = i.ins_code AND b.date = ?
+            WHERE i.is_equity = 1
+        """, (str(previous)[:10], session)).fetchone()
+    finally:
+        conn.close()
+    return session, int(traded or 0), int(held or 0)
 
 
 def _indices_state():
@@ -430,8 +487,11 @@ def _flow_state():
 
 
 # Share of the names that traded in the newest session which must have that
-# session's flow before the flow counts as current.
-FLOW_SESSION_COVERAGE = 0.9
+# session's flow before the flow counts as current. Every session from
+# 2026-06 to 11-04 had 100%; 0.9 then let 11-07..11-10 through at 93.9%,
+# 93.1%, 91.3% and 90.8% (592/652), the names wrongly marked off the market
+# watch going without flow for a week (seed_import._still_absent).
+FLOW_SESSION_COVERAGE = 0.97
 
 
 def _flow_session_coverage():

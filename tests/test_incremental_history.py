@@ -12,6 +12,14 @@ that matter, each a way an incremental collector quietly corrupts a series:
 
     A GAP IS FETCHED, NOT PAPERED OVER. A name more than one session behind
     never gets its newest bar from the watch, which would leave a hole.
+
+    ABSENCE NEEDS EVIDENCE. A watch listing too few of the names that traded
+    proves nothing; a name off a whole one is marked only when its own bars
+    show no trade; a mark the name has traded since no longer stands, for
+    its bars or its flow (2026-11-08: 128 marked, 38 trading that day).
+
+    A STORED COPY IS NOT A FETCH. What the offline floor serves from this
+    database is never stored back, or counted, as new (2026-11-10 21:04).
 """
 
 import os
@@ -382,6 +390,235 @@ class IncrementalHistoryTests(unittest.TestCase):
 
         fetched = {c for codes, _ in provider.requests for c in codes}
         self.assertIn("8", fetched)
+
+    # ---- the watch is often partial (2026-11-08) ----------------------------
+
+    def add_traders(self, count, start=100):
+        """`count` more equities that traded on PREVIOUS, like 1, 2 and 3."""
+
+        codes = [str(start + i) for i in range(count)]
+        conn = database._connect()
+        conn.executemany("INSERT INTO instruments (ins_code, symbol_fa, "
+                         "is_equity) VALUES (?, ?, 1)",
+                         [(c, "n" + c) for c in codes])
+        conn.commit()
+        conn.close()
+        for code in codes:
+            database.save_history(code, bars(["2026-10-26", PREVIOUS]))
+        return codes
+
+    def run_rows_floor_off(self, provider):
+        saved = seed_import.WATCH_MIN_ROWS
+        seed_import.WATCH_MIN_ROWS = 1
+        try:
+            return self.run_with(provider)
+        finally:
+            seed_import.WATCH_MIN_ROWS = saved
+
+    def test_a_watch_missing_traders_proves_nothing_whatever_its_size(self):
+        """11-08 ~07:00: past the row floor, short of the market: 128 marked."""
+
+        from datetime import date
+
+        self.add_delisted("8")
+        database.mark_history_checked(["8"], date.today().isoformat())
+
+        history = {c: self.full_history() for c in ("1", "2", "3")}
+        history["8"] = bars(["2026-08-31", "2026-09-01"])
+
+        # Two of the three names that traded last: a partial answer.
+        provider = FakeProvider(
+            watch={c: watch_row() for c in ("1", "2")}, history=history)
+        stats = self.run_rows_floor_off(provider)
+
+        fetched = {c for codes, _ in provider.requests for c in codes}
+        self.assertIn("8", fetched)                 # its mark proves nothing
+        self.assertNotIn("3", database.history_checked_dates())
+        self.assertTrue(any("partial" in n for n in stats["notes"]))
+
+    def test_a_name_off_the_watch_that_traded_is_not_marked(self):
+        """ملت: off the watch, its own bars show it trading in the session."""
+
+        listed = self.add_traders(40)
+
+        # Halted: listed at a frozen close, no trade since September.
+        conn = database._connect()
+        conn.execute("INSERT INTO instruments (ins_code, symbol_fa, "
+                     "is_equity) VALUES ('48', 'n48', 1)")
+        conn.commit()
+        conn.close()
+        frozen = bars(["2026-09-01", PREVIOUS])
+        frozen.loc[1, "volume"] = 0.0
+        database.save_history("48", frozen)
+        frozen_now = bars([PREVIOUS, SESSION])
+        frozen_now["volume"] = 0.0
+
+        traders = ["1", "2", "3"] + listed
+        history = {c: self.full_history() for c in traders}
+        history["48"] = frozen_now
+        on_watch = traders[:-1]             # 42 of the 43 that traded last
+        trading = traders[-1]
+
+        provider = FakeProvider(watch={c: watch_row() for c in on_watch},
+                                history=history)
+        self.run_rows_floor_off(provider)
+
+        checked = database.history_checked_dates()
+        self.assertNotIn(trading, checked)
+        self.assertIn("48", checked)        # off the watch and not trading
+        self.assertEqual(self.newest(trading), (SESSION, 1010.0))
+
+    def test_a_mark_the_name_traded_since_does_not_skip_it(self):
+        """A name back from a wrong mark is fetched, not left for the week."""
+
+        listed = self.add_traders(40)
+        self.add_delisted("8", newest=PREVIOUS)     # traded on PREVIOUS
+        # Marked the day before it traded: the mark came from a partial watch.
+        database.mark_history_checked(["8"], "2026-10-26")
+
+        traders = ["1", "2", "3"] + listed
+        history = {c: self.full_history() for c in traders + ["8"]}
+
+        saved = seed_import.ABSENT_RECHECK_DAYS
+        seed_import.ABSENT_RECHECK_DAYS = 100_000   # the mark is "recent"
+        try:
+            provider = FakeProvider(
+                watch={c: watch_row() for c in traders}, history=history)
+            stats = self.run_rows_floor_off(provider)
+        finally:
+            seed_import.ABSENT_RECHECK_DAYS = saved
+
+        fetched = {c for codes, _ in provider.requests for c in codes}
+        self.assertIn("8", fetched)
+        self.assertEqual(stats["absent"], 0)
+        self.assertEqual(self.newest("8")[0], SESSION)
+
+    # ---- a stored copy is not a fetch (2026-11-10 21:04) ---------------------
+
+    def test_an_offline_copy_is_a_failure_not_a_fetch(self):
+        """The offline floor served the database's own rows: nothing new."""
+
+        from providers.base import SEED
+
+        class OfflineFloor(FakeProvider):
+            def get_market_snapshot(self):
+                result = super().get_market_snapshot()
+                result.provenance = SEED
+                return result
+
+            def get_histories(self, codes, count=300, progress=None):
+                results = super().get_histories(codes, count, progress)
+                for result in results.values():
+                    result.provenance = SEED
+                return results
+
+        provider = OfflineFloor(
+            watch={c: watch_row() for c in ("1", "2", "3")},
+            history={c: bars(["2026-10-26", PREVIOUS]) for c in ("1", "2", "3")})
+        stats = self.run_rows_floor_off(provider)
+
+        self.assertFalse(stats["ok"])
+        self.assertEqual((stats["watch"], stats["tail"]), (0, 0))
+        self.assertEqual(stats["failed"], 3)
+        self.assertEqual(stats["deferred"], 0)
+        self.assertEqual(database.history_checked_dates(), {})
+        self.assertTrue(any("no live answer" in n for n in stats["notes"]))
+
+    def test_an_offline_sample_is_not_a_lagging_endpoint(self):
+        from providers.base import SEED
+
+        class OfflineSample(FakeProvider):
+            def get_histories(self, codes, count=300, progress=None):
+                results = super().get_histories(codes, count, progress)
+                for result in results.values():
+                    result.provenance = SEED
+                return results
+
+        provider = OfflineSample(watch={}, history={
+            "1": bars(["2026-10-26", PREVIOUS])})
+        agrees, detail, lagging = seed_import._watch_agrees(
+            provider, {"1": bars([SESSION])}, SESSION)
+
+        self.assertFalse(agrees)
+        self.assertFalse(lagging)
+        self.assertIn("no sample name", detail)
+
+
+class AbsentMarkTests(unittest.TestCase):
+    """A mark stands only while the name has not traded since."""
+
+    def setUp(self):
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        self.original = database.DATABASE_NAME
+        database.DATABASE_NAME = self.path
+        database.create_database()
+
+    def tearDown(self):
+        database.DATABASE_NAME = self.original
+        os.unlink(self.path)
+
+    @staticmethod
+    def day(offset):
+        from datetime import date, timedelta
+        return (date.today() + timedelta(days=offset)).isoformat()
+
+    def test_still_absent(self):
+        database.mark_history_checked(["quiet", "back"], self.day(-2))
+        database.mark_history_checked(["old"], self.day(-30))
+        traded = {"quiet": self.day(-5), "back": self.day(-1),
+                  "old": self.day(-40)}
+
+        self.assertEqual(
+            seed_import._still_absent(["quiet", "back", "old", "never"],
+                                      traded),
+            {"quiet"})
+        # Traded three days before its mark: still within a week's grace.
+        self.assertEqual(
+            seed_import._still_absent(["quiet", "back"], traded,
+                                      grace_days=7),
+            set())
+
+    def test_flow_is_fetched_for_a_marked_name_that_traded_since(self):
+        """72 names marked on 11-08..11-10 had no flow for their last session.
+
+        61 traded after their mark; 11 (جوین, قشرین ...) traded the session
+        before it and were suspended the next -- their last session's flow
+        is still there to fetch. A name dead for months is not asked.
+        """
+
+        def flow(code, dates):
+            database.save_client_type_history(code, pd.DataFrame({
+                "date": pd.to_datetime(dates),
+                "individual_buy_value": 1.0, "institutional_buy_value": 1.0}))
+
+        database.save_history("back", bars([self.day(-6), self.day(-1)]))
+        flow("back", [self.day(-6)])
+        database.save_history("suspended", bars([self.day(-6), self.day(-3)]))
+        flow("suspended", [self.day(-6)])
+        database.save_history("quiet", bars([self.day(-60)]))
+        database.mark_history_checked(["back", "suspended", "quiet"],
+                                      self.day(-2))
+
+        class Recorder:
+            name = "fake"
+            asked = []
+
+            def get_client_type_histories(self, codes, progress=None):
+                Recorder.asked = sorted(codes)
+                return {c: ProviderResult.failure("fake", "offline")
+                        for c in codes}
+
+        saved = seed_import.get_provider
+        seed_import.get_provider = Recorder
+        try:
+            seed_import.import_client_type(
+                ins_codes=["back", "suspended", "quiet"], verbose=False,
+                incremental=True)
+        finally:
+            seed_import.get_provider = saved
+
+        self.assertEqual(Recorder.asked, ["back", "suspended"])
 
 
 class FlowOwedTests(unittest.TestCase):
