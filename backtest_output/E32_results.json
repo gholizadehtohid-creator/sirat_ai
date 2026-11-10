@@ -1,0 +1,148 @@
+{
+  "experiment_id": "E32-forward-fundamental-quality",
+  "run_at": "2026-11-10T22:49:47",
+  "alpha": 0.0167,
+  "decision": "REJECT",
+  "primary": {
+    "top": 10,
+    "periods": 61,
+    "strategy": {
+      "cumulative_net_pct": 380.6,
+      "annualised_net_pct": 34.0,
+      "cumulative_gross_pct": 541.5,
+      "mean_names": 9.8
+    },
+    "control_eligible_ew": {
+      "cumulative_net_pct": 305.5,
+      "annualised_net_pct": 29.8,
+      "mean_names": 85.3
+    },
+    "excess_log_per_period_pct": 0.279,
+    "newey_west_t": 0.69,
+    "p_one_sided": 0.2444,
+    "first_half_mean_excess_pct": 0.473,
+    "second_half_mean_excess_pct": 0.09,
+    "beat_control_share_of_periods": 0.541
+  },
+  "random_null": {
+    "strategy_gross_pct": 541.5,
+    "percentile": 89.3,
+    "null_median_pct": 371.5
+  },
+  "tedpix_annualised_pct": 44.4,
+  "quintiles_mean_period_return_pct_best_first": [
+    3.56,
+    2.99,
+    3.32,
+    3.45,
+    2.31
+  ],
+  "diagnostics_not_decisive": {
+    "top_20": {
+      "top": 20,
+      "periods": 61,
+      "strategy": {
+        "cumulative_net_pct": 383.4,
+        "annualised_net_pct": 34.2,
+        "cumulative_gross_pct": 523.6,
+        "mean_names": 19.6
+      },
+      "control_eligible_ew": {
+        "cumulative_net_pct": 305.5,
+        "annualised_net_pct": 29.8,
+        "mean_names": 85.3
+      },
+      "excess_log_per_period_pct": 0.288,
+      "newey_west_t": 0.86,
+      "p_one_sided": 0.1941,
+      "first_half_mean_excess_pct": 0.716,
+      "second_half_mean_excess_pct": -0.126,
+      "beat_control_share_of_periods": 0.492
+    },
+    "forward_profit_growth_alone": {
+      "top": 10,
+      "periods": 61,
+      "strategy": {
+        "cumulative_net_pct": 225.8,
+        "annualised_net_pct": 24.6,
+        "cumulative_gross_pct": 348.2,
+        "mean_names": 9.8
+      },
+      "control_eligible_ew": {
+        "cumulative_net_pct": 305.5,
+        "annualised_net_pct": 29.8,
+        "mean_names": 85.3
+      },
+      "excess_log_per_period_pct": -0.359,
+      "newey_west_t": -0.84,
+      "p_one_sided": 0.7994,
+      "first_half_mean_excess_pct": 0.264,
+      "second_half_mean_excess_pct": -0.961,
+      "beat_control_share_of_periods": 0.459
+    },
+    "sales_growth_alone": {
+      "top": 10,
+      "periods": 61,
+      "strategy": {
+        "cumulative_net_pct": 285.5,
+        "annualised_net_pct": 28.6,
+        "cumulative_gross_pct": 407.1,
+        "mean_names": 9.8
+      },
+      "control_eligible_ew": {
+        "cumulative_net_pct": 305.5,
+        "annualised_net_pct": 29.8,
+        "mean_names": 85.3
+      },
+      "excess_log_per_period_pct": -0.083,
+      "newey_west_t": -0.19,
+      "p_one_sided": 0.5749,
+      "first_half_mean_excess_pct": 0.16,
+      "second_half_mean_excess_pct": -0.318,
+      "beat_control_share_of_periods": 0.459
+    },
+    "margin_change_alone": {
+      "top": 10,
+      "periods": 61,
+      "strategy": {
+        "cumulative_net_pct": 470.2,
+        "annualised_net_pct": 38.4,
+        "cumulative_gross_pct": 656.2,
+        "mean_names": 9.8
+      },
+      "control_eligible_ew": {
+        "cumulative_net_pct": 305.5,
+        "annualised_net_pct": 29.8,
+        "mean_names": 85.3
+      },
+      "excess_log_per_period_pct": 0.559,
+      "newey_west_t": 1.12,
+      "p_one_sided": 0.1307,
+      "first_half_mean_excess_pct": 0.666,
+      "second_half_mean_excess_pct": 0.455,
+      "beat_control_share_of_periods": 0.59
+    },
+    "cash_conversion_alone": {
+      "top": 10,
+      "periods": 61,
+      "strategy": {
+        "cumulative_net_pct": 94.2,
+        "annualised_net_pct": 13.2,
+        "cumulative_gross_pct": 158.3,
+        "mean_names": 9.8
+      },
+      "control_eligible_ew": {
+        "cumulative_net_pct": 305.5,
+        "annualised_net_pct": 29.8,
+        "mean_names": 85.3
+      },
+      "excess_log_per_period_pct": -1.207,
+      "newey_west_t": -2.76,
+      "p_one_sided": 0.9971,
+      "first_half_mean_excess_pct": -0.668,
+      "second_half_mean_excess_pct": -1.729,
+      "beat_control_share_of_periods": 0.344
+    }
+  },
+  "pit_blocked_future_reads": 29145
+}
