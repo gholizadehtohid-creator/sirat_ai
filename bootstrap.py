@@ -84,8 +84,28 @@ STEP_DEADLINE_SECONDS = {
 # Tehran Stock Exchange trades Saturday to Wednesday.
 TRADING_WEEKDAYS = {5, 6, 0, 1, 2}          # Sat, Sun, Mon, Tue, Wed
 
+# The session closes at 12:30 Tehran time; TSETMC's closing prices, index
+# values and client-type figures are final by about 14:00 (local clock).
+DATA_READY = (14, 0)
 
-def sessions_behind(newest):
+
+def _ready_today(now=None):
+    """True once today's session figures are final, on a trading weekday."""
+
+    now = now or datetime.now()
+    return (now.weekday() in TRADING_WEEKDAYS
+            and (now.hour, now.minute) >= DATA_READY)
+
+
+def _ready_moment():
+    """Today's DATA_READY as an aware instant, comparable with _now()."""
+
+    local = datetime.now().astimezone()
+    return local.replace(hour=DATA_READY[0], minute=DATA_READY[1],
+                         second=0, microsecond=0)
+
+
+def sessions_behind(newest, include_today=False):
     """Completed trading sessions we are missing since `newest`.
 
     Daily bars are stamped at midnight, so a bar for the last completed
@@ -94,8 +114,15 @@ def sessions_behind(newest):
     still never be satisfied. What actually matters is whether a session has
     closed that we do not hold.
 
-    Today is excluded: its bar does not exist until the session ends, and
-    counting it would make the data permanently one session short.
+    Today counts only when the caller says it has happened: `include_today`.
+    Excluding it unconditionally (until 2026-11-10) meant the 19:00 evening
+    run never fetched the session that had closed six hours earlier -- it
+    only ever caught up to yesterday -- so the forward prediction log wrote
+    each session a day late, after the next session had traded, which is the
+    one thing its admissibility rule refuses: every entry from 11-07 on was
+    unusable. The callers decide what "happened" means: the index after
+    DATA_READY, and the bars and flow only once the index shows the session
+    (a holiday then costs two index requests, not 1,600 per-symbol ones).
     """
 
     if newest is None:
@@ -106,6 +133,9 @@ def sessions_behind(newest):
 
     missed = 0
 
+    if include_today and day < today:
+        missed += 1
+
     day = day + timedelta(days=1)
 
     while day < today:
@@ -114,6 +144,25 @@ def sessions_behind(newest):
         day += timedelta(days=1)
 
     return missed
+
+
+def _index_has_today():
+    """Whether an index bar for today is stored: the session happened.
+
+    The index trades every session and nothing else does reliably, which is
+    why backtesting/pit.py builds its calendar from it too.
+    """
+
+    coverage = database.index_coverage()
+    today = datetime.now().date()
+    for spec in config.INDICES.values():
+        stamp = _parse((coverage.get(spec["insCode"]) or {}).get("last_date"))
+        if stamp is not None and stamp.date() >= today:
+            return True
+    return False
+
+# The components that gain one row per trading session.
+SESSION_COMPONENTS = ("indices", "history", "flow")
 
 # A failed step waits this long before being attempted again.
 RETRY_COOLDOWN = timedelta(minutes=10)
@@ -268,7 +317,8 @@ def _history_state():
     # cannot vouch for equity freshness, and the query now says so.
     newest = database.newest_equity_bar()
 
-    missed = sessions_behind(newest)
+    missed = sessions_behind(newest,
+                             include_today=_ready_today() and _index_has_today())
 
     detail = f"{covered}/{equities} equities have bars"
 
@@ -300,7 +350,8 @@ def _indices_state():
         if stamp and (oldest is None or stamp < oldest):
             oldest = stamp
 
-    missed = sessions_behind(oldest)
+    # Two requests: worth asking after every close, holiday or not.
+    missed = sessions_behind(oldest, include_today=_ready_today())
 
     detail = f"{len(have)}/{len(wanted)} indices stored"
 
@@ -343,7 +394,8 @@ def _flow_state():
     covered = coverage["with_flow"]
 
     newest = _parse(coverage["last_date"])
-    missed = sessions_behind(newest)
+    missed = sessions_behind(newest,
+                             include_today=_ready_today() and _index_has_today())
 
     detail = f"{covered}/{equities} equities have flow data"
 
@@ -470,6 +522,13 @@ def _probe_all():
             fetched_at is not None
             and (_now() - fetched_at) < MAX_AGE[name]
         )
+
+        # A fetch made before today's figures were final cannot have found
+        # them: the panel opened at 10:00 would otherwise make the 19:00 run
+        # skip the session that closed in between.
+        if (attempted_recently and name in SESSION_COMPONENTS
+                and _ready_today() and fetched_at < _ready_moment()):
+            attempted_recently = False
 
         stale = (not state["present"]) or (
             state.get("behind", False) and not attempted_recently
@@ -695,6 +754,17 @@ def ensure(force=False, only=None):
             _last_failure.pop(name, None)
             satisfied.add(name)
             _mark_fetched(name)
+            # Today's index bar is what tells the bar and flow probes that a
+            # session happened today; they were read before it was stored.
+            if name == "indices":
+                report = status(fresh=True)
+                with _lock:
+                    _state["planned"] = [
+                        n for n, _p, _r in STEPS
+                        if (not only or n in only)
+                        and (force or n in planned or not report[n]["present"]
+                             or report[n]["needs_fetch"])
+                    ]
             # The component's own probe is the honest post-fetch detail: a
             # fetch that "succeeded" but stored 3 of 818 histories should not
             # read as simply done.
