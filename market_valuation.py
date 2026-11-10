@@ -45,6 +45,12 @@ EVERY = 21                    # sessions between history points
 # point has 220 or more.
 MIN_COMPANIES = 200
 
+# An industry is read against its own history only with at least this many
+# companies in a point (fewer is one company's P/E with a sector's name) and
+# this many points (fewer is no history to be cheap or dear against).
+SECTOR_MIN_COMPANIES = 4
+SECTOR_MIN_POINTS = 12
+
 
 def _jalali(ts):
     import jalali
@@ -180,6 +186,7 @@ def point(data, decision):
     no_hurdle = {"rate_pct": 0.0, "as_of": "-", "source": "valuation"}
     cap = profit = 0.0
     used = skipped = halted = 0
+    by_sector = {}
     for code, inst in data.instruments().items():
         if inst["sector"] in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL:
             continue
@@ -221,12 +228,20 @@ def point(data, decision):
         cap += value
         profit += ttm
         used += 1
+        sector = by_sector.setdefault(inst["sector"] or "بدون صنعت", [0.0, 0.0, 0])
+        sector[0] += value
+        sector[1] += ttm
+        sector[2] += 1
     if used < MIN_COMPANIES or profit <= 0:
         return None
     return {"date": str(decision.date()), "pe": round(cap / profit, 2),
             "earnings_yield_pct": round(profit / cap * 100, 2),
             "companies": used, "left_out": skipped, "halted": halted,
-            "market_cap": cap, "profit_ttm": profit}
+            "market_cap": cap, "profit_ttm": profit,
+            # [market value, trailing profit, companies] per industry, for
+            # reading each against its own history.
+            "sectors": {name: [round(c), round(pr), n]
+                        for name, (c, pr, n) in by_sector.items()}}
 
 
 def load():
@@ -302,6 +317,36 @@ def _quantile(values, q):
     return ordered[lo] + (ordered[hi] - ordered[lo]) * (k - lo)
 
 
+def _sectors(points):
+    """Each industry's aggregate P/E now, against its own history.
+
+    Cheapest against itself first. A point counts for an industry only with
+    SECTOR_MIN_COMPANIES companies and a positive total profit (a loss-making
+    industry has no P/E), and an industry is listed only with
+    SECTOR_MIN_POINTS such points, the newest among them.
+    """
+
+    if not points:
+        return []
+    series = {}
+    for p in points:
+        for name, (cap, profit, n) in (p.get("sectors") or {}).items():
+            if n >= SECTOR_MIN_COMPANIES and profit > 0 and cap > 0:
+                series.setdefault(name, []).append((p["date"], cap / profit, n))
+    newest = points[-1]["date"]
+    out = []
+    for name, rows in series.items():
+        if len(rows) < SECTOR_MIN_POINTS or rows[-1][0] != newest:
+            continue
+        values = [pe for _d, pe, _n in rows]
+        out.append({"sector": name, "pe": round(values[-1], 2),
+                    "median_pe": round(_quantile(values, 0.5), 2),
+                    "percentile": _percentile(values, values[-1]),
+                    "companies": rows[-1][2], "points": len(rows)})
+    out.sort(key=lambda r: (r["percentile"], r["sector"]))
+    return out
+
+
 def summary(opportunity=None):
     """What the panel shows: now, against history, against bills."""
 
@@ -318,7 +363,7 @@ def summary(opportunity=None):
     rate = opportunity["rate_pct"]
     return {
         "available": True,
-        "now": now,
+        "now": {k: v for k, v in now.items() if k != "sectors"},
         "percentile": _percentile(history, now["pe"]),
         "median_pe": round(_quantile(history, 0.5), 2),
         "p20_pe": round(_quantile(history, 0.2), 2),
@@ -328,6 +373,9 @@ def summary(opportunity=None):
         "bill_yield_pct": rate,
         "bill_as_of": opportunity.get("as_of"),
         "yield_gap_pct": round(now["earnings_yield_pct"] - rate, 2),
+        "sectors": _sectors(points),
+        "sector_rules": {"min_companies": SECTOR_MIN_COMPANIES,
+                         "min_points": SECTOR_MIN_POINTS},
     }
 
 
@@ -342,7 +390,8 @@ def main(argv=None):
     if args.update:
         result = update(verbose=not args.quiet, rebuild=args.rebuild)
         print("valuation: %(added)d points computed, %(points)d stored" % result)
-    print(json.dumps({k: v for k, v in summary().items() if k != "series"},
+    print(json.dumps({k: v for k, v in summary().items()
+                      if k not in ("series", "sectors")},
                      ensure_ascii=False, default=str))
     return 0
 

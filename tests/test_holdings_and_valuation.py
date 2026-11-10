@@ -174,6 +174,53 @@ class RouteTests(unittest.TestCase):
         self.assertFalse(r.get_json()["available"])
 
 
+class SectorValuationTests(unittest.TestCase):
+    """Each industry against its own history."""
+
+    def points(self, sectors_by_point):
+        return [{"date": "2025-%02d-01" % (i + 1), "pe": 7.0, "earnings_yield_pct": 14.0,
+                 "companies": 300, "sectors": s} for i, s in enumerate(sectors_by_point)]
+
+    def test_an_industry_is_placed_in_its_own_history(self):
+        # P/E 10, 9, ..., 1 then 5.5 now: 4.5 of 13 points below... spelled out:
+        pes = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 7, 5.5]
+        pts = self.points([{"فلزات": [pe * 100, 100, 6]} for pe in pes])
+        out = mv._sectors(pts)
+        self.assertEqual(len(out), 1)
+        row = out[0]
+        self.assertEqual(row["sector"], "فلزات")
+        self.assertEqual(row["pe"], 5.5)
+        self.assertEqual(row["points"], 13)
+        below = sum(1 for v in pes if v < 5.5)
+        self.assertAlmostEqual(row["percentile"], round((below + 0.5) / 13 * 100, 1))
+
+    def test_thin_loss_making_and_short_histories_are_not_listed(self):
+        good = {"الف": [700, 100, 5]}
+        pts = self.points([dict(good, **{"کم": [500, 100, 2], "زیان": [500, -10, 9]})
+                           for _ in range(12)] )
+        names = [r["sector"] for r in mv._sectors(pts)]
+        self.assertEqual(names, ["الف"])
+        # eleven points are not a history
+        self.assertEqual(mv._sectors(pts[:11]), [])
+
+    def test_an_industry_missing_today_is_not_listed(self):
+        pts = self.points([{"الف": [700, 100, 5]}] * 12 + [{"ب": [700, 100, 5]}])
+        self.assertEqual(mv._sectors(pts), [])
+
+    def test_summary_keeps_the_sector_detail_out_of_now(self):
+        handle, path = tempfile.mkstemp(suffix=".json")
+        os.close(handle)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"points": self.points([{"الف": [700, 100, 5]}] * 12)}, f)
+            with mock.patch.object(mv, "FILE", path):
+                s = mv.summary(opportunity={"rate_pct": 40.0, "as_of": "x", "source": "t"})
+            self.assertNotIn("sectors", s["now"])
+            self.assertEqual(s["sectors"][0]["sector"], "الف")
+        finally:
+            os.unlink(path)
+
+
 class LatestWithTtmTests(unittest.TestCase):
     """A newest filing that cannot give a trailing year (found 2026-11-11)."""
 

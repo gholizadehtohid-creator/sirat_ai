@@ -3799,11 +3799,33 @@ function valuationWord(pct) {
   return "در محدوده‌ی معمول";
 }
 
+function valuationCell(pct) {
+  const word = valuationWord(pct);
+  if (pct == null) return word;
+  return pct < 25 ? `<span class="up">${word}</span>`
+    : pct > 75 ? `<span class="down">${word}</span>`
+      : `<span class="hint">${word}</span>`;
+}
+
+function renderValuationSectors(rows) {
+  const box = $("valuationSectorsBox");
+  if (!box) return;
+  box.classList.toggle("hidden", !rows.length);
+  $("valuationSectors").innerHTML = rows.length
+    ? table(["صنعت", "P/E امروز", "میانه‌ی خودش", "صدک", "در برابر خودش", "شرکت‌ها"],
+        rows.map(s => [esc(s.sector), num(s.pe, 1), num(s.median_pe, 1),
+                       num(s.percentile, 0), valuationCell(s.percentile),
+                       num(s.companies, 0)]))
+    : "";
+  if (rows.length) capRows("valuationSectors", 8);
+}
+
 function renderValuation(rep) {
   if (!rep.available) {
     banner("valuationStatus", "valuationStatusText", "", esc(rep.reason || "در دسترس نیست"));
     $("valuationKpis").innerHTML = "";
     $("valuationChart").innerHTML = "";
+    renderValuationSectors([]);
     return;
   }
   const now = rep.now || {};
@@ -3830,6 +3852,7 @@ function renderValuation(rep) {
     ],
     format: v => num(v, 1),
   });
+  renderValuationSectors(rep.sectors || []);
   // Said from the side the number is on: "dearer than 85% of months" reads
   // straight, "cheaper than 15%" makes the reader do the subtraction.
   const cheaper = rep.percentile <= 50;
@@ -3853,6 +3876,9 @@ async function loadValuation() {
   try {
     renderValuation(await getJSON("/api/valuation"));
   } catch (err) {
+    $("valuationKpis").innerHTML = "";
+    $("valuationChart").innerHTML = "";
+    renderValuationSectors([]);
     banner("valuationStatus", "valuationStatusText", "is-error",
       `<strong>بارگذاری نشد.</strong> ${esc(err.message)}`);
   }
