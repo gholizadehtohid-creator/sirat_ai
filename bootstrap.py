@@ -404,6 +404,16 @@ def _flow_state():
         if missed:
             detail += f" ({missed} session(s) behind)"
 
+    # The newest flow row of ANY name said nothing about the rest: on
+    # 2026-11-10 154 of 652 names that traded had that session's flow, the
+    # newest date read "2026-11-10", nothing was owed, and the other ~500
+    # were never fetched (11-09 stood at 355). The latest traded session's
+    # coverage decides as well.
+    session, traded, flowed = _flow_session_coverage()
+    thin = bool(traded) and flowed < traded * FLOW_SESSION_COVERAGE
+    if thin:
+        detail += f"; session {session}: {flowed}/{traded} traded names have flow"
+
     return {
         "present": equities > 0 and covered >= equities * 0.9,
         "detail": detail,
@@ -411,8 +421,38 @@ def _flow_state():
         # Same rule as price history: staleness is a missing session, never a
         # wall-clock age. The newest row is stamped with the session's own
         # date, so it is always "a day old" the morning after a close.
-        "behind": bool(missed),
+        "behind": bool(missed) or thin,
     }
+
+
+# Share of the names that traded in the newest session which must have that
+# session's flow before the flow counts as current.
+FLOW_SESSION_COVERAGE = 0.9
+
+
+def _flow_session_coverage():
+    """(newest equity session, names that traded in it, names with its flow)."""
+
+    conn = database._connect()
+    try:
+        session = conn.execute("""
+            SELECT MAX(p.date) FROM price_history p
+            JOIN instruments i ON i.ins_code = p.ins_code
+            WHERE i.is_equity = 1 AND p.volume > 0
+        """).fetchone()[0]
+        if not session:
+            return None, 0, 0
+        traded, flowed = conn.execute("""
+            SELECT COUNT(*), COUNT(f.ins_code)
+            FROM price_history p
+            JOIN instruments i ON i.ins_code = p.ins_code
+            LEFT JOIN client_type_history f
+              ON f.ins_code = p.ins_code AND f.date = p.date
+            WHERE i.is_equity = 1 AND p.volume > 0 AND p.date = ?
+        """, (session,)).fetchone()
+    finally:
+        conn.close()
+    return session, int(traded or 0), int(flowed or 0)
 
 
 def _codal_state():

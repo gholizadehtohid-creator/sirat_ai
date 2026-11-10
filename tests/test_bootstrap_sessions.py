@@ -88,6 +88,28 @@ class ProbeTests(unittest.TestCase):
         self.assertFalse(self.history_state(TUESDAY_MORNING, index_has_today=True)["behind"])
 
 
+class FlowCoverageTests(unittest.TestCase):
+    """One name's newest flow row does not vouch for the other five hundred."""
+
+    def flow_state(self, traded, flowed):
+        coverage = {"equities": 818, "with_flow": 780, "last_date": "2026-11-10"}
+        with frozen(TUESDAY), \
+                mock.patch.object(bootstrap, "_index_has_today", return_value=True), \
+                mock.patch.object(bootstrap.database, "client_type_coverage",
+                                  return_value=coverage), \
+                mock.patch.object(bootstrap, "_flow_session_coverage",
+                                  return_value=("2026-11-10", traded, flowed)):
+            return bootstrap._flow_state()
+
+    def test_a_thinly_covered_session_is_behind(self):
+        state = self.flow_state(652, 154)
+        self.assertTrue(state["behind"])
+        self.assertIn("154/652", state["detail"])
+
+    def test_a_fully_covered_session_is_current(self):
+        self.assertFalse(self.flow_state(652, 640)["behind"])
+
+
 class AttemptTests(unittest.TestCase):
     """A fetch from before today's close does not excuse the evening run."""
 
