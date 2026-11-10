@@ -724,6 +724,17 @@ INFLATION_RATE = 76.8
 INFLATION_POINT_RATE = 88.7
 INFLATION_AS_OF = "1405/07"
 
+# What a shareholder could earn instead, without equity risk: the yield to
+# maturity of treasury bills (اخزا) with more than 90 days to run. 42.2% median,
+# 44% on the traded long bills, on 2026-11-10 -- against the 23% policy rate
+# (RISK_FREE_RATE) the outlook compared earnings yields with until then, so a
+# stock yielding 25% read as clearing the bar when bills paid 44%.
+# opportunities.treasury_bills() refreshes data/bill_yield.json whenever the
+# panel's opportunities card loads; this is the fallback. RISK_FREE_RATE stays
+# as it is: the scoring bands and the registered backtests are built on it.
+OPPORTUNITY_RATE = 44.0
+OPPORTUNITY_RATE_AS_OF = "1405/08/19"
+
 # The fundamental BACKTESTS were run and registered with 40. History is not
 # re-scored at today's inflation: 2020-2023 filings faced ~40%, and moving
 # this would silently change registered results. backtesting/fundamental.py

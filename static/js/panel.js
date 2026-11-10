@@ -3472,6 +3472,23 @@ function pctCell(v, digits = 1) {
   return v == null ? "—" : `${num(v, digits)}٪`;
 }
 
+// Which statements the read rests on: never a group against its parent.
+const OUTLOOK_BASIS = {
+  consolidated: "تلفیقی (کل گروه)",
+  separate: "جداگانه (خود شرکت)",
+  mixed: "تلفیقی و جداگانه (هم‌اندازه‌اند)",
+  separate_fallback: "جداگانه — تلفیقی تازه هنوز منتشر نشده",
+};
+
+// The price's growth hurdle against the bill yield, as one readable cell.
+function hurdleCell(h) {
+  if (!h || h.required_growth_pct == null) return "—";
+  if (h.required_growth_pct <= 0) return '<span class="up">لازم نیست</span>';
+  const ok = h.cushion_pct != null && h.cushion_pct >= 0;
+  return `${num(h.required_growth_pct, 0)}٪` + (h.actual_growth_pct == null ? "" :
+    ` <span class="${ok ? "up" : "down"}">(فعلی ${num(h.actual_growth_pct, 0)}٪)</span>`);
+}
+
 function renderOutlookDetail(r) {
   const v = r.valuation || {}, g = r.growth || {}, mg = r.margins || {};
   const c = r.cash || {}, b = r.balance || {}, l = r.latest || {};
@@ -3479,6 +3496,7 @@ function renderOutlookDetail(r) {
     ["آخرین صورت مالی", `${esc(l.period_end)} — ${l.months} ماهه` +
       (l.audited ? " (حسابرسی‌شده)" : " (حسابرسی‌نشده)")],
     ["روش برآورد", esc(OUTLOOK_METHOD[r.method] || "برآورد ممکن نیست")],
+    ["مبنای صورت‌های مالی", esc(OUTLOOK_BASIS[r.basis] || r.basis || "—")],
     ["رشد فروش / سود (نسبت به همان دوره‌ی سال قبل)",
       `${pctCell(g.revenue_pct)} / ${pctCell(g.profit_pct)} — تورم مبنا ${pctCell(g.inflation_pct, 0)} (سالانه${g.inflation_as_of ? "، " + esc(g.inflation_as_of) : ""}؛ نقطه‌به‌نقطه ${pctCell(g.inflation_point_pct, 0)})`],
     ["حاشیه سود ناخالص / عملیاتی / خالص",
@@ -3488,10 +3506,21 @@ function renderOutlookDetail(r) {
       `${num((r.ttm || {}).eps, 0)} / ${num((r.forward || {}).eps, 0)} ریال`],
     ["P/E گذشته / آینده‌نگر", `${num(v.pe_ttm, 1)} / ${num(v.pe_forward, 1)}`],
     ["بازده سود برآوردی", pctCell(v.earnings_yield_forward_pct)],
+    ["رشد لازم برای توجیه قیمت (در برابر اخزا) / رشد فعلی",
+      r.hurdle && r.hurdle.required_growth_pct != null
+        ? `${hurdleCell(r.hurdle)} — اخزا ${pctCell(r.hurdle.rate_pct, 1)} (${esc(r.hurdle.as_of || "")})`
+        : "—"],
+    ["P/NAV (ارزش خالص دارایی‌ها)", v.price_to_nav == null ? "—" :
+      `${num(v.price_to_nav, 2)} — پرتفوی ${esc(v.nav_period || "")}` +
+      (v.nav_complete === false ? " (سهام غیربورسی به بهای تمام‌شده؛ NAV کف است)" : "")],
+    ["ارزش بازار", v.market_cap == null ? "—" :
+      `${money(v.market_cap)} ریال` + (v.shares_source === "capital"
+        ? " (تعداد سهم از سرمایه‌ی صورت مالی؛ از بورس در دست نبود)" : "")],
     ["سود نقدی آخرین مجمع / بازده نقدی", v.dps == null ? "— (مجمع ثبت‌شده‌ای در دست نیست)" :
       `${num(v.dps, 0)} ریال (سال مالی ${esc(v.dividend_fiscal_year)}) / ${pctCell(v.dividend_yield_pct)}`],
     ["P/B و ROE دوازده‌ماهه", `${num(v.pb, 2)} / ${pctCell(v.roe_ttm_pct)}`],
-    ["تبدیل سود به نقد عملیاتی", c.cash_conversion == null ? "—" : `${num(c.cash_conversion, 2)} برابر`],
+    ["تبدیل سود به نقد عملیاتی", c.cash_conversion == null ? "—" :
+      `${num(c.cash_conversion, 2)} برابر` + (c.cash_conversion_basis === "ttm" ? " (۱۲ ماه گذشته)" : " (همین دوره)")],
     ["بازده جریان نقد آزاد", pctCell(v.fcf_yield_pct)],
     ["بدهی به حقوق صاحبان سهام / پوشش هزینه مالی",
       `${num(b.debt_to_equity, 2)} / ${b.interest_cover == null ? "—" : num(b.interest_cover, 1) + " برابر"}`],
@@ -3540,27 +3569,48 @@ function renderOutlookDetail(r) {
 function renderOutlook(rep) {
   const rows = (rep.ranked || []).map(r => {
     const v = r.valuation || {}, g = r.growth || {};
+    const vs = v.pe_vs_sector == null ? "—"
+      : `<span class="${v.pe_vs_sector < 1 ? "up" : "down"}">${num(v.pe_vs_sector, 2)}</span>` +
+        ` <span class="hint">(میانه ${num(v.sector_pe_median, 1)})</span>`;
     return [`<strong>${esc(r.symbol)}</strong>`, esc(r.sector || ""),
-      `${esc(r.latest.period_end)} (${r.latest.months}م)`,
-      pctCell(g.revenue_pct), num(v.pe_ttm, 1), num(v.pe_forward, 1),
-      pctCell(v.earnings_yield_forward_pct),
+      `${esc(r.latest.period_end)} (${r.latest.months}م${r.basis === "consolidated" ? "، تلفیقی" : ""})`,
+      pctCell(g.revenue_pct), num(v.pe_ttm, 1), num(v.pe_forward, 1), vs,
+      pctCell(v.earnings_yield_forward_pct), hurdleCell(r.hurdle),
       r.monthly && r.monthly.ytd_growth != null
         ? `${signed(r.monthly.ytd_growth * 100, 0)} <span class="hint">(${esc(r.monthly.period_end)})</span>`
         : "—",
       (r.flags || []).map(esc).join("<br>") || "—"];
   });
-  $("outlookTable").innerHTML = rows.length
+  const fin = (rep.financials || []).map(r => {
+    const v = r.valuation || {};
+    return [`<strong>${esc(r.symbol)}</strong>`, esc(r.sector || ""),
+      v.price_to_nav == null ? "—"
+        : `${num(v.price_to_nav, 2)} <span class="hint">(${esc(v.nav_period || "")})</span>`,
+      num(v.pb, 2), pctCell(v.roe_ttm_pct), pctCell(v.dividend_yield_pct)];
+  });
+  const sus = (rep.suspect || []).map(x =>
+    `${esc(x.symbol)} <span class="hint">(${esc(x.reason)}، ${esc(x.period_end)})</span>`).join("، ");
+  $("outlookTable").innerHTML = (rows.length
     ? table(["نماد", "صنعت", "آخرین دوره", "رشد فروش", "P/E گذشته",
-             "P/E آینده‌نگر", "بازده سود برآوردی", "رشد فروش ماهانه", "هشدار"], rows)
-    : '<div class="empty">هنوز شرکتی با داده‌ی کافی برای برآورد نیست</div>';
-  const x = rep.excluded || {};
+             "P/E آینده‌نگر", "P/E به میانه‌ی صنعت", "بازده سود برآوردی",
+             "رشد لازم (فعلی)", "رشد فروش ماهانه", "هشدار"], rows)
+    : '<div class="empty">هنوز شرکتی با داده‌ی کافی برای برآورد نیست</div>') +
+    (fin.length ? `<h3 style="margin-top:16px">بانک، بیمه، سرمایه‌گذاری و هلدینگ
+      <span class="hint">— با P/NAV و P/B سنجیده می‌شوند، نه P/E (ارزان‌ترین اول)</span></h3>` +
+      table(["نماد", "صنعت", "P/NAV (تاریخ پرتفوی)", "P/B", "ROE دوازده‌ماهه", "بازده نقدی"], fin) : "") +
+    (sus ? `<p class="hint" style="margin-top:12px">⚠ داده‌ی ناممکن — رتبه‌بندی نشد، صورت مالی را دستی ببینید: ${sus}</p>` : "");
+  const x = rep.excluded || {}, o = rep.opportunity || {};
   banner("outlookStatus", "outlookStatusText", "is-live",
-    `${rep.count} شرکت رتبه‌بندی شد (بیشترین بازده سود برآوردی اول). ` +
-    `کنار گذاشته: ${x.no_estimate || 0} بدون صورت مالی سال قبل (در حال جمع‌آوری از کدال)، ` +
+    `${rep.count} شرکت تولیدی/خدماتی رتبه‌بندی شد (بیشترین بازده سود برآوردی اول) ` +
+    `و ${rep.financials_count || 0} شرکت مالی جداگانه. ` +
+    `کنار گذاشته: ${x.no_estimate || 0} بدون صورت مالی سال قبل، ` +
+    `${x.basis_gap || 0} که صورت تلفیقی تازه‌شان هنوز منتشر نشده، ` +
+    `${x.suspect || 0} با داده‌ی ناممکن، ` +
     `${x.stale || 0} با صورت مالی کهنه، ${x.flags || 0} با بیش از یک هشدار، ` +
     `${x.loss || 0} زیان‌ده، ${x.no_filing || 0} بدون صورت مالی، ` +
     `${x.halted || 0} متوقف بیش از یک ماه. ` +
-    `معیار مقایسه: نرخ بدون ریسک ${num(rep.bar_pct, 0)}٪.`);
+    `معیار مقایسه: بازده اخزا ${num(rep.bar_pct, 1)}٪` +
+    (o.as_of ? ` (${esc(o.as_of)})` : "") + ".");
 }
 
 async function loadOutlook(force = false) {

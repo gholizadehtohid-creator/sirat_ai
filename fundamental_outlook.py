@@ -56,7 +56,35 @@ PAR_VALUE = 1_000                       # rials per share
 GROWTH_CAP = (-0.50, 1.00)
 STALE_MONTHS = 7                        # a newest period older than this
 INTEREST_COVER_LOW = 2.0
+
+# Twelve-month operating cash over profit, measured across the 379 ranked
+# companies on 2026-11-10: deciles -0.17 0.06 0.22 0.36 0.49 0.63 0.83 1.04
+# 1.66, median 0.49. At 77% inflation working capital absorbs half of a
+# typical company's profit, so 0.5 described the median company rather than
+# warned of one; the warning marks the market's bottom third.
+CASH_CONVERSION_LOW = 0.25
 RECEIVABLE_GAP_PCT = 15.0               # receivables outgrowing sales by this
+
+# Consolidated and separate statements are compared only when they describe
+# about the same business: monthly revenue within this ratio of each other.
+BASIS_SCALE_BAND = (0.67, 1.5)
+
+# Points by which actual growth must beat, or miss, the growth the price
+# requires before it is called out.
+GROWTH_CUSHION_PCT = 15.0
+
+# Past these, a result is far likelier a filing the parser misread than a
+# company: counted and named for a manual check, never ranked.
+SUSPECT_PE = 1.0
+SUSPECT_GROWTH_PCT = (-80.0, 400.0)
+SUSPECT_MARGIN_PCT = 100.0
+
+# Banks, insurers, investment and holding companies: P/E on a disposal gain or
+# a provision is not a valuation (config.EARNINGS_MULTIPLE_NOT_MEANINGFUL).
+# Ranked in their own list, by P/NAV where the portfolio filing allows it,
+# else by P/B.
+FINANCIAL = "financial"
+OPERATING = "operating"
 
 
 def _f(value):
@@ -105,9 +133,62 @@ def _periods(rows):
         out.append({"end": row.get("period_end"), "months": int(months),
                     "fy": fy, "items": items, "ratios": row.get("ratios") or {},
                     "published": row.get("published_at"),
-                    "audited": row.get("audited")})
+                    "audited": row.get("audited"),
+                    "consolidated": bool(row.get("consolidated"))})
     out.sort(key=lambda p: (p["end"], p["months"]), reverse=True)
     return out
+
+
+def _monthly_revenue(periods):
+    values = sorted(v for v in (_div(_f(p["items"].get("revenue")), p["months"])
+                                for p in periods) if v and v > 0)
+    return values[len(values) // 2] if values else None
+
+
+def choose_basis(periods, today=None):
+    """(periods, basis): like with like, never a group against its parent.
+
+    Found 2026-11-10: 347 of 785 companies file SEPARATE statements at 3 and
+    9 months and CONSOLIDATED ones at 6 and 12. For a holding company the two
+    are different businesses -- the parent alone earns little but its
+    subsidiaries' dividends -- and comparing a separate half-year with last
+    year's consolidated one read خبهمن's revenue as down 98%.
+
+    When the two bases are about the same size (a manufacturer with small
+    subsidiaries) they are one series and all periods are kept, the freshest
+    first. When they differ materially, only the consolidated periods are
+    used, the whole group being what the shares own -- unless the newest of
+    them is stale, in which case the separate series is the better read.
+    """
+
+    consolidated = [p for p in periods if p["consolidated"]]
+    separate = [p for p in periods if not p["consolidated"]]
+
+    if not consolidated:
+        return periods, "separate"
+    if not separate:
+        return periods, "consolidated"
+
+    a, b = _monthly_revenue(consolidated), _monthly_revenue(separate)
+    if a and b and BASIS_SCALE_BAND[0] <= a / b <= BASIS_SCALE_BAND[1]:
+        return periods, "mixed"
+
+    age = _age_months(consolidated[0]["end"], today)
+    if age is not None and age > STALE_MONTHS:
+        # The group's statements are stale and the parent's alone are not.
+        # Usually only for weeks: the 6-month consolidated statement follows
+        # the separate one. Named apart so the gap is not read as no data.
+        return separate, "separate_fallback"
+    return consolidated, "consolidated"
+
+
+def _age_months(period_end, today=None):
+    today = today or jalali.today_jalali()
+    try:
+        ey, em = (int(p) for p in str(period_end).split("/")[:2])
+        return (today[0] - ey) * 12 + (today[1] - em)
+    except (TypeError, ValueError, AttributeError, IndexError):
+        return None
 
 
 def _find(periods, fy, months):
@@ -210,14 +291,17 @@ _UNSET = object()
 
 
 def analyse(ins_code, price=None, periods=12, today=None, rows=None,
-            monthly_rows=None, dividend=_UNSET):
+            monthly_rows=None, dividend=_UNSET, shares=_UNSET, sector=_UNSET,
+            portfolio=_UNSET, opportunity=None):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
     `monthly_rows` the monthly-report read; the tests pass hand-built
     periods through them. `dividend` is the last AGM's
-    codal_announcements.latest_dividends() entry; screen() passes it so 800
-    companies cost one read.
+    codal_announcements.latest_dividends() entry, `shares` the exchange's
+    share count, `sector` the instrument's sector name and `portfolio` its
+    newest ن-31 filing; screen() passes all of them so 800 companies cost one
+    read each. `opportunity` is opportunity_rate()'s answer.
     """
 
     rows_from_store = rows is None
@@ -228,6 +312,21 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         if rows_from_store:
             import codal_announcements
             dividend = codal_announcements.latest_dividends().get(str(ins_code))
+    if shares is _UNSET:
+        shares = (exchange_shares().get(str(ins_code))
+                  if rows_from_store else None)
+    if sector is _UNSET:
+        sector = None
+        if rows_from_store:
+            for inst in database.load_instruments(equities_only=True):
+                if str(inst["ins_code"]) == str(ins_code):
+                    sector = inst.get("sector_name")
+                    break
+    if portfolio is _UNSET:
+        portfolio = (database.load_codal_portfolio_latest([ins_code])
+                     .get(str(ins_code)) if rows_from_store else None)
+    opportunity = opportunity or opportunity_rate()
+    today = today or jalali.today_jalali()
 
     # A halted symbol's last close can be months or years old; a P/E on it
     # is not today's valuation (دتهران read 0.02 on a 2018 price). Report
@@ -235,10 +334,14 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     halted = halted_since(ins_code) if price and rows_from_store else None
     if halted:
         price = None
-    ps = _periods(rows)
+    all_periods = _periods(rows)
 
-    if not ps:
+    if not all_periods:
         return None
+
+    ps, basis = choose_basis(all_periods, today)
+    kind = FINANCIAL if (sector or "").strip() in \
+        config.EARNINGS_MULTIPLE_NOT_MEANINGFUL else OPERATING
 
     latest = ps[0]
     li = latest["items"]
@@ -260,10 +363,24 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if owners_share is None or not 0 < owners_share <= 1.5:
         owners_share = 1.0
 
-    rev_prev = _f((same_prev or {}).get("items", {}).get("revenue")) \
-        if same_prev else _backed_out(latest, "revenue", "revenue_growth")
-    net_prev = _f(same_prev["items"].get("net_profit")) if same_prev else \
-        _backed_out(latest, "net_profit", "profit_growth")
+    # Growth is measured against the same KIND of statement. Where a "mixed"
+    # series stores last year's period consolidated and this year's separate,
+    # the filing's own comparative column -- always its own basis -- is the
+    # prior figure: فولاد read +16% on separate-vs-consolidated six months
+    # while its monthly reports said +68% (2026-11-10).
+    like = same_prev if same_prev and \
+        same_prev["consolidated"] == latest["consolidated"] else None
+
+    def _prior(key, growth_key):
+        if like:
+            return _f(like["items"].get(key))
+        backed = _backed_out(latest, key, growth_key)
+        if backed is not None or not same_prev:
+            return backed
+        return _f(same_prev["items"].get(key))
+
+    rev_prev = _prior("revenue", "revenue_growth")
+    net_prev = _prior("net_profit", "profit_growth")
 
     growth_rev = _div(rev, rev_prev)
     growth_rev = None if growth_rev is None or rev_prev <= 0 else growth_rev - 1
@@ -280,7 +397,13 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if m == 12:
         ttm_rev, ttm_net = rev, net
         if rev is not None and net is not None and margin is not None:
-            g = min(max(growth_rev if growth_rev is not None else 0.0,
+            # A whole year not yet begun: last year's growth halfway back to
+            # inflation, not carried forward whole. 167% one year is rarely
+            # 167% the next; inflation is what nominal sales drift back to.
+            # (A year under way grows its remaining months at the rate it has
+            # actually run at, below -- that is evidence, this is a forecast.)
+            last = growth_rev if growth_rev is not None else 0.0
+            g = min(max(0.5 * last + 0.5 * config.INFLATION_RATE / 100.0,
                         GROWTH_CAP[0]), GROWTH_CAP[1])
             fwd_rev = rev * (1 + g)
             fwd_net = fwd_rev * margin
@@ -288,7 +411,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     elif annual_prev and same_prev:
         a_rev = _f(annual_prev["items"].get("revenue"))
         a_net = _f(annual_prev["items"].get("net_profit"))
-        s_rev, s_net = rev_prev, net_prev
+        # Last year's same months as STORED, on the annual's own basis: the
+        # remaining months are the annual less them, one basis throughout.
+        s_rev = _f(same_prev["items"].get("revenue"))
+        s_net = _f(same_prev["items"].get("net_profit"))
         if None not in (rev, a_rev, s_rev):
             ttm_rev = rev + a_rev - s_rev
             if growth_rev is not None:
@@ -330,10 +456,19 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             method = "monthly_sales"
 
     # ---- per share and valuation -----------------------------------------
+    # The exchange's share count, not the statement's capital line: that is
+    # the capital at the period's end, and a raise since then (or a stale
+    # line -- شصفها's read 300 billion rials against 15.3 billion shares)
+    # leaves the market value, and every multiple on it, wrong by the ratio.
     capital = _f(li.get("capital"))
-    shares = capital / PAR_VALUE if capital else None
+    shares = _f(shares)
+    shares_source = "exchange"
+    if not shares or shares <= 0:
+        shares = capital / PAR_VALUE if capital else None
+        shares_source = "capital" if shares else None
 
     # Owners' part of the group's profit: what a shareholder's EPS is.
+    ttm_net_total = ttm_net
     ttm_net = ttm_net * owners_share if ttm_net is not None else None
     fwd_net = fwd_net * owners_share if fwd_net is not None else None
 
@@ -361,6 +496,19 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     fcf_yield = _div(fcf_annual, market_cap)
     cash_conversion = _div(ocf, net) if net and net > 0 else None
 
+    # Over twelve months where the statements allow: an interim period's
+    # cash flow carries the working capital that 77% inflation builds into
+    # inventory and receivables mid-year, and on six-month figures 196 of 379
+    # ranked companies read as "profit not turning into cash" (2026-11-10).
+    cash_conversion_basis = "period" if cash_conversion is not None else None
+    if m != 12 and annual_prev and same_prev:
+        a_ocf = _f(annual_prev["items"].get("operating_cash_flow"))
+        s_ocf = _f(same_prev["items"].get("operating_cash_flow"))
+        if None not in (ocf, a_ocf, s_ocf) and ttm_net_total and                 ttm_net_total > 0:
+            # Group cash against group profit, not the owners' share of it.
+            cash_conversion = (ocf + a_ocf - s_ocf) / ttm_net_total
+            cash_conversion_basis = "ttm"
+
     debt = None
     if li.get("borrowings_short") is not None or li.get("borrowings_long") is not None:
         debt = (_f(li.get("borrowings_short")) or 0.0) + (_f(li.get("borrowings_long")) or 0.0)
@@ -377,8 +525,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     receivable_days = receivable_days * 365 if receivable_days is not None else None
 
     rec_growth = None
-    if same_prev:
-        r0 = _f(same_prev["items"].get("receivables"))
+    if like:
+        r0 = _f(like["items"].get("receivables"))
         r1 = _f(li.get("receivables"))
         if r0 and r1 and r0 > 0:
             rec_growth = r1 / r0 - 1
@@ -387,14 +535,19 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if annual_prev and m == 12:
         payout = _div(-(_f(li.get("dividends_paid")) or 0.0), _profit(annual_prev["items"]))
 
+    # ---- NAV, for the companies whose earnings are not a valuation ---------
+    # The portfolio filing (ن-31) is the parent's own holdings, so its book
+    # equity is the parent's: the newest SEPARATE period when there is one.
+    nav_result = price_to_nav = None
+    if kind == FINANCIAL and portfolio:
+        import nav as nav_module
+        own = next((p for p in all_periods if not p["consolidated"]), latest)
+        own_equity = _f(own["items"].get("equity_owners")) or             _f(own["items"].get("equity"))
+        nav_result = nav_module.net_asset_value(portfolio, own_equity)
+        price_to_nav = nav_module.price_to_nav(market_cap, nav_result)
+
     # ---- age -------------------------------------------------------------
-    age_months = None
-    today = today or jalali.today_jalali()
-    try:
-        ey, em = (int(p) for p in latest["end"].split("/")[:2])
-        age_months = (today[0] - ey) * 12 + (today[1] - em)
-    except (TypeError, ValueError, AttributeError):
-        pass
+    age_months = _age_months(latest["end"], today)
 
     inflation = config.INFLATION_RATE / 100.0
 
@@ -410,39 +563,54 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
 
     if age_months is not None and age_months > STALE_MONTHS:
         flag("آخرین صورت مالی %d ماه پیش تمام شده؛ برآوردها کهنه است" % age_months)
-    if growth_rev is not None:
-        if growth_rev < inflation:
-            flag("رشد فروش %.0f٪ — زیر تورم %.0f٪، یعنی کوچک شدن واقعی"
-                 % (growth_rev * 100, inflation * 100))
-        else:
-            positives.append("رشد فروش %.0f٪، بالاتر از تورم %.0f٪"
-                             % (growth_rev * 100, inflation * 100))
-    if margin is not None and margin_prev is not None:
-        change = (margin - margin_prev) * 100
-        if change <= -3:
-            flag("حاشیه سود خالص %.1f واحد افت کرده (%.1f٪ → %.1f٪)"
-                 % (-change, margin_prev * 100, margin * 100))
-        elif change >= 3:
-            positives.append("حاشیه سود خالص %.1f واحد بهتر شده (%.1f٪ → %.1f٪)"
-                             % (change, margin_prev * 100, margin * 100))
+    if basis == "separate_fallback":
+        flag("صورت مالی تلفیقیِ تازه هنوز منتشر نشده؛ ارقام فقط شرکت مادر است و "
+             "با ارقام گروه قابل مقایسه نیست")
     if net is not None and net < 0:
         flag("زیان‌ده در دوره‌ی اخیر")
-    if cash_conversion is not None:
-        if cash_conversion < 0.5:
-            flag("فقط %.0f٪ سود به نقد عملیاتی تبدیل شده" % (cash_conversion * 100))
-        elif cash_conversion >= 1.0:
-            positives.append("نقد عملیاتی بیشتر از سود خالص (کیفیت سود خوب)")
-    if rec_growth is not None and growth_rev is not None and \
-            (rec_growth - growth_rev) * 100 > RECEIVABLE_GAP_PCT:
-        flag("مطالبات %.0f٪ رشد کرده در برابر فروش %.0f٪ — فروش نسیه یا وصول کند"
-             % (rec_growth * 100, growth_rev * 100))
-    if interest_cover is not None and interest_cover < INTEREST_COVER_LOW:
-        flag("سود عملیاتی فقط %.1f برابر هزینه مالی" % interest_cover)
-    if fcf is not None and fcf < 0 and net_debt is not None and net_debt > 0:
-        flag("جریان نقد آزاد منفی با بدهی خالص — سرمایه‌گذاری با وام")
-    if eps_fwd is not None and eps_ttm is not None and eps_ttm > 0 and eps_fwd < eps_ttm * 0.9:
-        flag("سود برآوردی سال جاری زیر سود ۱۲ ماه گذشته")
-    if monthly:
+
+    # A bank's "revenue" is interest, an investment company's is disposal
+    # gains: sales growth, margins, cash conversion, receivables, interest
+    # cover and the monthly sales read are an operating company's questions
+    # and only noise for these.
+    if kind == OPERATING:
+        # The monthly report's year-to-date growth, when it is newer, says the
+        # same thing more recently -- one flag, not two.
+        newer_monthly = bool(monthly and monthly.get("ytd_growth") is not None
+                             and monthly["period_end"] > latest["end"])
+        if growth_rev is not None and not newer_monthly:
+            if growth_rev < inflation:
+                flag("رشد فروش %.0f٪ — زیر تورم %.0f٪، یعنی کوچک شدن واقعی"
+                     % (growth_rev * 100, inflation * 100))
+            else:
+                positives.append("رشد فروش %.0f٪، بالاتر از تورم %.0f٪"
+                                 % (growth_rev * 100, inflation * 100))
+        if margin is not None and margin_prev is not None:
+            change = (margin - margin_prev) * 100
+            if change <= -3:
+                flag("حاشیه سود خالص %.1f واحد افت کرده (%.1f٪ → %.1f٪)"
+                     % (-change, margin_prev * 100, margin * 100))
+            elif change >= 3:
+                positives.append("حاشیه سود خالص %.1f واحد بهتر شده (%.1f٪ → %.1f٪)"
+                                 % (change, margin_prev * 100, margin * 100))
+        if cash_conversion is not None:
+            if cash_conversion < CASH_CONVERSION_LOW:
+                flag("فقط %.0f٪ سود %s به نقد عملیاتی تبدیل شده"
+                     % (cash_conversion * 100,
+                        "۱۲ ماه گذشته" if cash_conversion_basis == "ttm"
+                        else "دوره"))
+            elif cash_conversion >= 1.0:
+                positives.append("نقد عملیاتی بیشتر از سود خالص (کیفیت سود خوب)")
+        if rec_growth is not None and growth_rev is not None and                 (rec_growth - growth_rev) * 100 > RECEIVABLE_GAP_PCT:
+            flag("مطالبات %.0f٪ رشد کرده در برابر فروش %.0f٪ — فروش نسیه یا وصول کند"
+                 % (rec_growth * 100, growth_rev * 100))
+        if interest_cover is not None and interest_cover < INTEREST_COVER_LOW:
+            flag("سود عملیاتی فقط %.1f برابر هزینه مالی" % interest_cover)
+        if fcf is not None and fcf < 0 and net_debt is not None and net_debt > 0:
+            flag("جریان نقد آزاد منفی با بدهی خالص — سرمایه‌گذاری با وام")
+        if eps_fwd is not None and eps_ttm is not None and eps_ttm > 0 and                 eps_fwd < eps_ttm * 0.9:
+            flag("سود برآوردی سال جاری زیر سود ۱۲ ماه گذشته")
+    if monthly and kind == OPERATING:
         mg = monthly.get("ytd_growth")
         if mg is not None:
             text = ("فروش ماهانه از ابتدای سال تا %s: %+.0f٪ نسبت به سال قبل"
@@ -462,32 +630,68 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             flag("خرید مواد اولیه %+.0f٪ در برابر فروش %+.0f٪ — فشار بر حاشیه سود"
                  % (pg * 100, mg * 100))
         for p in monthly.get("products") or []:
-            if (p.get("production_to_sales") or 0) > 1.3 and \
-                    (p.get("amount_ytd") or 0) > 0:
+            if (p.get("production_to_sales") or 0) > 1.3 and                     (p.get("amount_ytd") or 0) > 0:
                 flag("تولید «%s» %.0f٪ بیشتر از فروش آن — انباشت موجودی"
                      % (p["name"], (p["production_to_sales"] - 1) * 100))
                 break
+    if monthly:
         ratio = monthly.get("expense_to_income")
         if ratio is not None and monthly.get("template") == "insurance" and ratio > 0.7:
             flag("خسارت پرداختی %.0f٪ حق بیمه‌ی صادره" % (ratio * 100))
 
-    bar = config.RISK_FREE_RATE
-    if yield_fwd is not None and 0 < yield_fwd < bar:
-        flag("بازده سود برآوردی %.0f٪ — کمتر از نرخ بدون ریسک %.0f٪"
-             % (yield_fwd * 100, bar * 100))
-    elif yield_fwd is not None and yield_fwd > 0 and pe_fwd is not None:
+    # ---- what today's price asks of the company ---------------------------
+    # A shareholder's return is roughly the earnings yield plus the growth of
+    # those earnings; bills pay the opportunity rate with neither risk nor
+    # growth. So the growth the price REQUIRES is the rate less the earnings
+    # yield, and the question is whether the company is growing faster than
+    # that. Nominal both sides, so inflation cancels. An approximation -- it
+    # assumes earnings reach shareholders and grow at about the sales rate --
+    # and labelled as one.
+    rate = opportunity["rate_pct"] / 100.0
+    required_growth = cushion = actual_growth = None
+    if kind == OPERATING and yield_fwd is not None and yield_fwd > 0:
+        required_growth = rate - yield_fwd
+        actual_growth = (monthly.get("ytd_growth") if monthly and
+                         monthly.get("ytd_growth") is not None else growth_rev)
+        if actual_growth is not None:
+            cushion = actual_growth - required_growth
+        if required_growth <= 0:
+            positives.append("بازده سود برآوردی %.0f٪ از بازده اخزا (%.0f٪) بیشتر "
+                             "است؛ قیمت برای توجیه شدن به رشد نیاز ندارد"
+                             % (yield_fwd * 100, rate * 100))
+        elif cushion is not None and cushion * 100 < -GROWTH_CUSHION_PCT:
+            flag("قیمت امروز، در برابر اخزای %.0f٪، رشد سالانه‌ی حدود %.0f٪ "
+                 "سود را لازم دارد؛ رشد فعلی فروش %.0f٪ است"
+                 % (rate * 100, required_growth * 100, actual_growth * 100))
+        elif cushion is not None and cushion * 100 > GROWTH_CUSHION_PCT:
+            positives.append("رشد فعلی فروش %.0f٪، بیشتر از رشد %.0f٪ که قیمت "
+                             "امروز در برابر اخزای %.0f٪ لازم دارد"
+                             % (actual_growth * 100, required_growth * 100,
+                                rate * 100))
+    if kind == OPERATING and yield_fwd is not None and yield_fwd > 0             and pe_fwd is not None:
         positives.append("بازده سود برآوردی %.0f٪ (P/E آینده‌نگر %.1f)"
                          % (yield_fwd * 100, pe_fwd))
+    if kind == FINANCIAL:
+        flag("بانک، بیمه، سرمایه‌گذاری یا هلدینگ: P/E و رشد فروش معیار "
+             "ارزش‌گذاری نیست؛ با P/NAV یا P/B و ROE سنجیده می‌شود")
+        if price_to_nav is not None:
+            (positives if price_to_nav < 1 else flags).append(
+                "P/NAV %.2f — %s" % (price_to_nav,
+                                     "زیر ارزش خالص دارایی‌ها" if price_to_nav < 1
+                                     else "بالاتر از ارزش خالص دارایی‌ها"))
     if dividend_yield is not None and dps > 0:
         positives.append("سود نقدی مجمع سال %s: %s ریال هر سهم — بازده نقدی %.1f٪"
                          % (dividend["fiscal_year_end"], format(int(round(dps)), ","),
                             dividend_yield * 100))
 
-    return {
+    result = {
         "ins_code": str(ins_code),
+        "kind": kind,
+        "basis": basis,
         "latest": {"period_end": latest["end"], "months": m,
                    "audited": latest["audited"], "published": latest["published"],
-                   "age_months": age_months},
+                   "age_months": age_months,
+                   "consolidated": latest["consolidated"]},
         "has_prior_year": bool(annual_prev),
         "has_same_period": bool(same_prev),
         "method": method,
@@ -507,8 +711,21 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                       "fcf_yield_pct": _pct(fcf_yield),
                       "dps": dps,
                       "dividend_fiscal_year": (dividend or {}).get("fiscal_year_end"),
-                      "dividend_yield_pct": _pct(dividend_yield)},
-        "cash": {"cash_conversion": _round(cash_conversion), "fcf": fcf,
+                      "dividend_yield_pct": _pct(dividend_yield),
+                      "shares": shares, "shares_source": shares_source,
+                      "price_to_nav": _round(price_to_nav),
+                      "nav": (nav_result or {}).get("nav"),
+                      "nav_complete": (nav_result or {}).get("complete"),
+                      "nav_period": (portfolio or {}).get("period_end")
+                      if nav_result else None},
+        "hurdle": {"rate_pct": opportunity["rate_pct"],
+                   "as_of": opportunity["as_of"],
+                   "source": opportunity["source"],
+                   "required_growth_pct": _pct(required_growth),
+                   "actual_growth_pct": _pct(actual_growth),
+                   "cushion_pct": _pct(cushion)},
+        "cash": {"cash_conversion": _round(cash_conversion),
+                 "cash_conversion_basis": cash_conversion_basis, "fcf": fcf,
                  "capex": capex, "payout_pct": _pct(payout)},
         "balance": {"debt": debt, "net_debt": net_debt,
                     "debt_to_equity": _round(debt_to_equity),
@@ -519,6 +736,13 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         "flags": flags,
         "positives": positives,
     }
+
+    suspect = suspect_reason(result)
+    result["suspect"] = suspect
+    if suspect:
+        flags.insert(0, "داده‌ی ناممکن (%s): به احتمال زیاد صورت مالی درست "
+                        "خوانده نشده؛ دستی بررسی کنید" % suspect)
+    return result
 
 
 def _round(x, digits=2):
@@ -570,20 +794,90 @@ def latest_prices():
     return {str(code): _f(close) for code, close in rows}
 
 
-def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
-    """Every company with a forward estimate, ranked by forward earnings yield.
+def exchange_shares():
+    """{ins_code: shares outstanding} from the newest market snapshot."""
 
-    Only companies whose latest period is recent, with a prior year to
-    complete it, and at most `max_flags` warnings, are ranked; the rest are
-    counted, not hidden.
+    conn = database._connect()
+    try:
+        rows = conn.execute("""
+            SELECT s.ins_code, s.total_shares FROM market_snapshot s
+            JOIN (SELECT ins_code, MAX(captured_at) at FROM market_snapshot
+                  GROUP BY ins_code) m
+              ON m.ins_code = s.ins_code AND m.at = s.captured_at
+        """).fetchall()
+    except Exception:                                           # noqa: BLE001
+        rows = []
+    finally:
+        conn.close()
+    return {str(code): _f(n) for code, n in rows if _f(n)}
+
+
+def opportunity_rate(today=None):
+    """The bill yield the outlook measures equity against.
+
+    The yield opportunities.treasury_bills() last stored, if under two weeks
+    old; else config.OPPORTUNITY_RATE with its date. Never a network call.
+    """
+
+    import opportunities
+    stored = opportunities.remembered_bill_yield(today=today)
+    if stored:
+        return {"rate_pct": stored["yield_pct"], "as_of": stored["as_of"],
+                "source": "اخزا (%d سری)" % (stored.get("bills") or 0)}
+    return {"rate_pct": config.OPPORTUNITY_RATE,
+            "as_of": config.OPPORTUNITY_RATE_AS_OF, "source": "config"}
+
+
+def suspect_reason(result):
+    """Why a result is likelier a misread filing than a company, or None."""
+
+    if result["kind"] != OPERATING:
+        return None
+    pe = result["valuation"]["pe_forward"]
+    growth = result["growth"]["revenue_pct"]
+    margin = result["margins"]["net_pct"]
+    if pe is not None and pe < SUSPECT_PE:
+        return "P/E آینده‌نگر %.2f" % pe
+    if growth is not None and not             SUSPECT_GROWTH_PCT[0] <= growth <= SUSPECT_GROWTH_PCT[1]:
+        return "رشد فروش %+.0f٪" % growth
+    if margin is not None and margin > SUSPECT_MARGIN_PCT:
+        return "حاشیه سود خالص %.0f٪" % margin
+    return None
+
+
+def _median(values):
+    values = sorted(values)
+    if not values:
+        return None
+    middle = len(values) // 2
+    return values[middle] if len(values) % 2 else         (values[middle - 1] + values[middle]) / 2.0
+
+
+SECTOR_PEERS_MIN = 3
+
+
+def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
+    """Every company with a forward estimate, in two lists.
+
+    `ranked`: operating companies by forward earnings yield, each with its
+    P/E against its industry's median and the growth its price requires.
+    `financials`: banks, insurers, investment and holding companies, by P/NAV
+    where the portfolio filing allows, else by P/B. Only companies whose
+    latest period is recent, with a prior year to complete it, and at most
+    `max_flags` warnings, are ranked; the rest are counted, not hidden, and a
+    result that looks like a misread filing is named under `suspect`.
     """
 
     instruments = {str(r["ins_code"]): r
                    for r in database.load_instruments(equities_only=True)}
     prices = latest_prices()
+    shares = exchange_shares()
+    portfolios = database.load_codal_portfolio_latest()
+    opportunity = opportunity_rate()
 
-    ranked, excluded = [], {"no_filing": 0, "stale": 0, "no_estimate": 0,
-                            "flags": 0, "loss": 0, "halted": 0}
+    ranked, financials, suspect = [], [], []
+    excluded = {"no_filing": 0, "stale": 0, "no_estimate": 0, "flags": 0,
+                "loss": 0, "halted": 0, "suspect": 0, "basis_gap": 0}
     halted = database.halted_codes()
     import codal_announcements
     dividends = codal_announcements.latest_dividends()
@@ -593,32 +887,71 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
             excluded["halted"] += 1
             continue
         result = analyse(code, price=prices.get(code), today=today,
-                         dividend=dividends.get(code))
+                         dividend=dividends.get(code), shares=shares.get(code),
+                         sector=inst.get("sector_name"),
+                         portfolio=portfolios.get(code), opportunity=opportunity)
         if not result:
             excluded["no_filing"] += 1
             continue
+        result.update(symbol=inst.get("symbol_fa"), name=inst.get("name_fa"),
+                      sector=inst.get("sector_name"))
         age = result["latest"]["age_months"]
         if age is not None and age > STALE_MONTHS:
             excluded["stale"] += 1
             continue
+
+        if result["kind"] == FINANCIAL:
+            if result["valuation"]["pb"] is not None or                     result["valuation"]["price_to_nav"] is not None:
+                financials.append(result)
+            else:
+                excluded["no_estimate"] += 1
+            continue
+
         ey = result["valuation"]["earnings_yield_forward_pct"]
         if ey is None or result["method"] == "annualised":
-            excluded["no_estimate"] += 1
+            excluded["basis_gap" if result["basis"] == "separate_fallback"
+                     else "no_estimate"] += 1
             continue
         if ey <= 0:
             excluded["loss"] += 1
+            continue
+        reason = suspect_reason(result)
+        if reason:
+            excluded["suspect"] += 1
+            suspect.append({"symbol": result["symbol"], "reason": reason,
+                            "period_end": result["latest"]["period_end"]})
             continue
         if len(result["flags"]) > max_flags:
             excluded["flags"] += 1
             continue
         if min_yield_pct is not None and ey < min_yield_pct:
             continue
-        result.update(symbol=inst.get("symbol_fa"), name=inst.get("name_fa"),
-                      sector=inst.get("sector_name"))
         ranked.append(result)
 
+    # Relative value: each P/E against its own industry's, among the ranked.
+    by_sector = {}
+    for r in ranked:
+        by_sector.setdefault(r["sector"], []).append(
+            r["valuation"]["pe_forward"])
+    medians = {k: _median([v for v in vs if v]) for k, vs in by_sector.items()
+               if len([v for v in vs if v]) >= SECTOR_PEERS_MIN}
+    for r in ranked:
+        median = medians.get(r["sector"])
+        pe = r["valuation"]["pe_forward"]
+        r["valuation"]["sector_pe_median"] = _round(median)
+        r["valuation"]["pe_vs_sector"] = _round(pe / median) if median and pe             else None
+        r["valuation"]["sector_peers"] = len(by_sector.get(r["sector"]) or [])
+
     ranked.sort(key=lambda r: -r["valuation"]["earnings_yield_forward_pct"])
+    financials.sort(key=lambda r: (
+        r["valuation"]["price_to_nav"] is None,
+        r["valuation"]["price_to_nav"] if r["valuation"]["price_to_nav"]
+        is not None else (r["valuation"]["pb"] or 99)))
 
     return {"ranked": ranked[:limit], "count": len(ranked),
+            "financials": financials[:limit],
+            "financials_count": len(financials),
+            "suspect": suspect,
             "excluded": excluded,
-            "bar_pct": round(config.RISK_FREE_RATE * 100, 1)}
+            "bar_pct": opportunity["rate_pct"],
+            "opportunity": opportunity}

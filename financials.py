@@ -122,6 +122,23 @@ def is_audited(title):
     return None
 
 
+# A parenthesised name in a statement title: «... (حسابرسی شده) (شرکت فولادکالا
+# فوکا)». Since 1405 a parent publishes its subsidiaries' statements under its
+# OWN symbol with the subsidiary named like this. Found 2026-11-10: 182 had
+# been stored as their parents' latest period -- فولاد's 6-month statement was
+# a football club's (capital 10 million rials against 1,935 trillion), and the
+# outlook read فولاد's revenue as down 99.9%.
+_SUBSIDIARY = re.compile(r"\(\s*((?:شرکت|سهامی خاص)[^()]*)\)")
+
+
+def subsidiary_of(title):
+    """The subsidiary a statement belongs to, or None for the issuer's own."""
+
+    match = _SUBSIDIARY.search(persian.normalize(title or ""))
+
+    return match.group(1).strip() if match else None
+
+
 def annualise(value, months):
     """Scale a period figure to a yearly rate.
 

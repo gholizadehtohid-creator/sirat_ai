@@ -30,6 +30,8 @@ deducted: bills and funds carry far smaller fees than the 1.039% equity round
 trip, and the broker's actual fee is not known here.
 """
 
+import json
+import os
 import re
 from datetime import date
 
@@ -238,7 +240,54 @@ def treasury_bills(today=None):
 
     rows.sort(key=lambda r: -r["ytm_pct"])
 
+    _remember_bill_yield(rows, today)
+
     return {"bills": rows, "fund_rate_pct": FUND_RATE * 100, "error": None}
+
+
+# The fundamental outlook's opportunity cost reads this rather than calling
+# TSETMC itself: an analysis of filed statements makes no network call.
+BILL_YIELD_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "data", "bill_yield.json")
+BILL_YIELD_MIN_DAYS = 90               # shorter bills price the next weeks' rate
+
+
+def _remember_bill_yield(rows, today):
+    """Median yield of the bills with 90+ days to run, written for the outlook."""
+
+    longer = sorted(r["ytm_pct"] for r in rows
+                    if r["days"] > BILL_YIELD_MIN_DAYS and r["traded_value"])
+    if not longer:
+        return None
+
+    middle = len(longer) // 2
+    median = (longer[middle] if len(longer) % 2
+              else (longer[middle - 1] + longer[middle]) / 2.0)
+    record = {"yield_pct": round(median, 2), "bills": len(longer),
+              "as_of": today.isoformat()}
+    try:
+        os.makedirs(os.path.dirname(BILL_YIELD_FILE), exist_ok=True)
+        with open(BILL_YIELD_FILE, "w", encoding="utf-8") as handle:
+            json.dump(record, handle)
+    except OSError:
+        return None
+    return record
+
+
+def remembered_bill_yield(max_age_days=14, today=None):
+    """The last stored bill yield if it is recent, else None."""
+
+    try:
+        with open(BILL_YIELD_FILE, encoding="utf-8") as handle:
+            record = json.load(handle)
+        as_of = date.fromisoformat(record["as_of"])
+        value = float(record["yield_pct"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if ((today or date.today()) - as_of).days > max_age_days:
+        return None
+    return {"yield_pct": value, "as_of": record["as_of"],
+            "bills": record.get("bills")}
 
 
 def fund_discounts(per_sleeve=12):

@@ -221,6 +221,134 @@ def retried_filings():
     return {str(row[0]): int(row[1] or 0) for row in rows}
 
 
+SUBSIDIARY_REASON = "subsidiary's statement (not the issuer's own)"
+
+
+def purge_subsidiaries(verbose=True):
+    """Take out every stored subsidiary statement, and put the parent back.
+
+    codal_sync.parse_letter refuses them from now on; this removes the ones
+    stored before it did (182 on 2026-11-10). Each is deleted from
+    codal_filings and settled so no queue fetches it again. Where it had
+    taken the period's place in codal_financials or in the fundamental
+    store's metrics, the parent's own newest filing for that period goes back
+    in -- or the period is left empty, which is honest, rather than another
+    company's. Idempotent.
+    """
+
+    import financials
+    import fundamental_db
+
+    database.create_database()
+    _ensure_state_table()
+
+    conn = database._connect()
+    rows = conn.execute(
+        "SELECT tracing_no, ins_code, period_end, period_months, title "
+        "FROM codal_filings").fetchall()
+    bad = [r for r in rows if financials.subsidiary_of(r[4])]
+    bad_ids = {str(r[0]) for r in bad}
+    keys = {(str(r[1]), r[2], r[3]) for r in bad}
+
+    for tracing_no, ins_code, _, _, _ in bad:
+        conn.execute("DELETE FROM codal_filings WHERE tracing_no = ?",
+                     (str(tracing_no),))
+    conn.commit()
+
+    # The parent's own newest filing for each period it had displaced.
+    restore = {}
+    for ins_code, period_end, months in keys:
+        own = conn.execute(
+            "SELECT tracing_no FROM codal_filings WHERE ins_code = ? AND "
+            "period_end = ? AND period_months IS ? ORDER BY published_at DESC "
+            "LIMIT 1", (ins_code, period_end, months)).fetchone()
+        restore[(ins_code, period_end, months)] = str(own[0]) if own else None
+
+    # A subsidiary row in the period table whose filing never reached
+    # codal_filings: nothing to restore from, so it simply goes.
+    for tracing_no, title in conn.execute(
+            "SELECT tracing_no, title FROM codal_financials").fetchall():
+        if financials.subsidiary_of(title) and str(tracing_no) not in bad_ids:
+            conn.execute("DELETE FROM codal_financials WHERE tracing_no = ?",
+                         (tracing_no,))
+    conn.commit()
+
+    replaced = 0
+    for (ins_code, period_end, months), own in restore.items():
+        held = conn.execute(
+            "SELECT tracing_no FROM codal_financials WHERE ins_code = ? AND "
+            "period_end = ? AND period_months IS ?",
+            (ins_code, period_end, months)).fetchone()
+        if not held or str(held[0]) not in bad_ids:
+            continue
+        conn.execute(
+            "DELETE FROM codal_financials WHERE ins_code = ? AND period_end = ? "
+            "AND period_months IS ?", (ins_code, period_end, months))
+        replaced += 1
+    conn.commit()
+    conn.close()
+
+    for row in database.load_codal_filings():
+        key = (str(row.get("ins_code")), row.get("period_end"),
+               row.get("period_months"))
+        if restore.get(key) == str(row.get("tracing_no")):
+            database.save_codal_financials(row["ins_code"], row)
+
+    for tracing_no, ins_code, _, _, _ in bad:
+        record_failure(tracing_no, ins_code, SUBSIDIARY_REASON)
+        database.mark_letter_parsed(tracing_no)
+
+    # The fundamental store: drop the borrowed periods, and forget that the
+    # parent's own letter was imported, so the next sync carries it back in.
+    fundamental_db.create_database()
+    fconn = fundamental_db._connect()
+    fconn.execute("CREATE TABLE IF NOT EXISTS imported_letters ("
+                  "tracing_no TEXT PRIMARY KEY, imported_at TEXT)")
+    # Every period a subsidiary held here, by key: the market-db sweep above
+    # and any row this store took from elsewhere.
+    borrowed = {(str(i), p, m) for t, i, p, m, title in fconn.execute(
+        "SELECT tracing_no, ins_code, period_end, period_months, title "
+        "FROM metrics").fetchall()
+        if str(t) in bad_ids or financials.subsidiary_of(title)}
+    dropped = 0
+    for ins_code, period_end, months in borrowed:
+        dropped += fconn.execute(
+            "DELETE FROM metrics WHERE ins_code = ? AND period_end = ? AND "
+            "period_months IS ?", (ins_code, period_end, months)).rowcount
+    # Released from the ledger: the subsidiaries (harmless, they are gone
+    # from the source) and the issuer's own letters for those periods, which
+    # the next sync then carries back in, newest publication last.
+    mconn = database._connect()
+    for ins_code, period_end, months in borrowed:
+        for (own,) in mconn.execute(
+                "SELECT tracing_no FROM codal_filings WHERE ins_code = ? AND "
+                "period_end = ? AND period_months IS ?",
+                (ins_code, period_end, months)).fetchall():
+            fconn.execute("DELETE FROM imported_letters WHERE tracing_no = ?",
+                          (str(own),))
+    mconn.close()
+    for tracing_no in bad_ids:
+        fconn.execute("DELETE FROM imported_letters WHERE tracing_no = ?",
+                      (tracing_no,))
+    fconn.commit()
+    fconn.close()
+
+    synced = fundamental_db.sync_from_market_db() if borrowed else None
+
+    result = {"removed": len(bad), "periods": len(keys),
+              "restored": sum(1 for v in restore.values() if v),
+              "financials_replaced": replaced, "metrics_dropped": dropped,
+              "synced": synced}
+
+    if verbose:
+        print("purge: %(removed)d subsidiary statements removed from "
+              "%(periods)d company-periods; %(restored)d periods have the "
+              "issuer's own filing back, %(metrics_dropped)d dropped from the "
+              "fundamental store" % result, flush=True)
+
+    return result
+
+
 def record_failure(tracing_no, ins_code, reason):
     """Settle one filing as unreadable, so the queue moves past it."""
 
@@ -496,6 +624,8 @@ def seed_from_financials(verbose=True):
     than guessing.
     """
 
+    import financials
+
     database.create_database()
 
     conn = database._connect()
@@ -519,6 +649,10 @@ def seed_from_financials(verbose=True):
          consolidated, items, ratios, published_at) in rows:
 
         if str(tracing_no) in have:
+            continue
+
+        # Never carry a subsidiary's statement back in (purge_subsidiaries).
+        if financials.subsidiary_of(title):
             continue
 
         database.save_codal_filing(ins_code, {
@@ -844,6 +978,9 @@ def _reason_key(error):
     # starts filling them.
     if "empty statement export" in text:
         return "empty statement export (Codal holds no tables for it)"
+
+    if "subsidiary's statement" in text:
+        return SUBSIDIARY_REASON
 
     return text[:70] or "unknown"
 
@@ -1281,6 +1418,9 @@ def main(argv=None):
                         metavar="N",
                         help="re-read each company's N newest stored filings "
                              "that predate the outlook line items, then exit")
+    parser.add_argument("--purge-subsidiaries", action="store_true",
+                        help="remove stored subsidiary statements, restore "
+                             "the issuer's own periods, and exit")
     parser.add_argument("--refresh", action="store_true",
                         help="re-search companies already searched")
     parser.add_argument("--delay", type=float, default=None,
@@ -1295,6 +1435,10 @@ def main(argv=None):
         return 0
 
     verbose = not args.quiet
+
+    if args.purge_subsidiaries:
+        purge_subsidiaries(verbose=verbose)
+        return 0
 
     if args.seed:
         seed_from_financials(verbose=verbose)

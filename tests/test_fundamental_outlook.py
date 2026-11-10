@@ -140,3 +140,163 @@ class MonthlyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ==============================
+# 2026-11-10: like with like, the exchange's shares, the bill hurdle
+# ==============================
+
+BILLS = {"rate_pct": 44.0, "as_of": "1405/08/19", "source": "test"}
+
+
+def basis_period(end, months, revenue, net, consolidated):
+    row = period(end, months, revenue, net)
+    row["consolidated"] = consolidated
+    return row
+
+
+class BasisTests(unittest.TestCase):
+    """A holding company's parent alone is not its group (خبهمن, 2026-11-10)."""
+
+    holding = [
+        basis_period("1405/06/31", 6, 8 * B, 6 * B, False),        # parent alone
+        basis_period("1405/03/31", 3, 4 * B, 3 * B, False),
+        basis_period("1404/12/29", 12, 1000 * B, 140 * B, True),   # the group
+        basis_period("1404/09/30", 9, 3 * B, 2 * B, False),
+        basis_period("1404/06/31", 6, 450 * B, 35 * B, True),
+    ]
+
+    def test_a_holding_is_read_on_its_consolidated_statements_only(self):
+        kept, basis = fo.choose_basis(fo._periods(self.holding), (1405, 4, 1))
+        self.assertEqual(basis, "consolidated")
+        self.assertTrue(all(p["consolidated"] for p in kept))
+
+    def test_no_growth_is_computed_across_the_two(self):
+        r = fo.analyse("x", price=1_000, rows=self.holding, today=(1405, 4, 1),
+                       opportunity=BILLS)
+        self.assertEqual(r["latest"]["period_end"], "1404/12/29")
+        self.assertNotAlmostEqual(r["growth"]["revenue_pct"] or 0, -98.2, 0)
+
+    def test_stale_group_statements_give_way_to_the_parents(self):
+        _, basis = fo.choose_basis(fo._periods(self.holding), (1405, 8, 19))
+        self.assertEqual(basis, "separate_fallback")
+
+    def test_bases_of_one_size_stay_one_series(self):
+        rows = [basis_period("1405/06/31", 6, 120 * B, 24 * B, False),
+                basis_period("1404/12/29", 12, 230 * B, 50 * B, True),
+                basis_period("1404/06/31", 6, 100 * B, 20 * B, True)]
+        kept, basis = fo.choose_basis(fo._periods(rows), (1405, 8, 1))
+        self.assertEqual((basis, len(kept)), ("mixed", 3))
+
+
+class SharesTests(unittest.TestCase):
+
+    def test_the_exchange_share_count_beats_a_stale_capital_line(self):
+        rows = [period("1405/06/31", 6, 120 * B, 24 * B),
+                period("1404/12/29", 12, 300 * B, 60 * B),
+                period("1404/06/31", 6, 100 * B, 20 * B)]
+        r = fo.analyse("x", price=5_000, rows=rows, today=(1405, 8, 14),
+                       shares=1e9, opportunity=BILLS)    # 10x the capital line
+        self.assertEqual(r["valuation"]["shares_source"], "exchange")
+        self.assertAlmostEqual(r["valuation"]["pe_forward"], 69.44, places=2)
+        self.assertAlmostEqual(r["forward"]["eps"], 72.0)
+
+
+class HurdleTests(unittest.TestCase):
+
+    rows = [period("1405/06/31", 6, 120 * B, 24 * B),
+            period("1404/12/29", 12, 300 * B, 60 * B),
+            period("1404/06/31", 6, 100 * B, 20 * B)]
+
+    def analyse(self, price):
+        return fo.analyse("x", price=price, rows=self.rows, today=(1405, 8, 14),
+                          opportunity=BILLS)
+
+    def test_the_growth_a_price_requires_is_the_bill_yield_less_its_own(self):
+        r = self.analyse(5_000)          # forward yield 14.4%, growth 20%
+        self.assertAlmostEqual(r["hurdle"]["required_growth_pct"], 29.6)
+        self.assertAlmostEqual(r["hurdle"]["cushion_pct"], -9.6)
+
+    def test_a_price_asking_for_far_more_growth_than_there_is_is_flagged(self):
+        r = self.analyse(12_000)         # yield 6%: needs 38%, has 20%
+        self.assertTrue(any("لازم دارد" in f for f in r["flags"]))
+
+    def test_a_yield_above_the_bills_needs_no_growth(self):
+        r = self.analyse(1_500)          # yield 48%
+        self.assertTrue(any("نیاز ندارد" in p for p in r["positives"]))
+
+
+class FinancialTests(unittest.TestCase):
+
+    def test_an_investment_company_is_valued_on_nav_not_earnings(self):
+        rows = [basis_period("1405/06/31", 6, 50 * B, 45 * B, False)]
+        r = fo.analyse("x", price=2_000, rows=rows, today=(1405, 8, 14),
+                       sector="سرمايه گذاريها", shares=1e8,
+                       portfolio={"listed_unrealised": 100 * B,
+                                  "unlisted_cost": 0, "period_end": "1405/07/30"},
+                       opportunity=BILLS)
+        self.assertEqual(r["kind"], fo.FINANCIAL)
+        # NAV = equity 400bn + unrealised 100bn; market cap 200bn
+        self.assertAlmostEqual(r["valuation"]["price_to_nav"], 0.4)
+        self.assertIsNone(r["hurdle"]["required_growth_pct"])
+
+
+class SuspectTests(unittest.TestCase):
+
+    def result(self, pe=5.0, growth=50.0, margin=20.0, kind=fo.OPERATING):
+        return {"kind": kind, "valuation": {"pe_forward": pe},
+                "growth": {"revenue_pct": growth}, "margins": {"net_pct": margin}}
+
+    def test_implausible_results_are_named_not_ranked(self):
+        self.assertIsNone(fo.suspect_reason(self.result()))
+        self.assertIn("P/E", fo.suspect_reason(self.result(pe=0.03)))
+        self.assertIn("رشد", fo.suspect_reason(self.result(growth=-99.9)))
+        self.assertIn("حاشیه", fo.suspect_reason(self.result(margin=1252)))
+        self.assertIsNone(fo.suspect_reason(self.result(margin=1252,
+                                                        kind=fo.FINANCIAL)))
+
+
+class NextYearTests(unittest.TestCase):
+
+    def test_a_years_growth_is_not_carried_forward_whole(self):
+        rows = [period("1405/12/29", 12, 267 * B, 50 * B)]
+        rows[0]["ratios"] = {"revenue_growth": 167.0, "profit_growth": 150.0}
+        r = fo.analyse("x", price=1_000, rows=rows, today=(1406, 2, 1),
+                       opportunity=BILLS)
+        expected = 0.5 * 1.67 + 0.5 * fo.config.INFLATION_RATE / 100.0
+        self.assertAlmostEqual(r["forward"]["revenue"],
+                               267 * B * (1 + min(expected, fo.GROWTH_CAP[1])))
+
+
+class CashConversionTests(unittest.TestCase):
+
+    def test_an_interim_is_read_over_twelve_months(self):
+        rows = [period("1405/06/31", 6, 120 * B, 24 * B,
+                       operating_cash_flow=6 * B),        # 25% on the half
+                period("1404/12/29", 12, 300 * B, 60 * B,
+                       operating_cash_flow=66 * B),
+                period("1404/06/31", 6, 100 * B, 20 * B,
+                       operating_cash_flow=8 * B)]
+        r = fo.analyse("x", price=5_000, rows=rows, today=(1405, 8, 14),
+                       opportunity=BILLS)
+        # TTM cash 6 + 66 - 8 = 64 against TTM profit 64
+        self.assertEqual(r["cash"]["cash_conversion_basis"], "ttm")
+        self.assertAlmostEqual(r["cash"]["cash_conversion"], 1.0)
+        self.assertFalse(any("نقد عملیاتی تبدیل" in f for f in r["flags"]))
+
+
+class LikeForLikeGrowthTests(unittest.TestCase):
+
+    def test_growth_uses_the_filings_own_column_across_a_basis_change(self):
+        """فولاد: separate six months against last year's consolidated six."""
+        latest = basis_period("1405/06/31", 6, 168 * B, 30 * B, False)
+        latest["ratios"] = {"revenue_growth": 68.0, "profit_growth": 40.0}
+        rows = [latest,
+                basis_period("1404/12/29", 12, 300 * B, 60 * B, True),
+                basis_period("1404/06/31", 6, 130 * B, 25 * B, True)]
+        r = fo.analyse("x", price=1_000, rows=rows, today=(1405, 8, 14),
+                       opportunity=BILLS)
+        self.assertEqual(r["basis"], "mixed")
+        self.assertAlmostEqual(r["growth"]["revenue_pct"], 68.0)
+        # The year is still completed from the annual's own basis.
+        self.assertAlmostEqual(r["ttm"]["revenue"], (168 + 300 - 130) * B)

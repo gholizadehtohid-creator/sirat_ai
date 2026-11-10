@@ -474,6 +474,13 @@ def parse_letter(client, letter):
 
     title = letter.get("title") or ""
 
+    # Decided from the title, before a byte is downloaded: another company's
+    # figures under this symbol would replace its own latest period.
+    subsidiary = financials.subsidiary_of(title)
+    if subsidiary:
+        return (None, f"{letter.get('tracing_no')}: subsidiary's statement "
+                      f"({subsidiary})", codal.KIND_BAD)
+
     got = client.fetch_sheets(letter.get("excel_url"),
                               archive_key=letter.get("tracing_no"))
 
