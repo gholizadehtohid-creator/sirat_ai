@@ -95,5 +95,98 @@ class ValuationSummaryTests(unittest.TestCase):
             self.assertFalse(mv.summary()["available"])
 
 
+class RouteTests(unittest.TestCase):
+    """/api/holdings and /api/valuation, and how a wrong request is answered."""
+
+    @classmethod
+    def setUpClass(cls):
+        import app as panel
+        cls.panel = panel
+        cls.client = panel.app.test_client()
+
+    def setUp(self):
+        self.panel.invalidate()
+
+    def test_the_list_travels_in_the_body_not_the_url(self):
+        seen = {}
+
+        def review(entries):
+            seen["entries"] = entries
+            return {"rows": [], "warnings": [], "count": len(entries)}
+
+        with mock.patch.object(holdings, "review", side_effect=review):
+            r = self.client.post("/api/holdings", json={"list": "فولاد 1000\nشپنا"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json()["count"], 2)
+        self.assertEqual(seen["entries"][0][0], "فولاد")
+
+    def test_a_get_is_refused_with_its_own_status(self):
+        r = self.client.get("/api/holdings?list=x")
+        self.assertEqual(r.status_code, 405)
+        self.assertTrue(r.get_json()["error"].startswith("MethodNotAllowed: 405"))
+
+    def test_an_unknown_route_keeps_the_message_the_panel_reads(self):
+        r = self.client.get("/api/no-such-route")
+        self.assertEqual(r.status_code, 404)
+        self.assertTrue(r.get_json()["error"].startswith("NotFound: 404"))
+
+    def test_valuation_reads_the_stored_summary(self):
+        with mock.patch.object(mv, "summary", return_value={"available": False, "reason": "x"}):
+            r = self.client.get("/api/valuation")
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.get_json()["available"])
+
+
+class _Bars:
+    """The two PointInTimeData calls the trading rule makes."""
+
+    def __init__(self, frames):
+        self.frames = frames
+
+    def bars(self, code):
+        return self.frames.get(code)
+
+    def position(self, code, date):
+        import pandas as pd
+        frame = self.frames.get(code)
+        if frame is None or frame.empty:
+            return -1
+        return int(frame["date"].searchsorted(pd.Timestamp(date), side="right")) - 1
+
+
+class TradedRecentlyTests(unittest.TestCase):
+    """Which companies the market P/E counts on a date (found 2026-11-11)."""
+
+    def setUp(self):
+        import pandas as pd
+        days = pd.to_datetime(["2026-10-01", "2026-10-20", "2026-11-04", "2026-11-07"])
+        self.data = _Bars({
+            # traded on 11-07 and has no bar on 11-08: a short halt, still in
+            "short": pd.DataFrame({"date": days, "volume": [5, 5, 5, 5]}),
+            # frozen since 10-01, zero-volume bars after: halted, out
+            "frozen": pd.DataFrame({"date": days, "volume": [5, 0, 0, 0]}),
+            # no zero-volume bars at all after 10-01: the same halt, also out
+            "gone": pd.DataFrame({"date": days[:1], "volume": [5]}),
+            "never": pd.DataFrame({"date": days, "volume": [0, 0, 0, 0]}),
+        })
+
+    def test_a_missing_bar_on_the_day_is_not_a_halt(self):
+        self.assertTrue(mv._traded_recently(self.data, "short", "2026-11-08"))
+
+    def test_a_long_halt_is_out_whether_or_not_frozen_bars_were_written(self):
+        self.assertFalse(mv._traded_recently(self.data, "frozen", "2026-11-08"))
+        self.assertFalse(mv._traded_recently(self.data, "gone", "2026-11-08"))
+
+    def test_it_is_point_in_time(self):
+        # On 10-20 the frozen name had traded 19 days earlier: still in.
+        self.assertTrue(mv._traded_recently(self.data, "frozen", "2026-10-20"))
+        # Before its first bar a name is simply not there.
+        self.assertFalse(mv._traded_recently(self.data, "short", "2026-09-01"))
+
+    def test_never_traded_and_unknown_are_out(self):
+        self.assertFalse(mv._traded_recently(self.data, "never", "2026-11-08"))
+        self.assertFalse(mv._traded_recently(self.data, "missing", "2026-11-08"))
+
+
 if __name__ == "__main__":
     unittest.main()

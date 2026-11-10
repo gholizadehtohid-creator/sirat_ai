@@ -293,6 +293,18 @@ def full_scan_disabled():
 def handle_error(exc):
     """Return JSON on API routes so the panel can surface the real message."""
 
+    from werkzeug.exceptions import HTTPException
+
+    # A wrong URL or method is the caller's mistake, not a crash: it keeps its
+    # own status (it was answered as a 500) and stays out of the log as a
+    # traceback. The message keeps its "NotFound: 404 ..." form, which the
+    # panel reads to tell a stale running panel from a broken feature.
+    if isinstance(exc, HTTPException):
+        log.warning("%s on %s %s", exc.code, request.method, request.path)
+        if request.path.startswith("/api/"):
+            return jsonify({"error": f"{type(exc).__name__}: {exc}"}), exc.code
+        return exc
+
     # To the log file, not stderr: a panel started without a console has an
     # invalid stderr, print_exc then raised OSError inside this handler, and
     # the API answered an HTML 500 in place of the JSON message.
@@ -803,6 +815,49 @@ def api_opportunities():
 
     try:
         return jsonify(memoise(key, build, force=force))
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
+@app.route("/api/holdings", methods=["POST"])
+def api_holdings():
+    """The reader's own list of holdings, at one glance. See holdings.py.
+
+    POST, not GET: the list is the reader's book, kept in their browser, and
+    a query string would be written to the request log line by line. The
+    server keeps it only as an in-memory cache key and never on disk. Reads
+    only what is stored, so the memo is keyed on the data version.
+    """
+
+    body = request.get_json(silent=True) or {}
+    text = str(body.get("list") or "")[:4000]
+    force = bool(body.get("refresh"))
+
+    key = cache_key("holdings", data_version(), text)
+
+    def build():
+        import holdings
+        return holdings.review(holdings.parse(text))
+
+    try:
+        return jsonify(memoise(key, build, force=force))
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
+@app.route("/api/valuation")
+def api_valuation():
+    """The market's aggregate P/E against its own history and bills.
+
+    The history is heavy and is built by the evening task
+    (market_valuation.py --update); this only reads the stored file and the
+    remembered bill yield, so it is not memoised -- a cache here could only
+    serve yesterday's file after the evening task replaced it.
+    """
+
+    try:
+        import market_valuation
+        return jsonify(market_valuation.summary())
     except Exception as exc:                                    # noqa: BLE001
         return handle_error(exc)
 

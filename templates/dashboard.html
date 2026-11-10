@@ -105,6 +105,57 @@
     <p class="hint" id="todayHint"></p>
   </div>
 
+  <!-- The user's own holdings at one glance (holdings.py, 2026-11-10). The
+       list lives in this browser's localStorage; the server stores nothing. -->
+  <div class="card" id="holdingsCard">
+    <div class="card-head">
+      <h2>دیده‌بان سبد من</h2>
+      <div class="top-actions">
+        <button type="button" id="holdingsEditBtn">✎ ویرایش فهرست</button>
+        <button type="button" id="holdingsRefreshBtn" class="primary">↻ بررسی</button>
+      </div>
+    </div>
+    <p class="hint">
+      سهم‌ها و صندوق‌هایی که دارید در یک نگاه: قیمت و تغییر روز، ارزش و وزن هر
+      کدام، هشدارهای بنیادی، سود نقدی و تازه‌ترین اطلاعیه‌های کدال؛ و اگر یک نماد
+      یا یک صنعت بیش از حد سهم سبد شده باشد.
+    </p>
+    <div id="holdingsEditor" class="holdings-editor hidden">
+      <textarea id="holdingsInput" rows="6" spellcheck="false"
+        placeholder="هر خط یک نماد و، اگر خواستید، تعداد سهم:&#10;فولاد 1000&#10;زر 20000&#10;شپنا"></textarea>
+      <div class="holdings-editor-actions">
+        <button type="button" id="holdingsSaveBtn" class="primary">ذخیره و بررسی</button>
+        <span class="hint">فهرست فقط در همین مرورگر ذخیره می‌شود؛ پنل آن را فقط برای محاسبه می‌خواند و جایی نگه نمی‌دارد.</span>
+      </div>
+    </div>
+    <div id="holdingsStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="holdingsStatusText">فهرستی ثبت نشده است.</div>
+    </div>
+    <div class="kpi-row" id="holdingsKpis"></div>
+    <ul class="evidence" id="holdingsWarnings"></ul>
+    <div class="table-wrap" id="holdingsTable" style="margin-top:12px"></div>
+    <details class="help">
+      <summary>راهنما: این کارت چه می‌گوید؟</summary>
+      <div class="help-body">
+        <p>«✎ ویرایش فهرست» را بزنید و در هر خط یک نماد بنویسید؛ اگر تعداد سهم
+        را هم بنویسید (مثلاً <code>فولاد 1000</code>)، ارزش و وزن هر نماد و
+        هشدار تمرکز هم حساب می‌شود. صندوق‌ها (مثلاً زر، وبازار) هم پذیرفته‌اند.</p>
+        <table class="help-table">
+          <tr><th>ستون</th><th>چطور بخوانید</th></tr>
+          <tr><td>تغییر روز</td><td>آخرین قیمت پایانی نسبت به جلسه‌ی قبل</td></tr>
+          <tr><td>وزن</td><td>سهم آن نماد از ارزش کل فهرست شما</td></tr>
+          <tr><td>P/E آینده‌نگر</td><td>از کارت چشم‌انداز بنیادی؛ برای بانک و سرمایه‌گذاری معنا ندارد</td></tr>
+          <tr><td>هشدار بنیادی</td><td>تعداد هشدارهای همان کارت؛ نشانگر را روی آن نگه دارید تا متنشان را ببینید</td></tr>
+          <tr><td>سود نقدی</td><td>سود نقدی هر سهم در آخرین مجمع و بازده آن به قیمت امروز</td></tr>
+          <tr><td>آخرین اطلاعیه</td><td>تازه‌ترین اطلاعیه‌ی مهم کدال در ۹۰ روز اخیر</td></tr>
+        </table>
+        <p>هشدار تمرکز وقتی می‌آید که یک نماد بیش از ۲۰٪ یا یک صنعت بیش از ۴۰٪ سبد
+        باشد. این کارت چیزی پیشنهاد نمی‌کند؛ همان اعدادی را نشان می‌دهد که بقیه‌ی پنل
+        برای هر نماد دارد، کنار هم.</p>
+      </div>
+    </details>
+  </div>
+
   <!-- Net individual money into the whole equity market, one bar per
        session, from the daily حقیقی/حقوقی data. See moneyflow.market_daily. -->
   <div class="card">
@@ -178,6 +229,45 @@
       <summary>صندوق‌های پیشنهادی هر بخش و توضیحات</summary>
       <div class="table-wrap" id="allocationFunds" style="margin-top:12px"></div>
       <ul class="evidence" id="allocationNotes" style="margin-top:12px"></ul>
+    </details>
+  </div>
+
+  <!-- The market's aggregate P/E against its own history and bills
+       (market_valuation.py, 2026-11-10). Context for the allocation above,
+       not a tested timing signal -- which is why it sits after the
+       allocation: that card is the only advice here that passed a
+       preregistered test, and it keeps the first place. -->
+  <div class="card" id="valuationCard">
+    <div class="card-head">
+      <h2>بازار ارزان است یا گران؟</h2>
+    </div>
+    <p class="hint">
+      P/E کل بازار — ارزش بازار همه‌ی شرکت‌های تولیدی و خدماتی ÷ سود ۱۲ ماه
+      گذشته‌ی آن‌ها — در برابر تاریخچه‌ی خودش از خرداد ۱۴۰۱ و در برابر بازده اخزا.
+    </p>
+    <div id="valuationStatus" class="banner" style="margin-top:4px">
+      <span class="icon">…</span><div id="valuationStatusText">در حال بارگذاری…</div>
+    </div>
+    <div class="kpi-row" id="valuationKpis"></div>
+    <div class="chart" id="valuationChart"></div>
+    <details class="help">
+      <summary>راهنما: این کارت چه می‌گوید؟</summary>
+      <div class="help-body">
+        <p>هر نقطه‌ی نمودار فقط با صورت‌های مالی منتشرشده تا همان روز و قیمت همان
+        روز حساب شده است (بدون نگاه به آینده). بانک‌ها، بیمه‌ها، سرمایه‌گذاری‌ها و
+        هلدینگ‌ها کنار گذاشته شده‌اند، چون سودشان معیار ارزش‌گذاری نیست؛ شرکت‌های
+        زیان‌ده با زیانشان حساب می‌شوند.</p>
+        <ul>
+          <li><strong>صدک تاریخی:</strong> P/E امروز از چند درصد ماه‌های گذشته بالاتر است.
+          زیر ۲۵ یعنی ارزان‌تر از معمول، بالای ۷۵ یعنی گران‌تر از معمول.</li>
+          <li><strong>بازده سود در برابر اخزا:</strong> بازده سود بازار (۱ ÷ P/E) منهای بازده
+          اوراق خزانه. منفی بودنش در تورم بالا عادی است، چون سود شرکت‌ها همراه تورم رشد
+          می‌کند و اخزا رشد نمی‌کند؛ مقایسه با گذشته‌ی خود این عدد مهم‌تر است.</li>
+        </ul>
+        <p class="help-warn">این یک زمینه برای تصمیم تخصیص است، نه سیگنال آزموده‌شده.
+        قاعده‌ی زمان‌بندی با روند (E27) رد شد و زمان‌بندی با ارزش‌گذاری هنوز آزموده
+        نشده است؛ «ارزان» می‌تواند ارزان‌تر هم بشود.</p>
+      </div>
     </details>
   </div>
 

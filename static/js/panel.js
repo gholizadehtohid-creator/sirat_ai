@@ -3638,6 +3638,170 @@ async function lookupOutlook() {
   }
 }
 
+/* ---------- my holdings (holdings.py) ----------
+   The list is the user's own and lives in this browser only; the server is
+   asked for the numbers, never told to remember the book. */
+
+const HOLDINGS_KEY = "sirat-holdings";
+
+function holdingsText() {
+  try { return localStorage.getItem(HOLDINGS_KEY) || ""; } catch (e) { return ""; }
+}
+
+function renderHoldings(rep) {
+  const rows = rep.rows || [];
+  const warn = rep.warnings || [];
+  const flagged = rows.filter(r => ((r.outlook || {}).flags || []).length).length;
+  tiles("holdingsKpis", [
+    { k: "ارزش کل فهرست", v: rep.total_value ? money(rep.total_value) : "—",
+      sub: rep.total_value ? "ریال، به آخرین قیمت پایانی" : "تعداد سهم وارد نشده" },
+    { k: "نمادها", v: num(rows.length, 0), sub: rep.as_of ? `قیمت‌ها تا ${faDay(rep.as_of, true)}` : "" },
+    { k: "با هشدار بنیادی", v: num(flagged, 0), sub: "از کارت چشم‌انداز بنیادی" },
+    { k: "نکته‌ها", v: num(warn.length, 0), sub: warn.length ? "فهرست زیر" : "موردی نیست" },
+  ]);
+  $("holdingsWarnings").innerHTML = warn.map(w => `<li>⚠ ${esc(w)}</li>`).join("");
+
+  const body = rows.map(r => {
+    if (r.error) {
+      return [`<strong>${esc(r.symbol)}</strong>`, `<span class="down">${esc(r.error)}</span>`,
+              "—", "—", "—", "—", "—", "—", "—", "—"];
+    }
+    const o = r.outlook || {};
+    const flags = o.flags || [];
+    const chg = r.halted_since
+      ? `<span class="down">متوقف از ${esc(r.halted_since)}</span>`
+      : (r.change_pct == null ? "—"
+        : signed(r.change_pct, 2, "٪"));
+    const flagCell = !r.equity ? '<span class="hint">صندوق</span>'
+      : (flags.length
+        ? `<span class="down" title="${esc(flags.join("\n"))}">⚠ ${num(flags.length, 0)}</span>` +
+          ` <span class="hint">${esc(flags[0].slice(0, 48))}${flags[0].length > 48 ? "…" : ""}</span>`
+        : '<span class="up">✓ بدون هشدار</span>');
+    const pe = !r.equity ? "—"
+      : o.kind === "financial"
+        ? (o.price_to_nav == null ? '<span class="hint">مالی</span>' : `P/NAV ${num(o.price_to_nav, 2)}`)
+        : (o.pe_forward == null ? "—" : num(o.pe_forward, 1));
+    const div = !r.dividend ? "—"
+      : !r.dividend.dps ? '<span class="hint">بدون سود نقدی</span>'
+        : `${num(r.dividend.dps, 0)} <span class="hint">(${pctCell(r.dividend.yield_pct, 1)})</span>`;
+    const a = (r.announcements || [])[0];
+    const ann = a
+      ? `<a href="https://www.codal.ir${esc(a.url || "")}" target="_blank" rel="noopener">${esc((a.title || "").slice(0, 40))}${(a.title || "").length > 40 ? "…" : ""}</a>` +
+        ` <span class="hint">${esc((a.published_at || "").slice(0, 10))}</span>`
+      : '<span class="hint">در ۹۰ روز اخیر نبوده</span>';
+    return [`<strong>${esc(r.symbol)}</strong> <span class="hint">${esc((r.name || "").slice(0, 22))}</span>`,
+            num(r.price, 0), chg, r.quantity == null ? "—" : num(r.quantity, 0),
+            r.value == null ? "—" : money(r.value),
+            r.weight_pct == null ? "—" : `${num(r.weight_pct, 1)}٪`,
+            pe, flagCell, div, ann];
+  });
+  $("holdingsTable").innerHTML = body.length
+    ? table(["نماد", "قیمت", "تغییر روز", "تعداد", "ارزش (ریال)", "وزن",
+             "P/E آینده‌نگر", "هشدار بنیادی", "سود نقدی (بازده)", "آخرین اطلاعیه‌ی کدال"], body)
+    : "";
+  banner("holdingsStatus", "holdingsStatusText", "is-live",
+    `${num(rows.length, 0)} نماد بررسی شد` + (rep.as_of ? ` — قیمت‌ها تا ${faDay(rep.as_of, true)}` : "") + ".");
+}
+
+async function loadHoldings(force = false) {
+  const text = holdingsText();
+  if (!text.trim()) {
+    $("holdingsEditor").classList.remove("hidden");
+    $("holdingsKpis").innerHTML = "";
+    $("holdingsWarnings").innerHTML = "";
+    $("holdingsTable").innerHTML = "";
+    banner("holdingsStatus", "holdingsStatusText", "",
+      "فهرستی ثبت نشده است. نمادهایی را که دارید بنویسید و «ذخیره و بررسی» را بزنید.");
+    return;
+  }
+  banner("holdingsStatus", "holdingsStatusText", "", "در حال بررسی…");
+  try {
+    // POST: the list is the reader's own book, and a query string would land
+    // in the server's request log line by line.
+    renderHoldings(await getJSON("/api/holdings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ list: text, refresh: force }),
+    }));
+  } catch (err) {
+    banner("holdingsStatus", "holdingsStatusText", "is-error",
+      `<strong>بررسی نشد.</strong> ${esc(err.message)}`);
+  }
+}
+
+on("holdingsEditBtn", "click", () => {
+  $("holdingsInput").value = holdingsText();
+  $("holdingsEditor").classList.toggle("hidden");
+});
+
+on("holdingsSaveBtn", "click", () => {
+  try { localStorage.setItem(HOLDINGS_KEY, $("holdingsInput").value || ""); } catch (e) { /* private mode */ }
+  $("holdingsEditor").classList.add("hidden");
+  loadHoldings(true);
+});
+
+on("holdingsRefreshBtn", "click", () => loadHoldings(true));
+
+/* ---------- is the market cheap or dear? (market_valuation.py) ---------- */
+
+function valuationWord(pct) {
+  if (pct == null) return "—";
+  if (pct < 25) return "ارزان‌تر از معمول";
+  if (pct > 75) return "گران‌تر از معمول";
+  return "در محدوده‌ی معمول";
+}
+
+function renderValuation(rep) {
+  if (!rep.available) {
+    banner("valuationStatus", "valuationStatusText", "", esc(rep.reason || "در دسترس نیست"));
+    $("valuationKpis").innerHTML = "";
+    $("valuationChart").innerHTML = "";
+    return;
+  }
+  const now = rep.now || {};
+  tiles("valuationKpis", [
+    { k: "P/E کل بازار", v: num(now.pe, 1),
+      sub: `${num(now.companies, 0)} شرکت — ${now.date ? faDay(now.date, true) : ""}` },
+    { k: "صدک در تاریخچه", v: `${num(rep.percentile, 0)}`,
+      sub: `${valuationWord(rep.percentile)} (از ${faDay(rep.since, true)})` },
+    { k: "میانه‌ی تاریخی P/E", v: num(rep.median_pe, 1),
+      sub: `۶۰٪ ماه‌ها بین ${num(rep.p20_pe, 1)} و ${num(rep.p80_pe, 1)}` },
+    { k: "بازده سود بازار / اخزا", v: `${num(now.earnings_yield_pct, 1)}٪`,
+      sub: `اخزا ${num(rep.bill_yield_pct, 1)}٪ — فاصله ${signed(rep.yield_gap_pct, 1, "")} واحد` },
+  ]);
+  const data = (rep.series || []).map(p => ({
+    date: p.date, pe: p.pe, median: rep.median_pe, p20: rep.p20_pe, p80: rep.p80_pe,
+  }));
+  lineChart($("valuationChart"), {
+    data, xKey: "date", height: 220,
+    series: [
+      { key: "pe", label: "P/E بازار" },
+      { key: "median", label: "میانه", color: cssVar("--text-muted"), dash: "5 5", width: 1.5, ref: true },
+      { key: "p20", label: "صدک ۲۰", color: cssVar("--status-good"), dash: "2 4", width: 1, ref: true },
+      { key: "p80", label: "صدک ۸۰", color: cssVar("--status-critical"), dash: "2 4", width: 1, ref: true },
+    ],
+    format: v => num(v, 1),
+  });
+  // Said from the side the number is on: "dearer than 85% of months" reads
+  // straight, "cheaper than 15%" makes the reader do the subtraction.
+  const cheaper = rep.percentile <= 50;
+  banner("valuationStatus", "valuationStatusText", "is-live",
+    `بازار با P/E ${num(now.pe, 1)} ${valuationWord(rep.percentile)} است: ` +
+    `${cheaper ? "ارزان‌تر" : "گران‌تر"} از ` +
+    `${num(cheaper ? 100 - rep.percentile : rep.percentile, 0)}٪ ماه‌های ` +
+    `${faDay(rep.since, true)} تا امروز. ` +
+    "زمینه‌ای برای تصمیم تخصیص، نه سیگنال آزموده‌شده.");
+}
+
+async function loadValuation() {
+  try {
+    renderValuation(await getJSON("/api/valuation"));
+  } catch (err) {
+    banner("valuationStatus", "valuationStatusText", "is-error",
+      `<strong>بارگذاری نشد.</strong> ${esc(err.message)}`);
+  }
+}
+
 /* ---------- tabs ----------
    Four tabs instead of one long page (2026-11-05). Each tab's data is
    requested the first time the tab is opened, so the summary is on screen
@@ -3646,7 +3810,8 @@ async function lookupOutlook() {
 const TAB_LOADERS = {
   // Live first in the summary too: the "today" card's market line reads it.
   summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities(),
-            () => loadMarketflow(), () => loadAnnouncements()],
+            () => loadMarketflow(), () => loadAnnouncements(),
+            () => loadHoldings(), () => loadValuation()],
   stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
   live: [() => loadLive()],
   // The guide is static HTML: nothing to fetch.

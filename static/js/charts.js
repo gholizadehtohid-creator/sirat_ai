@@ -382,10 +382,15 @@ export function lineChart(container, opts) {
     axisText(svg, padL - 8, y + 4, format(t), { "text-anchor": "end" });
   }
 
-  // x labels: a handful, evenly spaced, so they never collide
-  const every = Math.max(1, Math.ceil(points.length / 6));
+  // x labels: a handful, evenly spaced, so they never collide -- no more than
+  // the width holds (a date label is about 60 px wide; on a phone six of them
+  // ran into each other), and the newest point only when it is at least half
+  // a step past the last regular label, the rule divergingBar already uses.
+  const fit = Math.max(2, Math.floor(plotW / 72));
+  const every = Math.max(1, Math.ceil(points.length / Math.min(6, fit)));
+  const last = points.length - 1;
   points.forEach((d, i) => {
-    if (i % every && i !== points.length - 1) return;
+    if (i % every && !(i === last && i % every >= every / 2)) return;
     axisText(svg, X(i), h - 10, String(d[xKey]).slice(2), { "text-anchor": "middle" });
   });
 

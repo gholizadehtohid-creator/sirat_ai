@@ -111,6 +111,37 @@ def _shares(data, code, newest, previous, decision):
     return shares * ratio
 
 
+def _traded_recently(data, code, decision, days=None):
+    """Whether `code` traded (volume > 0) within `days` calendar days up to
+    `decision`, using only bars on or before it.
+
+    The market's P/E is over the companies one can trade. Asking for a bar ON
+    the decision date instead made the rule depend on how the store happens to
+    record a halt: until 2026-11-07 a halted share kept getting zero-volume
+    bars at its frozen close and counted, from 11-08 the fetch stopped writing
+    them and ~75 halted names dropped out of the newest points only -- 476
+    companies on 10-10, 395 on 11-08, a composition change inside the very
+    series the percentile compares against (found 2026-11-11). A short halt
+    (an AGM, a few days) keeps the name at its last printed close, the way the
+    exchange's own market value does; a halt past config.HALT_EXCLUDE_DAYS
+    takes it out on every date alike.
+    """
+
+    import config
+    import pandas as pd
+
+    days = config.HALT_EXCLUDE_DAYS if days is None else days
+    frame = data.bars(code)
+    i = data.position(code, decision)
+    if frame is None or i < 0 or "volume" not in frame.columns:
+        return False
+    upto = frame.iloc[: i + 1]
+    traded = upto["date"][upto["volume"].fillna(0) > 0]
+    if traded.empty:
+        return False
+    return (pd.Timestamp(decision) - pd.Timestamp(traded.iloc[-1])).days <= days
+
+
 def point(data, decision):
     """The market's aggregate trailing P/E on session `decision`, or None."""
 
@@ -119,11 +150,14 @@ def point(data, decision):
 
     no_hurdle = {"rate_pct": 0.0, "as_of": "-", "source": "valuation"}
     cap = profit = 0.0
-    used = skipped = 0
+    used = skipped = halted = 0
     for code, inst in data.instruments().items():
         if inst["sector"] in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL:
             continue
-        if data.bar_on(code, decision) is None:
+        if data.position(code, decision) < 0:
+            continue                     # not listed yet
+        if not _traded_recently(data, code, decision):
+            halted += 1
             continue
         history = data.fundamental_history(code, decision, periods=12)
         if not history:
@@ -157,7 +191,7 @@ def point(data, decision):
         return None
     return {"date": str(decision.date()), "pe": round(cap / profit, 2),
             "earnings_yield_pct": round(profit / cap * 100, 2),
-            "companies": used, "left_out": skipped,
+            "companies": used, "left_out": skipped, "halted": halted,
             "market_cap": cap, "profit_ttm": profit}
 
 
@@ -169,14 +203,19 @@ def load():
         return {"points": []}
 
 
-def update(verbose=True, data=None):
-    """Fill the history grid and refresh the newest session's point."""
+def update(verbose=True, data=None, rebuild=False):
+    """Fill the history grid and refresh the newest session's point.
+
+    `rebuild` recomputes every stored point: needed whenever the method
+    changes, because stored points are otherwise kept as computed and a
+    series mixing two methods compares unlike with unlike.
+    """
 
     import backtest_config
     from backtesting.pit import PointInTimeData
 
     data = data or PointInTimeData(backtest_config.BacktestConfig(), verbose=False)
-    stored = {p["date"]: p for p in load().get("points", [])}
+    stored = {} if rebuild else {p["date"]: p for p in load().get("points", [])}
 
     sessions = data.sessions()
     if not sessions:
@@ -262,10 +301,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--update", action="store_true",
                         help="fill the history and refresh the newest point")
+    parser.add_argument("--rebuild", action="store_true",
+                        help="with --update: recompute every stored point")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
     if args.update:
-        result = update(verbose=not args.quiet)
+        result = update(verbose=not args.quiet, rebuild=args.rebuild)
         print("valuation: %(added)d points computed, %(points)d stored" % result)
     print(json.dumps({k: v for k, v in summary().items() if k != "series"},
                      ensure_ascii=False, default=str))

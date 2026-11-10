@@ -1848,3 +1848,44 @@ tbody tr:last-child td { border-bottom: none; }
   .tab { padding: 7px 11px; font-size: 13.5px; }
   .card { padding: 14px 14px 16px; }
 }
+
+/* ---------- my holdings: the list editor (2026-11-11) ----------
+   The textarea is styled like the panel's own inputs; it takes the card's
+   full width because a list of symbols is read line by line. */
+
+.holdings-editor { margin: 10px 0 6px; }
+
+.holdings-editor textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 132px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.8;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  resize: vertical;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.holdings-editor textarea:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.holdings-editor textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
+}
+
+.holdings-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
