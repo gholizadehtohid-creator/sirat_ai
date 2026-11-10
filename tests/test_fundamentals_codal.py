@@ -223,7 +223,10 @@ class TestRatios(unittest.TestCase):
         obviously broken, so nothing downstream would flag it.
         """
 
-        market = {"close": 10_000.0, "total_shares": 1e9}
+        # The filing's own share count (capital 400e9 at par), so the EPS and
+        # the price are per the same share and only the period differs. A
+        # count that has grown since is test_fundamental_valuation's case.
+        market = {"close": 10_000.0, "total_shares": 400e6}
 
         annual = financials.ratios(statement(), market=market, months=12)
         quarter = financials.ratios(statement(), market=market, months=3)

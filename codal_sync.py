@@ -686,12 +686,13 @@ def progress():
 # READING WHAT IS STORED
 # ==============================
 
-def metrics_for(ins_codes, market_by_code=None):
+def metrics_for(ins_codes, market_by_code=None, sector_by_code=None):
     """Fundamental ratios and scores for many companies, from cache only.
 
     This is what the scan calls. It touches the network never and the database
-    once, so adding fundamentals to a whole-market ranking costs one query --
-    which is the difference between a fundamental view and a slower bot.
+    twice -- the filings, and the sectors unless `sector_by_code` is given -- so
+    adding fundamentals to a whole-market ranking costs two queries, which is
+    the difference between a fundamental view and a slower bot.
     """
 
     import fundamental_scoring
@@ -699,6 +700,13 @@ def metrics_for(ins_codes, market_by_code=None):
     market_by_code = market_by_code or {}
 
     latest = database.load_codal_latest(ins_codes)
+
+    # Which industry each company is in decides whether its P/E means anything
+    # (config.EARNINGS_MULTIPLE_NOT_MEANINGFUL). Read here rather than asked of
+    # the callers, so the panel's card and the scan cannot disagree about it.
+    if sector_by_code is None:
+        sector_by_code = {str(row["ins_code"]): row.get("sector_name")
+                          for row in database.load_instruments()}
 
     # "Now", taken from the market rather than the clock: the newest period any
     # company has filed. Using the wall clock would mark the whole market stale
@@ -725,15 +733,42 @@ def metrics_for(ins_codes, market_by_code=None):
 
         # Growth needs the comparative period, which the stored ratios already
         # hold from when the filing was parsed. Carry those across rather than
-        # re-downloading the filing to recover them.
+        # re-downloading the filing to recover them -- through the near-zero
+        # base rule, which filings parsed before it existed never went
+        # through (فناوا carried EPS +175,200% into a full growth score).
         stored = record.get("ratios") or {}
 
         for key in ("revenue_growth", "profit_growth", "eps_growth",
                     "operating_profit_growth", "equity_growth"):
             if ratios.get(key) is None:
-                ratios[key] = stored.get(key)
+                ratios[key] = financials.comparable_growth(stored.get(key))
 
-        scored = fundamental_scoring.score(ratios)
+        # An investment company's P/E is last year's disposals, a bank's and
+        # an insurer's a provisioning choice: scored, they put وجامی (P/E 1.16)
+        # first and 13 such names in the top 40 on 2026-11-11. Withheld from
+        # the score the way fundamental_engine.market_ratios() and the snapshot
+        # screen withhold them -- but still shown, as the screen does, because
+        # the panel reads an empty P/E as "above 60" and the multiple itself
+        # is a fact; it is the "very cheap" verdict on it that is wrong.
+        sector = (sector_by_code.get(code) or "").strip()
+        withheld = sector in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL
+
+        scored = fundamental_scoring.score(
+            dict(ratios, pe=None, earnings_yield=None) if withheld else ratios
+        )
+
+        notes = list(scored["notes"])
+
+        if withheld and ratios.get("pe") is not None:
+            # In place of the scorer's "P/E unavailable (no positive
+            # earnings)", which is what it says of any absent P/E and is
+            # untrue of a profitable bank.
+            note = (f"Valuation: P/E {ratios['pe']:.1f} withheld — "
+                    f"{sector} is valued on assets, not earnings")
+            notes = [note if n.startswith("Valuation: P/E unavailable") else n
+                     for n in notes]
+            if note not in notes:
+                notes.append(note)
 
         age = financials.period_age_months(
             record.get("period_end"), newest_period
@@ -763,11 +798,11 @@ def metrics_for(ins_codes, market_by_code=None):
             "verdict": ("STALE" if stale else scored["verdict"]),
             "breakdown": scored["breakdown"],
             "notes": (
-                scored["notes"] + [
+                notes + [
                     f"Filing: last reported period {record.get('period_end')} "
                     f"is {age} months behind the market's newest — treated as "
                     f"out of date."
-                ] if stale else scored["notes"]
+                ] if stale else notes
             ),
             "weight_covered": scored["weight_covered"],
         }

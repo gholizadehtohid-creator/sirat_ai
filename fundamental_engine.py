@@ -605,11 +605,41 @@ def evaluate(ratios=None, history=None, medians=None, weights=None,
 # THE LIVE PATH
 # ==============================
 
+def _exchange_shares(ins_code):
+    """Today's share count for one company from the market snapshot, or None.
+
+    One primary-key read, because evaluate_stored() runs once per name in a
+    scan: fundamental_outlook.exchange_shares() reads the whole snapshot, 34 ms
+    a call measured on 2026-11-11, which is half a minute across the market;
+    this is 3.3 ms, mostly the connection. Never raises -- no snapshot means
+    the filing's own count, as before.
+    """
+
+    try:
+        import database
+
+        conn = database._connect()
+
+        try:
+            row = conn.execute(
+                "SELECT total_shares FROM market_snapshot WHERE ins_code = ?",
+                (str(ins_code),)).fetchone()
+        finally:
+            conn.close()
+    except Exception:                                           # noqa: BLE001
+        return None
+
+    value = _finite(row[0]) if row else None
+
+    return value if value and value > 0 else None
+
+
 def evaluate_stored(ins_code, medians=None, before=None, periods=4,
-                    weights=None, price=None, sector=None):
+                    weights=None, price=None, sector=None, shares=None):
     """Score one company from the weekly fundamental store.
 
-    Reads fundamental_db only. If the store does not exist, or holds nothing for
+    Reads fundamental_db, and nothing else but the snapshot's share count when
+    re-striking at a price. If the store does not exist, or holds nothing for
     this company, the verdict is INSUFFICIENT_DATA with a reason naming which of
     the two it was -- because "run the collector" and "this company never files"
     call for different actions.
@@ -620,6 +650,11 @@ def evaluate_stored(ins_code, medians=None, before=None, periods=4,
     moved -- and on this market it had moved a long way, so the panel was
     valuing companies at prices they no longer traded at. Callers that only want
     quality and growth can still omit it and get the old behaviour.
+
+    `shares` is the share count that price is per; when omitted on a live
+    re-strike (no `before`) it is the exchange's count from the market
+    snapshot, since a price is today's and the filing's capital may be several
+    capital increases old. See market_ratios().
     """
 
     import fundamental_db
@@ -669,13 +704,18 @@ def evaluate_stored(ins_code, medians=None, before=None, periods=4,
     history = list(reversed(rows))
 
     if price is not None:
+        # A store read as of a past date gets no share count of today's: the
+        # point-in-time rule market_ratios() keeps for the backtest.
+        if shares is None and before is None:
+            shares = _exchange_shares(ins_code)
+
         # Only the newest filing is re-struck. The older ones feed stability and
         # growth, which read margins and profit rather than multiples, so
         # re-pricing them would change nothing and cost a pass over the history.
         history = list(history)
         history[-1] = dict(history[-1],
                            ratios=market_ratios(history[-1], price,
-                                                sector=sector))
+                                                sector=sector, shares=shares))
 
     result = evaluate(ratios=history[-1], history=history, medians=medians,
                       weights=weights)
@@ -707,7 +747,7 @@ def score(ratios, min_coverage=None):
 # VALUATION AT A PRICE
 # ==============================
 
-def market_ratios(record, price, sector=None):
+def market_ratios(record, price, sector=None, shares=None):
     """Valuation multiples recomputed at `price`. Never the stored ones.
 
     Lives here rather than in backtesting/pit.py because BOTH sides need it and
@@ -720,6 +760,15 @@ def market_ratios(record, price, sector=None):
     lower prices, so the live path called the market cheaper than it was. The
     price frames were byte-identical by then; this was the whole remaining gap.
 
+    `shares` is the exchange's share count today, for a caller striking the
+    valuation at today's price. The stored count is the filing's capital at
+    par, and after a capital increase today's price against it understates
+    every multiple by the increase -- on 2026-11-11 فملی read P/E 8.2 against
+    11.3, سصفها P/B 0.02 against 0.5. With it, P/E is market cap over the
+    year's owners' profit, as in financials.ratios(). Without it -- the
+    point-in-time path, which has no record of a past session's share count --
+    nothing changes.
+
     Nothing about the SCORING changes: evaluate() is untouched and still reads a
     ratios dict. This decides which ratios it is handed.
     """
@@ -729,7 +778,10 @@ def market_ratios(record, price, sector=None):
 
     price = _finite(price)
 
-    shares = _finite(ratios.get("shares"))
+    exchange = _finite(shares)
+    exchange = exchange if exchange and exchange > 0 else None
+
+    shares = exchange or _finite(ratios.get("shares"))
     months = (record or {}).get("period_months") or ratios.get("period_months")
 
     # Wipe anything market-derived that came off disk, so a stored value can
@@ -741,6 +793,10 @@ def market_ratios(record, price, sector=None):
     if not price or price <= 0 or not shares or shares <= 0:
         return ratios
 
+    # Only when replaced: the point-in-time path's dict stays as it was.
+    if exchange:
+        ratios["shares"] = exchange
+
     ratios["market_cap"] = price * shares
 
     eps_annual = _finite(ratios.get("eps_annual"))
@@ -750,9 +806,24 @@ def market_ratios(record, price, sector=None):
     # component is honest and scoring it on a meaningless ratio is not.
     multiple_meaningful = sector not in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL
 
+    # Owners' profit, the earnings financials.ratios() strikes P/E on, read
+    # the same way: the parent's share where the filing separates it.
+    profit = (_finite(items.get("net_profit_owners"))
+              or _finite(items.get("net_profit")))
+
     if eps_annual and eps_annual > 0 and multiple_meaningful:
-        ratios["pe"] = round(price / eps_annual, 2)
-        ratios["earnings_yield"] = round(eps_annual / price * 100, 2)
+        if exchange and profit is not None:
+            # Market cap over the year's profit: no per-share figure, so no
+            # share count but today's. A loss leaves P/E empty, as a negative
+            # EPS already does.
+            annual_profit = profit * (12.0 / float(months)) if months else profit
+            if annual_profit > 0:
+                ratios["pe"] = round(ratios["market_cap"] / annual_profit, 2)
+                ratios["earnings_yield"] = round(
+                    annual_profit / ratios["market_cap"] * 100, 2)
+        else:
+            ratios["pe"] = round(price / eps_annual, 2)
+            ratios["earnings_yield"] = round(eps_annual / price * 100, 2)
 
     revenue = _finite(items.get("revenue"))
 

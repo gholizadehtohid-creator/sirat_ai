@@ -521,6 +521,26 @@ def _ratio(numerator, denominator, percent=True):
     return round(value * 100, 2) if percent else round(value, 4)
 
 
+# A positive figure is compared with its base only when the base is at least
+# this share of it -- below that the percentage measures how small the base
+# was, not how the business grew. فناوا's six months read EPS +175,200% and
+# profit +150,777% (EPS 1 rial -> 1,753) and took full growth points, which
+# sorts a company that was barely profitable a year ago above every company
+# that actually grew.
+#
+# Measured over the 14,496 stored filings on 2026-11-11: growth is p95 +291%
+# revenue, +649% profit, +526% EPS, and the tail thins steadily past that
+# with no natural break. 5% -- a base under a twentieth of today's figure,
+# growth beyond +1,900% -- sits at about p98 in all three and leaves 1.3% of
+# revenue, 2.0% of profit and 1.6% of EPS comparisons as "not comparable".
+# Every figure below the line is returned exactly as before.
+#
+# A swing from a small profit to a large loss keeps its number. Its sign is
+# what the scoring reads ("contracting"), and None there would drop a zero
+# from the growth pillar and lift a company for falling into a loss.
+GROWTH_MIN_BASE_SHARE = 0.05
+
+
 def _growth(current, previous):
     """Percent change, with the sign trap Iranian filings walk into.
 
@@ -528,7 +548,8 @@ def _growth(current, previous):
     1,000 loss to a 500 loss computes as -150% improvement under the usual
     formula, and from -1,000 to +500 as +150%, which ranks a turnaround below
     a company that merely grew. Both are reported as None -- "not comparable"
-    -- rather than as a number that would sort.
+    -- rather than as a number that would sort. So is growth off a base too
+    small to divide by (GROWTH_MIN_BASE_SHARE), its limiting case from above.
     """
 
     current = _finite(current)
@@ -537,7 +558,32 @@ def _growth(current, previous):
     if current is None or previous is None or previous <= 0:
         return None
 
+    if current > 0 and previous < current * GROWTH_MIN_BASE_SHARE:
+        return None
+
     return round((current - previous) / previous * 100, 2)
+
+
+def comparable_growth(value):
+    """A stored growth figure, or None where its base was negligible.
+
+    Growth is stored when a filing is parsed, so every filing parsed before
+    GROWTH_MIN_BASE_SHARE existed still carries the old number, and the read
+    paths carry it into a live score. The figure alone is enough to apply the
+    same rule: growth g means current = previous * (1 + g/100), so the base
+    was under GROWTH_MIN_BASE_SHARE of a positive current exactly when
+    1 + g/100 exceeds its reciprocal.
+    """
+
+    value = _finite(value)
+
+    if value is None:
+        return None
+
+    if 1 + value / 100.0 > 1.0 / GROWTH_MIN_BASE_SHARE:
+        return None
+
+    return value
 
 
 def ratios(current, previous=None, market=None, months=None):
@@ -625,7 +671,8 @@ def ratios(current, previous=None, market=None, months=None):
     # ---- valuation --------------------------------------------------------
 
     price = _finite(market.get("close"))
-    shares = _finite(market.get("total_shares")) or shares_outstanding(current)
+    exchange_shares = _finite(market.get("total_shares"))
+    shares = exchange_shares or shares_outstanding(current)
 
     out["shares"] = shares
     out["market_cap"] = price * shares if price and shares else None
@@ -647,10 +694,30 @@ def ratios(current, previous=None, market=None, months=None):
 
     out["eps_annual"] = round(annual_eps, 2) if annual_eps is not None else None
 
-    if price and annual_eps and annual_eps > 0:
-        pe = price / annual_eps
+    # Price and earnings have to be counted in the same shares. The price is
+    # per share TODAY; the filed EPS is per share of the capital the filing
+    # stood on, and after a capital increase the two differ by its factor --
+    # شصفها (300 billion rials of capital -> 15.3 billion shares) read P/E
+    # 0.04 and an earnings yield of 2,613% against a real ~2. On 2026-11-11
+    # 60 of 577 profitable names traded on over 1.2x their filed share count.
+    # So where the exchange gives today's count, P/E is market cap over the
+    # year's owners' profit, which needs no per-share figure at all --
+    # fundamental_outlook's construction. Rescaling the EPS by the two counts
+    # instead would double-correct 27 of the 78 mismatched names, whose EPS is
+    # already on today's count or whose capital line was misread (ملت, اسیا).
+    annual_profit = annualise(owners_profit, months)
+
+    if exchange_shares and exchange_shares > 0 and annual_profit is not None:
+        value, earnings = out["market_cap"], annual_profit
+    else:
+        value, earnings = price, annual_eps
+
+    # The filed EPS must be positive as well: a loss has no P/E, and an EPS
+    # whose sign disagrees with the profit line is a filing misread.
+    if value and earnings and earnings > 0 and annual_eps and annual_eps > 0:
+        pe = value / earnings
         out["pe"] = round(pe, 2) if pe < config.PE_ABSURD else None
-        out["earnings_yield"] = round(annual_eps / price * 100, 2)
+        out["earnings_yield"] = round(earnings / value * 100, 2)
     else:
         out["pe"] = None
         out["earnings_yield"] = None
