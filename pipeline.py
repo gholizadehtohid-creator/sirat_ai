@@ -116,6 +116,15 @@ def run_scan(
     if not have_history:
         warnings.append("No cached price history at all — nothing can be screened.")
 
+    # How many of the instruments being screened have bars -- the same test the
+    # screen below uses to load them. price_history also holds funds and names
+    # outside this universe, so its own size is not that number: reported as-is
+    # it put "832 of 818 shares have stored bars" on the coverage table.
+    screened_with_history = sum(
+        1 for instrument in instruments
+        if instrument["ins_code"] in have_history
+    )
+
     # ---- Stage 2: fundamental screen -------------------------------------
 
     note("Applying fundamental screen")
@@ -397,7 +406,12 @@ def run_scan(
         },
         "gate_counts": gate_counts,
         "snapshot": database.snapshot_info(),
-        "have_history": len(have_history),
+        # The panel's banner reads its "real data / simulated" verdict from the
+        # screen report, and this key was never in it -- so the banner said
+        # "real stored data" whatever the bars actually were. The same record
+        # /api/status serves; one indexed row.
+        "provenance": database.get_provenance("price_history"),
+        "have_history": screened_with_history,
         "codal": {
             **database.codal_coverage(),
             "in_scan": sum(
@@ -555,6 +569,7 @@ def _empty_report(started_at, message, approve_score):
         },
         "gate_counts": {},
         "snapshot": database.snapshot_info(),
+        "provenance": database.get_provenance("price_history"),
         "have_history": 0,
         "warnings": [message],
         "final": [],

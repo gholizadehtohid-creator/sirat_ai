@@ -2785,3 +2785,29 @@ def database_summary():
         }
         for r in rows
     ]
+
+
+def history_coverage():
+    """Bars and date span of price_history, the table every analysis reads.
+
+    The status strip's numbers. database_summary() above counts the legacy
+    market_data table -- five hand-picked symbols, newest bar 2026-08-09 --
+    and the strip printed its 1,505 bars as the size of the database. One
+    aggregate over the whole table, ~0.5 s on ~2 million rows, so the panel
+    memoises it rather than paying it per page load.
+    """
+
+    if not os.path.exists(DATABASE_NAME):
+        return {"bars": 0, "first_date": None, "last_date": None}
+
+    create_database()
+
+    conn = _connect()
+
+    bars, first, last = conn.execute(
+        "SELECT COUNT(*), MIN(date), MAX(date) FROM price_history"
+    ).fetchone()
+
+    conn.close()
+
+    return {"bars": bars or 0, "first_date": first, "last_date": last}

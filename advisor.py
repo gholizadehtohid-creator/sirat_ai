@@ -440,11 +440,46 @@ def _v2_position(signal, rank, equity):
         "risk_pct": (round(risk_rials / equity * 100.0, 3)
                      if (risk_rials and equity) else None),
         "bound_by": signal.get("bound_by"),
-        "scaled_by": signal.get("allocated_binding"),
+        "scaled_by": _v2_scaled_by(signal),
         "expected_holding_sessions": signal.get("expected_holding_sessions"),
         "reasons": signal.get("reasons") or [],
         "notes": signal.get("notes") or [],
     }
+
+
+def _v2_scaled_by(signal):
+    """The portfolio-level limit that cut this position, or None if none did.
+
+    v1's meaning, which the panel's «قید» column reads as `scaled_by || bound_by`:
+    `bound_by` is why the risk engine asked for no more, `scaled_by` what then
+    cut the request -- None when nothing did.
+
+    portfolio_engine.admit() answers "requested" when it granted what it was
+    handed. That is not a limit, and passed through it filled the column and
+    hid `bound_by`. Nor is it always "granted what the risk engine asked":
+    allocate() hands admit() the even-spread ceiling instead whenever the
+    risk-based size is larger, so a position cut to its share of the budget
+    comes back "requested" too. On the 2026-11-10 book that was every row:
+    requests of 11-15% of equity, each cut to 7.65%, the 76.5% budget over ten
+    names. None there would have credited the risk budget with the spread's cut.
+    """
+
+    binding = signal.get("allocated_binding")
+
+    if binding != "requested":
+        return binding
+
+    try:
+        cut = (float(signal.get("requested_value"))
+               - float(signal.get("allocated_value")))
+        price = float(signal.get("entry_price"))
+    except (TypeError, ValueError):
+        return None
+
+    # Rounding down to whole shares costs less than one share; a shortfall of
+    # a share or more is the allocator's, and with admit() naming no limit of
+    # its own the only cut it applies is the spread.
+    return "spread_ceiling" if price > 0 and cut >= price else None
 
 
 def _print(report):

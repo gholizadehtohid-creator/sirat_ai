@@ -35,6 +35,7 @@ import indices
 import moneyflow
 import pipeline
 import regime as regime_module
+import regime_engine
 import sectors
 import settings
 import technical
@@ -348,13 +349,23 @@ def api_status():
 
     rows = database_summary()
 
+    # The bar count and the span are price_history's, the table every analysis
+    # reads. They used to be summed from `rows`, which is the legacy five-symbol
+    # market_data table, so the footer on every tab said 1,505 bars from
+    # 2025-05-07 to 2026-08-09 over a database of ~2 million bars to the latest
+    # session. `symbols` stays for whatever still reads it. The aggregate scans
+    # the whole table (~0.5 s), so it is memoised on the data version like
+    # every other read of the stored bars.
+    coverage = memoise(cache_key("status", data_version()),
+                       database.history_coverage)
+
     return jsonify({
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "symbols": rows,
         "provenance": database.get_provenance("price_history"),
-        "total_bars": sum(r["bars"] for r in rows),
-        "date_min": min((r["first_date"] for r in rows), default=None),
-        "date_max": max((r["last_date"] for r in rows), default=None),
+        "total_bars": coverage["bars"],
+        "date_min": coverage["first_date"],
+        "date_max": coverage["last_date"],
         "config": {
             "equity": ACCOUNT_EQUITY,
             "currency": CURRENCY,
@@ -367,14 +378,32 @@ def api_status():
 
 @app.route("/api/regime")
 def api_regime():
-    """Market regime: trend, breadth, participation, and the cash target."""
+    """Market regime: trend, breadth, participation, and the cash target.
+
+    Answered by the engine that builds the basket, so the card and the book
+    describe one market read. v2 sizes its book from regime_engine.assess(),
+    which only ever tightens regime.py's figure -- a NORMAL mode spends 0.85 of
+    it -- and this route used to answer regime.detect() under both engines: the
+    card said "cash target 10%" beside a v2 basket holding 23.5% cash.
+    """
 
     params = wanted_params()
     force = request.args.get("refresh") == "1"
 
-    key = cache_key("regime", params_key(params))
+    # In the key for the reason /api/portfolio gives: the two engines answer
+    # differently from the same inputs, and a key without the engine would
+    # serve whichever ran first for the next five minutes.
+    engine = advisor.engine_name(request.args.get("engine"))
+
+    # assess() is called exactly as swing_advisor.scan() calls it -- with no
+    # arguments -- so the panel's indicator windows never reach the v2 read and
+    # stay out of its key: an edit of them would only recompute the same read.
+    key = cache_key("regime", engine, data_version(),
+                    params_key(params) if engine == advisor.V1 else None)
 
     def build():
+        if engine == advisor.V2:
+            return regime_engine.assess()
         return regime_module.detect(params=params)
 
     return jsonify(memoise(key, build, force=force))
@@ -406,10 +435,20 @@ def api_portfolio():
     # five minutes.
     engine = advisor.engine_name(request.args.get("engine"))
 
+    # Only what the engine reads belongs in its key. v2 is handed neither the
+    # score floor nor the indicator windows (see build() below), and the panel
+    # sends both on every call, so with them in the key each edit of either
+    # field cost a full v2 scan (~50 s, see config.DECISION_ENGINE) that
+    # returned the same book.
+    if engine == advisor.V2:
+        min_score, windows = None, None
+    else:
+        min_score, windows = args["min_score"], params_key(params)
+
     key = cache_key(
         "portfolio", engine, data_version(), args["equity"], args["size"],
-        args["max_per_sector"], args["min_score"], args["risk_pct"],
-        use_regime, params_key(params),
+        args["max_per_sector"], min_score, args["risk_pct"],
+        use_regime, windows,
     )
 
     def build():
