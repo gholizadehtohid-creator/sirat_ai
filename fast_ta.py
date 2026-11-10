@@ -25,7 +25,10 @@ answers 500 for every name, because one fresh listing made the list. Here
 those lengths return all-NaN instead -- "not enough bars for this
 indicator", the same absent column calculate_indicators already writes for a
 series with no high/low range, which every caller handles. Every length ta
-can compute is untouched.
+can compute is untouched, with one deliberate exception: between window and
+2 * window - 1 bars ta's adx() raises while adx_pos()/adx_neg() return
+values; here DI+ and DI- are NaN there too, so the three never disagree on
+whether the trend reading exists.
 """
 
 import numpy as np

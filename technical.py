@@ -1176,6 +1176,7 @@ def best_technical_inflow(top=15, params=None, min_turnover=MIN_TURNOVER,
     # recurring.
     flow_frames = database.load_client_type_tail(
         codes, config.FLOW_BASELINE_WINDOW)
+    flow_since = moneyflow.current_from(flow_frames)
 
     qualified = []
     liquid = 0
@@ -1211,6 +1212,10 @@ def best_technical_inflow(top=15, params=None, min_turnover=MIN_TURNOVER,
         # qualify -- the question was "AND money inflow", so absence is a no,
         # not a maybe.
         flow = moneyflow.analyse(flow_frames.get(code))
+        # A window that ends before this week's is another week's flow (the
+        # rule the money-flow card applies): no inflow, not old inflow.
+        if not moneyflow.is_current(flow, flow_since):
+            continue
         reading = flow.get("reading") or {}
         net_pct = reading.get("net_pct")
 

@@ -87,7 +87,8 @@ class BookRiskTests(unittest.TestCase):
         with mock.patch.object(risk, "analyse", side_effect=analyse):
             out = holdings._risk(rows, 100.0)
         self.assertEqual([p["symbol"] for p in seen["positions"]], ["الف", "ب"])
-        self.assertEqual(seen["equity"], 100.0)
+        # The rial base is the measured holdings (risk.py), not a passed equity.
+        self.assertIsNone(seen["equity"])
         self.assertEqual(seen["positions"][1]["sector_name"], "بدون صنعت")
         self.assertTrue(out["available"])
         self.assertEqual(out["average_correlation"], 0.4)

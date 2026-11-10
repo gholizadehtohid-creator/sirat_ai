@@ -413,6 +413,30 @@ def analyse(df, window=None, min_sessions=None):
 # WHOLE-MARKET AGGREGATE
 # ==============================
 
+def current_from(frames, window=None):
+    """The oldest session a reading must reach to be this week's flow.
+
+    _current_from for the other readers of a single name's flow -- the
+    "technical AND inflow" card and the screen's flow tilt -- which took
+    moneyflow.analyse() readings however old (found 2026-11-11: three names
+    qualified for the inflow card on windows ending 10-20..11-03).
+    """
+
+    return _current_from(frames, window or config.FLOW_WINDOW)
+
+
+def is_current(flow, since):
+    """Whether an analyse() result reaches `since` (current_from's answer).
+
+    The same test analyse_market applies; True when nothing is dated.
+    """
+
+    if since is None:
+        return True
+    reading = (flow or {}).get("reading") or {}
+    return (reading.get("last_date") or "") >= since
+
+
 def _current_from(frames, window):
     """The oldest session a reading must reach to describe the market now.
 

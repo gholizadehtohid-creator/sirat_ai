@@ -179,13 +179,14 @@ def data_version():
     """
 
     try:
-        state = bootstrap.progress()
+        # finished_at(), not progress(): progress() calls status(), which
+        # re-probes the database (~5 s) once its own short cache is cold, and
+        # this runs on nearly every request.
+        return str(bootstrap.finished_at() or "-")
     except Exception:
         # A cache key is not worth failing a request over. A constant here
         # degrades to exactly the previous behaviour rather than to no cache.
         return "unknown"
-
-    return str(state.get("finished_at") or "-")
 
 
 # ==============================

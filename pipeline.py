@@ -226,6 +226,7 @@ def run_scan(
     flow_by_code = database.load_client_type_tail(
         [r["ins_code"] for r in shortlist], config.FLOW_BASELINE_WINDOW
     )
+    flow_since = moneyflow.current_from(flow_by_code)
 
     if shortlist and not flow_by_code:
         warnings.append(
@@ -306,10 +307,21 @@ def run_scan(
         # the tilt is too small to change a rank.
         flow = moneyflow.analyse(flow_by_code.get(row["ins_code"]))
 
-        row["flow"] = _public_flow(flow)
-        row["flow_score"] = (
-            flow["score"] if flow["verdict"] == moneyflow.SCORED else None
-        )
+        if flow["verdict"] == moneyflow.SCORED                 and not moneyflow.is_current(flow, flow_since):
+            # Another week's flow does not tilt this week's rank: kept on the
+            # row as stale, with no score, rather than silently dropped.
+            row["flow"] = {
+                "verdict": "stale", "score": None, "label": None,
+                "reason": "داده‌ی حقیقی/حقوقی این نماد به هفته‌ی جاری نمی‌رسد "
+                          "(آخرین روز: %s)" % (flow["reading"] or {}).get("last_date"),
+                "sessions": flow["sessions"],
+            }
+            row["flow_score"] = None
+        else:
+            row["flow"] = _public_flow(flow)
+            row["flow_score"] = (
+                flow["score"] if flow["verdict"] == moneyflow.SCORED else None
+            )
 
         # Codal fundamentals for this row, when its filings have arrived.
         codal_metrics = codal_by_code.get(str(row["ins_code"]))

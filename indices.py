@@ -6,8 +6,9 @@ An index is not a share, and three differences shape this module:
       index and nothing else. The scoring model in ranking.py weights volume
       at 15 of its 100 points, so an index either loses that component or is
       given a volume from somewhere. This module gives it market turnover --
-      the total rials traded across every instrument we hold bars for -- and
-      says so in `volume_source`. That is the figure a trader would look at
+      the total rials traded across every stored EQUITY (the gold funds are
+      left out since 2026-11-11; see database.market_turnover) -- and says so
+      in `volume_source`. That is the figure a trader would look at
       anyway: an index rising on falling turnover is the classic warning, and
       here that warning is an actual vote (`_turnover_vote`), not a remark.
 

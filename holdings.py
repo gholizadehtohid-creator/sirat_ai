@@ -176,7 +176,10 @@ def _risk(rows, total):
                  for r in rows if r.get("value") and r.get("ins_code")]
     if not positions or not total:
         return None
-    report = risk.analyse(positions, equity=total)
+    # The rial VaR is struck on the holdings that could be measured (risk.py
+    # since 2026-11-11): a name dropped for too little history is named in
+    # names_dropped and is not in the figure. `total` stays the caller's test.
+    report = risk.analyse(positions)
     if not report.get("available"):
         return {"available": False, "reason": report.get("reason"),
                 "notes": report.get("notes") or []}

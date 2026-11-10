@@ -458,3 +458,38 @@ class TestAnalyseMarketIsCurrent(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class CurrentWeekRuleTests(unittest.TestCase):
+    """One rule for every reader of a name's flow (2026-11-11)."""
+
+    def test_a_reading_must_reach_this_weeks_window(self):
+        import moneyflow
+
+        since = "2026-11-04"
+        self.assertTrue(moneyflow.is_current(
+            {"reading": {"last_date": "2026-11-10"}}, since))
+        self.assertTrue(moneyflow.is_current(
+            {"reading": {"last_date": "2026-11-04"}}, since))
+        self.assertFalse(moneyflow.is_current(
+            {"reading": {"last_date": "2026-10-20"}}, since))
+        self.assertFalse(moneyflow.is_current({"reading": None}, since))
+
+    def test_nothing_dated_means_nothing_is_stale(self):
+        import moneyflow
+
+        self.assertTrue(moneyflow.is_current(
+            {"reading": {"last_date": "2021-07-31"}}, None))
+
+    def test_the_window_is_counted_in_stored_sessions(self):
+        import pandas as pd
+
+        import moneyflow
+
+        days = pd.to_datetime(["2026-11-01", "2026-11-02", "2026-11-03",
+                               "2026-11-04", "2026-11-07", "2026-11-08",
+                               "2026-11-09", "2026-11-10"])
+        frames = {"a": pd.DataFrame({"date": days}),
+                  "b": pd.DataFrame({"date": days[:3]})}
+        # Five newest stored sessions: 11-10, 09, 08, 07, 04.
+        self.assertEqual(moneyflow.current_from(frames, 5), "2026-11-04")

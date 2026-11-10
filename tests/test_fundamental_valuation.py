@@ -324,3 +324,31 @@ class NegligibleGrowthBaseTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SharedGrowthRuleTests(unittest.TestCase):
+    """The near-zero-base rule where every scorer reads growth (2026-11-11)."""
+
+    def test_the_shared_scorer_drops_growth_off_a_negligible_base(self):
+        import fundamental_scoring
+
+        fraction, notes = fundamental_scoring._score_growth(
+            {"revenue_growth": 30.0, "profit_growth": 150777.0,
+             "eps_growth": 175200.0}, inflation=35.0)
+        joined = " ".join(notes)
+        self.assertIn("profit growth not comparable", joined)
+        self.assertIn("EPS growth not comparable", joined)
+        self.assertNotIn("+175200%", joined)
+        # Scored on revenue alone: 30% is "growing, but shrinking in real terms".
+        alone, _ = fundamental_scoring._score_growth(
+            {"revenue_growth": 30.0}, inflation=35.0)
+        self.assertEqual(fraction, alone)
+
+    def test_ordinary_growth_is_scored_as_before(self):
+        import fundamental_scoring
+
+        fraction, notes = fundamental_scoring._score_growth(
+            {"revenue_growth": 60.0, "profit_growth": 90.0, "eps_growth": 1800.0},
+            inflation=35.0)
+        self.assertTrue(all("not comparable" not in n for n in notes))
+        self.assertIsNotNone(fraction)

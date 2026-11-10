@@ -163,12 +163,20 @@ def _score_growth(r, inflation=None):
             (float("-inf"), 0.0, lambda v: f"{label} {v:+.0f}% — contracting"),
         ])
 
+    # The near-zero-base rule (financials.GROWTH_MIN_BASE_SHARE) applied HERE,
+    # where every scorer reads growth: the card, the v1 scan, the v2 engine and
+    # both backtests. Applied only on the card's read path it left the v2 book
+    # scoring فناوا's "EPS +175,200%" as far ahead of inflation (2026-11-11).
+    import financials
+
     for key, label in (("revenue_growth", "revenue"),
                        ("profit_growth", "profit"),
                        ("eps_growth", "EPS")):
-        value = _value(r.get(key))
+        raw = _value(r.get(key))
+        value = _value(financials.comparable_growth(raw))
         if value is None:
-            notes.append(f"{label} growth unavailable")
+            notes.append(f"{label} growth not comparable (near-zero base)"
+                         if raw is not None else f"{label} growth unavailable")
             continue
         fraction, note = growth_band(label, value)
         parts.append(fraction)

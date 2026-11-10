@@ -144,7 +144,7 @@ def _instruments():
 
 def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
              positions=None, held=False, index_series=None, fundamental=None,
-             risk_pct=None):
+             risk_pct=None, shares=None):
     """One name, all the way to a signal. Returns None when it cannot be scored.
 
     `fundamental` is the ONE input a historical caller cannot read the same way
@@ -204,7 +204,7 @@ def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
         # always in the flattering direction.
         fundamental = fundamental_engine.evaluate_stored(
             ins_code, medians=(medians or {}).get(reading["sector"]),
-            price=close, sector=reading["sector"])
+            price=close, sector=reading["sector"], shares=shares)
 
     if fundamental.get("verdict") != fundamental_engine.SCORED:
         # Kept rather than discarded: "no filing in the store" is a fact about
@@ -414,6 +414,15 @@ def scan(equity=None, size=None, max_per_sector=None, limit=None,
     scanned = 0
     skipped = 0
 
+    # Today's share counts, read once: evaluate_stored() re-strikes each P/E
+    # at today's close on today's shares, and left to itself it opened a
+    # fresh connection per name (3-20 ms each, seconds over the market).
+    try:
+        import fundamental_outlook
+        snapshot_shares = fundamental_outlook.exchange_shares()
+    except Exception:                                           # noqa: BLE001
+        snapshot_shares = {}
+
     for number, code in enumerate(codes, start=1):
 
         # The shared builder: back-adjusted for capital increases and windowed
@@ -429,7 +438,8 @@ def scan(equity=None, size=None, max_per_sector=None, limit=None,
         signal = evaluate(code, instruments[code], frame, regime=regime,
                           medians=medians, equity=equity, positions=positions,
                           index_series=index_series,
-                          held=code in held_codes, risk_pct=risk_pct)
+                          held=code in held_codes, risk_pct=risk_pct,
+                          shares=snapshot_shares.get(str(code)))
 
         if signal is None:
             skipped += 1

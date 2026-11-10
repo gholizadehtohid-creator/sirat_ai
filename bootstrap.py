@@ -941,6 +941,19 @@ def is_running():
         return _state["running"]
 
 
+def finished_at():
+    """When the last run finished, or None. Cheap — touches no database.
+
+    The panel's cache key (app.data_version). It used to read progress(),
+    which calls status() and re-probes the whole database (~5 s) whenever its
+    5-second cache has gone cold -- on most requests, since the panel polls
+    only every 20 s -- so the key cost ten times the reads it was memoising.
+    """
+
+    with _lock:
+        return _state["finished_at"]
+
+
 def progress():
     """Current run state, for the panel to poll."""
 

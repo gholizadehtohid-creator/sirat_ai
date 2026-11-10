@@ -680,3 +680,18 @@ class PaperEngineSelectionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DataVersionCostTests(unittest.TestCase):
+    """The panel's cache key is read on nearly every request (2026-11-11)."""
+
+    def test_the_cache_key_never_probes_the_database(self):
+        from unittest import mock
+
+        import app
+        import bootstrap
+
+        probed = AssertionError("data_version() re-probed the database")
+        with mock.patch.object(bootstrap, "status", side_effect=probed), \
+                mock.patch.object(bootstrap, "progress", side_effect=probed):
+            self.assertNotEqual(app.data_version(), "unknown")

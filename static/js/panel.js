@@ -275,12 +275,20 @@ function renderBanner(rep) {
   if (prov && prov.status !== "verified-real") {
     b.classList.add("is-error");
     b.querySelector(".icon").textContent = prov.status === "simulated" ? "⛔" : "⚠";
-    const headline = prov.status === "simulated"
-      ? "این قیمت‌ها شبیه‌سازی‌شده‌اند، نه داده‌ی واقعی بازار."
-      : "این قیمت‌ها تأییدنشده‌اند.";
-    t.innerHTML = `<strong>${headline}</strong> ${prov.detail || ""} ` +
-      `هر امتیاز و هر پیشنهاد سبد در این صفحه همین سری شبیه‌سازی‌شده را توصیف می‌کند — ` +
-      `نه بورس تهران را. برای بررسی کامل: <code>python authenticity.py</code>`;
+    // Simulated and unverified are different claims. The panel's own fetch
+    // records no provenance, so an install whose bars all came from TSETMC
+    // reads UNVERIFIED -- and calling those bars "simulated" would be false.
+    // The detail is shown only when it was recorded by a check (checked_at);
+    // the default one is an English placeholder.
+    t.innerHTML = prov.status === "simulated"
+      ? `<strong>این قیمت‌ها شبیه‌سازی‌شده‌اند، نه داده‌ی واقعی بازار.</strong> ` +
+        `${prov.checked_at ? esc(prov.detail || "") + " " : ""}` +
+        `هر امتیاز و هر پیشنهاد سبد در این صفحه همین سری شبیه‌سازی‌شده را توصیف ` +
+        `می‌کند — نه بورس تهران را. برای بررسی کامل: <code>python authenticity.py</code>`
+      : `<strong>منشأ این قیمت‌ها تأیید نشده است.</strong> ` +
+        `${prov.checked_at ? esc(prov.detail || "") + " " : ""}` +
+        `یعنی هنوز بررسی نشده که داده‌ی واقعی بورس است — نه اینکه ساختگی باشد. ` +
+        `برای بررسی: <code>python authenticity.py</code>`;
     return;
   }
 
@@ -2206,7 +2214,14 @@ function peCell(x) {
   if (x.market_cap == null) {
     return '<span class="hint" title="نماد امروز معامله نشده یا متوقف است، پس قیمت روز ندارد">بدون قیمت</span>';
   }
-  return '<span class="hint" title="P/E بالای ۶۰ — سود نسبت به قیمت ناچیز است">بالای ۶۰</span>';
+  // ratios() leaves an earnings yield only when the P/E was dropped as absurd
+  // (above 60). With P/E struck on owners' profit, a positive filed EPS beside
+  // a loss now has neither -- and "above 60" would call a loss "profit
+  // negligible against price".
+  if (x.earnings_yield != null) {
+    return '<span class="hint" title="P/E بالای ۶۰ — سود نسبت به قیمت ناچیز است">بالای ۶۰</span>';
+  }
+  return '<span class="hint" title="سود ۱۲ ماهه‌ی سهامداران مثبت نیست یا با سود هر سهم نمی‌خواند">نامعلوم</span>';
 }
 
 function fundRows(list) {
@@ -2768,6 +2783,16 @@ function syncMinScore(rep) {
   // shows a tooltip for a disabled control.
   const field = input.closest(".field");
   if (field) field.title = why;
+
+  // And visibly: a phone shows no tooltip, and a faded "60" beside a book
+  // built on 68 explains nothing by itself.
+  let note = field?.querySelector(".field-note");
+  if (field && !note && v2) {
+    note = document.createElement("span");
+    note.className = "hint field-note";
+    field.appendChild(note);
+  }
+  if (note) note.textContent = v2 ? `موتور v2: کف ${floor ?? "—"}` : "";
 }
 
 // The engines name the limit that sized a position in their own vocabulary
@@ -3370,13 +3395,20 @@ async function loadAllocation(force = false) {
   const btn = $("runAllocationBtn");
   if (btn) btn.disabled = true;
 
+  state.allocationFailed = false;
+
   try {
     const rep = await getJSON(`/api/allocation?${query()}${force ? "&refresh=1" : ""}`);
     renderAllocation(rep);
   } catch (err) {
     state.allocation = null;
+    // The today card is built from this answer and has no banner of its own:
+    // left alone it kept the previous equity's rial amounts after a failed
+    // apply, with nothing marking them as stale.
+    state.allocationFailed = true;
     banner("allocationStatus", "allocationStatusText", "is-error",
       `<strong>تخصیص محاسبه نشد.</strong> ${esc(err.message)}`);
+    renderToday();
     console.error(err);
   } finally {
     if (btn) btn.disabled = false;
@@ -3388,6 +3420,7 @@ async function loadAllocation(force = false) {
    Neither is a forecast. */
 
 function renderOpportunities(rep) {
+  state.opportunitiesFailed = false;
   const labels = rep.sleeve_labels || {};
 
   // The headline (cheapest fund, best bill) now lives in the "today" card.
@@ -3860,7 +3893,7 @@ function renderHoldingsRisk(risk) {
     notes.push(`میانگین همبستگی دوبه‌دو ${num(risk.average_correlation, 2)}`);
   }
   if ((risk.names_dropped || []).length) {
-    notes.push(`بدون سابقه‌ی کافی: ${esc(risk.names_dropped.join("، "))}`);
+    notes.push(`بدون سابقه‌ی کافی و بیرون از این اعداد: ${esc(risk.names_dropped.join("، "))}`);
   }
   $("holdingsRiskNote").innerHTML = notes.join(" · ") + ".";
 }
@@ -4105,14 +4138,30 @@ function renderToday() {
     // only in session, so out of session they are the last session's (one
     // recording: 57 hours old) -- dated here the way the live tab dates the
     // same numbers, with the same marker.
-    const age = ageTag(live.queues?.age_minutes);
+    const captured = live.queues?.captured_at;
+    // Re-dated at every render: renderToday runs again on each tab switch and
+    // profile change, and the server's age_minutes is the age at fetch time.
+    const ageNow = captured
+      ? (Date.now() - Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(captured) ? captured : `${captured}Z`)) / 60000
+      : live.queues?.age_minutes;
+    const age = ageTag(Number.isFinite(ageNow) ? ageNow : live.queues?.age_minutes);
     $("todayMarket").innerHTML =
       `بازار <strong>${open}</strong>` +
-      (c.buy != null ? ` · صف خرید <strong>${c.buy}</strong> و صف فروش <strong>${c.sell}</strong>` +
-        (age ? ` — ${age}` : "") : "");
+      (!captured
+        ? " · صف‌ها ثبت نشده"
+        : c.buy != null
+          ? ` · صف خرید <strong>${c.buy}</strong> و صف فروش <strong>${c.sell}</strong>` +
+            (age ? ` — ${age}` : "")
+          : "");
   }
 
-  if (!rep) return;
+  if (!rep) {
+    $("todayPlan").innerHTML = state.allocationFailed
+      ? '<div class="empty">تخصیص محاسبه نشد — کارت «چقدر در سهام، طلا و درآمد ثابت؟» را ببینید.</div>'
+      : "";
+    $("todayHint").innerHTML = "";
+    return;
+  }
 
   const key = $("todayProfile").value || "balanced";
   const profile = rep.profiles.find(p => p.key === key) || rep.profiles[0];
@@ -4122,9 +4171,11 @@ function renderToday() {
 
   const cheapest = (sleeve) => (funds[sleeve] || []).find(f => !f.suspect);
 
-  // Nothing is in flight after a failed read; "reading…" would say otherwise.
-  const pending = state.opportunitiesFailed
-    ? "قیمت‌ها خوانده نشد" : "در حال خواندن قیمت‌ها…";
+  // What the empty cell means: the read failed, or finished with nothing for
+  // this sleeve (TSETMC unreachable answers 200 with empty lists), or is still
+  // in flight. "Reading…" for the first two would never stop saying it.
+  const pending = state.opportunitiesFailed ? "قیمت‌ها خوانده نشد"
+    : opp ? "قیمتی برای این بخش خوانده نشد" : "در حال خواندن قیمت‌ها…";
 
   const items = Object.entries(profile.weights).filter(([, w]) => w > 0).map(([sleeve, w]) => {
     let buy = "", why = "";
@@ -4241,7 +4292,7 @@ on("importIndicesBtn", "click", () =>
 // by accident deserves a confirmation.
 on("importSectorsBtn", "click", () => {
   const count = (state.screen && state.screen.counts)
-    ? state.screen.counts.universe : "all";
+    ? state.screen.counts.universe : "همه‌ی";
   if (!confirm(
     `دریافت صنایع برای هر سهم یک درخواست جداگانه می‌فرستد (${count} سهم) و ` +
     `چند دقیقه طول می‌کشد. ادامه می‌دهید؟`
@@ -4256,7 +4307,7 @@ on("importSectorsBtn", "click", () => {
 // whole universe, minutes long, so it asks first.
 on("importFlowBtn", "click", () => {
   const count = (state.screen && state.screen.counts)
-    ? state.screen.counts.universe : "all";
+    ? state.screen.counts.universe : "همه‌ی";
   if (!confirm(
     `دریافت داده‌ی حقیقی/حقوقی برای هر سهم یک درخواست جداگانه می‌فرستد ` +
     `(${count} سهم) و چند دقیقه طول می‌کشد. ادامه می‌دهید؟`
