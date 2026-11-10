@@ -68,6 +68,7 @@
        page has become very crowded"). Every analysis is kept; each tab loads
        its data the first time it is opened. -->
   <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab tab-guide" role="tab" data-tab="guide">✦ راهنما</button>
     <button class="tab" role="tab" data-tab="summary">خلاصه و اقدام امروز</button>
     <button class="tab" role="tab" data-tab="stocks">سهام و سبد</button>
     <button class="tab" role="tab" data-tab="live">بازار زنده</button>
@@ -77,6 +78,13 @@
 
 
   <section class="tab-panel" data-tab="summary">
+
+  <!-- A first-visit nudge towards the guide; hidden once dismissed. -->
+  <div class="guide-nudge hidden" id="guideNudge" dir="rtl" lang="fa">
+    <span>تازه با صراط آشنا شده‌اید؟ در سه دقیقه ببینید به چه دردتان می‌خورد و هر کاری را کِی انجام دهید.</span>
+    <button type="button" class="primary" data-goto="guide:guideRoutine">نمایش راهنما</button>
+    <button type="button" class="link" id="guideNudgeClose" aria-label="بستن">✕</button>
+  </div>
 
   <!-- What to do, in one card: the allocation profile the reader picks,
        turned into rial amounts and the cheapest instrument for each part
@@ -1495,6 +1503,202 @@
   </div>
 
   </details>
+
+  </section>
+
+  <!-- The user guide (2026-11-10: "an attractive guide that tells the user
+       what the bot is for, how, and on what timetable"). Plain HTML: every
+       "برو به" button carries data-goto="tab:elementId" and panel.js opens
+       that tab and scrolls to the card. What it promises is what E27/E28
+       accepted and E30-E32 rejected -- keep it that way when editing. -->
+  <section class="tab-panel guide" data-tab="guide" dir="rtl" lang="fa">
+
+    <div class="guide-hero">
+      <div class="guide-hero-text">
+        <span class="guide-kicker">راهنمای سه‌دقیقه‌ای</span>
+        <h2>صراط؛ دستیار سرمایه‌گذاری شما در بورس تهران</h2>
+        <p>برای <strong>چند تصمیم درست در سال</strong> ساخته شده، نه برای حدس‌زدن
+        سهم برنده‌ی فردا. اطلاعات کدال، بورس و بازار طلا را خودش جمع می‌کند،
+        خطاهایش را پالایش می‌کند و نتیجه را به زبان ساده جلوی شما می‌گذارد.</p>
+        <div class="guide-cta">
+          <button type="button" class="primary" data-goto="summary:todayPlan">شروع کنید: «امروز چه کنم؟» ←</button>
+          <button type="button" data-goto="guide:guideRoutine">برنامه‌ی استفاده</button>
+        </div>
+      </div>
+      <ul class="guide-stats">
+        <li><b>۸۰۰+</b><span>شرکت بورسی زیر نظر</span></li>
+        <li><b>۲۳٬۰۰۰+</b><span>صورت مالی کدال، از ۱۳۹۴ تا امروز</span></li>
+        <li><b>هر ۲ ساعت</b><span>اطلاعیه‌های تازه‌ی کدال</span></li>
+        <li><b>هر عصر</b><span>قیمت، پول حقیقی، خبر و گزارش ماهانه</span></li>
+      </ul>
+    </div>
+
+    <h3 class="guide-title">بات به چه دردتان می‌خورد؟</h3>
+    <div class="guide-grid">
+      <article class="guide-card">
+        <div class="guide-icon" aria-hidden="true">🧭</div>
+        <h4>تقسیم درست سرمایه <span class="guide-badge">آزموده و تأییدشده</span></h4>
+        <p>چند درصد در سهام، چند درصد طلا، چند درصد درآمد ثابت. نگه‌داشتن کل بازار
+        در ۱۴ سال سالانه حدود <b>۴۴٪</b> داده، در برابر ۲۰٪ صندوق درآمد ثابت؛ و افزودن
+        طلا ریسک را کم کرده است.</p>
+        <button type="button" class="link" data-goto="summary:allocationTable">کارت تخصیص دارایی ←</button>
+      </article>
+      <article class="guide-card">
+        <div class="guide-icon" aria-hidden="true">💰</div>
+        <h4>ارزان‌ترین راه خرید</h4>
+        <p>کدام صندوق طلا یا شاخصی امروز <b>زیر ارزش خالص دارایی‌اش</b> است (همان
+        دارایی، قیمت کمتر)، و کدام اوراق خزانه (اخزا) بیشترین سود تضمینی را می‌دهد.</p>
+        <button type="button" class="link" data-goto="summary:opportunitiesFunds">کارت ارزان‌ترین راه ←</button>
+      </article>
+      <article class="guide-card">
+        <div class="guide-icon" aria-hidden="true">🔍</div>
+        <h4>چک‌آپ سهم پیش از خرید</h4>
+        <p>سهمی را جایی شنیده‌اید؟ نامش را بنویسید: رشد واقعی فروش، کیفیت سود،
+        بدهی، گرانی نسبت به هم‌صنعت‌ها و «رشدی که قیمت پیش‌خور کرده» را در چند ثانیه
+        می‌بینید. بهترین کاربرد: <b>نخریدنِ سهم بد</b>.</p>
+        <button type="button" class="link" data-goto="analysis:outlookSymbol">کارت چشم‌انداز بنیادی ←</button>
+      </article>
+      <article class="guide-card">
+        <div class="guide-icon" aria-hidden="true">📡</div>
+        <h4>خبرنامه‌ی خودکار</h4>
+        <p>مجمع و سود نقدی، افزایش سرمایه، افشای بااهمیت و توقف نماد از کدال؛ ورود و
+        خروج پول حقیقی به بازار؛ و خبرهای طلا، نفت، دلار و بورس، بی‌آنکه سایت‌ها را
+        یکی‌یکی بگردید.</p>
+        <button type="button" class="link" data-goto="summary:announcementsTable">اطلاعیه‌های کدال ←</button>
+      </article>
+    </div>
+
+    <h3 class="guide-title" id="guideRoutine">برنامه‌ی استفاده: چه کاری، کِی؟</h3>
+    <ol class="guide-routine">
+      <li class="is-key">
+        <div class="guide-when"><b>هر ماه</b><span>۳۰ دقیقه · مهم‌ترین</span></div>
+        <div class="guide-what">
+          <p>کارت <em>تخصیص دارایی</em> را ببینید و اگر سهم سهام، طلا یا درآمد ثابت
+          از هدف دور شده، با یکی دو معامله برگردانید. برای اجرا، ارزان‌ترین صندوق‌ها و
+          اخزا را از کارت <em>ارزان‌ترین راه</em> بردارید.</p>
+          <div class="guide-links">
+            <button type="button" class="link" data-goto="summary:allocationTable">تخصیص ←</button>
+            <button type="button" class="link" data-goto="summary:opportunitiesBills">اخزا ←</button>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="guide-when"><b>هر هفته</b><span>۱۰ دقیقه</span></div>
+        <div class="guide-what">
+          <p>اطلاعیه‌های مهم کدال ۷ روز اخیر را برای سهم‌هایی که دارید مرور کنید
+          (مجمع، افزایش سرمایه، افشای بااهمیت) و نگاهی به <em>هوش بازار</em> بیندازید.</p>
+          <div class="guide-links">
+            <button type="button" class="link" data-goto="summary:announcementsTable">اطلاعیه‌ها ←</button>
+            <button type="button" class="link" data-goto="analysis:intelStatus">هوش بازار ←</button>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="guide-when"><b>هر روز</b><span>۵ دقیقه · اختیاری</span></div>
+        <div class="guide-what">
+          <p>«امروز چه کنم؟» و ورود و خروج پول حقیقی به کل بازار. برای حس بازار خوب
+          است؛ <b>دلیل معامله‌ی روزانه نیست</b>.</p>
+          <div class="guide-links">
+            <button type="button" class="link" data-goto="summary:todayPlan">امروز چه کنم؟ ←</button>
+            <button type="button" class="link" data-goto="summary:marketflowChart">پول حقیقی ←</button>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="guide-when"><b>فصل گزارش‌ها</b><span>اردیبهشت · مرداد · آبان · بهمن</span></div>
+        <div class="guide-what">
+          <p>وقتی صورت‌های مالی سه، شش، نه و دوازده‌ماهه منتشر می‌شوند، سهم‌هایی را
+          که دارید در <em>چشم‌انداز بنیادی</em> دوباره بررسی کنید: هشدار تازه‌ای آمده؟</p>
+          <div class="guide-links">
+            <button type="button" class="link" data-goto="analysis:outlookSymbol">چشم‌انداز بنیادی ←</button>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="guide-when"><b>پیش از هر خرید</b><span>۲ دقیقه</span></div>
+        <div class="guide-what">
+          <p>نماد را در <em>چشم‌انداز بنیادی</em> بنویسید و «بررسی نماد» را بزنید. اگر
+          چند هشدار جدی (⚠) دارد، از خرید بگذرید.</p>
+          <div class="guide-links">
+            <button type="button" class="link" data-goto="analysis:outlookSymbol">بررسی نماد ←</button>
+          </div>
+        </div>
+      </li>
+    </ol>
+
+    <h3 class="guide-title">سه موقعیت رایج</h3>
+    <div class="guide-grid guide-grid-3">
+      <article class="guide-card guide-scenario">
+        <h4>«پول تازه دارم»</h4>
+        <ol>
+          <li>تخصیص پیشنهادی را ببینید.</li>
+          <li>سهم سهام را با صندوق شاخصی، سهم طلا را با صندوق طلای زیر NAV پر کنید.</li>
+          <li>بخش درآمد ثابت: اخزای پربازده.</li>
+        </ol>
+      </article>
+      <article class="guide-card guide-scenario">
+        <h4>«اسم یک سهم را شنیده‌ام»</h4>
+        <ol>
+          <li>در چشم‌انداز بنیادی بررسی‌اش کنید.</li>
+          <li>هشدارها را بخوانید؛ «داده‌ی ناممکن» یعنی صورت مالی را در کدال ببینید.</li>
+          <li>اگر خریدید، بخش کوچکی از سبد بماند.</li>
+        </ol>
+      </article>
+      <article class="guide-card guide-scenario">
+        <h4>«بازار ریخته، بفروشم؟»</h4>
+        <ol>
+          <li>تخصیص را ببینید: اگر سهم سهام از هدف کم شده، زمان <em>خرید</em> است نه فروش.</li>
+          <li>قانون «سهم عقب‌مانده‌ای که فروش حقیقی‌اش تمام شده را بخر» در آزمون بدترین نتیجه را داشت.</li>
+        </ol>
+      </article>
+    </div>
+
+    <div class="guide-honest">
+      <h3>آنچه بات <u>نمی‌کند</u>، و چرا می‌توانید به آن اعتماد کنید</h3>
+      <ul>
+        <li><b>سیگنال «این سهم را بخر» نمی‌دهد.</b> سه روش انتخاب سهم (ارزان‌ترین‌ها،
+        عقب‌مانده‌های خوب، بهترین بنیاد آینده‌نگر) روی ۵ سال اخیر آزموده شدند؛ هر سه
+        حدود ۱۰٪ در سال از نگه‌داشتن شاخص کل عقب ماندند. بات وانمود نمی‌کند که بلد است.</li>
+        <li><b>معامله نمی‌کند.</b> کارگزاری‌ها برای افراد رابط سفارش‌گذاری ندارند؛
+        تصمیم و سفارش با شماست.</li>
+        <li><b>اعداد اسمی‌اند.</b> با تورم ۴۰ تا ۹۰ درصدی، ۳۰٪ سود لزوماً سود واقعی نیست؛
+        همیشه با تورم و بازده اخزا مقایسه کنید.</li>
+      </ul>
+    </div>
+
+    <h3 class="guide-title">پرسش‌های رایج</h3>
+    <div class="guide-faq">
+      <details>
+        <summary>داده‌ها کی به‌روز می‌شوند؟</summary>
+        <p>هر روز ساعت ۱۹ قیمت‌ها، جریان پول حقیقی، خبرها و گزارش‌های ماهانه؛ هر ۲ ساعت
+        اطلاعیه‌ها و صورت‌های مالی تازه‌ی کدال؛ روزهای معاملاتی از ۸:۴۰ صف‌ها و جریان
+        درون‌جلسه‌ای. کافی است کامپیوتر روشن، یا در حالت خواب و به برق وصل، باشد.</p>
+      </details>
+      <details>
+        <summary>پنل را چطور باز کنم؟</summary>
+        <p>فایل <code>run.bat</code> را اجرا کنید و نشانی‌ای که نشان می‌دهد را در مرورگر باز
+        کنید. پس از هر به‌روزرسانی برنامه، یک بار پنل را ببندید و دوباره اجرا کنید.</p>
+      </details>
+      <details>
+        <summary>این همه عدد را از کجا شروع کنم؟</summary>
+        <p>فقط از دو کارت: «امروز چه کنم؟» و «چقدر در سهام، طلا و درآمد ثابت؟». بقیه
+        برای وقتی است که سؤال مشخصی دارید. هر کارت راهنمای «؟» خودش را دارد.</p>
+      </details>
+      <details>
+        <summary>«⚠ داده‌ی ناممکن» یعنی چه؟</summary>
+        <p>عددی که هیچ شرکت واقعی نمی‌سازد (مثلاً P/E زیر ۱). به احتمال زیاد صورت مالی
+        درست خوانده نشده؛ بات آن را رتبه‌بندی نمی‌کند و از شما می‌خواهد در کدال ببینید.</p>
+      </details>
+      <details>
+        <summary>چرا بات به جای «بخر» می‌گوید «صندوق شاخصی»؟</summary>
+        <p>چون شواهد همین را می‌گوید: در این بازار، نگه‌داشتن کل بازار از هر قاعده‌ی
+        انتخاب سهمی که آزمودیم بهتر بوده. هر روش تازه‌ای که ادعای بهتر بودن کند، پیش از
+        آمدن به پنل باید همین آزمون را پس بدهد.</p>
+      </details>
+    </div>
+
+    <p class="guide-foot">صراط ابزار کمک به تصمیم است، نه مشاور سرمایه‌گذاری. هر عدد یک
+    برآورد است، نه پیش‌بینی قطعی؛ تصمیم نهایی و مسئولیت آن با شماست.</p>
 
   </section>
 

@@ -3647,6 +3647,8 @@ const TAB_LOADERS = {
             () => loadMarketflow(), () => loadAnnouncements()],
   stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
   live: [() => loadLive()],
+  // The guide is static HTML: nothing to fetch.
+  guide: [],
   analysis: [() => loadRegime(), () => loadIndices(), () => loadSectors(),
              () => loadFundamentals(), () => loadMoneyflow(),
              () => loadIntelligence()],
@@ -4296,13 +4298,57 @@ getJSON("/api/status").then(status => {
     ` · ریسک هر موقعیت ${status.config.risk_per_trade_pct}%`;
 }).catch(() => {});
 
+/* ---------- the guide ----------
+   "برو به" buttons carry data-goto="tab:elementId": open the tab, bring the
+   card into view and let it glow for a moment so the eye finds it. */
+
+function gotoCard(target) {
+  const [tab, id] = String(target).split(":");
+  showTab(tab);
+  const node = id && $(id);
+  if (!node) return;
+  const card = node.closest(".card") || node;
+  // After the tab is laid out, or the scroll lands on a hidden element.
+  requestAnimationFrame(() => {
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+    card.classList.remove("guide-flash");
+    void card.offsetWidth;
+    card.classList.add("guide-flash");
+  });
+}
+
+document.addEventListener("click", (ev) => {
+  const button = ev.target.closest("[data-goto]");
+  if (!button) return;
+  ev.preventDefault();
+  gotoCard(button.dataset.goto);
+});
+
+function guideSeen() {
+  try { return localStorage.getItem("sirat-guide-seen") === "1"; } catch (e) { return true; }
+}
+
+function markGuideSeen() {
+  try { localStorage.setItem("sirat-guide-seen", "1"); } catch (e) { /* private mode */ }
+  $("guideNudge")?.classList.add("hidden");
+}
+
+on("guideNudgeClose", "click", markGuideSeen);
+document.querySelector('.tab[data-tab="guide"]')?.addEventListener("click", markGuideSeen);
+if (!guideSeen()) $("guideNudge")?.classList.remove("hidden");
+
 {
   const params = new URLSearchParams(location.search);
   let first = location.hash.slice(1);
   if (params.get("tech") || params.get("intel") || params.get("indices")) first = "analysis";
   if (!first) {
-    try { first = localStorage.getItem("sirat-tab") || "summary"; } catch (e) { first = "summary"; }
+    // A first visit opens on the guide; afterwards, the last tab used.
+    let stored = null;
+    try { stored = localStorage.getItem("sirat-tab"); } catch (e) { /* */ }
+    first = stored || (guideSeen() ? "summary" : "guide");
   }
   showTab(first);
-  prefetchTabs(TAB_LOADERS[first] ? first : "summary");
+  if (first === "guide") markGuideSeen();
+  // The guide fetches nothing; the data tabs still load behind it.
+  prefetchTabs(TAB_LOADERS[first] && first !== "guide" ? first : "summary");
 }
