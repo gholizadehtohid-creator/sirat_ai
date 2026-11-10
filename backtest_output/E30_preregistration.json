@@ -1,0 +1,52 @@
+{
+  "experiment_id": "E30-outlook-forward-yield",
+  "question": "If the bot had bought, each month, the companies the fundamental outlook (fundamental_outlook.py, as rebuilt on 2026-11-10) ranks highest by forward earnings yield, would it have made money -- and more than simply holding the same eligible companies, the index, or bills?",
+  "researcher": "Claude, at the user's request of 2026-11-10 ('check whether trading the stocks the forward-looking section recommends would be profitable')",
+  "why_this_is_a_fair_test": "The outlook's rules were written on 2026-11-10 from today's cross-section of filings (data errors, statement bases, flag calibration) without looking at any return. No experiment has tested a forward-earnings-yield ranking on any window, so the whole filing history is out of sample for THIS hypothesis. The Codal backfill completed on 2026-11-08 (23,491 filings, 96% of equities), which is what makes a point-in-time test possible at all.",
+  "data": {
+    "filings": "codal_filings through backtesting/pit.py: a filing is visible from the first session whose close follows its publication timestamp; undated filings unusable; when an unaudited and an audited release of a period are both public the later one is used. Subsidiary statements were purged on 2026-11-10 and are refused by title.",
+    "prices": "price_history via PointInTimeData.bars(): back-adjusted for capital increases (returns); raw printed close for valuation (valuation_price).",
+    "shares": "capital / 1,000 par from the newest visible filing, scaled by the back-adjustment factor between that filing's period end and the decision date, so a bonus issue after the period end is reflected (the live outlook uses the exchange's share count, which has no history in the database). A dividend gap above the adjustment threshold is misread as a share change by this method -- declared, it lowers the measured yield of large payers.",
+    "monthly_reports": "NOT used: ن-30 history in the store starts in 1405, so every historical estimate uses the statement methods (year_completed / next_year_trend). The live outlook uses monthly reports for ~60% of its ranking; this test therefore measures the statement-based ranking.",
+    "benchmark_index": "TEDPIX (32097828799138957) from index_history",
+    "window": "first decision 2021-06-01 (1400/03/11; filings for >=400 companies visible) through 2026-10-31"
+  },
+  "strategy": {
+    "decision": "every 21 sessions (pit.rebalance_dates), after the close of decision session D",
+    "eligible": "equities whose sector is NOT in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL (the outlook's operating-company list), traded on D, 20-session average traded value >= 5e9 rials (500m tomans), newest period <= 7 months old, method not 'annualised', forward earnings yield > 0, not suspect (fundamental_outlook.suspect_reason), at most 1 flag",
+    "hurdle_flag": "the bill-yield 'required growth' flag is DISABLED (opportunity rate passed as 0): there is no historical bill-yield series, and inventing one would put an unmeasured number into the selection",
+    "ranking": "forward earnings yield, highest first (fundamental_outlook.analyse with rows from pit.fundamental_history(periods=12), today = the Jalali date of D)",
+    "portfolio": "top 10, equal weight",
+    "execution": "buy and sell at the close of D+1 (the next session). A name locked in a buy queue on D+1 (ExecutionModel.queue_state) cannot be bought and the next-ranked name is taken. A held name that does not trade on the exit session is marked at its last close.",
+    "costs": "1.039% per round trip (backtest_config: 0.464 buy + 0.075 sell + 0.5 tax), charged on the fraction of the book that changes at each rebalance; a name held over is not charged"
+  },
+  "benchmarks": {
+    "B1_eligible_ew": "equal weight of EVERY eligible company at the same dates, same execution, same costs on its turnover -- the control that isolates the ranking from the market",
+    "B2_tedpix": "TEDPIX from D+1 close to the next D+1 close",
+    "B3_bills": "30% a year, accrued per session -- a round figure between the ~20% deposit rate of 2021 and the ~43% bill yield of 2026; reported, not tested",
+    "B4_random_null": "1,000 portfolios of 10 names drawn uniformly from the same eligible, buyable list at every date, same execution. Compared GROSS of costs: a random draw turns the whole book over every period and would be charged costs the ranked book, which keeps names it still ranks, does not pay."
+  },
+  "hypotheses": {
+    "H1": "The top-10 portfolio beats the eligible equal-weight portfolio (B1)."
+  },
+  "test": {
+    "primary_statistic": "mean of per-period log excess returns, top-10 minus B1, net of each one's costs",
+    "significance": "one-sided t-test on the per-period excess returns, Newey-West standard error with 2 lags; alpha 0.05",
+    "random_null": "percentile of the top-10's cumulative GROSS return among the 1,000 random portfolios' cumulative gross returns",
+    "stability": "the excess return computed separately for the first and the second half of the decision dates"
+  },
+  "decision_rule": {
+    "ACCEPT": "all three: (1) p < 0.05, (2) random-null percentile >= 90, (3) positive mean excess in BOTH halves",
+    "REJECT": "otherwise. A REJECT is reported as the answer to the user's question: the ranking did not show a selection edge.",
+    "no_retuning": "N, the cadence, the liquidity floor and the flag limit are fixed here. Results for N=5 and N=20 and for a 63-session cadence are reported as sensitivity and cannot change the decision. If H1 is rejected it is not re-run with other parameters under this ID."
+  },
+  "declared_limits": [
+    "Survivorship: the filings were collected for companies listed today, so companies that delisted in 2021-2026 are absent from both the strategy and B1. The comparison with B1 is the robust one; the absolute returns are flattered.",
+    "Monthly reports are not used (see data.monthly_reports).",
+    "Shares from capital lines adjusted by price gaps, not the exchange's history (see data.shares).",
+    "Fills at the close of D+1 with no market impact beyond the queue rule; a 10-name book of retail size is assumed.",
+    "Nominal returns: inflation ran 40-90% over the window, so beating bills or the index is the meaningful comparison, not a positive number.",
+    "Dividends: back-adjustment adds back only price gaps above the 12% threshold, so most cash dividends are counted as price falls. This understates the strategy and B1 alike (the comparison between them is unaffected) and favours B2, since TEDPIX includes dividends -- by roughly the market's dividend yield, a few percent a year."
+  ],
+  "expected_failure": "Every stock-selection rule tested in this repository so far (E19-E26) failed to beat random selection. A forward-earnings-yield ranking is a value tilt; in Iran 2021-2026 value tilts have been reported both ways, and the cheapest names are often cheap for reasons the filings show only later. The most likely outcome is a REJECT."
+}
