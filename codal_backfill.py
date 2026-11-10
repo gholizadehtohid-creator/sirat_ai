@@ -986,6 +986,27 @@ def _sync_store(verbose=False):
 # Both halves of the job are interleaved, because discovery is what creates
 # work for the download half and starving it would leave the queue empty.
 
+# A pause of the campaign, in short steps against the wall clock.
+#
+# One time.sleep(4 h) on a laptop does not end four hours later: the wait does
+# not advance while the machine sleeps. Observed 2026-11-10: the 11-09 run
+# (23.5 h budget, due out at 08:57) began a four-hour pause at 07:00, the
+# laptop slept through most of the day, and at 21:30 it was still waiting --
+# so Task Scheduler refused that morning's 09:00 run as already running.
+# Stepping a minute at a time against time.time() ends the pause, and the
+# run, when the clock on the wall says so.
+SLEEP_STEP_SECONDS = 60
+
+
+def _sleep_until(until, deadline=float("inf")):
+    end = min(until, deadline)
+    while True:
+        left = end - time.time()
+        if left <= 0:
+            return
+        time.sleep(min(left, SLEEP_STEP_SECONDS))
+
+
 def campaign(since, until, hours=None, batch=30, cool_minutes=15,
              per_company=None, verbose=True, delay=None, priority_date=None):
     """Alternate discovery and download for a wall-clock budget.
@@ -996,7 +1017,8 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
     failure of the run.
     """
 
-    deadline = time.monotonic() + (hours * 3600 if hours else float("inf"))
+    # The wall clock, not the monotonic one: see _sleep_until.
+    deadline = time.time() + (hours * 3600 if hours else float("inf"))
 
     client = codal.CodalClient(delay=delay) if delay else codal.CodalClient()
 
@@ -1011,7 +1033,7 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
     # One productive round clears it.
     refused_rounds = 0
 
-    while time.monotonic() < deadline:
+    while time.time() < deadline:
 
         totals["rounds"] += 1
 
@@ -1027,13 +1049,13 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
             letters_this_round = found["letters"]
             paused = paused or found["throttled"]
 
-        if time.monotonic() >= deadline:
+        if time.time() >= deadline:
             break
 
         got = fetch(since, until, limit=batch, per_company=per_company,
                     verbose=verbose, client=client,
                     priority_date=priority_date,
-                    deadline=max(0, deadline - time.monotonic()))
+                    deadline=max(0, deadline - time.time()))
 
         totals["stored"] += got["stored"]
         totals["unparseable"] += got["unparseable"]
@@ -1070,12 +1092,12 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
             if verbose:
                 print("campaign: nothing left to discover or download; "
                       "watching the feed until the deadline", flush=True)
-            while time.monotonic() + WATCH_SECONDS < deadline:
-                time.sleep(WATCH_SECONDS)
+            while time.time() + WATCH_SECONDS < deadline:
+                _sleep_until(time.time() + WATCH_SECONDS, deadline)
                 _watch_due(verbose)
             break
 
-        if time.monotonic() >= deadline:
+        if time.time() >= deadline:
             break
 
         productive = bool(got["stored"] or got["unparseable"]
@@ -1111,10 +1133,10 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
                      if paused else ""),
                   flush=True)
 
-        if time.monotonic() + wait > deadline:
+        if time.time() + wait > deadline:
             break
 
-        time.sleep(wait)
+        _sleep_until(time.time() + wait, deadline)
 
     if verbose:
         print("campaign: %d rounds, %d letters discovered, %d filings stored"

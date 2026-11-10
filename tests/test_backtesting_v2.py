@@ -1265,6 +1265,44 @@ class BackfillQueue(unittest.TestCase):
 
         self.assertEqual(self.codal_backfill.settled_failures(), set())
 
+    def test_a_pause_ends_by_the_wall_clock_after_the_laptop_sleeps(self):
+        """The 2026-11-10 overrun: a four-hour time.sleep begun at 07:00 was
+        still waiting at 21:30, because the wait does not advance while the
+        machine sleeps, and the next morning's scheduled run was refused."""
+
+        from unittest import mock
+
+        clock = {"now": 1000.0, "naps": []}
+
+        def nap(seconds):
+            clock["naps"].append(seconds)
+            # The first nap is where the lid closes: six hours pass on the
+            # wall while the sleep itself credits only `seconds`.
+            clock["now"] += seconds + (6 * 3600 if len(clock["naps"]) == 1 else 0)
+
+        with mock.patch("time.time", side_effect=lambda: clock["now"]), \
+                mock.patch("time.sleep", side_effect=nap):
+            self.codal_backfill._sleep_until(1000.0 + 4 * 3600)
+
+        self.assertEqual(len(clock["naps"]), 1,
+                         "the pause is over on the wall clock after one step")
+        self.assertLessEqual(max(clock["naps"]),
+                             self.codal_backfill.SLEEP_STEP_SECONDS)
+
+    def test_a_pause_never_outlives_the_runs_deadline(self):
+        from unittest import mock
+
+        clock = {"now": 0.0}
+
+        def nap(seconds):
+            clock["now"] += seconds
+
+        with mock.patch("time.time", side_effect=lambda: clock["now"]), \
+                mock.patch("time.sleep", side_effect=nap):
+            self.codal_backfill._sleep_until(4 * 3600, deadline=600)
+
+        self.assertEqual(clock["now"], 600)
+
     def test_the_failure_table_reports_why(self):
         """'7 unparseable' is not actionable; a reason breakdown is."""
 
