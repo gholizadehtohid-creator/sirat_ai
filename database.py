@@ -2096,12 +2096,24 @@ def newest_equity_bar():
 
 
 def market_turnover(limit=None):
-    """Total rials traded per session, summed across every stored instrument.
+    """Total rials traded per session, summed across stored EQUITIES.
 
     This is the only volume series an index can honestly be given. The exchange
     publishes no volume for an index, so a technical read on one either drops
     the volume component or states plainly where its volume came from -- and
     market-wide turnover is the figure a trader would use anyway.
+
+    Equities only, for the reason newest_equity_bar() gives. This summed every
+    row of price_history, and that table also holds the gold funds: through
+    2025-26 they were a fifth to two-thirds of a month's total, and from
+    2026-03-15 to 05-18, when no equity traded at all, they were ALL of it.
+    Their flows follow bullion and the dollar, not the stock market, yet they
+    drove the regime's turnover reading -- on 2026-11-10 the ten-session ratio
+    read 0.734 (CONTRACTING), which demoted a unanimous BULL read from
+    AGGRESSIVE to NORMAL, where the equities alone read 0.798 (STEADY) -- and
+    they were attached as the "volume" of TEDPIX, an index none of them is in.
+    `instruments` counts equity bars only, which is what the coverage filter
+    in indices.py means by a well-covered session.
     """
 
     create_database()
@@ -2109,8 +2121,11 @@ def market_turnover(limit=None):
     conn = _connect()
 
     query = """
-        SELECT date, SUM(COALESCE(value, 0)), COUNT(*)
-        FROM price_history GROUP BY date ORDER BY date
+        SELECT p.date, SUM(COALESCE(p.value, 0)), COUNT(*)
+        FROM price_history p
+        JOIN instruments i ON i.ins_code = p.ins_code
+        WHERE i.is_equity = 1
+        GROUP BY p.date ORDER BY p.date
     """
 
     rows = conn.execute(query).fetchall()

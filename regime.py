@@ -32,6 +32,7 @@ import pandas as pd
 import config
 import database
 import indices
+from backtest import back_adjust
 from indicators import DEFAULT_PARAMS, calculate_indicators
 
 
@@ -65,6 +66,25 @@ CASH_TARGET = {
 HIGH_VOLATILITY_CASH_PENALTY = 15.0
 
 
+def _halted(frame, clock, days=None):
+    """True when a series' last bar WITH VOLUME is over `days` before `clock`.
+
+    database.halted_codes()'s rule, applied to bars already cut at a date so
+    it holds for that date: a frozen close keeps arriving at zero volume, so
+    the newest bar's date says nothing, and a series with bars but no traded
+    session among them is halted.
+    """
+
+    days = config.HALT_EXCLUDE_DAYS if days is None else days
+
+    traded = frame.loc[frame["volume"].fillna(0) > 0, "date"].max()
+
+    if pd.isna(traded):
+        return True
+
+    return (clock - traded).days > days
+
+
 def participation(params=None, bars=None, as_of=None):
     """Share of instruments trading above their own slow moving average.
 
@@ -77,20 +97,38 @@ def participation(params=None, bars=None, as_of=None):
     regime call cannot be measured against what followed it -- and a market
     read nobody has ever checked against outcomes is the most expensive kind
     of confident output.
+
+    "The market" is the LIVE EQUITIES, on back-adjusted closes. It used to be
+    every series in price_history on raw closes, and three things in that
+    count were not the stock market's breadth. As of 2026-11-09 it read 63.13%
+    of 830 against the BULL line of 60; the same bars read 75.04% of 697 with
+    all three removed:
+
+      * the 14 gold funds, which follow bullion rather than the bourse;
+      * 119 names halted for over config.HALT_EXCLUDE_DAYS. A halted name keeps
+        getting bars at its frozen close, so once the freeze outlasts the slow
+        MA, close == MA exactly and it can never count as above -- 81 of the
+        119 sat on that line, a guaranteed "below" in every reading;
+      * capital-increase gaps. TSETMC's closes are unadjusted, so a name whose
+        price was cut by an increase inside the window reads as having fallen
+        by the whole cut, and stays under its MA until the gap leaves the
+        window unless it rallies by all of it.
     """
 
     params = params or DEFAULT_PARAMS
 
-    codes = list(database.inscodes_with_history())
+    equities = {str(row["ins_code"])
+                for row in database.load_instruments(equities_only=True)}
+
+    codes = [code for code in database.inscodes_with_history()
+             if code in equities]
 
     if not codes:
         return None
 
     cutoff = pd.Timestamp(as_of) if as_of is not None else None
 
-    above = 0
-    counted = 0
-    above_fast = 0
+    frames = []
 
     for code in codes:
 
@@ -105,10 +143,39 @@ def participation(params=None, bars=None, as_of=None):
         if frame is None or frame.empty or "close" not in frame.columns:
             continue
 
-        frame = frame.dropna(subset=["close"])
+        # A bar without a date cannot be placed against the halt clock below.
+        frame = frame.dropna(subset=["date", "close"])
 
         if len(frame) < params["ma_slow"] + 1:
             continue
+
+        frames.append(frame)
+
+    if not frames:
+        return None
+
+    # The halt clock is the market's newest session on or before the cutoff,
+    # read from these same bars -- not database.halted_codes(), which counts
+    # from the newest session in the WHOLE table and so would apply today's
+    # halts to a past date, making detect(as_of=...) depend on when it was run.
+    # Not the cutoff itself either: a cutoff on a holiday, or past the last
+    # fetch, must not age every name by the gap (halted_codes' own rule).
+    clock = max(frame["date"].max() for frame in frames)
+
+    above = 0
+    counted = 0
+    above_fast = 0
+
+    for frame in frames:
+
+        if _halted(frame, clock):
+            continue
+
+        # The helper the v2 path uses, on the raw stored bars. It anchors at
+        # the newest bar it is given and scales backwards, so it needs nothing
+        # past the cutoff: an increase after it would only rescale this whole
+        # window, which no close-against-its-MA comparison can see.
+        frame, _events = back_adjust(frame)
 
         closes = frame["close"]
 

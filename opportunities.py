@@ -126,7 +126,12 @@ def bill_yield(price, maturity, today):
 
     days = (maturity - today).days
 
-    if days < MIN_DAYS or price <= 0 or price >= FACE_VALUE * 1.5:
+    # Strictly below face. A zero-coupon bill at or above 1,000,000 has no
+    # positive yield to earn, and the price that lands there in practice is a
+    # placeholder: three series with no trade at all (traded value 0) were
+    # listed at 0.00% -- the yield of a price at face value -- among the real
+    # yields. The old ceiling of 1.5x face let that price through.
+    if days < MIN_DAYS or price <= 0 or price >= FACE_VALUE:
         return None
 
     return (FACE_VALUE / float(price)) ** (365.0 / days) - 1.0

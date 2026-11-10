@@ -10,6 +10,7 @@ import math
 import os
 import sys
 import unittest
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -300,6 +301,46 @@ class TestRiskAnalyseGuards(unittest.TestCase):
         self.assertFalse(report["available"])
         self.assertIn("reason", report)
         self.assertEqual(report["sector_exposure"], [])
+
+
+class TestRiskAnalyseVarBase(unittest.TestCase):
+    """The rial VaR is a loss on the basket, not on the whole account."""
+
+    def test_rial_var_is_struck_on_the_basket_value_not_on_equity(self):
+        rng = np.random.default_rng(7)
+        matrix = pd.DataFrame({
+            "A": rng.normal(0.0, 0.02, 300),
+            "B": rng.normal(0.0, 0.02, 300),
+        })
+
+        # Half the account invested; C has too little history and is dropped,
+        # so it is in neither the return series nor the rial base.
+        positions = [
+            {"ins_code": "a", "symbol": "A", "position_value": 300_000_000},
+            {"ins_code": "b", "symbol": "B", "position_value": 200_000_000},
+            {"ins_code": "c", "symbol": "C", "position_value": 100_000_000},
+        ]
+
+        with mock.patch.object(risk, "returns_matrix",
+                               return_value=(matrix, ["C"])), \
+                mock.patch.object(risk, "benchmark_returns",
+                                  return_value=pd.Series(dtype=float)):
+            report = risk.analyse(positions, equity=1_000_000_000)
+
+        basket = matrix["A"] * 0.6 + matrix["B"] * 0.4
+        expected = risk.value_at_risk(basket, equity=500_000_000)
+
+        self.assertEqual(report["var"]["historical_rials"],
+                         expected["historical_rials"])
+        self.assertEqual(report["var"]["conditional_rials"],
+                         expected["conditional_rials"])
+
+        # The account figure charged the 400M of cash and the unmeasured name
+        # the basket's loss rate too.
+        on_equity = risk.value_at_risk(basket, equity=1_000_000_000)
+        self.assertAlmostEqual(on_equity["historical_rials"]
+                               / report["var"]["historical_rials"], 2.0,
+                               places=6)
 
 
 if __name__ == "__main__":

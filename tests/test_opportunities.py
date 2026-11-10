@@ -40,6 +40,16 @@ class YieldTests(unittest.TestCase):
         self.assertIsNone(op.bill_yield(None, date(2027, 1, 1), today))
         self.assertIsNone(op.bill_yield(900_000, date(2025, 1, 1), today))
 
+    def test_a_price_at_or_above_face_is_no_yield_rather_than_zero(self):
+        # An untraded series is quoted at face value. It used to be listed at
+        # 0.00% among the real yields; no bill earns that, so it is refused.
+        today = date(2026, 1, 1)
+        self.assertIsNone(op.bill_yield(1_000_000, date(2027, 1, 1), today))
+        self.assertIsNone(op.bill_yield(1_200_000, date(2027, 1, 1), today))
+
+        # One rial under face is still a price, and a (tiny) positive yield.
+        self.assertGreater(op.bill_yield(999_999, date(2027, 1, 1), today), 0)
+
 
 class SleeveTests(unittest.TestCase):
 

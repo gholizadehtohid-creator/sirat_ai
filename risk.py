@@ -369,9 +369,12 @@ def sector_exposure(positions):
 
 
 def analyse(positions, equity=None, bars=None, benchmark_key="TEDPIX"):
-    """Full risk report for a built portfolio."""
+    """Full risk report for a built portfolio.
 
-    equity = equity or config.ACCOUNT_EQUITY
+    `equity` is still accepted, for the callers that pass it, and no longer
+    used: the rial VaR is struck on the money in the basket rather than on the
+    account -- see the comment at the VaR call.
+    """
 
     if not positions:
         return {
@@ -436,7 +439,14 @@ def analyse(positions, equity=None, bars=None, benchmark_key="TEDPIX"):
 
         portfolio_daily = (matrix[columns] * w).sum(axis=1)
 
-        report["var"] = value_at_risk(portfolio_daily, equity=equity)
+        # Rials on the money this series describes. The weights are position
+        # values over their own sum, so portfolio_daily is the BASKET's return
+        # and its quantile is a loss on the basket's value. It was struck on
+        # account equity, which charged the unallocated cash the same loss: a
+        # basket holding 76.5% of equity had its VaR and CVaR overstated 1.31x.
+        # A name dropped for want of history is in neither the series nor this
+        # value, as the note above already tells the user.
+        report["var"] = value_at_risk(portfolio_daily, equity=total_weight)
         report["drawdown"] = max_drawdown(portfolio_daily)
 
         market = benchmark_returns(benchmark_key, bars=bars)
