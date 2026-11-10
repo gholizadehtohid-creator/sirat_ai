@@ -20,6 +20,14 @@ that matter, each a way an incremental collector quietly corrupts a series:
 
     A STORED COPY IS NOT A FETCH. What the offline floor serves from this
     database is never stored back, or counted, as new (2026-11-10 21:04).
+
+    TOO FEW ANSWERS ARE NO CHECK. A sample with fewer than half (and fewer
+    than six) live re-reads neither accepts nor rejects the watch: its names
+    wait, and the step fails so it is retried after the cooldown.
+
+    A HOST THAT DOES NOT ANSWER COSTS A CANARY. No overview and no watch:
+    no history request at all. Otherwise at most a dozen history requests
+    until one comes back live -- never one per name (818 before 2026-11-11).
 """
 
 import os
@@ -524,7 +532,9 @@ class IncrementalHistoryTests(unittest.TestCase):
         self.assertEqual(database.history_checked_dates(), {})
         self.assertTrue(any("no live answer" in n for n in stats["notes"]))
 
-    def test_an_offline_sample_is_not_a_lagging_endpoint(self):
+    def test_an_offline_sample_is_unverifiable_not_lagging(self):
+        """A stored copy is no check: neither "not published" nor "agrees"."""
+
         from providers.base import SEED
 
         class OfflineSample(FakeProvider):
@@ -536,12 +546,166 @@ class IncrementalHistoryTests(unittest.TestCase):
 
         provider = OfflineSample(watch={}, history={
             "1": bars(["2026-10-26", PREVIOUS])})
-        agrees, detail, lagging = seed_import._watch_agrees(
+        check = seed_import._watch_agrees(
             provider, {"1": bars([SESSION])}, SESSION)
 
-        self.assertFalse(agrees)
-        self.assertFalse(lagging)
-        self.assertIn("no sample name", detail)
+        self.assertFalse(check.agrees)
+        self.assertEqual(check.wait, seed_import.UNVERIFIABLE)
+        self.assertEqual((check.asked, check.live), (1, 0))
+
+    # ---- a sample nobody answered is no reason to ask everyone --------------
+
+    def add_two_behind(self, count, start=500):
+        """`count` equities whose newest bar is the session before PREVIOUS."""
+
+        codes = [str(start + i) for i in range(count)]
+        conn = database._connect()
+        conn.executemany("INSERT INTO instruments (ins_code, symbol_fa, "
+                         "is_equity) VALUES (?, ?, 1)",
+                         [(c, "n" + c) for c in codes])
+        conn.commit()
+        conn.close()
+        for code in codes:
+            database.save_history(code, bars(["2026-10-25", "2026-10-26"]))
+        return codes
+
+    def test_an_unanswered_sample_defers_and_fails_cheaply(self):
+        """The offline floor answered all twelve: 412 requests, now twelve.
+
+        Before 2026-11-11 the watch was REJECTED and every one-behind name
+        went per symbol, at the endpoint that had just failed the sample --
+        ~660 requests on the live universe, again after each cooldown.
+        """
+
+        from providers.base import SEED
+
+        class OfflineHistory(FakeProvider):
+            def get_histories(self, codes, count=300, progress=None):
+                results = super().get_histories(codes, count, progress)
+                for result in results.values():
+                    result.provenance = SEED
+                return results
+
+        traders = ["1", "2", "3"] + self.add_traders(40)
+        behind = self.add_two_behind(5)
+
+        provider = OfflineHistory(
+            watch={c: watch_row() for c in traders + behind},
+            history={c: self.full_history() for c in traders + behind})
+        stats = self.run_with(provider)
+
+        # The sample and nothing else: it was the canary, and it failed.
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(provider.requests[0][1], 3)
+        self.assertEqual(len(provider.requests[0][0]),
+                         seed_import.WATCH_CHECK_SAMPLE)
+        self.assertEqual(stats["deferred"], len(traders))
+        self.assertEqual(stats["unasked"], len(behind))
+        self.assertEqual((stats["watch"], stats["tail"]), (0, 0))
+        self.assertFalse(stats["ok"])               # retried after cooldown
+        self.assertEqual(self.newest("1")[0], PREVIOUS)
+
+    def test_agreement_needs_enough_live_answers(self):
+        """Five live answers of twelve neither vouch for the watch nor not.
+
+        Until 2026-11-11 one agreeing answer was enough: here five, the
+        other seven refused, and all 43 bars were taken from the watch.
+        """
+
+        class PartlyLive(FakeProvider):
+            def get_histories(self, codes, count=300, progress=None):
+                results = super().get_histories(codes, count, progress)
+                for code in sorted(codes)[5:]:
+                    results[code] = ProviderResult.failure("fake", "HTTP 403")
+                return results
+
+        traders = ["1", "2", "3"] + self.add_traders(40)
+        provider = PartlyLive(watch={c: watch_row() for c in traders},
+                              history={c: self.full_history()
+                                       for c in traders})
+        stats = self.run_with(provider)
+
+        self.assertEqual(stats["watch"], 0)
+        self.assertEqual(stats["deferred"], len(traders))
+        self.assertFalse(stats["ok"])
+        self.assertEqual(len(provider.requests), 1)
+        self.assertTrue(any("too little of the sample" in n
+                            for n in stats["notes"]))
+
+    def test_half_the_sample_live_and_agreeing_is_enough(self):
+        class HalfLive(FakeProvider):
+            def get_histories(self, codes, count=300, progress=None):
+                results = super().get_histories(codes, count, progress)
+                for code in sorted(codes)[6:]:
+                    results[code] = ProviderResult.failure("fake", "HTTP 403")
+                return results
+
+        traders = ["1", "2", "3"] + self.add_traders(40)
+        stats = self.run_with(HalfLive(
+            watch={c: watch_row() for c in traders},
+            history={c: self.full_history() for c in traders}))
+
+        self.assertEqual(stats["watch"], len(traders))
+        self.assertTrue(stats["ok"])
+
+    # ---- an exchange that does not answer costs a handful of requests -------
+
+    def test_a_dead_exchange_costs_no_history_request(self):
+        """No overview, no watch: the run stops before asking any name."""
+
+        from unittest import mock
+
+        class Dead(FakeProvider):
+            def _get(self, url, timeout=None):
+                raise ConnectionError("no route to host")
+
+            def get_market_snapshot(self):
+                return ProviderResult.failure("fake", "no route to host")
+
+            def get_histories(self, codes, count=300, progress=None):
+                self.requests.append((sorted(codes), count))
+                return {c: ProviderResult.failure("fake", "no route to host")
+                        for c in codes}
+
+        provider = Dead(watch={}, history={})
+        with mock.patch.object(seed_import.time, "sleep"):
+            stats = self.run_with(provider)
+
+        self.assertEqual(provider.requests, [])
+        self.assertFalse(stats["ok"])
+        self.assertEqual(stats["unasked"], 3)
+
+    def test_a_refusing_history_endpoint_costs_a_canary_not_a_sweep(self):
+        """An open session goes per symbol; a 403 to each name stops at 12."""
+
+        class Refusing(FakeProvider):
+            def get_histories(self, codes, count=300, progress=None):
+                self.requests.append((sorted(codes), count))
+                return {c: ProviderResult.failure("fake", "HTTP 403")
+                        for c in codes}
+
+        traders = ["1", "2", "3"] + self.add_traders(40)
+        provider = Refusing(watch={c: watch_row() for c in traders},
+                            history={}, state="S")
+        stats = self.run_with(provider)
+
+        asked = [c for codes, _ in provider.requests for c in codes]
+        self.assertEqual(len(asked), seed_import.HISTORY_CANARY)
+        self.assertEqual(stats["unasked"],
+                         len(traders) - seed_import.HISTORY_CANARY)
+        self.assertFalse(stats["ok"])
+
+    def test_a_live_canary_lets_the_whole_run_through(self):
+        traders = ["1", "2", "3"] + self.add_traders(40)
+        provider = FakeProvider(watch={c: watch_row() for c in traders},
+                                history={c: self.full_history()
+                                         for c in traders}, state="S")
+        stats = self.run_with(provider)
+
+        asked = [c for codes, _ in provider.requests for c in codes]
+        self.assertEqual(sorted(asked), sorted(traders))
+        self.assertEqual((stats["tail"], stats["unasked"]), (len(traders), 0))
+        self.assertTrue(stats["ok"])
 
 
 class AbsentMarkTests(unittest.TestCase):

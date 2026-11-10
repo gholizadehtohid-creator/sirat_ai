@@ -117,8 +117,14 @@ def participation(params=None, bars=None, as_of=None):
 
     params = params or DEFAULT_PARAMS
 
+    # A past date is read with the listings a board move has retired since:
+    # they were the market then (database.load_instruments, with_superseded),
+    # and the halt rule below drops each one once its trading stops. Today's
+    # reading is of the live codes only -- شکبیر's old code last traded on
+    # 2026-11-04, inside HALT_EXCLUDE_DAYS, and would sit beside its new one.
     equities = {str(row["ins_code"])
-                for row in database.load_instruments(equities_only=True)}
+                for row in database.load_instruments(
+                    equities_only=True, with_superseded=as_of is not None)}
 
     codes = [code for code in database.inscodes_with_history()
              if code in equities]

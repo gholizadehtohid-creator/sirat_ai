@@ -841,7 +841,10 @@ def run(start="2025-05-01", end="2026-08-11", rebalance=DEFAULT_REBALANCE,
         print("not enough rebalance dates in that window")
         return None
 
-    instruments = database.load_instruments(equities_only=True)
+    # A historical universe: with the listings a board move retired, so a
+    # past date sees the code that traded then (load_instruments).
+    instruments = database.load_instruments(equities_only=True,
+                                            with_superseded=True)
 
     if limit:
         instruments = instruments[:limit]

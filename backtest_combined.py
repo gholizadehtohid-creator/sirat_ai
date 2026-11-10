@@ -329,7 +329,10 @@ def collect(limit=None, holding_days=20, threshold=70, step=DEFAULT_STEP,
     every warmup and quietly change what the early signals mean.
     """
 
-    instruments = database.load_instruments(equities_only=True)
+    # A historical universe: with the listings a board move retired, so a
+    # past signal date sees the code that traded then (load_instruments).
+    instruments = database.load_instruments(equities_only=True,
+                                            with_superseded=True)
     instruments.sort(key=lambda r: str(r.get("ins_code")))
 
     if limit:

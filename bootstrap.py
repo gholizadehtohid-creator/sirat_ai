@@ -432,19 +432,28 @@ def _indices_state():
 def _sectors_state():
     coverage = database.sector_coverage()
     equities = coverage["equities"] or 0
+    missing = equities - coverage["with_sector"]
 
     covered = (
         equities > 0 and coverage["with_sector"] >= equities * 0.9
     )
 
+    detail = (f"{coverage['with_sector']}/{equities} equities have a "
+              f"sector, {coverage['sectors']} sectors")
+    if missing > 0:
+        detail += f"; {missing} without one"
+
     return {
         "present": covered,
-        "detail": (f"{coverage['with_sector']}/{equities} equities have a "
-                   f"sector, {coverage['sectors']} sectors"),
+        "detail": detail,
         # Sector membership carries no timestamp of its own, and changes on the
-        # timescale of a company listing. Full coverage is current enough.
+        # timescale of a company listing -- so a listing without one is what
+        # makes this behind. Not falling under 90%: a new company or two a
+        # month never did, and so never got a sector (2026-11-11). The step
+        # asks only the names without one (import_sectors, missing_only), and
+        # MAX_AGE paces it: one request per new listing, at most monthly.
         "updated_at": None,
-        "behind": not covered,
+        "behind": missing > 0,
     }
 
 
@@ -698,8 +707,12 @@ def _fetch_history(on_item):
 
 
 def _fetch_sectors(on_item):
+    # Only the equities without a sector: a full refetch is ~900 requests for
+    # membership that does not change (`seed_import.py --sectors` still does
+    # it, as does the panel's sector button).
     import seed_import
-    return bool(seed_import.import_sectors(verbose=False, progress=on_item))
+    return bool(seed_import.import_sectors(verbose=False, progress=on_item,
+                                           missing_only=True))
 
 
 def _fetch_flow(on_item):

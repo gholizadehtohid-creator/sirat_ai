@@ -809,8 +809,26 @@ def save_instruments(records):
     return len(rows)
 
 
-def load_instruments(equities_only=False, limit=None):
-    """Instrument rows as dicts."""
+# universe.SUPERSEDED: the kind of a listing a board move retired. Spelled
+# here too so this module imports nothing above it; the tests hold the two
+# equal.
+SUPERSEDED_KIND = "superseded"
+
+
+def load_instruments(equities_only=False, limit=None, with_superseded=False):
+    """Instrument rows as dicts.
+
+    `with_superseded`, with `equities_only`: also the listings a board move
+    retired (SUPERSEDED_KIND). For a HISTORICAL universe -- the point-in-time
+    data, the backtests -- which must see a past date as it traded. As first
+    written (2026-11-11) a retirement (is_equity 0) took the old listing out
+    of every date, not only those after the move: the 17 codes it found hold
+    13,191 traded bars inside the 2021-06..2026-10 research window, and no
+    registered experiment would have reproduced. Its trading ends at the
+    move, and the halt and staleness filters drop it after that exactly as
+    they drop any halted name. Live readers -- scans, fetch loops, the panel
+    -- leave it out: the live code is the company now.
+    """
 
     create_database()
 
@@ -824,7 +842,10 @@ def load_instruments(equities_only=False, limit=None):
 
     params = []
 
-    if equities_only:
+    if equities_only and with_superseded:
+        query += " WHERE is_equity = 1 OR kind = ?"
+        params.append(SUPERSEDED_KIND)
+    elif equities_only:
         query += " WHERE is_equity = 1"
 
     # The equity row first among rows sharing a symbol: a board move leaves
@@ -2118,21 +2139,32 @@ def market_turnover(limit=None):
     they were attached as the "volume" of TEDPIX, an index none of them is in.
     `instruments` counts equity bars only, which is what the coverage filter
     in indices.py means by a well-covered session.
+
+    A listing a board move retired (SUPERSEDED_KIND) still counts: its bars
+    are that company's trading on the dates it traded, and a series the
+    backtests read (swing_backtest, swing_strategy) must not lose them for
+    every past session at the move. It stops trading there and is no longer
+    fetched, so a later session gains nothing from it -- see
+    load_instruments(with_superseded).
     """
 
     create_database()
 
     conn = _connect()
 
+    # CROSS JOIN fixes the order: the ~1,400 instruments first, then each
+    # one's bars by key. Given the OR, the planner otherwise walked all two
+    # million bars and looked each one's instrument up -- 3.7 s against
+    # 2.9 s on the live file (2026-11-11).
     query = """
         SELECT p.date, SUM(COALESCE(p.value, 0)), COUNT(*)
-        FROM price_history p
-        JOIN instruments i ON i.ins_code = p.ins_code
-        WHERE i.is_equity = 1
+        FROM instruments i
+        CROSS JOIN price_history p ON p.ins_code = i.ins_code
+        WHERE i.is_equity = 1 OR i.kind = ?
         GROUP BY p.date ORDER BY p.date
     """
 
-    rows = conn.execute(query).fetchall()
+    rows = conn.execute(query, (SUPERSEDED_KIND,)).fetchall()
 
     conn.close()
 

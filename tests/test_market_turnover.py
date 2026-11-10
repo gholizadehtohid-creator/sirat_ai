@@ -60,6 +60,21 @@ class MarketTurnoverTests(unittest.TestCase):
         self.assertEqual(frame["instruments"].tolist(), [2, 2, 2],
                          "coverage is counted in equity bars")
 
+    def test_a_listing_a_board_move_retired_keeps_its_turnover(self):
+        """Its sessions were the stock market's; the backtests reading this
+        series must not lose them at the move (seed_import, 2026-11-11)."""
+
+        database.save_instruments([{
+            "ins_code": "old", "symbol_fa": "ج", "kind": "superseded",
+            "is_equity": False}])
+        self._bars("eq1", [100.0, 100.0, 100.0])
+        self._bars("old", [40.0, 40.0, 40.0])
+
+        frame = database.market_turnover()
+
+        self.assertEqual(frame["turnover"].tolist(), [140.0, 140.0, 140.0])
+        self.assertEqual(frame["instruments"].tolist(), [2, 2, 2])
+
     def test_a_session_only_the_funds_reached_is_not_a_market_session(self):
         # gold.py fetches on its own schedule: on 2026-08-24 the funds held
         # bars three sessions newer than any equity. Those sessions carry no

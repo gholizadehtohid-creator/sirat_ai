@@ -179,6 +179,53 @@ class FlowCoverageTests(unittest.TestCase):
         self.assertTrue(self.flow_state(652, 592)["behind"])
 
 
+class SectorStateTests(unittest.TestCase):
+    """A listing without a sector is behind, whatever the coverage.
+
+    Under 90% was the only trigger, and then the step re-asked all ~900
+    equities: the 98 names added on 2026-11-11 would have cost ~900
+    requests, and a company or two listed in a month never got a sector.
+    """
+
+    def state(self, with_sector, equities=899):
+        coverage = {"equities": equities, "with_sector": with_sector,
+                    "sectors": 40}
+        with mock.patch.object(bootstrap.database, "sector_coverage",
+                               return_value=coverage):
+            return bootstrap._sectors_state()
+
+    def test_one_new_listing_without_a_sector_is_behind(self):
+        state = self.state(898)
+        self.assertTrue(state["present"])
+        self.assertTrue(state["behind"])
+        self.assertIn("1 without one", state["detail"])
+
+    def test_full_coverage_is_current(self):
+        self.assertFalse(self.state(899)["behind"])
+
+    def test_the_step_asks_only_the_names_without_one(self):
+        import seed_import
+
+        with mock.patch.object(seed_import, "import_sectors",
+                               return_value=818) as call:
+            self.assertTrue(bootstrap._fetch_sectors(lambda *a: None))
+
+        self.assertTrue(call.call_args.kwargs.get("missing_only"))
+
+    def test_the_month_still_paces_it(self):
+        """Behind, but asked within MAX_AGE: not fetched again."""
+
+        state = {"present": True, "detail": "", "updated_at": None,
+                 "behind": True}
+        now = TUESDAY.replace(tzinfo=timezone.utc)
+        with mock.patch.object(bootstrap, "STEPS",
+                               [("sectors", lambda: state, ())]), \
+                mock.patch.object(bootstrap, "_now", return_value=now), \
+                mock.patch.object(bootstrap, "_last_fetch",
+                                  return_value=now - timedelta(days=3)):
+            self.assertFalse(bootstrap._probe_all()["sectors"]["needs_fetch"])
+
+
 class AttemptTests(unittest.TestCase):
     """A fetch from before today's close does not excuse the evening run."""
 

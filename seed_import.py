@@ -10,6 +10,17 @@
                                             # stored market watch (dry run
                                             # unless --apply)
 
+--repair-universe --apply is the only way a board-moved code is retired (the
+snapshot step only adds new companies). Its undo, in sirat_market.db:
+
+    UPDATE instruments SET is_equity = 1, kind = 'equity'
+    WHERE kind = 'superseded';
+
+Everything else it writes is additive: the live codes it adds, and the
+statement rows it copies to them. It changes nothing keyed by a retired code
+-- though codal_sync's next run re-keys that code's Codal letters to the
+live one (see reconcile_universe).
+
 On a network that filters Iranian domains, --universe still works: the
 reference list is mirrored on GitHub. --snapshot and --history need a route to
 tsetmc, i.e. SIRAT_PROXY_URL.
@@ -22,6 +33,7 @@ this project, so SIRAT-AI itself carries no GPL obligation.
 import argparse
 import sys
 import time
+from collections import namedtuple
 
 import config
 import database
@@ -122,7 +134,7 @@ def import_universe(url=None, verbose=True, progress=None):
     return stats
 
 
-def reconcile_universe(snapshot=None, apply=False, verbose=True):
+def reconcile_universe(snapshot=None, apply=False, verbose=True, retire=True):
     """Bring the instrument list in line with a live market watch.
 
     The universe comes from a reference list on GitHub (UNIVERSE_URL) that
@@ -138,34 +150,59 @@ def reconcile_universe(snapshot=None, apply=False, verbose=True):
 
     Main-share lines (universe.watch_record) the universe lacks are added.
     A board move is RE-POINTED, NOT MIGRATED: the live code is added beside
-    the old one and the old row is retired -- kind SUPERSEDED, is_equity 0 --
-    with nothing keyed by it moved or deleted. Its bars, flow and filings are
-    the record of that listing; rewriting ins_code through price_history,
-    client_type_history, history_checked, the Codal tables and the
-    fundamental store would splice two listings into one series in a dozen
-    places, irreversibly. Every equity loop -- history, flow, sectors,
-    codal_sync, the Codal feed watch -- walks is_equity = 1, and the symbol
-    lookups now prefer the equity row (database.load_instruments), so from
-    the next run the live code is what gets bars and flow and what filings
-    land on. What stays behind is the history already parsed under the old
-    code; the retired row, same symbol and same ISIN company code, is the
-    link a reader needs to join the two.
+    the old one and the old row is retired -- kind SUPERSEDED, is_equity 0.
+    Its bars, flow and filings stay where they are, the record of that
+    listing; rewriting ins_code through price_history, client_type_history,
+    history_checked, the Codal tables and the fundamental store would splice
+    two listings into one series in a dozen places, irreversibly. Every
+    equity loop -- history, flow, sectors, codal_sync, the Codal feed watch
+    -- walks is_equity = 1, and the symbol lookups prefer the equity row
+    (database.load_instruments), so from the next run the live code is what
+    gets bars and flow and what filings land on. The point-in-time and
+    backtest universes still load the retired row (with_superseded): a past
+    date sees the code that traded then.
+
+    Not everything keyed by the old code stays put, and not everything should.
+    codal_sync files the company's letters under the code it searched for, so
+    its next run RE-KEYS the old code's codal_letters to the live code, parsed
+    flag kept -- and a parsed letter is never fetched again. The statements
+    parsed from them would then sit on a code no live reader asks for, so the
+    rows the live readers key by ins_code are COPIED to the live code
+    (_carry_over): codal_financials and codal_portfolio here, metrics and
+    dividends in the fundamental store, and the old code's sector. Copied,
+    never moved; only what the live code lacks; a second run copies nothing.
+    What is keyed by the tracing number holds one row per filing and cannot
+    be copied: codal_filings stays on the old code, where the point-in-time
+    reader, which still loads it, finds it; the old monthly reports stay
+    there too, and the live code's begin with its next one.
 
     A code is retired only on evidence: the watch lists a main share with the
     same symbol and the same company code, and the old code is neither on
     the watch nor traded in the newest stored session. A match on only one of
     the two, or an old code still alive, is held back and reported.
 
+    `retire` False is ADD-ONLY, the snapshot step's mode: new companies are
+    added, and a board move -- its live code only ever added together with
+    the old code's retirement, so that one company is never two equities --
+    is held back for `seed_import.py --repair-universe --apply`, the only
+    path that retires (2026-11-11: run after every live snapshot, the first
+    evening snapshot would have applied all 17 unreviewed). Its undo is in
+    this module's docstring.
+
     `snapshot` is a watch frame (default: the stored one). Nothing is written
-    unless `apply`; a second run finds nothing to do. Returns the plan:
+    unless `apply`; a second run finds nothing to do. A line that cannot be
+    read is skipped and counted, not allowed to stop the rest. Returns the
+    plan:
     {"added": [record], "retired": [(old row, live record)],
-     "held": [(record, reason)], "applied": bool}.
+     "held": [(record, reason)], "copies": {table: rows}, "unreadable": n,
+     "applied": bool} -- `copies` what the retirements copy, or would.
     """
 
     if snapshot is None:
         snapshot = database.load_snapshot()
 
-    plan = {"added": [], "retired": [], "held": [], "applied": False}
+    plan = {"added": [], "retired": [], "held": [], "copies": {},
+            "unreadable": 0, "applied": False}
 
     if snapshot is None or snapshot.empty or "isin" not in snapshot.columns:
         return plan
@@ -174,8 +211,15 @@ def reconcile_universe(snapshot=None, apply=False, verbose=True):
 
     lines = {}
     for row in snapshot.to_dict("records"):
-        record = universe.watch_record(row.get("ins_code"), row.get("symbol_fa"),
-                                       row.get("name_fa"), row.get("isin"))
+        # One bad line skips itself: a NaN ISIN raised here and cost every
+        # other line its place, the new listings included (2026-11-11).
+        try:
+            record = universe.watch_record(
+                row.get("ins_code"), row.get("symbol_fa"), row.get("name_fa"),
+                row.get("isin"))
+        except Exception:                                       # noqa: BLE001
+            plan["unreadable"] += 1
+            continue
         if record is not None:
             lines.setdefault(record["ins_code"], record)
 
@@ -231,15 +275,30 @@ def reconcile_universe(snapshot=None, apply=False, verbose=True):
                                  % alive[0]["ins_code"]))
             continue
 
+        if not retire:
+            plan["held"].append((record, "board move from %s: retired only "
+                                 "by --repair-universe --apply"
+                                 % ", ".join(str(r["ins_code"])
+                                             for r in rivals)))
+            continue
+
         if mine is None:
             plan["added"].append(record)
         plan["retired"].extend((r, record) for r in rivals)
 
+    if plan["retired"]:
+        plan["copies"] = _carry_over(plan["retired"], write=False)
+
     if apply and (plan["added"] or plan["retired"]):
-        # The live rows first: interrupted between the two writes, the next
-        # run still finds the old code beside a known live one and retires it.
+        # The live rows first, then what they inherit, then the retirement:
+        # interrupted anywhere, the next run still finds the old code beside
+        # a known live one and finishes -- the copy only fills what is
+        # missing. Copied after the retirement, an interruption between the
+        # two would leave the pair unfindable and the copy never made.
         database.save_instruments(plan["added"])
-        _retire_instruments([r["ins_code"] for r, _ in plan["retired"]])
+        if plan["retired"]:
+            plan["copies"] = _carry_over(plan["retired"], write=True)
+            _retire_instruments([r["ins_code"] for r, _ in plan["retired"]])
         plan["applied"] = True
 
     if verbose or plan["applied"]:
@@ -248,6 +307,123 @@ def reconcile_universe(snapshot=None, apply=False, verbose=True):
         _print_reconciliation(plan, apply, examples=8 if verbose else 0)
 
     return plan
+
+
+# What a retirement carries to the live code: the tables a LIVE reader asks
+# by ins_code -- the panel's statements and the outlook's metrics, NAV and
+# dividends (fundamental_outlook.analyse) -- with the columns that, beside
+# ins_code, identify a row. Keyed so, a copy is a second row, not a move.
+CARRIED_MARKET = (("codal_financials", ("period_end", "period_months")),
+                  ("codal_portfolio", ("period_end",)))
+CARRIED_FUNDAMENTAL = (("metrics", ("period_end", "period_months")),
+                       ("dividends", ("fiscal_year_end",)))
+
+# Keyed by the tracing number, one row per filing: a copy cannot exist.
+# Reported, so a reader of the dry run knows they stay on the old code.
+STAYING_MARKET = ("codal_filings",)
+STAYING_FUNDAMENTAL = ("monthly_reports",)
+
+
+def _carry_over(pairs, write=False):
+    """Copy to each live code what its retired code holds and it lacks.
+
+    `pairs` is the plan's [(old row, live record)]. Rows already under the
+    live code are kept, NULL key columns included (`IS`, not the primary
+    key, which lets a NULL through twice), and nothing under the old code
+    is changed. Returns {table: rows copied}, or with `write` False the rows
+    a write would copy, plus "<table> (stays)" for what cannot be copied.
+    """
+
+    import sqlite3
+
+    import fundamental_db
+
+    counts = {}
+
+    def add(key, n):
+        counts[key] = counts.get(key, 0) + int(n or 0)
+
+    def columns(conn, table):
+        return [c[1] for c in conn.execute("PRAGMA table_info(%s)" % table)]
+
+    def copy(conn, table, keys, old, live):
+        cols = columns(conn, table)
+        if not cols:
+            return                                     # no such table here
+        others = [c for c in cols if c != "ins_code"]
+        where = ("o.ins_code = ? AND NOT EXISTS (SELECT 1 FROM %s n "
+                 "WHERE n.ins_code = ? AND %s)"
+                 % (table, " AND ".join("n.%s IS o.%s" % (k, k)
+                                        for k in keys)))
+        if write:
+            n = conn.execute(
+                "INSERT OR IGNORE INTO %s (ins_code, %s) SELECT ?, %s "
+                "FROM %s o WHERE %s"
+                % (table, ", ".join(others),
+                   ", ".join("o." + c for c in others), table, where),
+                (live, old, live)).rowcount
+        else:
+            n = conn.execute("SELECT COUNT(*) FROM %s o WHERE %s"
+                             % (table, where), (old, live)).fetchone()[0]
+        add(table, n)
+
+    def staying(conn, table, old):
+        if columns(conn, table):
+            add(table + " (stays)", conn.execute(
+                "SELECT COUNT(*) FROM %s WHERE ins_code = ?" % table,
+                (old,)).fetchone()[0])
+
+    codes = [(str(old["ins_code"]), str(new["ins_code"]), old)
+             for old, new in pairs]
+
+    database.create_database()
+
+    conn = database._connect()
+    try:
+        for old, live, row in codes:
+            # The sector is the company's, and a board move keeps it. Only
+            # into a live row without one: the exchange's own word wins.
+            if row.get("sector_name"):
+                held = conn.execute(
+                    "SELECT sector_name FROM instruments WHERE ins_code = ?",
+                    (live,)).fetchone()
+                if held is None or held[0] is None:
+                    add("sector", 1)
+                    if write:
+                        conn.execute(
+                            "UPDATE instruments SET sector_code = ?, "
+                            "sector_name = ? WHERE ins_code = ? "
+                            "AND sector_name IS NULL",
+                            (row.get("sector_code"), row["sector_name"],
+                             live))
+            for table, keys in CARRIED_MARKET:
+                copy(conn, table, keys, old, live)
+            for table in STAYING_MARKET:
+                staying(conn, table, old)
+        if write:
+            conn.commit()
+    finally:
+        conn.close()
+
+    if not fundamental_db.exists():
+        return counts
+
+    try:
+        fconn = fundamental_db._connect()
+    except sqlite3.Error:
+        return counts
+    try:
+        for old, live, _ in codes:
+            for table, keys in CARRIED_FUNDAMENTAL:
+                copy(fconn, table, keys, old, live)
+            for table in STAYING_FUNDAMENTAL:
+                staying(fconn, table, old)
+        if write:
+            fconn.commit()
+    finally:
+        fconn.close()
+
+    return counts
 
 
 def _retire_instruments(ins_codes):
@@ -271,6 +447,12 @@ def _retire_instruments(ins_codes):
         conn.commit()
     finally:
         conn.close()
+
+
+# The undo of a retirement. Every retired row was an equity: the board-move
+# test (reconcile_universe) only ever pairs equity rows.
+UNDO_RETIREMENT = ("UPDATE instruments SET is_equity = 1, kind = 'equity' "
+                   "WHERE kind = 'superseded';")
 
 
 def _print_reconciliation(plan, apply, examples=8):
@@ -298,10 +480,30 @@ def _print_reconciliation(plan, apply, examples=8):
     if examples and len(held) > examples:
         print(f"  ... and {len(held) - examples} more")
 
+    if plan.get("unreadable"):
+        print(f"  {plan['unreadable']} watch lines could not be read and "
+              f"were skipped.")
+
+    copies = plan.get("copies") or {}
+    carried = {k: v for k, v in copies.items() if not k.endswith("(stays)")}
+    stays = {k: v for k, v in copies.items() if k.endswith("(stays)")}
+    if retired:
+        verb = "Copied" if plan["applied"] else "To copy"
+        print(f"{verb} from the retired codes to the live ones (never moved): "
+              + (", ".join(f"{k} {v}" for k, v in sorted(carried.items()))
+                 or "nothing"))
+        if stays:
+            print("Staying on the retired codes, one row per filing: "
+                  + ", ".join(f"{k[:-len(' (stays)')]} {v}"
+                              for k, v in sorted(stays.items())))
+
     if not apply and (added or retired):
         print("Dry run: nothing written. Re-run with --apply to write.")
     elif plan["applied"]:
         print("Written.")
+
+    if retired:
+        print(f"Undo the retirements with: {UNDO_RETIREMENT}")
 
 
 def import_snapshot(verbose=True, progress=None):
@@ -339,9 +541,12 @@ def import_snapshot(verbose=True, progress=None):
               f"(source: {result.source}, {result.provenance}).")
 
     # The live watch is the only list here the exchange itself vouches for.
-    # A failure to reconcile must not cost the snapshot just stored.
+    # A failure to reconcile must not cost the snapshot just stored. ADD-ONLY
+    # (retire=False): a retirement is reviewed before it is made, through
+    # --repair-universe --apply, never by an unattended evening snapshot.
     try:
-        reconcile_universe(result.data, apply=True, verbose=verbose)
+        reconcile_universe(result.data, apply=True, verbose=verbose,
+                           retire=False)
     except Exception as exc:                                    # noqa: BLE001
         print(f"universe reconciliation failed: {type(exc).__name__}: {exc}")
 
@@ -406,6 +611,24 @@ TAIL_MARGIN = 5
 # Names taken from the market watch that are re-read from the history
 # endpoint as a check. One disagreement and the watch is not used at all.
 WATCH_CHECK_SAMPLE = 12
+
+# ...but only a re-read that came back LIVE is a check. Fewer live answers
+# than half the sample, and fewer than this, settle nothing either way: the
+# watch is UNVERIFIABLE. As first written (2026-11-11) the check accepted
+# the watch on one live answer in twelve and rejected it on none -- which
+# sent every name per symbol (~660 requests) at an endpoint that had just
+# failed twelve, and again after each cooldown.
+WATCH_CHECK_MIN_LIVE = 6
+
+# Why the sample check could not decide (_watch_agrees). Both defer the
+# names one session behind; only LAGGING is a success.
+LAGGING = "lagging"            # answered live, without the session's bar yet
+UNVERIFIABLE = "unverifiable"  # too few sampled names answered live at all
+
+# The first history requests of a run are a canary, the sample's included:
+# until one of them comes back live, no more than this many are made. A dead
+# or refusing endpoint is then ~15 requests a retry, not 818.
+HISTORY_CANARY = 12
 
 # `py` against our stored close: equal unless the exchange re-based the
 # reference price (an ex-date), which is exactly the row to leave to the
@@ -615,59 +838,68 @@ def _watch_bars(snapshot, codes, newest, session):
     return out
 
 
-def _watch_agrees(provider, bars, session, sample=WATCH_CHECK_SAMPLE):
-    """Re-read a sample from the history endpoint. (agrees, detail, lagging).
+# What _watch_agrees found: whether the watch can be used, why, what stops a
+# decision (None, LAGGING or UNVERIFIABLE), and the history requests it made
+# (`asked`) and how many came back live -- the run's canary counts them.
+SampleCheck = namedtuple("SampleCheck", "agrees detail wait asked live")
 
-    `lagging` is True when the endpoint has not yet published the session at
-    all -- it trails the watch by hours after the close (on 2026-10-31 it
-    still ended at 10-28 at 15:10). Then nothing can be verified, and nothing
-    can be fetched either.
+
+def _watch_agrees(provider, bars, session, sample=WATCH_CHECK_SAMPLE):
+    """Re-read a sample from the history endpoint (a SampleCheck).
+
+    `wait` is LAGGING when the endpoint answered without the session -- it
+    trails the watch by hours after the close (on 2026-10-31 it still ended
+    at 10-28 at 15:10) -- and UNVERIFIABLE when too few of the sample came
+    back live to say anything (WATCH_CHECK_MIN_LIVE). Either way nothing can
+    be verified, and fetching per symbol would buy nothing: the names are
+    deferred. Only a decided check carries `wait` None: agreement, which
+    needs that many live comparisons, or a live disagreement.
     """
 
     import random
 
     if not bars:
-        return True, "nothing taken from the watch", False
+        return SampleCheck(True, "nothing taken from the watch", None, 0, 0)
 
     codes = sorted(bars)
     picked = random.Random(session).sample(codes, min(sample, len(codes)))
 
     results = provider.get_histories(picked, count=3)
 
-    compared = 0
+    # A stored copy served by the offline floor has no new bar, and would read
+    # as "the endpoint has not published yet"; a failure says nothing at all.
+    # Neither is a check, and too few real ones cannot vouch for -- or
+    # condemn -- a watch of six hundred names.
+    live = [code for code in picked if _live(results.get(code))]
+    need = min(WATCH_CHECK_MIN_LIVE, (len(picked) + 1) // 2)
 
-    for code in picked:
-        result = results.get(code)
+    if len(live) < need:
+        return SampleCheck(False, "%d of %d sampled names came back live, %d "
+                           "needed" % (len(live), len(picked), need),
+                           UNVERIFIABLE, len(picked), len(live))
 
-        # A stored copy served by the offline floor has no new bar, and would
-        # read as "the endpoint has not published yet" -- deferring every
-        # name over what was a network failure.
-        if not _live(result):
-            continue
-
-        frame = result.data
+    for code in live:
+        frame = results[code].data
         match = frame[frame["date"].dt.strftime("%Y-%m-%d") == session]
 
         if match.empty:
-            return False, ("%s: the history endpoint has no %s bar yet"
-                           % (code, session)), True
+            return SampleCheck(False, "%s: the history endpoint has no %s bar "
+                               "yet" % (code, session), LAGGING, len(picked),
+                               len(live))
 
         mine = bars[code].iloc[0]
         theirs = match.iloc[-1]
 
         for column in ("close", "volume"):
             if abs(float(theirs[column]) - float(mine[column])) > 0.5:
-                return False, ("%s %s: watch %s, history %s"
-                               % (code, column, mine[column],
-                                  theirs[column])), False
+                return SampleCheck(False, "%s %s: watch %s, history %s"
+                                   % (code, column, mine[column],
+                                      theirs[column]), None, len(picked),
+                                   len(live))
 
-        compared += 1
-
-    if not compared:
-        return False, "no sample name could be re-read", False
-
-    return (True, "%d of %d sampled names agree" % (compared, len(picked)),
-            False)
+    return SampleCheck(True, "%d of %d sampled names agree"
+                       % (len(live), len(picked)), None, len(picked),
+                       len(live))
 
 
 def update_history(full_count=300, verbose=True, progress=None):
@@ -686,8 +918,14 @@ def update_history(full_count=300, verbose=True, progress=None):
     It used to be the last case for every equity on every run: 818 requests
     for 300 bars each, about five minutes, to add one row per name.
 
-    Returns a dict of counts; `ok` is False only when nothing could be stored
-    and something was owed.
+    A host that does not answer costs a handful of requests, not a sweep:
+    with neither the overview nor the watch the run stops before any history
+    request, and the first history requests are a canary (HISTORY_CANARY).
+
+    Returns a dict of counts; `ok` is False when something was owed and
+    nothing could be stored, and whenever the sample check could not be made
+    (UNVERIFIABLE) -- so bootstrap retries after its cooldown instead of
+    reading the deferral as a fetch.
     """
 
     import market_session
@@ -701,7 +939,7 @@ def update_history(full_count=300, verbose=True, progress=None):
     codes = [str(r["ins_code"]) for r in rows]
 
     stats = {"watch": 0, "tail": 0, "full": 0, "failed": 0, "current": 0,
-             "session": None, "notes": []}
+             "unasked": 0, "session": None, "notes": []}
 
     def note(message):
         stats["notes"].append(message)
@@ -720,12 +958,18 @@ def update_history(full_count=300, verbose=True, progress=None):
     # are judged by. Updated below as bars are stored.
     traded = _traded_dates(codes)
 
+    # Requests this run made: the overview, watch and index calls, and the
+    # history requests with how many of them came back live (the canary).
+    calls = [0]
+    probe = {"asked": 0, "live": 0}
+
     # One call decides whether this run costs ~13 requests or ~800, so a
     # transient failure on it (an HTTPError was seen 2026-10-31, gone on the
     # next try) is retried before falling back.
     session_int, state = None, None
 
     for attempt in range(3):
+        calls[0] += 1
         try:
             session_int, state = market_session.exchange_session(provider)
             break
@@ -756,9 +1000,23 @@ def update_history(full_count=300, verbose=True, progress=None):
     from_watch = {}
     deferred = set()
     snapshot = None
+    unverified = False
+
+    def finish(stored_ok):
+        stats["deferred"] = len(deferred)
+        stats["absent"] = len(absent)
+        stats["ok"] = stored_ok and not unverified
+        note("history: %d current, %d from the market watch, %d by tail "
+             "fetch, %d full, %d failed, %d not asked (%d requests instead "
+             "of %d)"
+             % (stats["current"], stats["watch"], stats["tail"],
+                stats["full"], stats["failed"], stats["unasked"],
+                calls[0] + probe["asked"], len(codes)))
+        return stats
 
     if owed:
         report(0, 1, "reading the market watch")
+        calls[0] += 1
         snapshot = _only_live(provider.get_market_snapshot())
         if not snapshot.ok:
             note("market watch unreadable: %s" % snapshot.error)
@@ -782,6 +1040,19 @@ def update_history(full_count=300, verbose=True, progress=None):
                  "the last %d days and not traded since are skipped"
                  % (len(unlisted), len(absent), ABSENT_RECHECK_DAYS))
 
+    # ---- an exchange that does not answer -----------------------------------
+    # No overview and no watch: nothing says what is owed, and a host that
+    # refused both refuses a request per name as well. Until 2026-11-11 this
+    # went on to ask every name per symbol -- ~818 requests, each with its
+    # transport retries -- and, a stored copy no longer counting as a fetch,
+    # did it again after every RETRY_COOLDOWN.
+    if session is None and snapshot is not None and not snapshot.ok:
+        stats["unasked"] = len(owed) + len(fresh)
+        note("neither the market overview nor the market watch answered -- "
+             "no history requested; %d names wait for the next attempt"
+             % stats["unasked"])
+        return finish(False)
+
     if owed and session and closed:
         tedpix = config.INDICES["TEDPIX"]["insCode"]
 
@@ -795,6 +1066,7 @@ def update_history(full_count=300, verbose=True, progress=None):
         if session not in dates:
             # The index is the calendar: it is what says which session came
             # before this one. One call refreshes the whole series.
+            calls[0] += 1
             result = provider.get_index_history(tedpix)
             if _live(result):
                 database.save_index_history(tedpix, result.data)
@@ -816,20 +1088,31 @@ def update_history(full_count=300, verbose=True, progress=None):
             if snapshot.ok:
                 from_watch = _watch_bars(snapshot.data, one_behind, newest,
                                          session)
-                agrees, detail, lagging = _watch_agrees(provider, from_watch,
-                                                        session)
+                check = _watch_agrees(provider, from_watch, session)
+                probe["asked"] += check.asked
+                probe["live"] += check.live
                 note("market watch: %d of %d one-session-behind names usable; "
-                     "check: %s" % (len(from_watch), len(one_behind), detail))
-                if lagging:
+                     "check: %s" % (len(from_watch), len(one_behind),
+                                    check.detail))
+                if check.wait:
                     # Fetching these per symbol would cost a request each and
-                    # return nothing new. They are owed one bar, which the
-                    # next run collects once the endpoint has it.
+                    # return nothing new -- or, the sample unanswered, ask
+                    # ~660 times an endpoint that has just failed it. They
+                    # are owed one bar, which the next run collects.
                     deferred = set(one_behind)
                     from_watch = {}
-                    note("history endpoint has not published %s yet -- %d "
-                         "names one session behind wait for the next run"
-                         % (session, len(deferred)))
-                elif not agrees:
+                    if check.wait == UNVERIFIABLE:
+                        unverified = True
+                        note("history endpoint answered too little of the "
+                             "sample to check the watch -- %d names one "
+                             "session behind wait; the step reports failure "
+                             "and is retried after its cooldown"
+                             % len(deferred))
+                    else:
+                        note("history endpoint has not published %s yet -- "
+                             "%d names one session behind wait for the next "
+                             "run" % (session, len(deferred)))
+                elif not check.agrees:
                     note("market watch REJECTED -- every name goes per-symbol")
                     from_watch = {}
         else:
@@ -848,17 +1131,15 @@ def update_history(full_count=300, verbose=True, progress=None):
     # ---- per symbol, sized to the gap ---------------------------------------
 
     today = date.today()
-    by_count = {}
+    work = []                                   # (code, bars to request)
 
     for code in owed:
         if code in from_watch or code in deferred or code in absent:
             continue
         gap = _weekdays_after(newest[code][0], today)
-        count = min(full_count, gap + TAIL_MARGIN)
-        by_count.setdefault(count, []).append(code)
+        work.append((code, min(full_count, gap + TAIL_MARGIN)))
 
-    if fresh:
-        by_count.setdefault(full_count, []).extend(fresh)
+    work.extend((code, full_count) for code in fresh)
 
     # A bar for a session that has not closed is a draft. Stored, it would
     # make its name read as current on the next run and never be fetched
@@ -866,32 +1147,62 @@ def update_history(full_count=300, verbose=True, progress=None):
     draft = (None if closed
              else market_session.tehran_now().strftime("%Y-%m-%d"))
 
-    pending = sum(len(v) for v in by_count.values())
+    pending = len(work)
     done_so_far = [0]
     swept = []
 
     def on_item(done, total, _item):
         report(done_so_far[0] + done, pending, "fetching missing bars")
 
-    for count, group in sorted(by_count.items()):
-        results = provider.get_histories(group, count=count, progress=on_item)
-        done_so_far[0] += len(group)
+    def fetch(batch):
+        by_count = {}
+        for code, count in batch:
+            by_count.setdefault(count, []).append(code)
 
-        for code, result in results.items():
-            frame = result.data if _live(result) else None
+        for count, group in sorted(by_count.items()):
+            results = provider.get_histories(group, count=count,
+                                             progress=on_item)
+            done_so_far[0] += len(group)
+            probe["asked"] += len(group)
 
-            if frame is not None and draft is not None:
-                frame = frame[frame["date"].dt.strftime("%Y-%m-%d") < draft]
+            for code, result in results.items():
+                live = _live(result)
+                probe["live"] += live
+                frame = result.data if live else None
 
-            if frame is not None and database.save_history(code, frame) > 0:
-                stats["full" if code in fresh else "tail"] += 1
-                day = _newest_trade(frame)
-                if day and day > traded.get(code, ""):
-                    traded[code] = day
-                if listed is not None and code not in listed:
-                    swept.append(code)
-            else:
-                stats["failed"] += 1
+                if frame is not None and draft is not None:
+                    frame = frame[frame["date"].dt.strftime("%Y-%m-%d")
+                                  < draft]
+
+                if frame is not None and database.save_history(code,
+                                                               frame) > 0:
+                    stats["full" if code in fresh else "tail"] += 1
+                    day = _newest_trade(frame)
+                    if day and day > traded.get(code, ""):
+                        traded[code] = day
+                    if listed is not None and code not in listed:
+                        swept.append(code)
+                else:
+                    stats["failed"] += 1
+
+    # The canary. Until a history request of this run has come back live --
+    # the verification sample's requests count -- at most HISTORY_CANARY are
+    # made, the names likeliest to answer, the ones that traded last, first.
+    # A refusing endpoint then costs a dozen requests a retry, not one per
+    # name; an unanswered sample of twelve has already spent them.
+    if work and not probe["live"]:
+        work.sort(key=lambda item: traded.get(item[0], ""), reverse=True)
+        room = max(0, HISTORY_CANARY - probe["asked"])
+        fetch(work[:room])
+        work = work[room:]
+        if work and not probe["live"]:
+            stats["unasked"] = len(work)
+            note("none of the %d history requests made came back live -- "
+                 "%d names not asked; the next attempt starts again"
+                 % (probe["asked"], len(work)))
+            work = []
+
+    fetch(work)
 
     if swept:
         # Off the watch is not proof of not trading, so a name is marked only
@@ -908,18 +1219,8 @@ def update_history(full_count=300, verbose=True, progress=None):
 
     stored = stats["watch"] + stats["tail"] + stats["full"]
 
-    stats["deferred"] = len(deferred)
-    stats["absent"] = len(absent)
-    stats["ok"] = stored > 0 or (not set(owed) - deferred - absent
-                                 and not fresh)
-
-    note("history: %d current, %d from the market watch, %d by tail fetch, "
-         "%d full, %d failed (%d requests instead of %d)"
-         % (stats["current"], stats["watch"], stats["tail"], stats["full"],
-            stats["failed"], pending + (2 if from_watch else 1)
-            + min(WATCH_CHECK_SAMPLE, len(from_watch)), len(codes)))
-
-    return stats
+    return finish(stored > 0 or (not set(owed) - deferred - absent
+                                 and not fresh))
 
 
 def import_indices(verbose=True, progress=None):
@@ -1050,12 +1351,20 @@ def import_client_type(limit=None, ins_codes=None, verbose=True, progress=None,
     return stored
 
 
-def import_sectors(limit=None, verbose=True, progress=None):
+def import_sectors(limit=None, verbose=True, progress=None,
+                   missing_only=False):
     """Attach a sector to every equity, one instrument-info call each.
 
     This is the expensive import -- one request per symbol rather than one for
     the whole market -- but there is no bulk route to sector membership, and
     without it there is no such thing as a sector view.
+
+    `missing_only` asks only the equities without one (sector_name NULL):
+    bootstrap's mode. A company's sector does not move, so a new listing is
+    one request, not a refetch of every equity: adding 98 names on
+    2026-11-11 would have cost ~900 requests once coverage fell under the
+    90% line, and a listing that left it above never got a sector at all.
+    Nothing missing, no request.
     """
 
     provider = get_provider()
@@ -1063,6 +1372,14 @@ def import_sectors(limit=None, verbose=True, progress=None):
     report = _reporter(progress)
 
     rows = database.load_instruments(equities_only=True)
+
+    if missing_only and rows:
+        rows = [r for r in rows if r.get("sector_name") is None]
+        if not rows:
+            if verbose:
+                print("Every equity has a sector; nothing to fetch.")
+            return database.sector_coverage()["with_sector"]
+
     ins_codes = [r["ins_code"] for r in rows]
 
     if limit:

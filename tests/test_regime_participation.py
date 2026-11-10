@@ -100,6 +100,21 @@ class ParticipationTests(unittest.TestCase):
         self.assertEqual(regime.participation(as_of=later),
                          regime.participation())
 
+    def test_a_past_date_counts_a_listing_a_board_move_retired_since(self):
+        """seed_import.reconcile_universe retires the old code of a board
+        move (kind superseded, is_equity 0). It was the market on the dates
+        it traded; today's reading is of the live codes only."""
+
+        database.save_instruments([{
+            "ins_code": "moved", "symbol_fa": "moved", "kind": "superseded",
+            "is_equity": False}])
+        self._save("moved", [1000.0 + 5 * i for i in range(SESSIONS)])
+
+        past = regime.participation(as_of=self.dates[-1])
+
+        self.assertEqual(past["instruments"], 4)   # up, down, split, moved
+        self.assertEqual(regime.participation()["instruments"], 3)
+
     def test_detect_votes_on_the_corrected_reading(self):
         breadth = regime.participation()
 

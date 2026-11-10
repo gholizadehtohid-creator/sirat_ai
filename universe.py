@@ -104,6 +104,19 @@ def is_equity(isin, symbol="", name=""):
     return classify(isin, symbol, name)[0] == "equity"
 
 
+def _text(value):
+    """`value` if it is a string, else "".
+
+    A market-watch frame is not a list of strings. The CDN adapter emits None
+    for a line without an insID, and pandas 3 stores a missing value in a str
+    column as float NaN -- which is truthy, so `(isin or "").strip()` raised
+    AttributeError on it and took the whole reconciliation down with the one
+    line (found 2026-11-11).
+    """
+
+    return value if isinstance(value, str) else ""
+
+
 def company_code(isin):
     """The ISIN's four-character company mnemonic (IRO1KSIM0001 -> KSIM).
 
@@ -111,7 +124,7 @@ def company_code(isin):
     one thing that ties a re-issued listing to the company it was before.
     """
 
-    match = ISIN_RE.match((isin or "").strip().upper())
+    match = ISIN_RE.match(_text(isin).strip().upper())
 
     return match.group(3) if match else None
 
@@ -124,7 +137,7 @@ def exchange_spelling(symbol):
     with an empty result (codal_sync.codal_symbol), so it is not used here.
     """
 
-    text = (symbol or "").translate(persian.INVISIBLE)
+    text = _text(symbol).translate(persian.INVISIBLE)
 
     return text.translate(_ARABIC_LETTERS).replace(" ", "").strip()
 
@@ -133,15 +146,22 @@ def watch_record(ins_code, symbol, name, isin):
     """An instruments row for a market-watch line that is a main share.
 
     None for anything else: a fund, a bond, a derivative, a rights issue, a
-    block-trade board of a listed company, or a line without a usable ISIN.
+    block-trade board of a listed company, or a line without a usable ISIN or
+    symbol. A missing field may arrive as None or NaN (_text).
     """
 
-    isin = (isin or "").strip().upper()
+    isin = _text(isin).strip().upper()
+    symbol, name = _text(symbol), _text(name)
     code = str(ins_code or "").strip()
 
     match = ISIN_RE.match(isin)
 
     if not match or match.group(4) != MAIN_SHARE_ISSUE or not code.isdigit():
+        return None
+
+    # No symbol, nothing to find it by: every lookup and the Codal search go
+    # by symbol. (Uncoerced, persian.normalize would have spelled NaN "nan".)
+    if not persian.normalize_symbol(symbol):
         return None
 
     kind, board = classify(isin, symbol, name)

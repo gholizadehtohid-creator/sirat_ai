@@ -91,11 +91,18 @@ class PointInTimeData(object):
     # ==============================
 
     def instruments(self):
-        """{ins_code: {symbol, sector}} for every equity, loaded once."""
+        """{ins_code: {symbol, sector}} for every equity, loaded once.
+
+        With the listings a board move retired (database.load_instruments,
+        `with_superseded`): a past date sees the company under the code it
+        traded under then. Its trading ends at the move, where the staleness
+        filters drop it like any halted name.
+        """
 
         if self._instruments is None:
 
-            rows = database.load_instruments(equities_only=True)
+            rows = database.load_instruments(equities_only=True,
+                                             with_superseded=True)
 
             self._instruments = {
                 str(row["ins_code"]): {
