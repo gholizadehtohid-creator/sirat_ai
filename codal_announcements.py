@@ -4,9 +4,11 @@
     python codal_announcements.py --backfill-dps [--limit N]
                                                  last annual AGM's DPS, one
                                                  search per equity lacking it
+                                                 or holding an older year's
     python codal_announcements.py --repair-stale-dps [--apply]
-                                                 re-open companies holding an
-                                                 older year's DPS (dry run)
+                                                 companies holding an older
+                                                 year's DPS (dry run; --apply
+                                                 marks them due)
 
 The quarter-hour -- now two-hourly -- feed watch (codal_watch.py) already
 reads every letter Codal publishes and kept only statements (ن-10) and
@@ -32,11 +34,13 @@ is a server-rendered form whose rows carry a hidden PropertyName cell --
 attribute, e.g. فولاد FY1404: DPS 55 rials, capital 1,935,000,000 (million
 rials). The machine name is what is matched, never the Persian label.
 An amendment (اصلاحیه) is published later and replaces the original for the
-same fiscal year.
+same fiscal year. A recess notice (اعلام تنفس) carries the code but decides
+nothing: the meeting adjourned.
 """
 
 import argparse
 import re
+import sqlite3
 import sys
 from datetime import datetime, timezone
 
@@ -63,6 +67,7 @@ KIND_LABELS = {
 }
 
 ANNUAL_AGM_DECISIONS = "ن-52"
+RECESS = "تنفس"               # "(اعلام تنفس)" in an annual-AGM title
 
 KIND_OF = {persian.normalize(code): kind
            for kind, codes in KINDS.items() for code in codes}
@@ -95,6 +100,14 @@ def ensure_tables():
             ins_code TEXT, fiscal_year_end TEXT, dps REAL, capital REAL,
             tracing_no TEXT, published_at TEXT, stored_at TEXT,
             PRIMARY KEY (ins_code, fiscal_year_end));
+        -- The DPS backfill's record of what it has read (stale_dividends):
+        -- due = 0 once it has read a company's decisions, fiscal_year_end
+        -- the newest it found, so a decision without a DPS row is not
+        -- fetched again every run; due = 1 when --repair-stale-dps --apply
+        -- marks the company to be read again regardless.
+        CREATE TABLE IF NOT EXISTS dividend_reread (
+            ins_code TEXT PRIMARY KEY, fiscal_year_end TEXT, due INTEGER,
+            updated_at TEXT);
     """)
     conn.commit()
     conn.close()
@@ -129,6 +142,52 @@ def parse_dividend(html):
 def fiscal_year_end(title):
     match = _FISCAL_END.search(persian.normalize(title or ""))
     return match.group(1) if match else None
+
+
+def is_recess(title):
+    return RECESS in persian.normalize(title or "")
+
+
+def decision_years(titles):
+    """{fiscal year end: months covered} of a company's annual-AGM decisions.
+
+    A recess notice is left out: کیبیسی's newest ن-52 is "...منتهی به
+    1403/09/30(اعلام تنفس)", and counting it as a decision made its FY1402
+    DPS look stale (2026-11-11). A title that does not say its months is
+    taken as a year, as 1,493 of the 1,512 on file that day were.
+    """
+
+    import financials
+
+    years = {}
+    for title in titles:
+        year = fiscal_year_end(title)
+        if year and not is_recess(title):
+            years[year] = max(years.get(year, 0),
+                              financials.period_months(title) or 12)
+    return years
+
+
+def years_to_read(years):
+    """The decision years that can hold the latest DPS, in the order to try.
+
+    The newest decision's year; and when that covers less than 12 months --
+    a transitional period after the fiscal year end moved: وامیر's newest is
+    "دوره 3 ماهه منتهی به 1405/03/31", settled "no DividendPerShare row" --
+    the newest 12-month year before it, for when the short one carries no
+    DPS. Its FY1404 decision (1574028, amended by 1578016) is on file.
+    """
+
+    if not years:
+        return []
+    newest = max(years)
+    order = [newest]
+    if years[newest] < 12:
+        full = [year for year, months in years.items()
+                if months >= 12 and year < newest]
+        if full:
+            order.append(max(full))
+    return order
 
 
 # ==============================
@@ -315,7 +374,8 @@ def _agm_letters(client, symbol):
 
 
 def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
-    """The newest annual AGM's DPS for every equity that has none stored.
+    """The newest annual AGM's DPS for every equity that has none stored,
+    or an older year's than the newest decision on file (stale_dividends).
 
     Newest-published letter first: for its fiscal year it is the amendment
     if there is one. A refused search skips that company (the next run
@@ -335,9 +395,14 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
     pace = codal_monthly.Pacer("dps", verbose)
     deadline = time.monotonic() + hours * 3600
     have = latest_dividends()
+    # A company with a DPS stored was never searched again, so 17 showed a
+    # dividend one to three years old next to a newer decision on file
+    # (2026-11-11). Those are due too -- their rows stay where they are.
+    stale = stale_dividends()
     halted = database.halted_codes()
     todo = [r for r in database.load_instruments(equities_only=True)
-            if str(r["ins_code"]) not in have and str(r["ins_code"]) not in halted]
+            if (str(r["ins_code"]) not in have or str(r["ins_code"]) in stale)
+            and str(r["ins_code"]) not in halted]
     if limit:
         todo = todo[:limit]
 
@@ -363,31 +428,40 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
             pace(True)
             continue
         pace(False)
-        # The newest FISCAL YEAR's letters only (an amendment, then the
+        # The newest decision's FISCAL YEAR only (an amendment, then the
         # original), not simply the newest-published letter. Falling
         # through to an older year after a "no DPS", or taking an older
         # year's late amendment (دفرا: FY1403's, published after FY1404's
-        # decision), stored that year's DPS as the company's latest -- and
-        # a company with a DPS is never searched again: 17 showed a
-        # dividend one to three years old next to a newer decision on file
-        # (2026-11-11). With none for the newest year it stays due.
-        newest = max((fiscal_year_end(letter.get("title")) or ""
-                      for letter in letters), default="")
-        for letter in letters:
-            if not letter.get("tracing_no"):
-                continue
-            if (fiscal_year_end(letter.get("title")) or "") != newest:
-                continue
-            outcome = handle(client, letter, inst)
-            if outcome is None:                 # the page itself was refused
-                refused += 1
-                pace(True)
+        # decision), stored that year's DPS as the company's latest. The
+        # one way down is years_to_read's: a short transitional year
+        # without a DPS gives way to the 12-month year before it. A recess
+        # notice is no decision and is not read. With nothing for those
+        # years the company stays as it was.
+        letters = [letter for letter in letters if letter.get("tracing_no")
+                   and not is_recess(letter.get("title"))]
+        years = years_to_read(decision_years(
+            letter.get("title") for letter in letters))
+        found = turned_away = False
+        for year in years:
+            for letter in letters:
+                if fiscal_year_end(letter.get("title")) != year:
+                    continue
+                outcome = handle(client, letter, inst)
+                if outcome is None:             # the page itself was refused
+                    refused += 1
+                    pace(True)
+                    turned_away = True
+                    break
+                if outcome.startswith("stored (DPS"):
+                    stored += 1
+                    found = True
+                    if verbose:
+                        print("  + %s %s" % (symbol, outcome), flush=True)
+                    break                   # newest fiscal year is enough
+            if found or turned_away:
                 break
-            if outcome.startswith("stored (DPS"):
-                stored += 1
-                if verbose:
-                    print("  + %s %s" % (symbol, outcome), flush=True)
-                break                       # newest fiscal year is enough
+        if not turned_away:
+            _read_through(str(inst["ins_code"]), years[0] if years else "")
     if verbose:
         print("dps: %d companies searched, %d dividends stored, %d refused"
               % (searched, stored, refused), flush=True)
@@ -395,12 +469,31 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
             "stopped": stopped}
 
 
-def stale_dividends():
-    """{ins_code: (newest decision's fiscal year, [stored rows])} for every
-    company whose stored DPS is for an older fiscal year than an annual-AGM
-    decision on file -- the older-year fall-through backfill_dividends no
-    longer does. Decisions on file: the announcements table, and the letter
-    index the per-company sync fills (sirat_market.db)."""
+def _read_through(ins_code, year):
+    """The backfill has read `ins_code`'s decisions down from `year`."""
+
+    conn = fundamental_db._connect()
+    conn.execute("INSERT OR REPLACE INTO dividend_reread VALUES (?, ?, 0, ?)",
+                 (ins_code, year, _now()))
+    conn.commit()
+    conn.close()
+
+
+def stale_dividends(include_read=False):
+    """{ins_code: (decision year, [stored rows])} for every company whose
+    newest stored DPS is for an older fiscal year than the newest
+    annual-AGM decision on file, and that the backfill is due to read.
+
+    The decision year is years_to_read's: recess notices left out, and a
+    short newest year read without a DPS gives way to the 12-month year
+    before it. Not due: a company whose decisions the backfill has already
+    read down from that year (dividend_reread, due 0) -- a decision whose
+    form has no DPS row would otherwise be fetched again on every run --
+    unless --repair-stale-dps --apply has marked it (due 1). With
+    `include_read`, those read ones too: what the repair lists and marks.
+    Decisions on file: the announcements table, and the letter index the
+    per-company sync fills (sirat_market.db).
+    """
 
     import database
 
@@ -411,6 +504,11 @@ def stale_dividends():
                           "WHERE letter_code = ?", (code,)).fetchall()
     stored = conn.execute("SELECT ins_code, fiscal_year_end, dps, tracing_no "
                           "FROM dividends").fetchall()
+    try:
+        reread = {str(r[0]): (r[1] or "", r[2]) for r in conn.execute(
+            "SELECT ins_code, fiscal_year_end, due FROM dividend_reread")}
+    except sqlite3.OperationalError:            # a read-only look, pre-table
+        reread = {}
     conn.close()
 
     database.create_database()
@@ -419,60 +517,80 @@ def stale_dividends():
                             "WHERE letter_code = ?", (code,)).fetchall()
     mconn.close()
 
-    decided = {}
+    by_company = {}
     for ins_code, title in titles:
-        year = fiscal_year_end(title)
-        if year and year > decided.get(str(ins_code), ""):
-            decided[str(ins_code)] = year
+        by_company.setdefault(str(ins_code), []).append(title)
 
     rows = {}
     for row in stored:
         rows.setdefault(str(row[0]), []).append(row)
 
-    return {ins_code: (decided[ins_code], held)
-            for ins_code, held in rows.items()
-            if ins_code in decided
-            and max(r[1] or "" for r in held) < decided[ins_code]}
+    out = {}
+    for ins_code, held in rows.items():
+        years = years_to_read(decision_years(by_company.get(ins_code, ())))
+        if not years:
+            continue
+        read_to, due = reread.get(ins_code, ("", None))
+        have = {r[1] for r in held}
+        year = years[0]
+        if len(years) > 1 and year not in have and due == 0 \
+                and read_to >= year:
+            year = years[1]                     # the short year had none
+        if max(r[1] or "" for r in held) >= year:
+            continue
+        if due == 0 and read_to >= year and not include_read:
+            continue                            # read; it carries no DPS
+        out[ins_code] = (year, held)
+    return out
 
 
 def reopen_stale_dividends(apply=False, verbose=True):
-    """Make the stale_dividends() companies due again. Dry run unless `apply`.
+    """List the stale_dividends() companies; with `apply`, mark them due.
 
-    A company with any DPS stored is never searched again, so the older
-    year's rows are deleted; the next `--backfill-dps` run then reads only
-    the newest year's decision. Idempotent.
+    Nothing is deleted. The first version deleted their older years' rows
+    so that the backfill, which skipped any company with a DPS, would
+    search them again -- rows right for their own year, and a company whose
+    newest decision turned out to carry no DPS (وامیر's 3-month year) was
+    left with none at all (2026-11-11). The backfill now takes stale
+    companies by itself; a mark makes it read one again even if it has read
+    it before. Dry run unless `apply`. Idempotent.
     """
 
     import database
 
-    stale = stale_dividends()
+    stale = stale_dividends(include_read=True)
+    due = stale_dividends()
     names = {str(r["ins_code"]): r.get("symbol_fa")
              for r in database.load_instruments(equities_only=False)}
-    rows = sum(len(held) for _year, held in stale.values())
 
     if verbose:
-        print("dps: %d companies hold an older fiscal year's DPS than an "
-              "annual-AGM decision on file (%d rows)%s"
-              % (len(stale), rows, "" if apply else " -- dry run, nothing "
-                 "written; --apply deletes them"), flush=True)
+        print("dps: %d companies hold an older fiscal year's DPS than the "
+              "newest annual-AGM decision on file; the next --backfill-dps "
+              "reads that decision for %d of them%s"
+              % (len(stale), len(due), "" if apply else " -- dry run, "
+                 "nothing written; --apply marks them all due, nothing is "
+                 "deleted"), flush=True)
         for ins_code, (year, held) in sorted(stale.items()):
             newest_held = max(held, key=lambda r: r[1] or "")
-            print("  %-10s %s  stored FY %s DPS %s  | newest decision FY %s"
+            print("  %-10s %s  stored FY %s DPS %s  | newest decision FY %s%s"
                   % (names.get(ins_code) or "?", ins_code, newest_held[1],
-                     newest_held[2], year), flush=True)
+                     newest_held[2], year, "" if ins_code in due else
+                     "  (read already: no DPS on it)"), flush=True)
 
     if apply and stale:
+        ensure_tables()
         conn = fundamental_db._connect()
-        for ins_code, (year, _held) in stale.items():
-            conn.execute("DELETE FROM dividends WHERE ins_code = ? AND "
-                         "fiscal_year_end < ?", (ins_code, year))
+        conn.executemany(
+            "INSERT OR REPLACE INTO dividend_reread VALUES (?, ?, 1, ?)",
+            [(ins_code, year, _now())
+             for ins_code, (year, _held) in stale.items()])
         conn.commit()
         conn.close()
         if verbose:
-            print("dps: deleted; now run  python codal_announcements.py "
+            print("dps: marked due; now run  python codal_announcements.py "
                   "--backfill-dps", flush=True)
 
-    return {"companies": len(stale), "rows": rows, "applied": bool(apply)}
+    return {"companies": len(stale), "due": len(due), "applied": bool(apply)}
 
 
 def report():
@@ -504,8 +622,9 @@ def main(argv=None):
                         help="list companies whose DPS is for an older fiscal "
                              "year than an AGM decision on file (dry run)")
     parser.add_argument("--apply", action="store_true",
-                        help="with --repair-stale-dps: delete those rows so "
-                             "the next --backfill-dps reads the newest year")
+                        help="with --repair-stale-dps: mark them due, so the "
+                             "next --backfill-dps reads the newest decision "
+                             "even if it has read it before (deletes nothing)")
     args = parser.parse_args(argv)
     if args.repair_stale_dps:
         reopen_stale_dividends(apply=args.apply)

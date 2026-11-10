@@ -36,6 +36,14 @@ NOT_THE_FORM = ("<html><head><title>Request Rejected</title></head><body>The "
 
 OLDER_YEAR = "تصمیمات مجمع عمومی عادی سالیانه دوره ۱۲ ماهه منتهی به ۱۴۰۳/۱۲/۳۰"
 
+# وامیر's newest ن-52 (2026-11-11): a transitional 3 months after its fiscal
+# year end moved, settled "no DividendPerShare row".
+SHORT_YEAR = "تصمیمات مجمع عمومی عادی سالیانه دوره ۳ ماهه منتهی به ۱۴۰۵/۰۳/۳۱"
+
+# کیبیسی's: the meeting adjourned; nothing was decided.
+RECESS = ("تصمیمات مجمع عمومی عادی سالیانه دوره ۱۲ ماهه منتهی به "
+          "۱۴۰۵/۱۲/۲۹(اعلام تنفس)")
+
 
 def letter(tracing, published, code="ن-52",
            title="تصمیمات مجمع عمومی عادی سالیانه دوره ۱۲ ماهه منتهی به ۱۴۰۴/۱۲/۲۹"):
@@ -146,23 +154,42 @@ class StoreTests(unittest.TestCase):
 class BackfillTests(unittest.TestCase):
 
     def setUp(self):
+        import database
+
+        self.database = database
+        handle, self.market = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
         handle, self.path = tempfile.mkstemp(suffix=".db")
         os.close(handle)
         os.unlink(self.path)
+        self.original = database.DATABASE_NAME
+        database.DATABASE_NAME = self.market
         self.previous = fundamental_db.set_path(self.path)
+        database.create_database()
         a.ensure_tables()
 
     def tearDown(self):
+        self.database.DATABASE_NAME = self.original
         fundamental_db.set_path(self.previous)
-        if os.path.exists(self.path):
-            os.unlink(self.path)
+        for path in (self.market, self.path):
+            if os.path.exists(path):
+                os.unlink(path)
 
     def run_backfill(self, pages, letters):
+        """`pages`: served in request order, or {tracing_no: page}."""
+
         instruments = [{"ins_code": "1", "symbol_raw": "x"},
                        {"ins_code": "2", "symbol_raw": "y"}]
-        client = mock.Mock()
-        client._get.side_effect = lambda url, **kw: mock.Mock(
-            content=pages.pop(0).encode("utf-8"))
+        self.client = client = mock.Mock()
+
+        def get(url, **_kw):
+            if isinstance(pages, dict):
+                page = pages[url.rsplit("=", 1)[-1]]
+            else:
+                page = pages.pop(0)
+            return mock.Mock(content=page.encode("utf-8"))
+
+        client._get.side_effect = get
         with mock.patch.object(a, "_agm_letters", side_effect=letters), \
                 mock.patch("time.sleep"), \
                 mock.patch("database.load_instruments", return_value=instruments), \
@@ -170,6 +197,14 @@ class BackfillTests(unittest.TestCase):
                 mock.patch.object(a.codal, "archive_read", return_value=None), \
                 mock.patch.object(a.codal, "archive_write"):
             return a.backfill_dividends(verbose=False, client=client)
+
+    def stored_years(self, ins_code):
+        conn = fundamental_db._connect()
+        years = {r[0]: r[1] for r in conn.execute(
+            "SELECT fiscal_year_end, dps FROM dividends WHERE ins_code = ?",
+            (ins_code,))}
+        conn.close()
+        return years
 
     def test_a_letter_without_dps_falls_through_to_the_next(self):
         # Two letters for one fiscal year -- an amendment without the row,
@@ -225,9 +260,67 @@ class BackfillTests(unittest.TestCase):
         self.assertNotIn("1", a.latest_dividends())
         self.assertIn("2", a.latest_dividends())
 
+    # ---- which decision is the newest (2026-11-11) -----------------------
+
+    def test_a_short_newest_year_without_dps_gives_way_to_the_12_month_one(self):
+        result = self.run_backfill(
+            {"1": FORM_WITHOUT_DPS, "2": PAGE},
+            [[letter("1", "1405/08/04 16:17:29", title=SHORT_YEAR),
+              letter("2", "1405/05/06 18:04:16"),
+              letter("3", "1404/05/05 18:23:28", title=OLDER_YEAR)], []])
+
+        self.assertEqual(result["stored"], 1)
+        self.assertEqual(self.stored_years("1"), {"1404/12/29": 55.0})
+
+    def test_a_recess_notice_is_not_read_as_the_newest_decision(self):
+        result = self.run_backfill(
+            {"1": FORM_WITHOUT_DPS, "2": PAGE},
+            [[letter("1", "1405/04/20 10:00:00", title=RECESS),
+              letter("2", "1405/04/01 16:07:12")], []])
+
+        self.assertEqual(result["stored"], 1)
+        self.assertEqual(self.stored_years("1"), {"1404/12/29": 55.0})
+        self.assertEqual(self.client._get.call_count, 1)
+
+    # ---- a DPS older than the newest decision on file ---------------------
+
+    def hold_an_older_year(self):
+        """Company 1 holds FY1403's DPS; its FY1404 decision is on file."""
+
+        a.store_dividend("1", "1403/12/30", {"dps": 40.0},
+                         letter("10", "1404/05/01 10:00:00", title=OLDER_YEAR))
+        a.store_announcement(letter("11", "1405/05/01 10:00:00"), "1", "agm")
+
+    def test_a_company_holding_an_older_year_is_searched_again(self):
+        # It used to be skipped for good: it had a DPS. Its row stays.
+        self.hold_an_older_year()
+        result = self.run_backfill(
+            {"11": PAGE},
+            [[letter("11", "1405/05/01 10:00:00"),
+              letter("10", "1404/05/01 10:00:00", title=OLDER_YEAR)], []])
+
+        self.assertEqual(result["stored"], 1)
+        self.assertEqual(self.stored_years("1"),
+                         {"1403/12/30": 40.0, "1404/12/29": 55.0})
+        self.assertEqual(a.latest_dividends()["1"]["dps"], 55.0)
+
+    def test_a_decision_read_without_dps_is_not_read_again_every_run(self):
+        self.hold_an_older_year()
+        searched = []
+
+        def letters(_client, symbol):
+            searched.append(symbol)
+            return [letter("11", "1405/05/01 10:00:00")] if symbol == "x" else []
+
+        self.run_backfill({"11": FORM_WITHOUT_DPS}, letters)
+        self.run_backfill({"11": FORM_WITHOUT_DPS}, letters)
+
+        self.assertEqual(searched.count("x"), 1)
+        self.assertEqual(self.stored_years("1"), {"1403/12/30": 40.0})
+
 
 class ReopenTests(unittest.TestCase):
-    """The repair for the 16 companies the older-year fall-through left."""
+    """The repair for the companies the older-year fall-through left."""
 
     def setUp(self):
         import database
@@ -258,18 +351,59 @@ class ReopenTests(unittest.TestCase):
             if os.path.exists(path):
                 os.unlink(path)
 
-    def test_a_dry_run_lists_and_deletes_nothing(self):
+    def rows(self):
+        conn = fundamental_db._connect()
+        rows = conn.execute("SELECT ins_code, fiscal_year_end, dps "
+                            "FROM dividends ORDER BY 1, 2").fetchall()
+        marks = conn.execute("SELECT ins_code, fiscal_year_end, due "
+                             "FROM dividend_reread ORDER BY 1").fetchall()
+        conn.close()
+        return rows, marks
+
+    def test_a_dry_run_lists_and_writes_nothing(self):
+        before = self.rows()
         result = a.reopen_stale_dividends(verbose=False)
-        self.assertEqual((result["companies"], result["rows"]), (1, 1))
-        self.assertIn("1", a.latest_dividends())
 
-    def test_apply_reopens_only_the_stale_company_once(self):
+        self.assertEqual((result["companies"], result["due"]), (1, 1))
+        self.assertEqual(self.rows(), before)
+
+    def test_apply_marks_the_stale_company_due_and_deletes_nothing(self):
+        # Deleting the older year's row left a company whose newest decision
+        # carries no DPS (وامیر) with no DPS at all.
         a.reopen_stale_dividends(apply=True, verbose=False)
-        again = a.reopen_stale_dividends(apply=True, verbose=False)
+        a.reopen_stale_dividends(apply=True, verbose=False)
 
-        self.assertNotIn("1", a.latest_dividends())
-        self.assertEqual(a.latest_dividends()["2"]["dps"], 55.0)
-        self.assertEqual(again["companies"], 0)
+        rows, marks = self.rows()
+        self.assertEqual(rows, [("1", "1403/12/30", 40.0),
+                                ("2", "1404/12/29", 55.0)])
+        self.assertEqual(marks, [("1", "1404/12/29", 1)])
+        self.assertEqual(a.latest_dividends()["1"]["dps"], 40.0)
+
+    def test_a_mark_has_a_company_read_already_read_again(self):
+        a._read_through("1", "1404/12/29")      # read: no DPS on FY1404's
+        self.assertNotIn("1", a.stale_dividends())
+        self.assertIn("1", a.stale_dividends(include_read=True))
+
+        result = a.reopen_stale_dividends(apply=True, verbose=False)
+
+        self.assertEqual((result["companies"], result["due"]), (1, 0))
+        self.assertIn("1", a.stale_dividends())
+
+    def test_a_recess_notice_is_no_newer_decision(self):
+        a.store_announcement(letter("13", "1405/06/01 10:00:00", title=RECESS),
+                             "2", "agm")
+        self.assertNotIn("2", a.stale_dividends(include_read=True))
+
+    def test_a_short_year_read_without_dps_leaves_the_12_month_year(self):
+        # Company 2 holds FY1404's DPS; its newest decision is a 3-month
+        # year. Unread, it is due; read without a DPS, FY1404 stands.
+        a.store_announcement(letter("14", "1405/08/04 16:17:29",
+                                    title=SHORT_YEAR), "2", "agm")
+        self.assertEqual(a.stale_dividends()["2"][0], "1405/03/31")
+
+        a._read_through("2", "1405/03/31")
+
+        self.assertNotIn("2", a.stale_dividends(include_read=True))
 
 
 if __name__ == "__main__":

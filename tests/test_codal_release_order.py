@@ -9,6 +9,7 @@ latest (ملت 1405/06/31 held 1614602, not its correction 1619771).
 """
 
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -201,6 +202,81 @@ class RepairTests(Stores):
         self.assertEqual(self.held()["tracing_no"], "1619771")
         self.assertEqual(self.held()["items"]["net_profit"], 120.0)
         self.assertEqual((again["superseded"], again["written"]), (0, 0))
+
+
+FULLER = {"net_profit": 120.0, "ppe": 6.0}
+
+# Enough of a statement document for codal.parse_body to split into sheets.
+DOCUMENT = ("<h2>صورت سود و زیان</h2><table><tr><td>درآمدهای عملیاتی</td>"
+            "<td>100</td></tr></table>").encode("utf-8")
+
+
+class ThinnerRepairTests(Stores):
+    """The newest release's stored parse can be thinner than the held one's:
+    129 of the 531 on 2026-11-11, most parsed in August before the extractor
+    learned ppe, capex, finance_cost and the rest."""
+
+    def setUp(self):
+        super().setUp()
+        self.archive = tempfile.mkdtemp()
+        self.patch = mock.patch.object(codal, "ARCHIVE_DIR", self.archive)
+        self.patch.start()
+        self.filing("1614602", ORIGINAL, 100.0, "1405/07/29 16:42:34")
+        self.filing("1619771", CORRECTION, 120.0, "1405/08/05 11:12:49")
+        # The original over its correction, as re-parsed in November: with
+        # a ppe line the correction's August parse lacks.
+        conn = database._connect()
+        conn.execute("UPDATE codal_financials SET tracing_no = '1614602', "
+                     "title = ?, items = ?",
+                     (ORIGINAL, '{"net_profit": 100.0, "ppe": 5.0}'))
+        conn.commit()
+        conn.close()
+
+    def tearDown(self):
+        self.patch.stop()
+        shutil.rmtree(self.archive, ignore_errors=True)
+        super().tearDown()
+
+    def filing_items(self, tracing_no):
+        return {f["tracing_no"]: f for f in
+                database.load_codal_filings("M")}[tracing_no]["items"]
+
+    def test_the_dry_run_names_what_would_be_lost_and_what_is_not_archived(self):
+        result = codal_backfill.repair_superseded(verbose=False)
+
+        self.assertEqual((result["losing_items"], result["items_lost"]),
+                         (1, {"ppe": 1}))
+        self.assertEqual((result["reparsed"], result["still_losing_items"],
+                          result["not_archived"]), (0, 1, ["1619771"]))
+        self.assertEqual(self.held()["tracing_no"], "1614602")
+
+    def test_an_archived_document_is_re_parsed_offline_and_kept_fuller(self):
+        codal.archive_write("1619771", DOCUMENT)
+        parsed = []
+
+        def parse(client, letter):
+            parsed.append(letter["tracing_no"])
+            got = client.fetch_sheets(None, archive_key=letter["tracing_no"])
+            self.assertTrue(got.ok, got.error)         # read from the archive
+            with self.assertRaises(RuntimeError):      # and never the network
+                client._get("https://codal.ir/")
+            return (dict(record(letter["tracing_no"], letter["title"], 120.0),
+                         items=dict(FULLER)), None, codal.KIND_OK)
+
+        with mock.patch.object(codal_backfill.codal_sync, "parse_letter",
+                               side_effect=parse):
+            dry = codal_backfill.repair_superseded(verbose=False)
+            self.assertEqual(self.filing_items("1619771"), {"net_profit": 120.0})
+            applied = codal_backfill.repair_superseded(apply=True, verbose=False)
+
+        self.assertEqual(parsed, ["1619771", "1619771"])
+        self.assertEqual((dry["losing_items"], dry["reparsed"],
+                          dry["still_losing_items"], dry["not_archived"]),
+                         (1, 1, 0, []))
+        self.assertEqual(applied["written"], 1)
+        self.assertEqual((self.held()["tracing_no"], self.held()["items"]),
+                         ("1619771", FULLER))
+        self.assertEqual(self.filing_items("1619771"), FULLER)
 
 
 if __name__ == "__main__":

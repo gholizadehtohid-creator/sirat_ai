@@ -212,7 +212,11 @@ def _universe():
 
 
 def _page(client, page):
-    """One page of the whole market's feed, every letter type.
+    """One page of the whole market's feed, every letter type: (letters, total).
+
+    `total` is the answer's Total, the number of letters in the whole feed,
+    or None if it did not say -- what tells the feed's real end from an
+    answer that came back empty or cut short (_read).
 
     Only PageNumber and search -- not client.SEARCH_DEFAULTS. Those sixteen
     parameters are what a company search sends, and market-wide they put
@@ -227,9 +231,14 @@ def _page(client, page):
     payload = client._get(config.CODAL_SEARCH_URL, params=params,
                           timeout=(settings.TIMEOUT_CONNECT,
                                    FEED_READ_TIMEOUT)).json()
-    return [dict(codal._letter_row(raw, raw.get("Symbol") or ""),
-                 symbol=raw.get("Symbol") or "")
-            for raw in payload.get("Letters") or []]
+    letters = [dict(codal._letter_row(raw, raw.get("Symbol") or ""),
+                    symbol=raw.get("Symbol") or "")
+               for raw in payload.get("Letters") or []]
+    try:
+        total = int(payload.get("Total"))
+    except (TypeError, ValueError):
+        total = None
+    return letters, (total if total is not None and total >= 0 else None)
 
 
 def collect(client, seen, since=None, pace=None, codes=FEEDS):
@@ -253,19 +262,14 @@ def _collect(client, seen, since=None, pace=None, codes=FEEDS):
     page = 1
     limit = None if since else MAX_PAGES_POLL
     newest, complete = None, False
+    feed = {}
 
     while limit is None or page <= limit:
-        try:
-            letters = _page(client, page)
-        except Exception as exc:                                # noqa: BLE001
-            if pace:
-                pace(codal.classify(exc) == codal.KIND_TRANSIENT)
-            print("watch: feed page %d failed: %s" % (page, exc), flush=True)
-            break
-        if pace:
-            pace(False)
+        letters = _read(client, page, pace, feed)
+        if letters is None:
+            break                       # a failed page claims nothing
         if not letters:
-            complete = True
+            complete = True             # the end of the feed, by its Total
             break
         newest = _later(newest, *_stamps(letters))
 
@@ -324,15 +328,44 @@ def _catch_up(client, seen, since, pace):
     return fresh, None
 
 
-def _read(client, page, pace):
-    """One page of the feed, or None if the request failed."""
+def _read(client, page, pace, feed=None):
+    """One page of the feed, whole: its letters, [] past the feed's end, or
+    None if the read failed.
+
+    A page holding fewer than PAGE_SIZE letters is the end of the feed only
+    where the answer's Total puts the end; anywhere else an empty or short
+    page is a failed read, and it claims nothing. Found 2026-11-11 by the
+    review: an empty page was taken for the end of the feed, and a short
+    one for a whole page, so an HTTP-200 answer that came back empty or cut
+    short -- which looks exactly like the end -- moved the complete-through
+    mark to the top and skipped the rest for good: with 3% such answers a
+    simulated recovery sweep lost 127-492 of ~2,450 letters, from the
+    bottom of its hole up, while the log said "complete through". The real
+    end is thousands of pages back and is never reached in practice.
+
+    `feed` keeps the largest Total read in this pass. The feed only grows,
+    so an empty answer's "Total: 0" cannot move the end up to it. Without a
+    Total at all, only a full page counts.
+    """
 
     try:
-        letters = _page(client, page)
+        letters, total = _page(client, page)
     except Exception as exc:                                    # noqa: BLE001
         if pace:
             pace(codal.classify(exc) == codal.KIND_TRANSIENT)
         print("watch: feed page %d failed: %s" % (page, exc), flush=True)
+        return None
+    feed = {} if feed is None else feed
+    if total is not None:
+        feed["total"] = max(total, feed.get("total") or 0)
+    total = feed.get("total")
+    due = PAGE_SIZE if total is None else max(
+        0, min(PAGE_SIZE, total - (page - 1) * PAGE_SIZE))
+    if len(letters) < due:
+        if pace:
+            pace(True)
+        print("watch: feed page %d failed: %d letters where %d were due "
+              "(Total %s)" % (page, len(letters), due, total), flush=True)
         return None
     if pace:
         pace(False)
@@ -369,12 +402,16 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
                below the floor steps back, so nothing between is skipped.
 
     Every unseen watched letter on a page read is taken, whatever its date:
-    the marks decide how far to read, not what to keep.
+    the marks decide how far to read, not what to keep. A page that fails
+    (_read: an error, or an empty or short answer short of the feed's end)
+    ends the reading where it is, and the marks claim nothing past the
+    pages read whole before it.
     """
 
     through, sweep = state.get("through"), state.get("sweep")
     sweep_pages = SWEEP_PAGES if sweep_pages is None else sweep_pages
     fresh, taken = [], set()
+    feed = {}                                       # the Total, for _read
 
     def take(letters):
         for letter in letters:
@@ -386,17 +423,21 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
 
     # ---- the top of the feed, down to ground already covered ------------
     ground = sweep["top_at"] if sweep else through
-    above, reached, page, size = [], False, 0, PAGE_SIZE
+    above, reached, page = [], False, 0
     while page < MAX_PAGES_POLL:
-        letters = _read(client, page + 1, pace)
+        letters = _read(client, page + 1, pace, feed)
         if letters is None:
-            break
+            # The marks stay as they were, a sweep under way included: the
+            # letters read above the failed page are taken (and handled and
+            # marked seen), so the next poll reads the top again for the
+            # price of a few pages. This used to start a fresh sweep from
+            # here, which threw away the old one's progress and re-read its
+            # whole range (found 2026-11-11).
+            return fresh, state
         page += 1
         if not letters:
-            reached = True                          # the end of the feed
+            reached = True                  # the end of the feed, by its Total
             break
-        if page == 1:
-            size = len(letters)
         above.extend(letters)
         take(letters)
         stamps = _stamps(letters)
@@ -405,17 +446,18 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
             break
 
     if not above:
-        return fresh, state                         # page 1 failed: no news
+        return fresh, state                         # an empty feed: no news
 
     stamps = _stamps(above)
     top = {"top": above[0].get("tracing_no"),
            "top_at": _later(*stamps) or ground}
 
     if not reached:
-        # The new letters alone outran the page cap, or a page failed: what
-        # was read is covered and the rest, down to the mark, is a backlog.
-        # A sweep already under way restarts from here (its stretch is now
-        # cut off from this one): pages are re-read, nothing is skipped.
+        # The new letters alone outran the page cap (about 17 hours of
+        # feed): what was read is covered and the rest, down to the mark,
+        # is a backlog. A sweep already under way restarts from here (its
+        # stretch is now cut off from this one): pages are re-read, nothing
+        # is skipped.
         return fresh, {"through": through, "sweep": dict(
             top, floor_at=min(stamps) if stamps else top["top_at"],
             floor_index=len(above) - 1)}
@@ -432,16 +474,16 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
                     if (l.get("published_at") or "") > (sweep["top_at"] or ""))
     floor_at = sweep["floor_at"]
     floor_index = sweep["floor_index"] + shift
-    number = max(page + 1, floor_index // size)     # one page of overlap
+    number = max(page + 1, floor_index // PAGE_SIZE)    # one page of overlap
     checked = number == page + 1                    # contiguous with the top
     done, requests = False, 0
 
     while requests < sweep_pages:
         time.sleep(CATCH_UP_GAP_SECONDS)
-        letters = _read(client, number, pace)
+        letters = _read(client, number, pace, feed)
         requests += 1
         if letters is None:
-            break
+            break                   # the floor stays at the last whole page
         stamps = _stamps(letters)
         if not checked:
             # Landed below the floor (or past the end): step back, or the
@@ -452,12 +494,12 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
                 continue
             checked = True
         if not letters:
-            done = True                             # the end of the feed
+            done = True                     # the end of the feed, by its Total
             break
         take(letters)
         if stamps:
             floor_at = min(floor_at, min(stamps))
-        floor_index = (number - 1) * size + len(letters) - 1
+        floor_index = (number - 1) * PAGE_SIZE + len(letters) - 1
         if through is None or (stamps and min(stamps) <= through):
             done = True
             break
@@ -595,6 +637,12 @@ def poll(since=None, verbose=True, client=None):
                 break
         else:
             refused = 0
+    # ...and the Pacer forgets them. It is shared with the scan, so a pass
+    # that ended on two refusals left it one short of its 15-minute wait,
+    # and a refused feed page 1 (18 in the watch's log by 2026-11-11, every
+    # one a timeout or a 429) set it sleeping inside the poll after all.
+    # Its batch count stands: that paces the requests, not the refusals.
+    pace.refused = 0
 
     # A queued letter is not new: it waits its turn rather than costing a
     # second request in the same poll.
@@ -644,6 +692,14 @@ def rewind(day, apply=False, verbose=True):
     then sweep back over it, SWEEP_PAGES a poll, and take every watched
     letter there they have not seen; a seen one costs only its share of a
     page. The mark only ever moves back. Dry run unless `apply`; idempotent.
+
+    Nothing is saved unless the mark really moves back. It used to be saved
+    with the sweep cleared every time, so running the same --apply again
+    during the recovery -- or naming a later day -- threw the sweep's
+    progress away and the next ~20 polls read the same ~400 pages again
+    (found 2026-11-11). A sweep under way is kept when the mark does move:
+    everything between its top and its floor is still covered, and it
+    carries on down to the new mark.
     """
 
     if not re.fullmatch(r"\d{4}/\d{2}/\d{2}", day or ""):
@@ -652,7 +708,8 @@ def rewind(day, apply=False, verbose=True):
 
     state = load_state()
     mark = "%s 00:00:00" % day
-    if state["through"] and state["through"] < mark:
+    changed = state["through"] is None or mark < state["through"]
+    if not changed:
         mark = state["through"]                 # never forward: that skips
 
     # What is known to be waiting there: statements and monthly reports the
@@ -694,13 +751,19 @@ def rewind(day, apply=False, verbose=True):
     pages = days * FEED_PAGES_PER_DAY if days else None
 
     if verbose:
-        print("watch: complete through %s -> %s%s" % (
-            state["through"], mark, "" if apply else
-            "  (dry run, nothing written; --apply saves it)"), flush=True)
+        if changed:
+            print("watch: complete through %s -> %s%s" % (
+                state["through"], mark, "" if apply else
+                "  (dry run, nothing written; --apply saves it)"), flush=True)
+        else:
+            print("watch: complete through %s, at or before %s already -- "
+                  "nothing changes" % (state["through"], day), flush=True)
         if state.get("sweep"):
-            print("  a sweep under way (reached %s) is restarted"
-                  % state["sweep"].get("floor_at"), flush=True)
-        if pages is not None:
+            print("  the sweep under way (reached %s) is kept%s"
+                  % (state["sweep"].get("floor_at"),
+                     ", and carries on down to the new mark" if changed
+                     else ""), flush=True)
+        if pages is not None and changed:
             print("  %d days of feed, ~%d pages: ~%d polls at %d pages a poll"
                   % (days, pages, -(-pages // SWEEP_PAGES), SWEEP_PAGES),
                   flush=True)
@@ -715,13 +778,13 @@ def rewind(day, apply=False, verbose=True):
             print("  days with no announcement seen (Fridays and holidays "
                   "have none anyway): %s" % ", ".join(empty), flush=True)
 
-    if apply:
+    if apply and changed:
         _ensure_table()
-        save_state({"through": mark, "sweep": None})
+        save_state({"through": mark, "sweep": state.get("sweep")})
 
     return {"through": mark, "previous": state["through"], "days": days,
             "pages": pages, "unseen": len(unseen), "unstored": len(unstored),
-            "applied": bool(apply)}
+            "changed": changed, "applied": bool(apply and changed)}
 
 
 def _days_between(first):

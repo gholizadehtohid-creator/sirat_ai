@@ -367,7 +367,7 @@ def superseded_periods():
     held = conn.execute("""
         SELECT f.ins_code, f.period_end, f.period_months, f.tracing_no,
                f.title, COALESCE(NULLIF(g.published_at, ''),
-                                 NULLIF(l.published_at, ''))
+                                 NULLIF(l.published_at, '')), f.items
         FROM codal_financials f
         LEFT JOIN codal_filings g ON g.tracing_no = f.tracing_no
         LEFT JOIN codal_letters l ON l.tracing_no = f.tracing_no
@@ -394,14 +394,15 @@ def superseded_periods():
 
     out = []
 
-    for ins_code, period_end, months, tracing_no, title, published in held:
+    for ins_code, period_end, months, tracing_no, title, published, items in held:
         best = newest.get((str(ins_code), period_end, months))
         if (best is None or not published or str(best[0]) == str(tracing_no)
                 or best[4] <= published):
             continue
         out.append(({"ins_code": str(ins_code), "period_end": period_end,
                      "period_months": months, "tracing_no": str(tracing_no),
-                     "title": title, "published_at": published},
+                     "title": title, "published_at": published,
+                     "items": database._loads(items)},
                     {"ins_code": str(best[1]), "period_end": best[2],
                      "period_months": best[3], "tracing_no": str(best[0]),
                      "published_at": best[4], "title": best[5],
@@ -413,16 +414,113 @@ def superseded_periods():
     return out
 
 
+NOT_ARCHIVED = "not in the raw archive"
+
+
+class _ArchiveOnly(codal.CodalClient):
+    """codal_sync.parse_letter's client for a re-parse that must not reach
+    Codal: a document comes from the raw archive or not at all."""
+
+    def __init__(self):                 # no session, no limiter: no route
+        pass
+
+    def _get(self, *args, **kwargs):
+        raise RuntimeError("archive only: no request is made")
+
+    def fetch_sheets(self, excel_url, archive_key=None):
+        body = codal.archive_read(archive_key) if archive_key else None
+        if body is None:
+            return codal.CodalResult(error=NOT_ARCHIVED, kind=codal.KIND_BAD)
+        return self.parse_body(body)
+
+
+def _present(items):
+    """The line items a parse carries a figure for."""
+
+    return {key for key, value in (items or {}).items() if value is not None}
+
+
+def _reparse_from_archive(best):
+    """`best` (a codal_filings row) re-parsed with today's extractor from the
+    raw archive: (record, None) if that finds items the stored parse lacks,
+    else (None, why not). Never downloads."""
+
+    if not codal.archive_has(best["tracing_no"]):
+        return None, NOT_ARCHIVED
+
+    record, error, _kind = codal_sync.parse_letter(_ArchiveOnly(), {
+        "tracing_no": best["tracing_no"], "title": best["title"]})
+
+    if error:
+        return None, error
+
+    if (record["period_end"], record["period_months"]) != \
+            (best["period_end"], best["period_months"]):
+        return None, "re-parsed as another period (%s, %sm)" % (
+            record["period_end"], record["period_months"])
+
+    # Only a fuller parse replaces the stored one; an equal one would only
+    # touch codal_filings for nothing.
+    if not _present(record["items"]) > _present(best["items"]):
+        return None, "today's extractor finds no more in the document"
+
+    record.update(tracing_no=best["tracing_no"],
+                  published_at=best["published_at"])
+    return record, None
+
+
 def repair_superseded(apply=False, verbose=True):
     """Put each period's newest release back in codal_financials.
 
     Dry run unless `apply`. Every release is in codal_filings with its
     figures, so nothing is downloaded; the fundamental store already holds
-    the newest release and is not touched. Idempotent: a repaired row holds
-    the newest release and is not listed again.
+    the newest release. Idempotent: a repaired row holds the newest release
+    and is not listed again.
+
+    The newest release's stored parse can be thinner than the held one's.
+    Found 2026-11-11 by the review: of the 531, 129 newest releases lack
+    items the held release's parse carries -- 123 are not in the raw
+    archive, 122 of them parsed in August, before the extractor learned
+    finance_cost, pretax_profit, ppe, capex and the rest; --reparse-latest
+    only re-reads a company's two newest filings, so nothing would restore
+    them. The dry run counts those rows and their items. A document the
+    archive holds is re-parsed from it with today's extractor, offline,
+    and a fuller parse is written to codal_filings too, so the fundamental
+    store carries it (on 2026-11-11 the 6 archived ones gained nothing:
+    today's extractor finds no owners' lines in those audited releases
+    either). The rest are listed by tracing number for a targeted
+    re-parse, which needs the network and is not done here. All are
+    written: the newest release is the right one, line items or not (and
+    none of the 129 was a company's latest period).
     """
 
     stale = superseded_periods()
+
+    # What each row would lose, before and after the archive re-parse.
+    lost_before, lost_after = {}, {}
+    thinner_before = thinner_after = 0
+    reparsed, unarchived, unparsed, plan = 0, [], [], []
+
+    for held, best in stale:
+        lost = _present(held["items"]) - _present(best["items"])
+        record = None
+        if lost:
+            thinner_before += 1
+            for key in lost:
+                lost_before[key] = lost_before.get(key, 0) + 1
+            record, why = _reparse_from_archive(best)
+            if record is not None:
+                reparsed += 1
+                lost = _present(held["items"]) - _present(record["items"])
+            elif why == NOT_ARCHIVED:
+                unarchived.append(best["tracing_no"])
+            else:
+                unparsed.append((best["tracing_no"], why, sorted(lost)))
+        if lost:
+            thinner_after += 1
+            for key in lost:
+                lost_after[key] = lost_after.get(key, 0) + 1
+        plan.append((held, best, record))
 
     latest = {}
     conn = database._connect()
@@ -456,11 +554,23 @@ def repair_superseded(apply=False, verbose=True):
 
     written = 0
     if apply:
-        for _held, best in stale:
-            written += database.save_codal_financials(best["ins_code"], best)
+        for _held, best, record in plan:
+            if record is not None:
+                # The fuller parse goes to codal_filings too, so the
+                # fundamental store's next sync carries it.
+                database.save_codal_filing(best["ins_code"], record,
+                                           published_at=best["published_at"])
+            written += database.save_codal_financials(
+                best["ins_code"], best if record is None else record)
+        if reparsed:
+            _sync_store(verbose)
 
     result = {"superseded": len(stale), "latest_period": len(on_latest),
-              "by_kind": kinds, "written": written, "applied": bool(apply)}
+              "by_kind": kinds, "written": written, "applied": bool(apply),
+              "losing_items": thinner_before, "items_lost": lost_before,
+              "reparsed": reparsed, "still_losing_items": thinner_after,
+              "items_still_lost": lost_after, "not_archived": unarchived,
+              "not_reparsed": unparsed}
 
     if verbose:
         print("repair: %d periods in codal_financials hold an older release "
@@ -477,6 +587,24 @@ def repair_superseded(apply=False, verbose=True):
                      held["period_end"], held["period_months"],
                      held["tracing_no"], held["published_at"],
                      best["tracing_no"], best["published_at"]), flush=True)
+
+        def by_rows(counts):
+            return ", ".join("%s %d" % kv for kv in sorted(
+                counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+        print("repair: %d of them would lose line items the held release's "
+              "parse carries (rows per item: %s)"
+              % (thinner_before, by_rows(lost_before) or "-"), flush=True)
+        print("  re-parsed from the raw archive with today's extractor, "
+              "offline, and fuller: %d; still losing items after that: %d"
+              % (reparsed, thinner_after), flush=True)
+        for tracing_no, why, keys in unparsed:
+            print("  archived, kept as stored -- %s: %s (%s)"
+                  % (why, tracing_no, ", ".join(keys)), flush=True)
+        if unarchived:
+            print("  not in the raw archive (%d; a targeted re-parse needs "
+                  "the network): %s" % (len(unarchived), " ".join(unarchived)),
+                  flush=True)
         if apply:
             print("repair: %d rows rewritten" % written, flush=True)
 
