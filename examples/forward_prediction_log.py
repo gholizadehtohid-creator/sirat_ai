@@ -55,7 +55,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -159,6 +159,61 @@ def append_entry(entry):
 # while bars arrive per-instrument and can run days behind -- the raw
 # MAX(date) intersection picked a session with 636 flow rows and ONE bar.
 MIN_WIDTH = 100
+
+# Two write-time rules (the review panel, 2026-11-11). Ten of the first
+# twenty entries were written after their outcome session had opened -- the
+# 19:00 run logs the newest COMPLETE session, usually yesterday's, and the
+# panel's fetch path logged during market hours -- and three were frozen on a
+# partial flow table (154 of ~750 names on 11-10). An entry is now written
+# only before the next trading day's pre-open, and only when the flow table
+# covers COVERAGE_MIN of the equities that traded that session. A session
+# that can no longer be logged in time gets a `missed` record instead, so
+# the log says what it lacks rather than holding a late prediction.
+COVERAGE_MIN = 0.9
+TEHRAN = timezone(timedelta(hours=3, minutes=30))
+PRE_OPEN = (8, 45)                       # Tehran; the pre-open session starts
+TRADING_WEEKDAYS = (5, 6, 0, 1, 2)       # Saturday .. Wednesday
+AUDIT_PATH = os.path.join(backtest_config.OUTPUT_DIR,
+                          "forward_predictions_audit.json")
+
+
+def too_late(conn, session, now=None):
+    """Why writing `session` now would follow its outcome, or None.
+
+    Late when a later session is already stored, or when any trading
+    weekday after the session has reached its pre-open by `now` (a holiday
+    on a weekday makes this conservative, never permissive).
+    """
+
+    later = conn.execute("SELECT MIN(date) FROM price_history WHERE date > ?",
+                         (session,)).fetchone()[0]
+    if later:
+        return "the next session (%s) is already stored" % later
+    now = (now or datetime.now(timezone.utc)).astimezone(TEHRAN)
+    day = date.fromisoformat(str(session)[:10]) + timedelta(days=1)
+    while day <= now.date():
+        if day.weekday() in TRADING_WEEKDAYS and \
+                (day < now.date() or (now.hour, now.minute) >= PRE_OPEN):
+            return "trading day %s had opened (pre-open %02d:%02d Tehran)" % (
+                day, PRE_OPEN[0], PRE_OPEN[1])
+        day += timedelta(days=1)
+    return None
+
+
+def coverage(conn, session):
+    """(equities that traded the session, of them with a flow row)."""
+
+    traded = conn.execute(
+        "SELECT COUNT(*) FROM price_history p JOIN instruments i "
+        "ON i.ins_code = p.ins_code WHERE p.date = ? AND p.volume > 0 "
+        "AND i.is_equity = 1", (session,)).fetchone()[0]
+    flowed = conn.execute(
+        "SELECT COUNT(*) FROM client_type_history c JOIN instruments i "
+        "ON i.ins_code = c.ins_code JOIN price_history p "
+        "ON p.ins_code = c.ins_code AND p.date = c.date "
+        "WHERE c.date = ? AND p.volume > 0 AND i.is_equity = 1",
+        (session,)).fetchone()[0]
+    return traded, flowed
 
 
 def latest_common_session(conn):
@@ -339,6 +394,22 @@ def log_once(verbose=True):
                     return out("session %s already logged; the log is "
                                "append-once per session" % session)
 
+                late = too_late(conn, session)
+                if late:
+                    head = append_entry({
+                        "spec": SPEC_VERSION, "session": str(session),
+                        "missed": late,
+                        "computed_at": datetime.now(timezone.utc).isoformat(
+                            timespec="seconds")})
+                    return out("session %s MISSED (%s); recorded as missed, "
+                               "head %s" % (session, late, head[:16]))
+
+                traded, flowed = coverage(conn, session)
+                if traded and flowed < COVERAGE_MIN * traded:
+                    return out("session %s: flow covers %d of %d traded "
+                               "equities (< %.0f%%); waiting for the rest"
+                               % (session, flowed, traded, COVERAGE_MIN * 100))
+
                 frame = build_cross_section(conn, session)
             finally:
                 conn.close()
@@ -358,6 +429,8 @@ def log_once(verbose=True):
                 "computed_at": datetime.now(timezone.utc).isoformat(
                     timespec="seconds"),
                 "n_names": len(names),
+                "traded_equities": traded,
+                "flow_rows": flowed,
                 "locked_up_today": int(frame["locked_up"].astype(bool).sum()),
                 "scores": {
                     key: {name: round(float(value), 6)
@@ -378,14 +451,88 @@ def log_once(verbose=True):
                    % (type(exc).__name__, str(exc)[:160]))
 
 
+def audit(write=True):
+    """Each entry's admissibility and width, recomputed from the stores.
+
+    The chain cannot be edited, so what the evaluator must know about the
+    entries written before the write-time rules -- which were late, which
+    were frozen on a partial flow table -- is kept beside it, recomputable
+    by anyone from the same database.
+    """
+
+    rows = read_log()
+    conn = sqlite3.connect("file:%s?mode=ro" % DB.replace("\\", "/"), uri=True)
+    report = []
+    try:
+        for r in rows:
+            item = {"session": r["session"], "computed_at": r.get("computed_at")}
+            if r.get("missed"):
+                item.update(status="missed", reason=r["missed"])
+                report.append(item)
+                continue
+            nxt = conn.execute("SELECT MIN(date) FROM price_history "
+                               "WHERE date > ?", (r["session"],)).fetchone()[0]
+            if nxt:
+                opens = datetime.fromisoformat(
+                    "%sT%02d:%02d:00" % (nxt[:10], PRE_OPEN[0], PRE_OPEN[1])
+                ).replace(tzinfo=TEHRAN)
+                stamp = datetime.fromisoformat(r["computed_at"])
+                item["outcome_session"] = nxt[:10]
+                item["admissible"] = stamp < opens
+            else:
+                item["outcome_session"] = None
+                item["admissible"] = None          # outcome not yet traded
+            traded, _flowed = coverage(conn, r["session"])
+            item["n_names"] = r.get("n_names")
+            item["traded_equities_now"] = traded
+            # The complete cross-section also needs a 70-session window, so
+            # it runs a little under the traded count even on a full day.
+            item["width_ok"] = bool(traded) and \
+                (r.get("n_names") or 0) >= AUDIT_WIDTH * traded
+            item["status"] = ("pending" if item["admissible"] is None
+                              else "ok" if item["admissible"] and item["width_ok"]
+                              else "inadmissible")
+            report.append(item)
+    finally:
+        conn.close()
+    summary = {
+        "entries": len(report),
+        "ok": sum(1 for i in report if i["status"] == "ok"),
+        "inadmissible": sum(1 for i in report if i["status"] == "inadmissible"),
+        "missed": sum(1 for i in report if i["status"] == "missed"),
+        "pending": sum(1 for i in report if i["status"] == "pending"),
+        "rule": "admissible: computed_at before the outcome session's pre-open "
+                "(%02d:%02d Tehran); width_ok: n_names at least %.0f%% of the "
+                "equities that traded" % (PRE_OPEN[0], PRE_OPEN[1],
+                                          AUDIT_WIDTH * 100),
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "entries_detail": report}
+    if write:
+        with open(AUDIT_PATH, "w", encoding="utf-8") as handle:
+            json.dump(summary, handle, ensure_ascii=False, indent=1)
+    return summary
+
+
+AUDIT_WIDTH = 0.75
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--status", action="store_true")
+    parser.add_argument("--audit", action="store_true",
+                        help="recompute each entry's admissibility and width")
 
     args = parser.parse_args(argv)
 
     if args.status:
         return status()
+
+    if args.audit:
+        summary = audit()
+        say("audit: %d entries -- %d ok, %d inadmissible, %d missed, %d pending"
+            % (summary["entries"], summary["ok"], summary["inadmissible"],
+               summary["missed"], summary["pending"]))
+        return 0
 
     outcome = log_once(verbose=True)
 

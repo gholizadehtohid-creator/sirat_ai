@@ -29,8 +29,9 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(len(holdings.parse(text)), holdings.MAX_SYMBOLS)
 
 
-def row(symbol, value, sector="فلزات", flags=0, halted=None):
+def row(symbol, value, sector="فلزات", flags=0, halted=None, equity=True):
     return {"symbol": symbol, "value": value, "sector": sector, "as_of": "2026-11-10",
+            "equity": equity,
             "halted_since": halted,
             "outlook": {"flags": ["x"] * flags} if flags is not None else None}
 
@@ -62,6 +63,41 @@ class SummaryTests(unittest.TestCase):
         out = holdings._summarise([row("الف", None), row("ب", None)])
         self.assertIsNone(out["total_value"])
         self.assertFalse(any("تمرکز" in w for w in out["warnings"]))
+
+
+class FundBookTests(unittest.TestCase):
+    """The plan's own book: an index fund, gold, bills (panel review, 2026-11-11)."""
+
+    def test_an_index_fund_carrying_the_book_is_not_one_names_risk(self):
+        warnings = holdings._summarise([row("فیروزه", 700, sector=None, equity=False),
+                                        row("عیار", 300, sector=None, equity=False)])["warnings"]
+        self.assertFalse(any("تمرکز" in w for w in warnings))
+
+    def test_a_quantity_without_a_price_is_named_and_listed(self):
+        out = holdings._summarise([row("الف", 100),
+                                   {"symbol": "اخزا512", "quantity": 10, "bill": True,
+                                    "sleeve": "fixed", "error": None}])
+        self.assertEqual(out["unpriced"], ["اخزا512"])
+        self.assertTrue(any("اخزا512" in w and "قیمتی" in w for w in out["warnings"]))
+
+    def test_funds_are_filed_by_the_opportunities_rule(self):
+        fund = lambda name: {"kind": "fund", "is_equity": 0, "name_fa": name}
+        self.assertEqual(holdings.sleeve_of({"is_equity": 1}), "equity")
+        self.assertEqual(holdings.sleeve_of(fund("صندوق سرمایه گذاری آوند مفید-د")), "fixed")
+        self.assertEqual(holdings.sleeve_of(fund("صندوق شاخص30 شرکت فیروزه-سهام")), "equity")
+        self.assertEqual(holdings.sleeve_of(fund("صندوق طلای عیار مفید")), "gold")
+        self.assertIsNone(holdings.sleeve_of(fund("صندوق اهرمی کاریزما")))
+
+    def test_a_fund_without_bars_is_priced_from_the_market_watch(self):
+        from unittest import mock
+        import pandas as pd
+        with mock.patch.object(holdings.database, "load_history_by_inscode",
+                               return_value=pd.DataFrame()),                 mock.patch.object(holdings.database, "_connect") as connect:
+            connect.return_value.execute.return_value.fetchone.return_value = (
+                46972.0, 46518.0, 46500.0, "2026-11-11T15:30:09+00:00")
+            close, previous, as_of, source = holdings._last_two("x")
+        self.assertEqual((close, previous, as_of, source),
+                         (46972.0, 46500.0, "2026-11-11", "snapshot"))
 
 
 class BookRiskTests(unittest.TestCase):

@@ -291,7 +291,11 @@ BUY = "BUY"
 SELL = "SELL"
 HOLD = "HOLD"
 
-SIGNAL_FA = {BUY: "خرید", SELL: "فروش", HOLD: "خنثی / نگهداری"}
+# What the indicator vote says, not what to do: "buy" in green over a vote
+# that has never beaten holding the index (E19, E26) read as an order
+# (the review panel, 2026-11-11).
+SIGNAL_FA = {BUY: "بیشتر اندیکاتورها مثبت", SELL: "بیشتر اندیکاتورها منفی",
+             HOLD: "اندیکاتورها خنثی"}
 
 
 def _vote(name, score, reason):

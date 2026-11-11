@@ -1,0 +1,211 @@
+{
+ "entries": 20,
+ "ok": 7,
+ "inadmissible": 13,
+ "missed": 0,
+ "pending": 0,
+ "rule": "admissible: computed_at before the outcome session's pre-open (08:45 Tehran); width_ok: n_names at least 75% of the equities that traded",
+ "generated_at": "2026-11-11T18:07:34+00:00",
+ "entries_detail": [
+  {
+   "session": "2026-08-19",
+   "computed_at": "2026-08-23T17:35:04+00:00",
+   "outcome_session": "2026-08-22",
+   "admissible": false,
+   "n_names": 632,
+   "traded_equities_now": 705,
+   "width_ok": true,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-08-23",
+   "computed_at": "2026-08-24T04:02:43+00:00",
+   "outcome_session": "2026-08-24",
+   "admissible": true,
+   "n_names": 636,
+   "traded_equities_now": 711,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-08-24",
+   "computed_at": "2026-08-25T12:33:20+00:00",
+   "outcome_session": "2026-08-25",
+   "admissible": false,
+   "n_names": 650,
+   "traded_equities_now": 723,
+   "width_ok": true,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-08-26",
+   "computed_at": "2026-08-28T08:43:01+00:00",
+   "outcome_session": "2026-08-29",
+   "admissible": true,
+   "n_names": 235,
+   "traded_equities_now": 735,
+   "width_ok": false,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-08-29",
+   "computed_at": "2026-08-30T19:09:20+00:00",
+   "outcome_session": "2026-08-31",
+   "admissible": true,
+   "n_names": 656,
+   "traded_equities_now": 731,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-08-31",
+   "computed_at": "2026-09-01T16:31:46+00:00",
+   "outcome_session": "2026-09-01",
+   "admissible": false,
+   "n_names": 656,
+   "traded_equities_now": 732,
+   "width_ok": true,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-09-01",
+   "computed_at": "2026-09-02T14:14:58+00:00",
+   "outcome_session": "2026-09-02",
+   "admissible": false,
+   "n_names": 372,
+   "traded_equities_now": 736,
+   "width_ok": false,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-09-16",
+   "computed_at": "2026-09-17T19:26:05+00:00",
+   "outcome_session": "2026-09-19",
+   "admissible": true,
+   "n_names": 662,
+   "traded_equities_now": 742,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-09-20",
+   "computed_at": "2026-09-20T17:29:34+00:00",
+   "outcome_session": "2026-09-21",
+   "admissible": true,
+   "n_names": 622,
+   "traded_equities_now": 737,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-09-23",
+   "computed_at": "2026-09-24T09:38:23+00:00",
+   "outcome_session": "2026-09-26",
+   "admissible": true,
+   "n_names": 575,
+   "traded_equities_now": 740,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-10-14",
+   "computed_at": "2026-10-15T08:02:12+00:00",
+   "outcome_session": "2026-10-17",
+   "admissible": true,
+   "n_names": 668,
+   "traded_equities_now": 761,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-10-17",
+   "computed_at": "2026-10-18T15:31:24+00:00",
+   "outcome_session": "2026-10-18",
+   "admissible": false,
+   "n_names": 663,
+   "traded_equities_now": 754,
+   "width_ok": true,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-10-19",
+   "computed_at": "2026-10-20T07:12:09+00:00",
+   "outcome_session": "2026-10-20",
+   "admissible": false,
+   "n_names": 135,
+   "traded_equities_now": 746,
+   "width_ok": false,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-10-28",
+   "computed_at": "2026-10-29T18:17:51+00:00",
+   "outcome_session": "2026-10-31",
+   "admissible": true,
+   "n_names": 278,
+   "traded_equities_now": 750,
+   "width_ok": false,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-10-31",
+   "computed_at": "2026-11-01T13:06:49+00:00",
+   "outcome_session": "2026-11-01",
+   "admissible": false,
+   "n_names": 650,
+   "traded_equities_now": 747,
+   "width_ok": true,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-11-04",
+   "computed_at": "2026-11-04T18:41:18+00:00",
+   "outcome_session": "2026-11-07",
+   "admissible": true,
+   "n_names": 648,
+   "traded_equities_now": 744,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-11-07",
+   "computed_at": "2026-11-08T15:36:17+00:00",
+   "outcome_session": "2026-11-08",
+   "admissible": false,
+   "n_names": 614,
+   "traded_equities_now": 750,
+   "width_ok": true,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-11-08",
+   "computed_at": "2026-11-09T15:51:40+00:00",
+   "outcome_session": "2026-11-09",
+   "admissible": false,
+   "n_names": 608,
+   "traded_equities_now": 749,
+   "width_ok": true,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-11-09",
+   "computed_at": "2026-11-10T18:08:19+00:00",
+   "outcome_session": "2026-11-10",
+   "admissible": false,
+   "n_names": 355,
+   "traded_equities_now": 754,
+   "width_ok": false,
+   "status": "inadmissible"
+  },
+  {
+   "session": "2026-11-10",
+   "computed_at": "2026-11-10T20:03:12+00:00",
+   "outcome_session": "2026-11-11",
+   "admissible": true,
+   "n_names": 154,
+   "traded_equities_now": 753,
+   "width_ok": false,
+   "status": "inadmissible"
+  }
+ ]
+}

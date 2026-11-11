@@ -73,12 +73,59 @@ def parse(text):
 
 
 def _last_two(ins_code):
+    """(close, previous close, as-of date, source).
+
+    The daily bars first. No equity or fixed-income fund has any (the
+    collector fetches equities and, since 11-05, gold funds), so a book that
+    followed the plan -- 70% in an index fund -- valued that 70% at nothing,
+    and the today card told its owner, the day after, to buy it again and
+    sell the gold (the panel review, 2026-11-11). The market watch prices
+    every traded instrument, funds included: its final price stands in.
+    """
+
     frame = database.load_history_by_inscode(ins_code, limit=2)
-    if frame is None or frame.empty:
-        return None, None, None
-    close = float(frame["close"].iloc[-1])
-    previous = float(frame["close"].iloc[-2]) if len(frame) > 1 else None
-    return close, previous, str(frame["date"].iloc[-1])[:10]
+    if frame is not None and not frame.empty:
+        close = float(frame["close"].iloc[-1])
+        previous = float(frame["close"].iloc[-2]) if len(frame) > 1 else None
+        return close, previous, str(frame["date"].iloc[-1])[:10], "history"
+    conn = database._connect()
+    try:
+        row = conn.execute(
+            "SELECT close, last, prev_close, captured_at FROM market_snapshot "
+            "WHERE ins_code = ? ORDER BY captured_at DESC LIMIT 1",
+            (str(ins_code),)).fetchone()
+    except Exception:                                           # noqa: BLE001
+        row = None
+    finally:
+        conn.close()
+    if not row:
+        return None, None, None, None
+    close = row[0] if row[0] and row[0] > 0 else row[1]
+    if not close or close <= 0:
+        return None, None, None, None
+    previous = row[2] if row[2] and row[2] > 0 else None
+    return float(close), previous, str(row[3] or "")[:10] or None, "snapshot"
+
+
+def sleeve_of(inst):
+    """Which allocation sleeve a holding counts toward: equity, gold, fixed,
+    or None for one the plan has no sleeve for (a leveraged or mixed fund).
+
+    Decided here, by the rule the opportunities card files funds by
+    (opportunities.fund_sleeve). The panel's own name match read 33 of the 40
+    fixed-income funds that end in «-د» (اوند among them) as equity, and two
+    equity funds with «زر» in the name as gold.
+    """
+
+    if inst.get("is_equity"):
+        return "equity"
+    if (inst.get("kind") or "") != "fund":
+        return None
+    import opportunities
+    sleeve = opportunities.fund_sleeve(inst.get("name_fa") or "")
+    if sleeve in ("equity", "equity_active"):
+        return "equity"
+    return sleeve
 
 
 def review(entries):
@@ -101,15 +148,24 @@ def review(entries):
     for symbol, quantity in entries:
         inst = instruments.get(persian.normalize_symbol(symbol))
         if not inst:
-            rows.append({"symbol": symbol, "error": "نماد پیدا نشد"})
+            # Treasury bills (اخزا) are not in the instrument list: the
+            # panel prices them from the bills it read and files them under
+            # fixed income, so the quantity travels with the row.
+            bill = persian.normalize(symbol).startswith("اخزا")
+            rows.append({"symbol": symbol, "quantity": quantity,
+                         "sleeve": "fixed" if bill else None,
+                         "bill": bill,
+                         "error": None if bill else "نماد پیدا نشد"})
             continue
         code = str(inst["ins_code"])
-        close, previous, as_of = _last_two(code)
+        close, previous, as_of, source = _last_two(code)
         row = {
             "symbol": inst.get("symbol_fa"), "name": inst.get("name_fa"),
             "ins_code": code, "sector": (inst.get("sector_name") or "").strip() or None,
             "equity": bool(inst.get("is_equity")),
+            "sleeve": sleeve_of(inst),
             "quantity": quantity, "price": close, "as_of": as_of,
+            "price_source": source,
             "change_pct": round((close / previous - 1) * 100, 2)
             if close and previous else None,
             "value": close * quantity if close and quantity else None,
@@ -132,10 +188,12 @@ def review(entries):
                 }
         dividend = dividends.get(code)
         if dividend and dividend.get("dps") is not None:
+            # On today's share count, as the outlook reads it (dps_today).
+            dps, _old = fo.dps_today(dividend, shares.get(code))
             row["dividend"] = {
-                "dps": dividend["dps"],
+                "dps": dps,
                 "fiscal_year_end": dividend.get("fiscal_year_end"),
-                "yield_pct": round(dividend["dps"] / close * 100, 2) if close else None,
+                "yield_pct": round(dps / close * 100, 2) if close and dps is not None else None,
             }
         row["announcements"] = [
             {"published_at": a.get("published_at"), "kind": a.get("kind_label"),
@@ -210,7 +268,10 @@ def _summarise(rows):
 
     if total:
         for r in rows:
-            if r.get("value") and r["value"] / total > CONCENTRATION_NAME:
+            # A share, not a fund: an index fund at 70% of the book is the
+            # plan itself, not one name's risk.
+            if r.get("equity") and r.get("value") and \
+                    r["value"] / total > CONCENTRATION_NAME:
                 warnings.append("%s %.0f٪ سبد است؛ بیش از %.0f٪ در یک نماد ریسک "
                                 "تمرکز دارد" % (r["symbol"], r["value"] / total * 100,
                                                 CONCENTRATION_NAME * 100))
@@ -233,7 +294,14 @@ def _summarise(rows):
                             % (r["symbol"], len(flags)))
         if r.get("error"):
             warnings.append("«%s»: %s" % (r["symbol"], r["error"]))
+        elif r.get("quantity") and not r.get("value"):
+            warnings.append("«%s»: قیمتی در دست نیست، پس در جمع سبد و وزن‌ها "
+                            "نیامد" % r["symbol"])
 
+    # Positions the total leaves out: with any, a weight or a rebalance
+    # amount computed from the total is wrong by their value.
+    unpriced = [r["symbol"] for r in rows
+                if r.get("quantity") and not r.get("value")]
     as_of = max((r["as_of"] for r in rows if r.get("as_of")), default=None)
     return {"rows": rows, "total_value": total or None, "warnings": warnings,
-            "as_of": as_of, "count": len(rows)}
+            "unpriced": unpriced, "as_of": as_of, "count": len(rows)}

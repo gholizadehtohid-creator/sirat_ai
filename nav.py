@@ -263,6 +263,17 @@ def net_asset_value(portfolio, equity):
         result["basis"] = "portfolio filing carries no market value"
         return result
 
+    # A portfolio of holdings whose listed cost, market value and gain all
+    # read zero is a misread total row, not an empty portfolio: 51 of 141
+    # stored ones (وغدیر with 22 holdings) made NAV equal book equity, and
+    # P/NAV 13.08 was only P/B (the review panel, 2026-11-11).
+    if (portfolio.get("holdings") or 0) > 0 and \
+            not any(portfolio.get(k) for k in
+                    ("listed_cost", "listed_market", "listed_unrealised")):
+        result["basis"] = ("portfolio filing lists holdings but read no listed "
+                           "value -- a misread, not an empty portfolio")
+        return result
+
     result["unrealised"] = unrealised
     result["unlisted_at_cost"] = portfolio.get("unlisted_cost")
     result["nav"] = equity + unrealised

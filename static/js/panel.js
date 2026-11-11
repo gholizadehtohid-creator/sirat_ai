@@ -54,8 +54,10 @@ const FUND_COMPONENTS = ["Valuation", "Profitability", "Liquidity", "Size", "Sta
 
 // Status band -> status token. Reserved for state, never reused as a series hue.
 const STATUS_CLASS = {
-  "STRONG BUY CANDIDATE": "good",
-  "BUY WATCHLIST": "good",
+  // No green on a stock-level reading: no ranking here beat holding the
+  // index (E19, E26, E30-E33), and green over "buy" reads as an order.
+  "STRONG BUY CANDIDATE": "neutral",
+  "BUY WATCHLIST": "neutral",
   "WATCHLIST": "warning",
   "HOLD / WAIT": "serious",
   "NO ENTRY": "critical",
@@ -163,17 +165,18 @@ function num(v, digits = 2) {
 // The engines' status codes are English; the reader is not. Shown in
 // Persian, with the code kept in the tooltip for anyone checking the logs.
 const STATUS_FA = {
-  "STRONG BUY CANDIDATE": "نامزد قوی خرید",
-  "BUY WATCHLIST": "دیده‌بان خرید",
-  "WATCHLIST": "دیده‌بان",
-  "HOLD / WAIT": "نگه‌داری / صبر",
-  "NO ENTRY": "ورود نه",
+  // Descriptions of a score, not orders (the review panel, 2026-11-11).
+  "STRONG BUY CANDIDATE": "امتیاز بالا",
+  "BUY WATCHLIST": "امتیاز خوب",
+  "WATCHLIST": "امتیاز متوسط",
+  "HOLD / WAIT": "امتیاز پایین",
+  "NO ENTRY": "امتیاز ضعیف",
   "NO TRADE": "بدون معامله",
   "NO DATA": "بدون داده",
   "BULL": "صعودی", "BEAR": "نزولی", "SIDEWAYS": "خنثی",
   "Strong": "قوی", "Moderate": "متوسط", "Weak": "ضعیف",
-  "APPROVED": "تأیید", "PROVISIONAL": "مشروط", "REJECTED": "رد",
-  "BUY": "خرید", "SELL": "فروش", "HOLD": "نگه‌داری", "AVOID": "پرهیز",
+  "APPROVED": "از غربال گذشت", "PROVISIONAL": "مشروط", "REJECTED": "رد شد",
+  "BUY": "مثبت", "SELL": "منفی", "HOLD": "خنثی", "AVOID": "پرهیز",
 };
 
 const VOL_FA = {
@@ -396,10 +399,17 @@ function renderRegime(rep) {
     return;
   }
 
-  banner("regimeStatus", "regimeStatusText", "is-live",
-    `<strong>${esc(rep.label)}</strong> — رأی‌گیری ${rep.votes.bull} صعودی، ` +
+  // A description, not an instruction (the review panel, 2026-11-11). It
+  // used to say "investment ceiling set to X%" and show a cash target -- 60%
+  // in a bear vote -- while E27 found timing the market on these very rules
+  // did not pay and the allocation card holds a fixed mix: in a fall it told
+  // the reader to sell near the bottom. The ceiling still sizes the paper
+  // basket, and that card says so.
+  banner("regimeStatus", "regimeStatusText", "is-idle",
+    `<strong>دمای بازار: ${esc(rep.label)}</strong> — رأی‌گیری ${rep.votes.bull} صعودی، ` +
     `${rep.votes.bear} نزولی، ${rep.votes.sideways} خنثی. ` +
-    `سقف سرمایه‌گذاری روی ${rep.max_invested_pct}٪ تنظیم شد.` + mode);
+    `<strong>این فقط توصیف است، نه دستور:</strong> وزن سهام شما را فقط کارت تخصیص تعیین می‌کند. ` +
+    `زمان‌بندی ورود و خروج با همین قواعد در آزمون E27 سودی نداشت.`);
 
   const cap = rep.cap_weighted || {};
   const ew = rep.equal_weighted || {};
@@ -407,11 +417,10 @@ function renderRegime(rep) {
 
   tiles("regimeKpis", [
     {
-      k: "رژیم بازار",
+      k: "دمای بازار",
       v: badge(rep.regime, REGIME_CLASS),
       sub: VOL_FA[rep.volatility_regime] || rep.volatility_regime || "—"
     },
-    { k: "نقد هدف", v: `${rep.cash_target_pct}٪`, sub: `حداکثر ${rep.max_invested_pct}٪ سرمایه‌گذاری` },
     // The votes themselves, not "confidence 100%": three rules agreeing is a
     // count, and E27 found that timing the market on such rules did not pay
     // (the 20-year reviewer's point, 2026-11-11).
@@ -725,7 +734,7 @@ function renderVoteCard(prefix, sig) {
 
   card.style.display = "";
 
-  const cls = sig.call === "BUY" ? "good" : sig.call === "SELL" ? "bad" : "neutral";
+  const cls = CALL_CLASS[sig.call] || "neutral";
   const conv = sig.conviction === "trending" ? "روند‌دار (ADX بالا)"
     : sig.conviction === "weak" ? "ضعیف (ADX پایین، بازار بی‌روند)"
     : "معمولی";
@@ -752,7 +761,7 @@ function renderVoteCard(prefix, sig) {
   // directional vote at all -- so the bare net is not comparable between two
   // symbols and this is.
   const strength = (sig.strength === null || sig.strength === undefined)
-    ? "" : ` · اتفاق نظر ${Math.round(Math.abs(sig.strength) * 100)}٪`;
+    ? "" : ` · ${Math.round(Math.abs(sig.strength) * 100)}٪ رأی‌ها هم‌جهت (شمارش، نه احتمال سود)`;
 
   part(prefix, "SignalHead").innerHTML =
     `<span class="badge ${cls}" style="font-size:1.05em">` +
@@ -1418,7 +1427,8 @@ async function loadTechnical(force = false) {
 
 /* ---------- top-N technical, over the liquid universe ---------- */
 
-const CALL_CLASS = { BUY: "good", SELL: "bad", HOLD: "neutral" };
+// An indicator vote is coloured as a description, never as a go-ahead.
+const CALL_CLASS = { BUY: "neutral", SELL: "serious", HOLD: "neutral" };
 
 function renderTopTechnical(rep) {
   state.topTechnical = rep;
@@ -1448,7 +1458,7 @@ function renderTopTechnical(rep) {
         title="تحلیل تک‌نماد">${esc(r.symbol || "—")}</a>`,
     esc((r.sector || "").slice(0, 22)),
     num(r.score, 0),
-    esc(r.status || "—"),
+    r.status ? badge(r.status) : "—",
     callBadge(r.call, r.call_fa),
     num(r.rsi, 1),
     num(r.macd, 2),
@@ -1561,7 +1571,7 @@ const SM_STATUS_CLASS = {
 // The V2 decision is shown as-is, including when it contradicts the scanner.
 // A row where the swing engine says AVOID and the scanner says 82 is the most
 // informative row in the table.
-const SM_V2_CLASS = { BUY: "good", HOLD: "neutral", SELL: "bad", AVOID: "bad" };
+const SM_V2_CLASS = { BUY: "neutral", HOLD: "neutral", SELL: "bad", AVOID: "bad" };
 
 // Market caps are read in همت on this market (۱ همت = ۱۰ هزار میلیارد ریال),
 // not in the T/B abbreviations money() uses for turnover. A reader who knows
@@ -1687,7 +1697,7 @@ function renderSmartMoney(rep) {
         (v2.action
           ? ` <span class="badge ${SM_V2_CLASS[v2.action] || "neutral"}" ` +
             `title="نظر موتور تصمیم V2 — جدا از این اسکنر">` +
-            `<span class="dot"></span>V2: ${esc(v2.action)}</span>`
+            `<span class="dot"></span>موتور V2: ${esc(STATUS_FA[v2.action] || v2.action)}</span>`
           : "")
     ];
   });
@@ -2646,10 +2656,9 @@ async function loadMoneyflow(force = false) {
 /* ---------- full-market screen ---------- */
 
 function verdictBadge(v) {
-  const cls = v === "APPROVED" ? "good"
-    : v === "PROVISIONAL" ? "warning"
+  const cls = v === "PROVISIONAL" ? "warning"
     : v === "REJECTED" ? "critical" : "neutral";
-  return `<span class="badge ${cls}"><span class="dot"></span>${v}</span>`;
+  return `<span class="badge ${cls}" title="${esc(String(v ?? ""))}"><span class="dot"></span>${esc(STATUS_FA[v] || v || "—")}</span>`;
 }
 
 function renderScreen(rep) {
@@ -2755,7 +2764,7 @@ function renderScreen(rep) {
             : "";
 
           return [
-            `<strong>${r.symbol}</strong>`,
+            `<strong>${esc(r.symbol)}</strong>`,
             esc((r.name || "").slice(0, 26)),
             verdictBadge(r.verdict),
             t.score ?? "—",
@@ -2763,8 +2772,8 @@ function renderScreen(rep) {
             r.risk_score ?? "—",
             r.flow_score ?? "—",
             `<strong>${r.overall_score ?? "—"}</strong>`,
-            t.trend ?? "—",
-            r.final_status ?? "—",
+            esc(TREND_FA[t.trend] || t.trend || "—"),
+            r.final_status ? badge(r.final_status) : "—",
             cr.pe != null ? num(cr.pe, 1) : (m.pe == null ? "—" : m.pe),
             cr.roe == null ? "—" : `${num(cr.roe, 0)}٪`,
             signed(cr.revenue_growth, 0),
@@ -3007,7 +3016,7 @@ function renderPortfolio(rep) {
      "تعداد سهم", "ارزش", "وزن", "ریسک", "قید"],
     positions.map(p => [
       p.rank,
-      `<strong>${p.symbol}</strong>`,
+      `<strong>${esc(p.symbol)}</strong>`,
       esc((p.name || "").slice(0, 22)),
       esc((p.sector_name || "").slice(0, 22)),
       // Every reading here is null-guarded, because the v2 engine renormalises
@@ -3820,6 +3829,8 @@ function renderOutlookDetail(r) {
         : "—"],
     ["P/NAV (ارزش خالص دارایی‌ها)", v.price_to_nav == null ? "—" :
       `${num(v.price_to_nav, 2)} — پرتفوی ${esc(v.nav_period || "")}` +
+      (v.nav_stale && v.price_to_nav_est != null
+        ? ` (کهنه؛ با حرکت شاخص حدود ${num(v.price_to_nav_est, 2)}، تخمینی)` : "") +
       (v.nav_complete === false ? " (سهام غیربورسی به بهای تمام‌شده؛ NAV کف است)" : "")],
     ["معاملات ۲۰ جلسه‌ی اخیر", tradingCell(r.trading)],
     ["ارزش بازار", v.market_cap == null ? "—" :
@@ -3894,7 +3905,10 @@ function renderOutlook(rep) {
     const v = r.valuation || {};
     return [`<strong>${esc(r.symbol)}</strong>`, esc(r.sector || ""),
       v.price_to_nav == null ? "—"
-        : `${num(v.price_to_nav, 2)} <span class="hint">(${esc(v.nav_period || "")})</span>`,
+        : v.nav_stale
+          ? (v.price_to_nav_est != null ? `${num(v.price_to_nav_est, 2)} <span class="hint">تخمینی</span> ` : "") +
+            `<span class="hint">(به قیمت ${esc(v.nav_period || "")}: ${num(v.price_to_nav, 2)}؛ شاخص از آن زمان ${signed(v.nav_index_move_pct, 0)})</span>`
+          : `${num(v.price_to_nav, 2)} <span class="hint">(${esc(v.nav_period || "")})</span>`,
       num(v.pb, 2), pctCell(v.roe_ttm_pct), pctCell(v.dividend_yield_pct)];
   });
   const sus = (rep.suspect || []).map(x =>
@@ -3931,7 +3945,7 @@ function renderOutlook(rep) {
   banner("outlookStatus", "outlookStatusText", "",
     "<strong>این رتبه‌بندی آزموده شده است:</strong> خرید ده نام بالای همین فهرست " +
     "در ۱۴۰۰ تا ۱۴۰۵ سالانه حدود ۳۵٪ داد در برابر ۴۴٪ شاخص کل (آزمون E30، رد شد). " +
-    "فهرست را برای شناخت و پرهیز از پایین آن به کار ببرید، نه برای انتخاب خرید.<br>" +
+    "فهرست برای شناخت شرکت‌هاست، نه انتخاب خرید. (اینکه پایین فهرست بدتر بود فقط مشاهده‌ی جانبی همان آزمون است و خودش آزموده نشده.)<br>" +
     `${rep.count} شرکت تولیدی/خدماتی رتبه‌بندی شد (بیشترین بازده سود برآوردی اول) ` +
     `و ${rep.financials_count || 0} شرکت مالی جداگانه. ` +
     `کنار گذاشته: ${x.no_estimate || 0} بدون صورت مالی سال قبل، ` +
@@ -3999,6 +4013,14 @@ function renderHoldings(rep) {
     if (r.error) {
       return [`<strong>${esc(r.symbol)}</strong>`, `<span class="down">${esc(r.error)}</span>`,
               "—", "—", "—", "—", "—", "—", "—", "—"];
+    }
+    if (r.bill) {
+      const b = billQuote(r.symbol);
+      return [`<strong>${esc(r.symbol)}</strong> <span class="hint">اخزا — درآمد ثابت</span>`,
+              b ? num(b.price, 0) : "—", "—", r.quantity == null ? "—" : num(r.quantity, 0),
+              b && r.quantity ? `${money(b.price * r.quantity)} ریال` : "—", "—",
+              b ? `<span class="hint">${num(b.ytm_pct, 1)}٪ سالانه تا سررسید</span>` : '<span class="hint">قیمت اخزا هنوز خوانده نشده</span>',
+              "—", "—", "—"];
     }
     const o = r.outlook || {};
     const flags = o.flags || [];
@@ -4132,10 +4154,13 @@ function valuationWord(pct) {
   return "در محدوده‌ی معمول";
 }
 
+// Industry and market cheapness against a 3-4 year nominal history: in
+// 40-80% inflation trailing P/E drifts down by itself, and E33 found buying
+// into "cheap" industries did not pay -- so no green "go" colour on it.
 function valuationCell(pct) {
   const word = valuationWord(pct);
   if (pct == null) return word;
-  return pct < 25 ? `<span class="up">${word}</span>`
+  return pct < 25 ? `<span class="hint">${word}</span>`
     : pct > 75 ? `<span class="down">${word}</span>`
       : `<span class="hint">${word}</span>`;
 }
@@ -4372,8 +4397,17 @@ function renderToday() {
   // card sized a 1-billion-rial example while the holdings card right below
   // held 20 billion with gold at 100% of a 30% target (found 2026-11-11).
   const book = state.holdingsBook;
-  const own = book && book.total_value > 0 ? sleevesOf(book.rows || []) : null;
-  const base = own ? book.total_value : null;
+  const mine = book && (book.rows || []).some(r => r.quantity) ? sleevesOf(book.rows || []) : null;
+  const own = mine && mine.total > 0 ? mine.sleeves : null;
+  const base = own ? mine.total : null;
+  // A position without a price is left out of the total, so every weight
+  // and every amount computed from it is wrong by that position: no
+  // instruction is given until it is priced.
+  const blocked = mine && mine.unpriced.length ? mine.unpriced : null;
+  // The allocation's own rule: back to target when a sleeve drifts more than
+  // this many points (allocation.DRIFT_BAND_PCT), or every ~60 sessions. The
+  // card switched to "buy/sell X" at 2% of the book -- five times as often.
+  const band = (rep.rebalance && rep.rebalance.drift_band_pct) || 10;
 
   const items = Object.entries(profile.weights).filter(([, w]) => w > 0).map(([sleeve, w]) => {
     let buy = "", why = "";
@@ -4394,15 +4428,18 @@ function renderToday() {
         why = "صندوق درآمد ثابت پرمعامله";
       }
     }
-    let amount = `${num(Math.round((profile.amounts || {})[sleeve] || 0), 0)} <span class="pct">ریال</span>`;
+    let amount = `${num(Math.round((profile.amounts || {})[sleeve] || 0), 0)} <span class="pct">ریال</span>` +
+      ` <span class="hint">(مثال برای سرمایه‌ی ${money(rep.equity)} ریال؛ دارایی خودتان را در «سبد من» وارد کنید)</span>`;
     if (own) {
       const have = own[sleeve] || 0;
       const gap = base * w / 100 - have;
       const now = base ? have / base * 100 : 0;
       amount = `الان ${num(now, 0)}٪ · هدف ${num(w, 0)}٪ → ` +
-        (Math.abs(gap) < base * 0.02
-          ? "<strong>نزدیک هدف</strong>"
-          : `<strong>${gap > 0 ? "بخرید" : "بفروشید"} ${money(Math.abs(gap))}</strong> <span class="pct">ریال</span>`);
+        (blocked
+          ? `<span class="hint">ارزش ${blocked.map(esc).join("، ")} معلوم نیست؛ دستوری داده نمی‌شود</span>`
+          : Math.abs(now - w) <= band
+            ? `<strong>در محدوده‌ی هدف</strong> <span class="hint">(±${num(band, 0)} واحد) — کاری لازم نیست</span>`
+            : `<strong>${gap > 0 ? "بخرید" : "بفروشید"} ${money(Math.abs(gap))}</strong> <span class="pct">ریال</span>`);
     }
     return `<div class="today-item">
       <div class="pct">${num(w, 0)}٪ ${esc(labels[sleeve] || sleeve)}</div>
@@ -4419,25 +4456,46 @@ function renderToday() {
     ? `این ترکیب از ${esc(rep.history.from)} سالانه ${num(h.cagr_pct, 0)}٪ داده و ` +
       `بدترین افتش ${num(h.max_drawdown_pct, 0)}٪ بوده است. `
     : "") +
-    `هر حدود سه ماه به همین وزن‌ها برگردانید. ` +
+    `هر حدود سه ماه، یا وقتی سهم یک بخش بیش از ${num(band, 0)} واحد از هدف دور شد، به همین وزن‌ها برگردانید؛ ` +
+    `بین این دو، کاری لازم نیست. ` +
+    (mine && mine.outside.length
+      ? `<span class="hint">${mine.outside.map(esc).join("، ")} (صندوق اهرمی یا مختلط) در هیچ‌کدام از سه بخش شمرده نشد. </span>`
+      : "") +
     `<span class="hint">${esc(profile.evidence_text || "")}</span>`;
 }
 
-// Which allocation sleeve a holdings row belongs to: a share is "equity";
-// a fund by its name -- gold, fixed income, or an equity fund.
+// A treasury bill's price and yield from the bills the opportunities card
+// read (bills are not in the instrument list the holdings card reads).
+function billQuote(symbol) {
+  const bills = ((state.opportunities || {}).bills || {}).bills || [];
+  const key = String(symbol || "").replace(/\s/g, "");
+  return bills.find(b => String(b.symbol || "").replace(/\s/g, "") === key) || null;
+}
+
+// Which allocation sleeve each holding counts toward, and what is left out.
+// The sleeve comes from the server (holdings.sleeve_of, the rule the
+// opportunities card files funds by): the name match this replaced read 33 of
+// 40 fixed-income funds ending «-د» as equity and «زر» equity funds as gold
+// (the panel review, 2026-11-11). A bill is priced from the bills read here.
 function sleevesOf(rows) {
-  const out = {};
+  const out = {}, unpriced = [], outside = [];
+  let total = 0;
   rows.forEach(r => {
-    const value = Number(r.value) || 0;
-    if (!value) return;
-    const name = String(r.name || "");
-    const sleeve = r.equity ? "equity"
-      : /طلا|سکه|زر/.test(name) ? "gold"
-      : /درآمد ثابت|ثابت|اوراق/.test(name) ? "fixed"
-      : "equity";
+    let value = Number(r.value) || 0;
+    if (r.bill) {
+      const b = billQuote(r.symbol);
+      value = b && r.quantity ? b.price * r.quantity : 0;
+    }
+    if (!value) {
+      if (r.quantity && !r.error) unpriced.push(r.symbol);
+      return;
+    }
+    total += value;
+    const sleeve = r.sleeve !== undefined ? r.sleeve : (r.equity ? "equity" : null);
+    if (!sleeve) { outside.push(r.symbol); return; }
     out[sleeve] = (out[sleeve] || 0) + value;
   });
-  return out;
+  return { sleeves: out, total, unpriced, outside };
 }
 
 // Repaints whatever each slot holds, on every tab switch, resize, theme toggle

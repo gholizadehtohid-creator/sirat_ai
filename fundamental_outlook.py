@@ -130,6 +130,14 @@ THIN_LISTED = 20
 #    against a year whose price step came mid-way, extrapolated to the year
 #    at the +100% cap -- forward profit exactly twice the trailing.
 ONE_OFF_RATIO = 2.0
+# Operating profit above gross profit by this share of itself: "other
+# operating income" -- livestock or FX revaluation, mostly -- is that much of
+# what the P/E rests on (سیمرغ: gross 2,335 bn, operating 17,918 bn).
+OTHER_OPERATING_SHARE = 0.3
+
+# A portfolio filing (ن-31) older than this many months prices NAV on that
+# month's market; past it the listed holdings are carried at the index's move.
+NAV_STALE_MONTHS = 1
 PUBLISHED_PE_BAND = (0.67, 1.5)
 EARLY_MONTHS = 4
 EARLY_JUMP = 1.5
@@ -542,8 +550,9 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     yield_fwd = _div(fwd_net, market_cap)
 
     # Cash dividend of the last annual AGM (ن-52), against today's price.
-    dps = _f((dividend or {}).get("dps"))
-    dividend_yield = _div(dps, price) if dps is not None and price else None
+    dps, dividend_stale = dps_today(dividend, shares, all_periods)
+    dividend_yield = (_div(dps, price) if dps is not None and price
+                      and not dividend_stale else None)
 
     equity = _f(li.get("equity_owners")) or _f(li.get("equity"))
     pb = _div(market_cap, equity) if equity and equity > 0 else None
@@ -599,13 +608,34 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # ---- NAV, for the companies whose earnings are not a valuation ---------
     # The portfolio filing (ن-31) is the parent's own holdings, so its book
     # equity is the parent's: the newest SEPARATE period when there is one.
-    nav_result = price_to_nav = None
+    nav_result = price_to_nav = price_to_nav_est = nav_move = None
+    nav_stale = False
     if kind == FINANCIAL and portfolio:
         import nav as nav_module
-        own = next((p for p in all_periods if not p["consolidated"]), latest)
-        own_equity = _f(own["items"].get("equity_owners")) or             _f(own["items"].get("equity"))
+        # The book equity the portfolio's gains are added to is the separate
+        # statement NEAREST the portfolio's date: equity from 1405/06 on top of
+        # gains marked at 1405/04 counted twice what was realised, or paid out
+        # at the AGM, in between (the review panel, 2026-11-11).
+        own = _nearest_separate(all_periods, portfolio.get("period_end")) or latest
+        own_equity = _f(own["items"].get("equity_owners")) or \
+            _f(own["items"].get("equity"))
         nav_result = nav_module.net_asset_value(portfolio, own_equity)
         price_to_nav = nav_module.price_to_nav(market_cap, nav_result)
+        # 130 of 141 portfolios were 1405/04/31 while TEDPIX had risen 72.5%
+        # since: every P/NAV was struck on July's prices, by a different
+        # amount per name, so the list's ORDER was wrong too. Past
+        # NAV_STALE_MONTHS the listed holdings are carried at the index's move
+        # -- an estimate, named as one.
+        age = _age_months(portfolio.get("period_end"), today)
+        if price_to_nav is not None and age is not None and \
+                age > NAV_STALE_MONTHS:
+            nav_stale = True
+            nav_move = index_move_since(portfolio.get("period_end"))
+            listed = _f(portfolio.get("listed_market"))
+            if nav_move is not None and listed:
+                estimate = dict(nav_result,
+                                nav=nav_result["nav"] + listed * nav_move)
+                price_to_nav_est = nav_module.price_to_nav(market_cap, estimate)
 
     # ---- age -------------------------------------------------------------
     age_months = _age_months(latest["end"], today)
@@ -704,7 +734,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         one_off = one_off_reason(li)
         if one_off:
             flag(one_off)
-            doubts.append({"code": "one_off", "label": "سود غیرعملیاتی"})
+            doubts.append({"code": "one_off", "label": "سود خارج از فروش"})
         # Our trailing P/E against the exchange's own.
         gap = published_gap_reason(pe_ttm, published)
         if gap:
@@ -766,15 +796,27 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if kind == FINANCIAL:
         flag("بانک، بیمه، سرمایه‌گذاری یا هلدینگ: P/E و رشد فروش معیار "
              "ارزش‌گذاری نیست؛ با P/NAV یا P/B و ROE سنجیده می‌شود")
-        if price_to_nav is not None:
+        if nav_stale:
+            flag("پرتفوی ثبت‌شده مال %s است و شاخص کل از آن زمان %s تغییر کرده؛ "
+                 "P/NAV به قیمت‌های آن روز %.2f است%s"
+                 % (portfolio.get("period_end"),
+                    "%+.0f٪" % (nav_move * 100) if nav_move is not None else "نامعلوم",
+                    price_to_nav,
+                    " و اگر سهام بورسی‌اش هم‌پای شاخص رفته باشد حدود %.2f (تخمینی)"
+                    % price_to_nav_est if price_to_nav_est is not None else ""))
+        elif price_to_nav is not None:
             (positives if price_to_nav < 1 else flags).append(
                 "P/NAV %.2f — %s" % (price_to_nav,
                                      "زیر ارزش خالص دارایی‌ها" if price_to_nav < 1
                                      else "بالاتر از ارزش خالص دارایی‌ها"))
     if dividend_yield is not None and dps > 0:
-        positives.append("سود نقدی مجمع سال %s: %s ریال هر سهم — بازده نقدی %.1f٪"
+        positives.append("سود نقدی مجمع سال %s: %s ریال هر سهم (به تعداد سهم امروز) — "
+                         "بازده نقدی %.1f٪"
                          % (dividend["fiscal_year_end"], format(int(round(dps)), ","),
                             dividend_yield * 100))
+    elif dividend_stale and dps:
+        flag("آخرین سود نقدی ثبت‌شده مال سال مالی %s است و مجمع سال بعد ثبت "
+             "نشده؛ بازده نقدی امروز حساب نشد" % dividend["fiscal_year_end"])
 
     result = {
         "ins_code": str(ins_code),
@@ -805,8 +847,12 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                       "dps": dps,
                       "dividend_fiscal_year": (dividend or {}).get("fiscal_year_end"),
                       "dividend_yield_pct": _pct(dividend_yield),
+                      "dividend_stale": dividend_stale,
                       "shares": shares, "shares_source": shares_source,
                       "price_to_nav": _round(price_to_nav),
+                      "price_to_nav_est": _round(price_to_nav_est),
+                      "nav_stale": nav_stale,
+                      "nav_index_move_pct": _pct(nav_move),
                       "nav": (nav_result or {}).get("nav"),
                       "nav_complete": (nav_result or {}).get("complete"),
                       "nav_period": (portfolio or {}).get("period_end")
@@ -949,6 +995,91 @@ def price_bands():
             for code, prev, up, down in rows}
 
 
+def _nearest_separate(periods, when):
+    """The separate (parent-only) period whose end is nearest `when`
+    (a Jalali date), preferring one at or before it; None without any."""
+
+    separate = [p for p in periods if not p["consolidated"]]
+    if not separate or not when:
+        return separate[0] if separate else None
+
+    def months(end):
+        try:
+            y, m = (int(x) for x in str(end).split("/")[:2])
+            return y * 12 + m
+        except (TypeError, ValueError):
+            return None
+
+    target = months(when)
+    if target is None:
+        return separate[0]
+    ranked = [(abs(months(p["end"]) - target) + (0.5 if months(p["end"]) > target else 0), i, p)
+              for i, p in enumerate(separate) if months(p["end"]) is not None]
+    return min(ranked)[2] if ranked else separate[0]
+
+
+_INDEX = {"at": None, "frame": None}
+
+
+def index_move_since(jalali_date):
+    """TEDPIX's change from the session on or before `jalali_date` to its
+    newest close, as a fraction; None when either end is missing."""
+
+    import time
+
+    try:
+        jy, jm, jd = (int(x) for x in str(jalali_date).split("/")[:3])
+        then = "%04d-%02d-%02d" % jalali.to_gregorian(jy, jm, jd)
+    except (TypeError, ValueError):
+        return None
+    now = time.monotonic()
+    if _INDEX["at"] is None or now - _INDEX["at"] > MARKET_DATE_TTL:
+        try:
+            frame = database.load_index_history(config.INDICES["TEDPIX"]["insCode"])
+        except Exception:                                       # noqa: BLE001
+            frame = None
+        _INDEX.update(at=now, frame=frame)
+    frame = _INDEX["frame"]
+    if frame is None or frame.empty:
+        return None
+    dates = frame["date"].dt.strftime("%Y-%m-%d")
+    before = frame[dates <= then]
+    if before.empty:
+        return None
+    start, end = float(before["close"].iloc[-1]), float(frame["close"].iloc[-1])
+    return end / start - 1 if start > 0 else None
+
+
+def dps_today(dividend, shares, periods=()):
+    """(DPS on today's share count, whether it is an older year's).
+
+    The AGM's DPS is per share of the capital at the AGM; after a bonus
+    issue or a split the price is per share of a larger count, and the yield
+    read on the two was off by the issue's factor -- شپدیس 81.5% for about 2%,
+    151 of 692 names off by more than 10% (the review panel, 2026-11-11).
+    And a DPS from a fiscal year older than the newest annual statement is
+    last year's payout while this year's AGM is pending or unrecorded (104
+    names): not a yield to quote today.
+    """
+
+    dividend = dividend or {}
+    dps = _f(dividend.get("dps"))
+    if dps is None:
+        return None, False
+    # The dividends table keeps the AGM's capital in MILLION rials (فولاد:
+    # 1,935,000 for 1,935 billion shares): shares then = capital x 1e6 / par.
+    capital = _f(dividend.get("capital"))
+    shares = _f(shares)
+    if capital and capital > 0 and shares and shares > 0:
+        dps = dps * (capital * 1_000_000 / PAR_VALUE) / shares
+    stale = False
+    fy = str(dividend.get("fiscal_year_end") or "")
+    annual = [str(p["end"]) for p in periods or () if p.get("months") == 12]
+    if fy and annual and max(annual)[:7] > fy[:7]:
+        stale = True
+    return dps, stale
+
+
 def published_pe():
     """{ins_code: TSETMC's own P/E} from the newest market snapshot."""
 
@@ -981,6 +1112,17 @@ def one_off_reason(items):
         return ("سود خالص %.1f برابر سود عملیاتی است: بیشتر سود از فعالیت "
                 "اصلی نیست (احتمالاً یک‌باره)، پس P/E بر آن ارزش‌گذاری نیست"
                 % (net / op))
+    # The same income booked INSIDE operating profit ("other operating
+    # income": livestock or FX revaluation) passed the test above: 18 of the
+    # 130 ranked names had operating profit above gross profit (the review
+    # panel, 2026-11-11).
+    gross = _f((items or {}).get("gross_profit"))
+    if gross is not None and op > 0 and op - max(gross, 0) > OTHER_OPERATING_SHARE * op:
+        head = ("سود عملیاتی %.1f برابر سود ناخالص است" % (op / gross)
+                if gross > 0 else "سود عملیاتی با وجود زیان ناخالص مثبت است")
+        return (head + ": بخش بزرگی از سود عملیاتی از فروش نیست (سایر درآمدهای "
+                "عملیاتی، مانند تسعیر ارز یا تجدید ارزیابی)، پس P/E بر آن "
+                "ارزش‌گذاری نیست")
     return None
 
 
@@ -1302,10 +1444,14 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
         r["valuation"]["sector_peers"] = len(by_sector.get(r["sector"]) or [])
 
     ranked.sort(key=lambda r: -r["valuation"]["earnings_yield_forward_pct"])
-    financials.sort(key=lambda r: (
-        r["valuation"]["price_to_nav"] is None,
-        r["valuation"]["price_to_nav"] if r["valuation"]["price_to_nav"]
-        is not None else (r["valuation"]["pb"] or 99)))
+    def _nav_key(r):
+        # A stale portfolio's estimate (listed holdings carried at the
+        # index's move) orders the list; a fresh one stands as filed.
+        v = r["valuation"]
+        nav = v["price_to_nav_est"] if v.get("nav_stale") else v["price_to_nav"]
+        return (nav is None, nav if nav is not None else (v["pb"] or 99))
+
+    financials.sort(key=_nav_key)
 
     thin.sort(key=lambda r: -(r["earnings_yield_forward_pct"] or -1e9))
     doubtful.sort(key=lambda r: -(r["earnings_yield_forward_pct"] or -1e9))
