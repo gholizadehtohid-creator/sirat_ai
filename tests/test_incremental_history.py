@@ -23,11 +23,13 @@ that matter, each a way an incremental collector quietly corrupts a series:
 
     TOO FEW ANSWERS ARE NO CHECK. A sample with fewer than half (and fewer
     than six) live re-reads neither accepts nor rejects the watch: its names
-    wait, and the step fails so it is retried after the cooldown.
+    wait, and the step fails so it is retried after the cooldown -- and
+    nothing else is asked in that run, so each retry costs the sample.
 
     A HOST THAT DOES NOT ANSWER COSTS A CANARY. No overview and no watch:
     no history request at all. Otherwise at most a dozen history requests
-    until one comes back live -- never one per name (818 before 2026-11-11).
+    until they meet the sample's bar -- never one per name (818 before
+    2026-11-11), and not the rest of the run on one live answer in twelve.
 """
 
 import os
@@ -101,6 +103,21 @@ def watch_row(close=1010.0, py=1000.0, volume=7000.0):
     return {"open": 1000.0, "high": 1015.0, "low": 995.0, "close": close,
             "prev_close": py, "volume": volume, "value": volume * close,
             "trades": 12.0}
+
+
+class SheddingLoad(FakeProvider):
+    """A history endpoint that lets `live` requests of each batch through
+    (the first, in code order) and answers the rest HTTP 429."""
+
+    def __init__(self, *args, live=0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.live = live
+
+    def get_histories(self, codes, count=300, progress=None):
+        results = super().get_histories(codes, count, progress)
+        for code in sorted(codes)[self.live:]:
+            results[code] = ProviderResult.failure("fake", "HTTP 429")
+        return results
 
 
 class IncrementalHistoryTests(unittest.TestCase):
@@ -648,6 +665,53 @@ class IncrementalHistoryTests(unittest.TestCase):
         self.assertEqual(stats["watch"], len(traders))
         self.assertTrue(stats["ok"])
 
+    def add_fresh(self, count, start=900):
+        """`count` equities with no bars at all: a full series each."""
+
+        codes = [str(start + i) for i in range(count)]
+        conn = database._connect()
+        conn.executemany("INSERT INTO instruments (ins_code, symbol_fa, "
+                         "is_equity) VALUES (?, ?, 1)",
+                         [(c, "n" + c) for c in codes])
+        conn.commit()
+        conn.close()
+        return codes
+
+    def test_an_unverifiable_sample_is_the_only_request_of_each_retry(self):
+        """3 of 12 sampled names live: the rest of the run is not asked.
+
+        The run fails so that it is retried, and the canary used to stand
+        aside for any live answer: every name not deferred -- two sessions
+        behind, new listings -- went per symbol on every retry, the ones
+        that failed included (2026-11-11 review: 72 requests a retry).
+        """
+
+        traders = ["1", "2", "3"] + self.add_traders(40)
+        behind = self.add_two_behind(5)
+        fresh = self.add_fresh(2)
+
+        provider = SheddingLoad(
+            watch={c: watch_row() for c in traders},
+            history={c: self.full_history()
+                     for c in traders + behind + fresh}, live=3)
+
+        for attempt in (1, 2):
+            provider.requests = []
+            stats = self.run_with(provider)
+
+            self.assertEqual(len(provider.requests), 1, attempt)
+            codes, count = provider.requests[0]
+            self.assertEqual((len(codes), count),
+                             (seed_import.WATCH_CHECK_SAMPLE, 3))
+            self.assertTrue(set(codes) <= set(traders))
+            self.assertEqual(stats["deferred"], len(traders))
+            self.assertEqual(stats["unasked"], len(behind) + len(fresh))
+            self.assertEqual((stats["watch"], stats["tail"], stats["full"]),
+                             (0, 0, 0))
+            self.assertFalse(stats["ok"])
+
+        self.assertEqual(database.newest_bars(fresh), {})
+
     # ---- an exchange that does not answer costs a handful of requests -------
 
     def test_a_dead_exchange_costs_no_history_request(self):
@@ -706,6 +770,51 @@ class IncrementalHistoryTests(unittest.TestCase):
         self.assertEqual(sorted(asked), sorted(traders))
         self.assertEqual((stats["tail"], stats["unasked"]), (len(traders), 0))
         self.assertTrue(stats["ok"])
+
+    def canary_run(self, live):
+        """An open session, so every name goes per symbol from the start:
+        no sample, the canary alone decides."""
+
+        traders = ["1", "2", "3"] + self.add_traders(40)
+        provider = SheddingLoad(watch={c: watch_row() for c in traders},
+                                history={c: self.full_history()
+                                         for c in traders},
+                                state="S", live=live)
+        stats = self.run_with(provider)
+        asked = [c for codes, _ in provider.requests for c in codes]
+        return traders, asked, stats
+
+    def test_one_live_answer_in_twelve_does_not_release_the_sweep(self):
+        """A host shedding load let one request through, and the canary
+        released all 818 (as first written, on 2026-11-11)."""
+
+        traders, asked, stats = self.canary_run(live=1)
+
+        self.assertEqual(len(asked), seed_import.HISTORY_CANARY)
+        self.assertEqual(stats["unasked"],
+                         len(traders) - seed_import.HISTORY_CANARY)
+        self.assertEqual(stats["tail"], 1)          # what came back is kept
+        self.assertFalse(stats["ok"])               # ...and the step retried
+        self.assertTrue(any("not asked" in n for n in stats["notes"]))
+
+    def test_five_live_answers_in_twelve_are_short_of_the_bar(self):
+        traders, asked, stats = self.canary_run(live=5)
+
+        self.assertEqual(len(asked), seed_import.HISTORY_CANARY)
+        self.assertEqual(stats["tail"], 5)
+        self.assertFalse(stats["ok"])
+
+    def test_half_the_canary_live_releases_the_rest(self):
+        traders, asked, stats = self.canary_run(live=6)
+
+        self.assertEqual(sorted(asked), sorted(traders))
+        self.assertEqual(stats["unasked"], 0)
+        self.assertTrue(stats["ok"])
+
+    def test_the_canary_and_the_sample_share_one_bar(self):
+        self.assertEqual([seed_import._live_needed(n)
+                          for n in (1, 2, 3, 11, 12, 13, 40)],
+                         [1, 1, 2, 6, 6, 6, 6])
 
 
 class AbsentMarkTests(unittest.TestCase):

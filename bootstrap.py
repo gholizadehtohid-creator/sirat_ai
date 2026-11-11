@@ -203,10 +203,13 @@ STEP_WEIGHT = {
 # A step is over -- whatever the outcome -- once it reports one of these.
 SETTLED = {"fetched", "failed", "kept", "skipped", "cooling-off"}
 
-# status() walks the whole price_history table (market_turnover groups every
-# stored bar), so it is far too expensive to recompute for a panel polling
-# twice a second. Cache it briefly: the numbers it reports change on the
-# timescale of a completed fetch, not of a poll.
+# status() runs every probe, and three of them walk the whole price_history
+# table: the equities with bars (instrument_counts, read by the universe and
+# history probes), the newest equity bar, and the newest session an equity
+# traded in (the flow probe). About 5 s on the live file (2026-11-11) -- far
+# too expensive to recompute for a panel polling twice a second. Cache it
+# briefly: the numbers it reports change on the timescale of a completed
+# fetch, not of a poll.
 STATUS_TTL = 5.0
 
 
@@ -685,7 +688,43 @@ def _fetch_universe(on_item):
 
 def _fetch_snapshot(on_item):
     import seed_import
-    return bool(seed_import.import_snapshot(verbose=False, progress=on_item))
+    written, plan = seed_import.import_snapshot(
+        verbose=False, progress=on_item, return_plan=True)
+    if written:
+        _note_board_moves(plan)
+    return bool(written)
+
+
+def _note_board_moves(plan=None):
+    """Say how many board moves wait for review, while any do.
+
+    The snapshot step adds new companies and holds every board move for
+    `seed_import.py --repair-universe --apply` (reconcile_universe). Held
+    silently -- the step reports only what it wrote -- a moved company
+    stayed on its dead code, without bars, flow or filings for the live
+    listing, and nothing on the panel said a review was waiting (review of
+    2026-11-11). So every run that includes the snapshot step says so: from
+    `plan` when the step has just fetched, otherwise from the stored watch,
+    which costs a read (~1.3 s on the live file) and no request.
+    """
+
+    import seed_import
+
+    try:
+        if plan is None:
+            plan = seed_import.reconcile_universe(apply=False, verbose=False,
+                                                  retire=False)
+        waiting = len({str(new["ins_code"])
+                       for _old, new in plan.get("awaiting") or ()})
+    except Exception as exc:                                    # noqa: BLE001
+        _note("board-move check failed: %s: %s"
+              % (type(exc).__name__, str(exc)[:160]))
+        return
+
+    if waiting:
+        _note(f"تصویر بازار: تغییر تابلوی {waiting} نماد در انتظار بازبینی "
+              "است و تا آن زمان کد قدیمی‌شان دنبال می‌شود — "
+              "python seed_import.py --repair-universe --apply")
 
 
 def _fetch_indices(on_item):
@@ -709,7 +748,10 @@ def _fetch_history(on_item):
 def _fetch_sectors(on_item):
     # Only the equities without a sector: a full refetch is ~900 requests for
     # membership that does not change (`seed_import.py --sectors` still does
-    # it, as does the panel's sector button).
+    # it, as does the panel's sector button). A run that got no live answer
+    # returns 0, and so is a failure retried after RETRY_COOLDOWN -- at most
+    # seed_import.SECTOR_CANARY requests an attempt -- not a fetch that
+    # holds a new listing off for MAX_AGE.
     import seed_import
     return bool(seed_import.import_sectors(verbose=False, progress=on_item,
                                            missing_only=True))
@@ -920,6 +962,12 @@ def ensure(force=False, only=None):
         _status_cache["at"] = None
         _status_cache["value"] = None
 
+    # A held board move waits for a person, so every run with the snapshot
+    # step says so -- not only the one whose snapshot found it, which has
+    # said so already (_fetch_snapshot).
+    if (results.get("snapshot") or {}).get("action") not in (None, "fetched"):
+        _note_board_moves()
+
     _forward_log()
 
     return results
@@ -963,8 +1011,6 @@ def _step_detail(name):
 
 def run(force=False, only=None):
     """ensure(), guarded so only one run happens at a time."""
-
-    global _thread
 
     with _lock:
         if _state["running"]:

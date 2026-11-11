@@ -20,13 +20,21 @@ traded 123.6M shares that day). These tests pin the reconciliation:
 
     ONLY ON REVIEW. The snapshot step adds new companies and nothing else; a
     retirement is made by `seed_import.py --repair-universe --apply`, which
-    prints its undo.
+    prints its undo. Until then every bootstrap run says how many board
+    moves wait, read from the stored watch.
+
+    ONLY ONCE COPIED. A pair whose copy fails -- a fundamental store that
+    cannot be opened or read -- is held whole: its live code not added, its
+    old code not retired, and the next run finds it again.
 
     HISTORY KEEPS THE OLD LISTING. The point-in-time and backtest universes
     still load a retired code, so a past date sees what traded then.
 
     ONE BAD LINE IS ONE LINE. A watch row with no ISIN (None, or NaN in a
     pandas 3 frame) skips itself, not the reconciliation.
+
+    A SECTOR RUN NOBODY ANSWERED IS NO FETCH. It costs three requests and
+    is retried after the cooldown, not recorded for a month.
 """
 
 import os
@@ -449,7 +457,8 @@ class ReconcileTests(unittest.TestCase):
                          ["100"])
 
         # Idempotent, the NULL period_months included.
-        again = seed_import._carry_over(plan["retired"], write=True)
+        again, failed = seed_import._carry_over(plan["retired"], write=True)
+        self.assertEqual(failed, {})
         self.assertEqual({k: again.get(k) for k in expected},
                          dict.fromkeys(expected, 0))
         self.assertEqual(len(database.load_codal_financials("999")), 2)
@@ -511,6 +520,166 @@ class ReconcileTests(unittest.TestCase):
 
         self.assertEqual(database.snapshot_info()["rows"], 0)
         self.assertIsNone(self.instrument("555"))
+
+    # ---- a held board move is said, on every run ------------------------
+
+    def stub_provider(self, provenance=None):
+        frame = self.watch.copy()
+
+        class Provider:
+            name = "fake"
+
+            def get_market_snapshot(self):
+                result = ProviderResult.success(frame, "fake")
+                result.provenance = provenance or seed_import.LIVE
+                return result
+
+        return mock.patch.object(seed_import, "get_provider", Provider)
+
+    def test_the_snapshot_step_returns_the_moves_it_holds(self):
+        with self.stub_provider():
+            rows, plan = seed_import.import_snapshot(verbose=False,
+                                                     return_plan=True)
+            plain = seed_import.import_snapshot(verbose=False)
+
+        self.assertEqual(rows, len(self.watch))
+        self.assertEqual([(old["ins_code"], new["ins_code"])
+                          for old, new in plan["awaiting"]], [("100", "999")])
+        # The panel's /api/import/snapshot reports the plain row count.
+        self.assertEqual(plain, len(self.watch))
+
+        with self.stub_provider(SEED):
+            self.assertEqual(seed_import.import_snapshot(
+                verbose=False, return_plan=True), (None, None))
+
+    def bootstrap_notes(self, run):
+        import bootstrap
+
+        notes = []
+        with mock.patch.object(bootstrap, "_note", side_effect=notes.append):
+            run(bootstrap)
+        return [n for n in notes if "--repair-universe --apply" in n]
+
+    def test_bootstrap_says_how_many_board_moves_wait(self):
+        """Held silently, 17 companies stayed on their dead codes with
+        nothing on the panel to say a review was waiting (2026-11-11)."""
+
+        with self.stub_provider():
+            fetched = self.bootstrap_notes(
+                lambda b: self.assertTrue(b._fetch_snapshot(lambda *a: None)))
+
+        self.assertEqual(len(fetched), 1)
+        self.assertIn("تغییر تابلوی 1 نماد", fetched[0])
+
+    def test_a_run_that_keeps_the_snapshot_still_says_it(self):
+        """The watch is read from the store: no request."""
+
+        database.save_snapshot(self.watch)
+        current = {"present": True, "detail": "", "updated_at": None,
+                   "behind": False}
+
+        def kept_run(bootstrap):
+            with mock.patch.object(bootstrap, "STEPS",
+                                   [("snapshot", lambda: current, ())]), \
+                    mock.patch.object(bootstrap, "_last_fetch",
+                                      return_value=None), \
+                    mock.patch.object(bootstrap, "_forward_log"), \
+                    mock.patch.object(seed_import, "get_provider",
+                                      side_effect=AssertionError("asked")):
+                results = bootstrap.ensure()
+            self.assertEqual(results["snapshot"]["action"], "kept")
+
+        self.assertEqual(len(self.bootstrap_notes(kept_run)), 1)
+
+        # Reviewed and applied: nothing waits, nothing is said.
+        seed_import.reconcile_universe(self.watch, apply=True, verbose=False)
+        self.assertEqual(self.bootstrap_notes(kept_run), [])
+
+    # ---- a pair is retired only once its copies are made ----------------
+
+    def assert_held_whole(self, plan):
+        self.assertEqual(plan["retired"], [])
+        self.assertIn("999", {r["ins_code"] for r, _ in plan["held"]})
+        reason = next(why for r, why in plan["held"] if r["ins_code"] == "999")
+        self.assertIn("fundamental store", reason)
+        self.assertNotIn("999", {r["ins_code"] for r in plan["added"]})
+
+    def test_an_unopenable_fundamental_store_holds_the_pair(self):
+        """It used to return early, the pair was retired anyway, and the
+        metrics and dividends were never copied: a retired code is no
+        longer found to copy from (review of 2026-11-11)."""
+
+        self.fill_old_code()
+
+        # A directory where the store should be: sqlite cannot open it.
+        with mock.patch.dict(os.environ,
+                             {"SIRAT_FUNDAMENTAL_DB": self.store_dir}):
+            dry = seed_import.reconcile_universe(self.watch, verbose=False)
+            plan = seed_import.reconcile_universe(self.watch, apply=True,
+                                                  verbose=False)
+
+        self.assert_held_whole(dry)
+        self.assert_held_whole(plan)
+        # Neither added nor retired, and nothing copied to the live code.
+        self.assertEqual((self.instrument("100")["is_equity"],
+                          self.instrument("100")["kind"]), (1, "equity"))
+        self.assertIsNone(self.instrument("999"))
+        self.assertEqual(database.load_codal_financials("999"), [])
+        # A new company is not held with it.
+        self.assertEqual(self.instrument("555")["is_equity"], 1)
+
+        # The store back, the next run finds the pair and finishes it.
+        import fundamental_db
+
+        again = seed_import.reconcile_universe(self.watch, apply=True,
+                                               verbose=False)
+        self.assertEqual([(old["ins_code"], new["ins_code"])
+                          for old, new in again["retired"]], [("100", "999")])
+        self.assertEqual(len(fundamental_db.load_metrics("999")), 1)
+        self.assertEqual(self.instrument("100")["kind"], universe.SUPERSEDED)
+
+    def test_a_store_that_fails_to_connect_holds_the_pair(self):
+        """The reviewer's case exactly: sqlite3.connect raising."""
+
+        import sqlite3
+
+        import fundamental_db
+
+        self.fill_old_code()
+
+        with mock.patch.object(fundamental_db, "_connect",
+                               side_effect=sqlite3.OperationalError(
+                                   "unable to open database file")):
+            plan = seed_import.reconcile_universe(self.watch, apply=True,
+                                                  verbose=False)
+
+        self.assert_held_whole(plan)
+        self.assertEqual(self.instrument("100")["is_equity"], 1)
+
+    def test_a_store_that_cannot_be_read_holds_the_pair(self):
+        """Opened, then every query fails: not a database at all."""
+
+        self.fill_old_code()
+        broken = os.path.join(self.store_dir, "broken.db")
+        with open(broken, "wb") as handle:
+            handle.write(b"this is not a database" * 100)
+
+        with mock.patch.dict(os.environ, {"SIRAT_FUNDAMENTAL_DB": broken}):
+            plan = seed_import.reconcile_universe(self.watch, apply=True,
+                                                  verbose=False)
+
+        self.assert_held_whole(plan)
+        self.assertEqual(self.instrument("100")["is_equity"], 1)
+
+    def test_an_absent_store_holds_nothing_back(self):
+        """No store yet, nothing in it to copy: the pair is retired."""
+
+        plan = seed_import.reconcile_universe(self.watch, apply=True,
+                                              verbose=False)
+
+        self.assertFalse(os.path.exists(self.store))
+        self.assertEqual([(old["ins_code"], new["ins_code"])
+                          for old, new in plan["retired"]], [("100", "999")])
 
 
 class HistoricalUniverseTests(unittest.TestCase):
@@ -621,21 +790,36 @@ class MissingSectorTests(unittest.TestCase):
         database.DATABASE_NAME = self.original
         os.unlink(self.path)
 
-    def run_import(self, **kwargs):
-        asked = []
+    def provider(self, asked, answering=None):
+        """Records what is asked; answers live only for `answering` (None:
+        everyone), HTTP 403 for the rest."""
 
         class Provider:
             name = "fake"
 
             def get_instrument_infos(self, codes, progress=None):
                 asked.extend(codes)
-                return {c: ProviderResult.success(
+                return {c: (ProviderResult.success(
                     {"ins_code": c, "sector_code": "44",
-                     "sector_name": "دارویی"}, "fake") for c in codes}
+                     "sector_name": "دارویی"}, "fake")
+                    if answering is None or c in answering
+                    else ProviderResult.failure("fake", "HTTP 403"))
+                    for c in codes}
 
-        with mock.patch.object(seed_import, "get_provider", Provider):
+        return mock.patch.object(seed_import, "get_provider", Provider)
+
+    def run_import(self, answering=None, **kwargs):
+        asked = []
+        with self.provider(asked, answering):
             result = seed_import.import_sectors(verbose=False, **kwargs)
         return asked, result
+
+    def add_listings(self, count=9):
+        """New listings, none with a sector yet: ten names missing one."""
+
+        database.save_instruments([
+            {"ins_code": str(10 + i), "symbol_fa": "ت%d" % i,
+             "kind": "equity", "is_equity": 1} for i in range(count)])
 
     def test_only_the_equities_without_a_sector_are_asked(self):
         asked, result = self.run_import(missing_only=True)
@@ -655,6 +839,84 @@ class MissingSectorTests(unittest.TestCase):
         asked, _ = self.run_import()
 
         self.assertEqual(sorted(asked), ["1", "2"])
+
+    def test_a_dead_host_costs_the_canary_and_is_no_fetch(self):
+        """Until 2026-11-11 a run whose every request failed still returned
+        the stored coverage, was recorded as fetched, and a new listing
+        whose first request failed waited 30 days for its next."""
+
+        self.add_listings()
+
+        asked, result = self.run_import(answering=set(), missing_only=True)
+        self.assertEqual(len(asked), seed_import.SECTOR_CANARY)
+        self.assertEqual(result, 0)
+
+        # The full import stops the same way.
+        asked, result = self.run_import(answering=set())
+        self.assertEqual(len(asked), seed_import.SECTOR_CANARY)
+        self.assertEqual(result, 0)
+
+    def test_one_live_answer_is_a_fetch(self):
+        self.add_listings()
+
+        asked, result = self.run_import(answering={"2"}, missing_only=True)
+
+        self.assertEqual(sorted(asked), sorted(["2"] + [str(10 + i)
+                                                        for i in range(9)]))
+        self.assertTrue(result)
+        self.assertEqual(database.sector_coverage()["with_sector"], 2)
+
+    def test_a_live_answer_without_a_sector_is_still_a_fetch(self):
+        """Not 0, or the step fails and every name is asked again after
+        each cooldown."""
+
+        conn = database._connect()
+        conn.execute("UPDATE instruments SET sector_code = NULL, "
+                     "sector_name = NULL")
+        conn.commit()
+        conn.close()
+
+        class Unclassified:
+            name = "fake"
+
+            def get_instrument_infos(self, codes, progress=None):
+                return {c: ProviderResult.success({"ins_code": c}, "fake")
+                        for c in codes}
+
+        with mock.patch.object(seed_import, "get_provider", Unclassified):
+            self.assertTrue(seed_import.import_sectors(verbose=False,
+                                                       missing_only=True))
+
+    def test_bootstrap_records_only_a_run_that_was_answered(self):
+        import bootstrap
+
+        self.add_listings()
+        behind = {"present": True, "detail": "", "updated_at": None,
+                  "behind": True}
+
+        def run(answering):
+            asked = []
+            with self.provider(asked, answering), \
+                    mock.patch.object(bootstrap, "STEPS",
+                                      [("sectors", lambda: behind, ())]), \
+                    mock.patch.object(bootstrap, "_last_fetch",
+                                      return_value=None), \
+                    mock.patch.object(bootstrap, "_mark_fetched") as mark, \
+                    mock.patch.object(bootstrap, "_step_detail",
+                                      return_value=""), \
+                    mock.patch.object(bootstrap, "_forward_log"), \
+                    mock.patch.dict(bootstrap._last_failure, clear=True):
+                action = bootstrap.ensure()["sectors"]["action"]
+                retry = "sectors" in bootstrap._last_failure
+            return asked, action, mark.called, retry
+
+        asked, action, marked, retry = run(answering=set())
+        self.assertEqual(len(asked), seed_import.SECTOR_CANARY)
+        self.assertEqual((action, marked, retry), ("failed", False, True))
+
+        asked, action, marked, retry = run(answering={"2"})
+        self.assertEqual(len(asked), 10)
+        self.assertEqual((action, marked, retry), ("fetched", True, False))
 
 
 if __name__ == "__main__":
