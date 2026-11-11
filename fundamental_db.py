@@ -1020,9 +1020,26 @@ def sync_from_market_db(verbose=False):
         tracing_no TEXT PRIMARY KEY, imported_at TEXT)""")
     seen = {row[0]: row[1] or "" for row in conn.execute(
         "SELECT tracing_no, imported_at FROM imported_letters")}
-    current = {(r[0], r[1], r[2]): r[3] or "" for r in conn.execute(
-        "SELECT ins_code, period_end, period_months, published_at FROM metrics")}
+    current = {(r[0], r[1], r[2]): (r[3] or "", r[4]) for r in conn.execute(
+        "SELECT ins_code, period_end, period_months, published_at, tracing_no "
+        "FROM metrics")}
     conn.close()
+
+    held_items = {}
+
+    def _held(key):
+        """The stored parse of a period, read only when a choice needs it."""
+        if key not in held_items:
+            c = _connect()
+            found = c.execute(
+                "SELECT items FROM metrics WHERE ins_code = ? AND "
+                "period_end = ? AND period_months IS ?", key).fetchone()
+            c.close()
+            try:
+                held_items[key] = json.loads(found[0]) if found and found[0] else {}
+            except (TypeError, ValueError):
+                held_items[key] = {}
+        return held_items[key]
 
     # New, or re-parsed since it was carried (codal_backfill.reparse_latest
     # re-reads a filing for line items added after its first parse).
@@ -1031,13 +1048,17 @@ def sync_from_market_db(verbose=False):
              and (str(row["tracing_no"]) not in seen
                   or (row.get("updated_at") or "") > seen[str(row["tracing_no"])])]
 
-    imported = superseded = empty = 0
+    imported = superseded = thin = empty = 0
     done = []
 
     for row in sorted(fresh, key=lambda r: r.get("published_at") or ""):
         key = (str(row.get("ins_code")), str(row.get("period_end")),
                row.get("period_months"))
         published = row.get("published_at") or ""
+        items = row.get("items") or {}
+        held = current.get(key)
+        tracing = None if row.get("tracing_no") is None else str(row["tracing_no"])
+        other = held is not None and held[1] != tracing
 
         # No exemption for a letter already carried. Re-parsing the release
         # the store holds passes anyway (same stamp); re-parsing an OLDER one
@@ -1046,7 +1067,21 @@ def sync_from_market_db(verbose=False):
         # exactly what must not displace the newer. The exemption allowed
         # that: --reparse-latest 4 would have put 20 older releases back,
         # 8 would have put 64 (2026-11-11).
-        if current.get(key, "") > published:
+        #
+        # The same choice as database.save_codal_financials, so metrics and
+        # codal_financials hold the same release (2026-11-11): a release whose
+        # parse lacks a statement the stored one has is a failed read, not
+        # the company's word, and does not replace it; an OLDER release may
+        # replace a stored one that lacks a statement it has. Newest-wins
+        # alone made the outcome depend on write order: 103 periods held a
+        # newest release with no income statement (or balance sheet, or cash
+        # flow) beside an older complete one, فوکا's latest 1405/06/31 among
+        # them.
+        lost = database.statements_lost(_held(key), items) if other else []
+        gained = database.statements_lost(items, _held(key)) if other else []
+        if lost:
+            thin += 1
+        elif other and held[0] > published and not gained:
             superseded += 1
         elif save_metrics({
             "ins_code": row.get("ins_code"),
@@ -1057,12 +1092,13 @@ def sync_from_market_db(verbose=False):
             "published_at": published or None,
             "audited": row.get("audited"),
             "consolidated": row.get("consolidated"),
-            "items": row.get("items") or {},
+            "items": items,
             "ratios": row.get("ratios") or {},
             "source": "market-db",
         }):
             imported += 1
-            current[key] = published
+            current[key] = (published, tracing)
+            held_items[key] = items
         else:
             empty += 1
 
@@ -1079,12 +1115,12 @@ def sync_from_market_db(verbose=False):
         conn.close()
 
     result = {"new": len(fresh), "imported": imported,
-              "superseded": superseded, "empty": empty}
+              "superseded": superseded, "thin": thin, "empty": empty}
 
     if verbose:
         print("fundamental store: %(new)d new letters, %(imported)d imported, "
-              "%(superseded)d older than what is stored, %(empty)d empty"
-              % result)
+              "%(superseded)d older than what is stored, %(thin)d lacking a "
+              "statement the stored release has, %(empty)d empty" % result)
 
     return result
 

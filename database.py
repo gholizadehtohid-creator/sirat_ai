@@ -1470,8 +1470,15 @@ def save_codal_financials(ins_code, record):
     no income statement, and the releases held for those periods have all
     three. codal_filings keeps every release as parsed; the repair names
     these for a targeted re-parse. A re-parse of the held letter itself
-    always may. Returns 1 if the row was written, 0 if it held a newer
-    release or a statement the incoming parse lacks.
+    always may.
+
+    And the choice does not depend on write order (third review,
+    2026-11-11): an OLDER release replaces a held newer one whose parse lacks
+    a statement the older has. Otherwise the thin newest release, written
+    first -- the daily sync writes newest first -- kept its period and the
+    complete original was refused as older. fundamental_db.sync_from_market_db
+    makes the same choice. Returns 1 if the row was written, 0 if it held a
+    newer release or a statement the incoming parse lacks.
     """
 
     if not record or not record.get("period_end"):
@@ -1497,9 +1504,10 @@ def save_codal_financials(ins_code, record):
         audited = excluded.audited, consolidated = excluded.consolidated,
         items = excluded.items, ratios = excluded.ratios,
         updated_at = excluded.updated_at
-    WHERE (%s)
-      AND (excluded.tracing_no IS codal_financials.tracing_no
-           OR NOT statements_lost(codal_financials.items, excluded.items))
+    WHERE excluded.tracing_no IS codal_financials.tracing_no
+       OR (NOT statements_lost(codal_financials.items, excluded.items)
+           AND ((%s)
+                OR statements_lost(excluded.items, codal_financials.items)))
     """ % _not_older("codal_financials"), (
         str(ins_code), record["period_end"], record.get("period_months"),
         tracing_no, record.get("title"),

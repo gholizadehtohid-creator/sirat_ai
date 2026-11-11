@@ -48,6 +48,7 @@ the rest of the project already applies.
 """
 
 import argparse
+import os
 import re
 import sys
 import time
@@ -349,6 +350,27 @@ def purge_subsidiaries(verbose=True):
     return result
 
 
+def _predecessors():
+    """{live ins_code: [retired ins_codes]} for board moves.
+
+    codal_filings stays keyed by the code a filing was published under, while
+    seed_import --repair-universe copies codal_financials to the live code, so
+    a live code's period must be compared with its predecessors' releases too
+    (2026-11-11: the copy ran before --repair-superseded, which then saw only
+    the retired codes' rows).
+    """
+
+    out = {}
+    try:
+        listings = database.superseded_listings()
+    except Exception:                                   # noqa: BLE001
+        return out
+    for retired, info in listings.items():
+        if info.get("successor"):
+            out.setdefault(str(info["successor"]), []).append(str(retired))
+    return out
+
+
 def superseded_periods():
     """codal_financials rows holding an older release than codal_filings has.
 
@@ -393,9 +415,13 @@ def superseded_periods():
             newest[key] = row
 
     out = []
+    before = _predecessors()
 
     for ins_code, period_end, months, tracing_no, title, published, items in held:
-        best = newest.get((str(ins_code), period_end, months))
+        found = [newest.get((code, period_end, months)) for code in
+                 [str(ins_code)] + before.get(str(ins_code), [])]
+        found = [row for row in found if row is not None]
+        best = max(found, key=lambda r: (r[4], str(r[0]))) if found else None
         if (best is None or not published or str(best[0]) == str(tracing_no)
                 or best[4] <= published):
             continue
@@ -403,7 +429,7 @@ def superseded_periods():
                      "period_months": months, "tracing_no": str(tracing_no),
                      "title": title, "published_at": published,
                      "items": database._loads(items)},
-                    {"ins_code": str(best[1]), "period_end": best[2],
+                    {"ins_code": str(ins_code), "period_end": best[2],
                      "period_months": best[3], "tracing_no": str(best[0]),
                      "published_at": best[4], "title": best[5],
                      "audited": None if best[6] is None else bool(best[6]),
@@ -411,6 +437,102 @@ def superseded_periods():
                      "items": database._loads(best[8]),
                      "ratios": database._loads(best[9])}))
 
+    return out
+
+
+def _filings_by_period():
+    """Every dated release in codal_filings, by (ins_code, period_end, months);
+    a subsidiary's statement filed under the parent's symbol left out."""
+
+    import financials
+
+    database.create_database()
+    conn = database._connect()
+    rows = conn.execute("""
+        SELECT tracing_no, ins_code, period_end, period_months, published_at,
+               title, audited, consolidated, items, ratios
+        FROM codal_filings
+        WHERE published_at IS NOT NULL AND published_at <> ''
+    """).fetchall()
+    conn.close()
+
+    out = {}
+    for row in rows:
+        if financials.subsidiary_of(row[5]):
+            continue
+        out.setdefault((str(row[1]), row[2], row[3]), []).append(row)
+    return out
+
+
+def _release(row):
+    return {"ins_code": str(row[1]), "period_end": row[2],
+            "period_months": row[3], "tracing_no": str(row[0]),
+            "published_at": row[4], "title": row[5],
+            "audited": None if row[6] is None else bool(row[6]),
+            "consolidated": bool(row[7]),
+            "items": database._loads(row[8]),
+            "ratios": database._loads(row[9])}
+
+
+def _held_rows(store):
+    """The release each period holds now: codal_financials ("market") or the
+    fundamental store's metrics ("store")."""
+
+    table = "codal_financials" if store == "market" else "metrics"
+    if store == "market":
+        conn = database._connect()
+    else:
+        import fundamental_db
+        if not os.path.isfile(fundamental_db.path()):
+            return []                   # a dry run creates no store
+        conn = fundamental_db._connect()
+    try:
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                            "AND name = ?", (table,)).fetchone():
+            return []
+        rows = conn.execute(
+            "SELECT ins_code, period_end, period_months, tracing_no, title, "
+            "items FROM %s" % table).fetchall()
+    finally:
+        conn.close()
+    return [{"ins_code": str(r[0]), "period_end": r[1], "period_months": r[2],
+             "tracing_no": None if r[3] is None else str(r[3]),
+             "title": r[4], "items": database._loads(r[5])} for r in rows]
+
+
+def unparsed_held_periods(held_rows, releases):
+    """[(held, better)]: periods whose HELD parse lacks a statement another
+    release of the period carries, with the newest release that lacks none
+    of the held parse's statements and has one it lacks.
+
+    The other half of the statement rule (third review, 2026-11-11):
+    superseded_periods() only sees rows holding an OLDER release, so a row
+    holding the newest release whose parse failed was invisible -- 103 on
+    live data, فوکا's latest period 1405/06/31 among them (correction
+    1613577 exported with no income-statement table; original 1611372 has
+    it), and the panel showed that period with no revenue, profit or EPS.
+    """
+
+    out = []
+    before = _predecessors()
+    for held in held_rows:
+        found = []
+        candidates = []
+        for code in [held["ins_code"]] + before.get(held["ins_code"], []):
+            candidates += releases.get(
+                (code, held["period_end"], held["period_months"]), [])
+        for row in candidates:
+            if str(row[0]) == held["tracing_no"]:
+                continue
+            items = database._loads(row[8])
+            if database.statements_lost(held["items"], items):
+                continue                        # it lacks one the held has
+            if not database.statements_lost(items, held["items"]):
+                continue                        # it adds nothing
+            found.append(row)
+        if found:
+            best = max(found, key=lambda r: (r[4] or "", str(r[0])))
+            out.append((held, dict(_release(best), ins_code=held["ins_code"])))
     return out
 
 
@@ -567,8 +689,26 @@ def repair_superseded(apply=False, verbose=True):
                                             held["period_months"] or 0):
             on_latest.append((held, best))
 
-    written = 0
+    # Rows holding a release whose parse lacks a statement another release
+    # has (the newest included), in both stores. A period the plan above
+    # already rewrites is left to it.
+    planned = {(h["ins_code"], h["period_end"], h["period_months"])
+               for h, _b, _r in plan}
+    releases = _filings_by_period()
+    restore = [(h, b) for h, b in unparsed_held_periods(
+        _held_rows("market"), releases)
+        if (h["ins_code"], h["period_end"], h["period_months"]) not in planned]
+    restore_store = unparsed_held_periods(_held_rows("store"), releases)
+
+    written = restored = restored_store = 0
     if apply:
+        for _held, best in restore:
+            restored += database.save_codal_financials(best["ins_code"], best)
+        if restore_store:
+            import fundamental_db
+            for _held, best in restore_store:
+                if fundamental_db.save_metrics(dict(best, source="market-db")):
+                    restored_store += 1
         for _held, best, record in plan:
             if record is not None:
                 # The fuller parse goes to codal_filings too, so the
@@ -585,12 +725,20 @@ def repair_superseded(apply=False, verbose=True):
               "losing_items": thinner_before, "items_lost": lost_before,
               "reparsed": reparsed, "still_losing_items": thinner_after,
               "items_still_lost": lost_after, "not_archived": unarchived,
-              "not_reparsed": unparsed, "kept_unparsed": kept}
+              "not_reparsed": unparsed, "kept_unparsed": kept,
+              "held_unparsed": [(h["tracing_no"], b["tracing_no"])
+                                for h, b in restore],
+              "held_unparsed_store": [(h["tracing_no"], b["tracing_no"])
+                                      for h, b in restore_store],
+              "restored": restored, "restored_store": restored_store}
 
     if verbose:
+        # Kept rows hold an older release on purpose (the newest one's parse
+        # lacks a statement), so the headline says how many are really owed.
         print("repair: %d periods in codal_financials hold an older release "
-              "than codal_filings has; %d are the company's latest period%s"
-              % (len(stale), len(on_latest), "" if apply else
+              "than codal_filings has (%d on purpose: the newest release's "
+              "parse lacks a statement); %d are the company's latest period%s"
+              % (len(stale), len(kept), len(on_latest), "" if apply else
                  " -- dry run, nothing written (--apply rewrites %d of them)"
                  % len(plan)), flush=True)
         for name, count in sorted(kinds.items(), key=lambda kv: -kv[1]):
@@ -625,8 +773,28 @@ def repair_superseded(apply=False, verbose=True):
             print("  newest release unparsed, kept: %s has no %s, which the "
                   "held %s has -- not written; it needs a targeted re-parse"
                   % (newest, " and no ".join(missing), held_no), flush=True)
+        on_latest_held = [pair for pair in restore if latest.get(
+            pair[0]["ins_code"]) == (pair[0]["period_end"] or "",
+                                     pair[0]["period_months"] or 0)]
+        print("repair: %d periods in codal_financials and %d in the "
+              "fundamental store hold a release whose parse lacks a statement "
+              "another release of the period has (%d are the company's latest "
+              "period)%s" % (len(restore), len(restore_store),
+                             len(on_latest_held), "" if apply else
+                             " -- --apply puts the complete release back"),
+              flush=True)
+        for held, best in (on_latest_held + [p for p in restore
+                                             if p not in on_latest_held])[:8]:
+            print("  %-8s %s %sm  held %s lacks the %s; %s has it"
+                  % (names.get(held["ins_code"]) or held["ins_code"],
+                     held["period_end"], held["period_months"],
+                     held["tracing_no"], " and the ".join(
+                         database.statements_lost(best["items"], held["items"])),
+                     best["tracing_no"]), flush=True)
         if apply:
-            print("repair: %d rows rewritten" % written, flush=True)
+            print("repair: %d rows rewritten; restored %d in codal_financials "
+                  "and %d in the fundamental store"
+                  % (written, restored, restored_store), flush=True)
 
     return result
 

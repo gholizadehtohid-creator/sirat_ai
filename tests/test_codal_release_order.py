@@ -8,6 +8,7 @@ operation. 531 periods held a superseded release, 74 of them a company's
 latest (ملت 1405/06/31 held 1614602, not its correction 1619771).
 """
 
+import json
 import os
 import shutil
 import sys
@@ -343,6 +344,16 @@ class StatementGuardTests(Stores):
     failed read, not the company's word: 472469 (no balance sheet or cash
     flow statement) and 1212323 (no income statement) on 2026-11-11."""
 
+    def setUp(self):
+        super().setUp()
+        # Never the live raw archive: 1619771 is in it, and a re-parse of the
+        # real ملت correction would decide the outcome (third review).
+        archive = tempfile.mkdtemp()
+        patch = mock.patch.object(codal, "ARCHIVE_DIR", archive)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(shutil.rmtree, archive, True)
+
     def save(self, tracing, title, items, published):
         row = dict(record(tracing, title, None), items=items)
         database.save_codal_filing("M", row, published_at=published)
@@ -465,6 +476,113 @@ class ArchivedEpsTests(Stores):
         eps = {f["tracing_no"]: f["items"].get("eps")
                for f in database.load_codal_filings("M")}
         self.assertEqual(eps["1619771"], 28428.0)
+
+
+class OrderIndependentGuardTests(Stores):
+    """The statement rule must not depend on write order (third review,
+    2026-11-11): the daily sync writes the newest filing first, and a thin
+    newest release written first used to keep its period for good."""
+
+    def setUp(self):
+        super().setUp()
+        archive = tempfile.mkdtemp()
+        patch = mock.patch.object(codal, "ARCHIVE_DIR", archive)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(shutil.rmtree, archive, True)
+
+    def save(self, tracing, title, items, published):
+        row = dict(record(tracing, title, None), items=items)
+        database.save_codal_filing("M", row, published_at=published)
+        return database.save_codal_financials("M", row)
+
+    THIN = {"revenue": 950.0, "net_profit": 120.0}     # no balance sheet, no cash flow
+
+    def test_a_thin_newest_written_first_gives_way_to_the_complete_original(self):
+        self.save("1619771", CORRECTION, dict(self.THIN), "1405/08/05 11:12:49")
+        written = self.save("1614602", ORIGINAL, dict(COMPLETE),
+                            "1405/07/29 16:42:34")
+
+        self.assertEqual(written, 1)
+        self.assertEqual(self.held()["tracing_no"], "1614602")
+
+    def test_the_store_makes_the_same_choice_in_either_order(self):
+        for order in ((("1619771", CORRECTION, self.THIN, "1405/08/05 11:12:49"),
+                       ("1614602", ORIGINAL, COMPLETE, "1405/07/29 16:42:34")),):
+            for tracing, title, items, published in order:
+                self.save(tracing, title, dict(items), published)
+        result = fundamental_db.sync_from_market_db()
+
+        held = fundamental_db.load_metrics("M")[0]
+        self.assertEqual(held["tracing_no"], "1614602")
+        self.assertEqual(result["thin"], 1)
+
+    def plant_thin_newest(self):
+        """The damage as live held it: the newest release, its parse without
+        two statements, in both stores; the complete original on file."""
+
+        conn = database._connect()
+        for tracing, title, items, published in (
+                ("1614602", ORIGINAL, COMPLETE, "1405/07/29 16:42:34"),
+                ("1619771", CORRECTION, self.THIN, "1405/08/05 11:12:49")):
+            conn.execute(
+                "INSERT INTO codal_filings (tracing_no, ins_code, period_end, "
+                "period_months, published_at, title, items, ratios) VALUES "
+                "(?, 'M', '1405/06/31', 6, ?, ?, ?, '{}')",
+                (tracing, published, title, json.dumps(items)))
+        conn.execute(
+            "INSERT INTO codal_financials (ins_code, period_end, period_months, "
+            "tracing_no, title, items, ratios) VALUES ('M', '1405/06/31', 6, "
+            "'1619771', ?, ?, '{}')", (CORRECTION, json.dumps(self.THIN)))
+        conn.commit()
+        conn.close()
+        fundamental_db.save_metrics({
+            "ins_code": "M", "period_end": "1405/06/31", "period_months": 6,
+            "tracing_no": "1619771", "title": CORRECTION,
+            "published_at": "1405/08/05 11:12:49", "items": dict(self.THIN),
+            "ratios": {}})
+
+    def test_the_repair_restores_a_held_thin_newest_release_once(self):
+        self.plant_thin_newest()
+
+        dry = codal_backfill.repair_superseded(verbose=False)
+        self.assertEqual(dry["held_unparsed"], [("1619771", "1614602")])
+        self.assertEqual(dry["held_unparsed_store"], [("1619771", "1614602")])
+        self.assertEqual(self.held()["tracing_no"], "1619771")    # dry: no write
+
+        applied = codal_backfill.repair_superseded(apply=True, verbose=False)
+        self.assertEqual((applied["restored"], applied["restored_store"]), (1, 1))
+        self.assertEqual(self.held()["items"], COMPLETE)
+        self.assertEqual(fundamental_db.load_metrics("M")[0]["tracing_no"],
+                         "1614602")
+
+        again = codal_backfill.repair_superseded(verbose=False)
+        self.assertEqual((again["held_unparsed"], again["held_unparsed_store"]),
+                         ([], []))
+
+    def test_a_live_code_is_compared_with_its_predecessors_releases(self):
+        # A board move: codal_filings stays on the retired code M while
+        # --repair-universe copied codal_financials to the live code L.
+        self.save("1614602", ORIGINAL, dict(COMPLETE), "1405/07/29 16:42:34")
+        self.save("1619771", CORRECTION, dict(COMPLETE, net_profit=120.0),
+                  "1405/08/05 11:12:49")
+        conn = database._connect()
+        conn.execute(
+            "INSERT INTO codal_financials (ins_code, period_end, period_months, "
+            "tracing_no, title, items, ratios) VALUES ('L', '1405/06/31', 6, "
+            "'1614602', ?, ?, '{}')", (ORIGINAL, json.dumps(COMPLETE)))
+        conn.commit()
+        conn.close()
+
+        with mock.patch.object(codal_backfill, "_predecessors",
+                               return_value={"L": ["M"]}):
+            pairs = codal_backfill.superseded_periods()
+            codal_backfill.repair_superseded(apply=True, verbose=False)
+
+        self.assertEqual([(h["ins_code"], b["ins_code"], b["tracing_no"])
+                          for h, b in pairs], [("L", "L", "1619771")])
+        self.assertEqual(database.load_codal_financials("L")[0]["tracing_no"],
+                         "1619771")
 
 
 if __name__ == "__main__":
