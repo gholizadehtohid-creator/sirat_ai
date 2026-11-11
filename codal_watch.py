@@ -4,7 +4,8 @@
     python codal_watch.py --since 1405/05/01   catch up: page back to a date
     python codal_watch.py --rewind 1405/08/04  re-sweep from a day (dry run;
                                                --apply saves it)
-    python codal_watch.py --report
+    python codal_watch.py --report             the marks, the sweep, the retry
+                                               queue, dead letters and stalls
 
 WHY A FEED AND NOT A SWEEP
 --------------------------
@@ -42,6 +43,16 @@ Now the mark moves only when a poll has covered everything down to it, a
 transient failure waits in watch_retry, and a backlog deeper than the page
 cap is swept SWEEP_PAGES a poll from where the last one stopped (scan).
 
+A poll that cannot be sure of what it read claims nothing and reads it
+again next time, so what is left to watch for is a stall, and a stall is
+made visible: a poll that does not advance is counted, and after
+STALL_POLLS of them in a row the poll's log and --report say so, with the
+reason (a feed that keeps refusing, or pages that keep coming back short --
+as a page size other than PAGE_SIZE would make every one). A letter whose
+handler keeps failing goes behind the others in watch_retry and, after
+RETRY_LIMIT tries, is kept with its last error as a dead letter that
+--report lists.
+
 Companies outside today's equity universe are recorded as seen and skipped.
 The per-company paths stay as safety nets: codal_monthly.py nightly, and
 codal_sync from the panel.
@@ -53,13 +64,14 @@ import re
 import sqlite3
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import codal
 import codal_announcements
 import config
 import database
 import fundamental_db
+import jalali
 import persian
 import settings
 
@@ -77,11 +89,24 @@ FEED_READ_TIMEOUT = 60        # seconds; see _page
 SWEEP_PAGES = 20
 PAGE_SIZE = 20                # letters a feed page carries (the sweep's arithmetic)
 FEED_PAGES_PER_DAY = 14       # measured 2026-11-06: 333 pages reached back 23 days
-# A letter whose fetch keeps failing transiently is retried from watch_retry
-# this many polls (about a day), then given up; ن-10 and ن-30 still have the
-# backfill and codal_monthly behind them.
+# How far past a mark a pass reads before it takes the mark as reached. The
+# feed is not strictly in PublishDateTime order -- the 11-06 catch-up log
+# shows inversions of 4 to 30 seconds -- so a letter stamped just after the
+# mark can sit below letters stamped before it, on a page that a pass
+# stopping at the first stamp at or before the mark never read (the review,
+# 2026-11-11). Letters already seen cost nothing but their share of a page:
+# about one page more, at most, outside a deadline-day burst.
+MARK_MARGIN_SECONDS = 120
+# A letter whose fetch keeps failing -- transiently, or by raising -- is
+# retried from watch_retry, behind the others, up to this many tries in all
+# (about 16 hours of two-hourly polls). Then it is given up: marked seen with
+# that outcome and kept, with its last error, in the watch state's dead
+# letters for --report. ن-10 and ن-30 still have the backfill and
+# codal_monthly behind them.
 RETRY_PER_POLL = 30
-RETRY_LIMIT = 12
+RETRY_LIMIT = 8
+# Polls in a row that did not advance before the watch calls itself stalled.
+STALL_POLLS = 3
 
 
 def _now():
@@ -94,16 +119,63 @@ def _ensure_table():
     conn.execute("""CREATE TABLE IF NOT EXISTS watch_seen (
         tracing_no TEXT PRIMARY KEY, letter_code TEXT, ins_code TEXT,
         published_at TEXT, outcome TEXT, seen_at TEXT)""")
-    # The complete-through mark and an unfinished sweep (scan), and the
-    # letters whose fetch failed transiently, kept whole so a later poll
-    # retries them without paging back to find them.
+    # The complete-through mark and an unfinished sweep (scan), the largest
+    # feed Total seen, the stall count and the dead letters (notes); and the
+    # letters whose fetch failed, kept whole so a later poll retries them
+    # without paging back to find them.
     conn.execute("""CREATE TABLE IF NOT EXISTS watch_state (
         key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)""")
     conn.execute("""CREATE TABLE IF NOT EXISTS watch_retry (
         tracing_no TEXT PRIMARY KEY, letter TEXT, attempts INTEGER,
-        last_tried TEXT)""")
+        last_tried TEXT, error TEXT)""")
+    # A queue made before 2026-11-11 has no error column.
+    if "error" not in {r[1] for r in conn.execute(
+            "PRAGMA table_info(watch_retry)")}:
+        conn.execute("ALTER TABLE watch_retry ADD COLUMN error TEXT")
     conn.commit()
     conn.close()
+
+
+def _values():
+    """watch_state as {key: value}; {} before the table exists."""
+
+    conn = fundamental_db._connect()
+    try:
+        rows = dict(conn.execute(
+            "SELECT key, value FROM watch_state").fetchall())
+    except sqlite3.OperationalError:
+        rows = {}
+    conn.close()
+    return rows
+
+
+def _save_values(values):
+    conn = fundamental_db._connect()
+    now = _now()
+    conn.executemany("INSERT OR REPLACE INTO watch_state VALUES (?, ?, ?)",
+                     [(key, value, now) for key, value in values.items()])
+    conn.commit()
+    conn.close()
+
+
+def _json(text, default):
+    try:
+        value = json.loads(text) if text else default
+    except ValueError:
+        return default
+    return value if isinstance(value, type(default)) else default
+
+
+# A stamp as the feed carries it once its digits are folded. Anything else
+# -- missing, empty, another shape -- is undated here: the letter is still
+# taken and handled, but it never moves a mark, ends a pass or places a
+# floor, because the marks are compared as strings and only this shape
+# orders correctly as one.
+_STAMP = re.compile(r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}")
+
+
+def _dated(stamp):
+    return isinstance(stamp, str) and bool(_STAMP.fullmatch(stamp))
 
 
 def load_state():
@@ -114,48 +186,58 @@ def load_state():
     left below it is for rewind(), not for a silent default.
     """
 
-    conn = fundamental_db._connect()
-    try:
-        rows = dict(conn.execute(
-            "SELECT key, value FROM watch_state").fetchall())
-    except sqlite3.OperationalError:            # before the table exists
-        rows = {}
+    rows = _values()
     if "through" not in rows:
+        conn = fundamental_db._connect()
         try:
-            rows["through"] = conn.execute(
-                "SELECT MAX(published_at) FROM watch_seen").fetchone()[0]
+            stamps = [r[0] for r in conn.execute(
+                "SELECT DISTINCT published_at FROM watch_seen")]
         except sqlite3.OperationalError:
-            rows["through"] = None
-    conn.close()
+            stamps = []
+        conn.close()
+        rows["through"] = _later(*(s for s in stamps if _dated(s)))
 
-    sweep = None
-    if rows.get("sweep"):
-        try:
-            sweep = json.loads(rows["sweep"])
-        except ValueError:
-            sweep = None
+    sweep = _json(rows.get("sweep"), {}) or None
     return {"through": rows.get("through") or None, "sweep": sweep}
 
 
 def save_state(state):
-    conn = fundamental_db._connect()
-    now = _now()
-    conn.executemany("INSERT OR REPLACE INTO watch_state VALUES (?, ?, ?)", [
-        ("through", state.get("through") or "", now),
-        ("sweep", json.dumps(state["sweep"], ensure_ascii=False)
-         if state.get("sweep") else "", now),
-    ])
-    conn.commit()
-    conn.close()
+    _save_values({
+        "through": state.get("through") or "",
+        "sweep": json.dumps(state["sweep"], ensure_ascii=False)
+        if state.get("sweep") else "",
+    })
+
+
+def notes():
+    """What the watch keeps beside its marks.
+
+      total  the largest Total the feed has answered with, or None. The
+             market-wide feed only grows, so it is a floor for every later
+             answer (_read).
+      stall  {'polls', 'since', 'reason'} while polls in a row have not
+             advanced (scan), else {}.
+      dead   letters given up after RETRY_LIMIT tries, oldest first:
+             {'tracing_no', 'attempts', 'error', 'at', 'letter'}.
+    """
+
+    rows = _values()
+    try:
+        total = int(rows.get("total") or "")
+    except ValueError:
+        total = None
+    return {"total": total, "stall": _json(rows.get("stall"), {}),
+            "dead": _json(rows.get("dead"), [])}
 
 
 def _queued():
-    """{tracing_no: (letter, attempts)} waiting for a retry, least recent first."""
+    """{tracing_no: (letter, attempts)} waiting for a retry, least recently
+    tried first -- so a letter that failed waits behind the others."""
 
     conn = fundamental_db._connect()
     try:
         rows = conn.execute("SELECT tracing_no, letter, attempts FROM watch_retry"
-                            " ORDER BY last_tried").fetchall()
+                            " ORDER BY last_tried, rowid").fetchall()
     except sqlite3.OperationalError:
         rows = []
     conn.close()
@@ -168,11 +250,15 @@ def _queued():
     return out
 
 
-def _queue(letter, attempts):
+def _queue(letter, attempts, error=None):
+    # Microseconds: letters queued within one second must still keep the
+    # order they failed in, or a failed one could sort ahead of the rest.
+    tried = datetime.now(timezone.utc).isoformat(timespec="microseconds")
     conn = fundamental_db._connect()
-    conn.execute("INSERT OR REPLACE INTO watch_retry VALUES (?, ?, ?, ?)",
+    conn.execute("INSERT OR REPLACE INTO watch_retry (tracing_no, letter, "
+                 "attempts, last_tried, error) VALUES (?, ?, ?, ?, ?)",
                  (letter["tracing_no"], json.dumps(letter, ensure_ascii=False),
-                  attempts, _now()))
+                  attempts, tried, error))
     conn.commit()
     conn.close()
 
@@ -182,6 +268,15 @@ def _unqueue(tracing_no):
     conn.execute("DELETE FROM watch_retry WHERE tracing_no = ?", (tracing_no,))
     conn.commit()
     conn.close()
+
+
+def _bury(letter, attempts, error):
+    """Keep a letter given up in the dead letters, with its last error."""
+
+    dead = notes()["dead"]
+    dead.append({"tracing_no": letter["tracing_no"], "attempts": attempts,
+                 "error": (error or "")[:200], "at": _now(), "letter": letter})
+    _save_values({"dead": json.dumps(dead, ensure_ascii=False)})
 
 
 def _seen():
@@ -253,7 +348,7 @@ def collect(client, seen, since=None, pace=None, codes=FEEDS):
     return _collect(client, seen, since, pace, codes)[0]
 
 
-def _collect(client, seen, since=None, pace=None, codes=FEEDS):
+def _collect(client, seen, since=None, pace=None, codes=FEEDS, feed=None):
     """collect(), and the newest stamp read if paging ended where it should
     -- known ground, `since`, or the end of the feed -- rather than on a
     failed page or the page cap (None then)."""
@@ -262,7 +357,7 @@ def _collect(client, seen, since=None, pace=None, codes=FEEDS):
     page = 1
     limit = None if since else MAX_PAGES_POLL
     newest, complete = None, False
-    feed = {}
+    feed = {} if feed is None else feed
 
     while limit is None or page <= limit:
         letters = _read(client, page, pace, feed)
@@ -297,10 +392,12 @@ def _collect(client, seen, since=None, pace=None, codes=FEEDS):
         if since:
             time.sleep(CATCH_UP_GAP_SECONDS)
 
+    if complete and _cut_short(feed) is not None:
+        complete = False
     return fresh, (newest if complete else None)
 
 
-def _catch_up(client, seen, since, pace):
+def _catch_up(client, seen, since, pace, feed=None):
     """collect(since=...) that cannot leave a hole: (fresh, state or None).
 
     The mark is lowered to `since` and saved BEFORE anything is fetched. On
@@ -321,7 +418,7 @@ def _catch_up(client, seen, since, pace):
         state = {"through": mark, "sweep": None}
         save_state(state)
 
-    fresh, newest = _collect(client, seen, since=since, pace=pace)
+    fresh, newest = _collect(client, seen, since=since, pace=pace, feed=feed)
 
     if newest and state["through"] == mark:
         return fresh, {"through": _later(mark, newest), "sweep": None}
@@ -343,37 +440,133 @@ def _read(client, page, pace, feed=None):
     bottom of its hole up, while the log said "complete through". The real
     end is thousands of pages back and is never reached in practice.
 
-    `feed` keeps the largest Total read in this pass. The feed only grows,
-    so an empty answer's "Total: 0" cannot move the end up to it. Without a
-    Total at all, only a full page counts.
+    Which Total places the end (found by the second review, 2026-11-11):
+      - none that the answer itself contradicts: fewer letters in the feed
+        than this page and the pages before it hold is no Total at all.
+        Five letters with "Total: 0" on page 1 had passed for a whole page
+        (nothing read before it to say otherwise), the next page was read
+        as contiguous, and the 15 letters between were never read;
+      - the largest one known: read in this pass, or stored from earlier
+        polls (feed['stored'], notes) -- the market-wide feed only grows,
+        so a degraded answer whose small Total agrees with itself (five
+        letters, "Total: 5") cannot move the end up to it either. Nor
+        can it on the first poll, with nothing stored: the pages are judged
+        again, before the marks move, by the largest Total the whole pass
+        read (_cut_short).
+    Without any Total, only a full page counts.
+
+    And a Total below one read earlier in the same pass is an answer from
+    an older copy of the feed -- a lagging replica, a cache, or a letter
+    withdrawn meanwhile -- whose page holds letters from further down than
+    its number says: the letters between it and the page before are
+    skipped. It is a failed read too. In the second review's simulation a
+    page served as it was one poll earlier lost 8-341 letters; the second
+    read of a pass's last page (_confirm) alone still left 3-29 lost to
+    such pages in mid-pass. Only within a pass: a letter withdrawn since an
+    earlier poll must not blind the watch until the feed outgrows the
+    stored Total.
+
+    `feed` is the pass's record of what the feed said: 'stored' (given),
+    'read' (the largest Total read in this pass), 'whole' ({page: letters}
+    accepted) and 'failed' (what ended the pass, if a read did).
     """
 
+    feed = {} if feed is None else feed
     try:
         letters, total = _page(client, page)
     except Exception as exc:                                    # noqa: BLE001
         if pace:
             pace(codal.classify(exc) == codal.KIND_TRANSIENT)
-        print("watch: feed page %d failed: %s" % (page, exc), flush=True)
-        return None
-    feed = {} if feed is None else feed
+        return _failed(feed, "feed page %d failed: %s" % (page, exc))
+    if total is not None and total < (page - 1) * PAGE_SIZE + len(letters):
+        total = None
+    if total is not None and total < (feed.get("read") or 0):
+        if pace:
+            pace(True)
+        return _failed(feed, "feed page %d failed: an older copy of the feed "
+                             "(Total %d, below the %d read before it in this "
+                             "pass)" % (page, total, feed["read"]))
     if total is not None:
-        feed["total"] = max(total, feed.get("total") or 0)
-    total = feed.get("total")
+        feed["read"] = max(total, feed.get("read") or 0)
+    known = [t for t in (feed.get("read"), feed.get("stored")) if t is not None]
+    total = max(known) if known else None
     due = PAGE_SIZE if total is None else max(
         0, min(PAGE_SIZE, total - (page - 1) * PAGE_SIZE))
     if len(letters) < due:
         if pace:
             pace(True)
-        print("watch: feed page %d failed: %d letters where %d were due "
-              "(Total %s)" % (page, len(letters), due, total), flush=True)
-        return None
+        return _failed(feed, "feed page %d failed: %d letters where %d were "
+                             "due (Total %s)" % (page, len(letters), due, total))
     if pace:
         pace(False)
+    feed.setdefault("whole", {})[page] = len(letters)
     return letters
 
 
+def _failed(feed, message):
+    print("watch: %s" % message, flush=True)
+    feed["failed"] = message
+    return None
+
+
+def _cut_short(feed):
+    """The first page this pass took as whole that the largest Total known
+    now says was short, or None. A page 1 of five letters with "Total: 5"
+    is whole when it is read; page 2's real Total says it was not."""
+
+    known = [t for t in (feed.get("read"), feed.get("stored")) if t is not None]
+    if not known:
+        return None
+    total = max(known)
+    for number, count in sorted((feed.get("whole") or {}).items()):
+        if count < max(0, min(PAGE_SIZE, total - (number - 1) * PAGE_SIZE)):
+            _failed(feed, "feed page %d held %d letters, short of what the "
+                          "Total read later in the pass (%d) puts there; the "
+                          "marks stay this poll" % (number, count, total))
+            return number
+    return None
+
+
+def _confirm(client, number, letters, pace, feed, take):
+    """Read the page a pass ends on a second time, before the marks move on it.
+
+    The page that joins new ground to ground already covered is the one a
+    stale answer does the most harm on. An answer served from an older copy
+    of the feed -- a lagging replica, a cache -- holds letters from further
+    down than its page number says, so the letters between it and the page
+    above are skipped; on the last page they are claimed with the rest when
+    the mark moves. In the second review's simulation (2026-11-11) a page
+    served as it was one poll earlier ended a sweep and claimed 8 to 341
+    letters of the hole. _read refuses such an answer by its Total; this
+    check holds without one.
+
+    One more request, CATCH_UP_GAP_SECONDS later. It holds if the second
+    answer is read whole, shares letters with the first and shows no
+    watched letter the pass has not taken: letters published in between
+    push the page down by letters the pass read above it, which is no
+    difference. Otherwise the marks stay this poll, and the next one reads
+    the page again; whatever the second answer showed is taken all the same.
+    """
+
+    time.sleep(CATCH_UP_GAP_SECONDS)
+    again = _read(client, number, pace, feed)
+    if again is None:
+        return False
+    first = {letter.get("tracing_no") for letter in letters}
+    missed = take(again)
+    if missed:
+        why = "%d watched letters the first read had skipped" % missed
+    elif not any(letter.get("tracing_no") in first for letter in again):
+        why = "no letter in common with the first read"
+    else:
+        return True
+    _failed(feed, "feed page %d read differently a second time (%s); the "
+                  "marks stay this poll" % (number, why))
+    return False
+
+
 def _stamps(letters):
-    return [l["published_at"] for l in letters if l.get("published_at")]
+    return [l["published_at"] for l in letters if _dated(l.get("published_at"))]
 
 
 def _later(*stamps):
@@ -381,7 +574,27 @@ def _later(*stamps):
     return max(stamps) if stamps else None
 
 
-def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
+def _earliest(*stamps):
+    stamps = [s for s in stamps if s]
+    return min(stamps) if stamps else None
+
+
+def _before(stamp, seconds):
+    """`stamp` moved `seconds` earlier, in the same shape; an undated stamp
+    is returned as it is."""
+
+    moment = jalali.parse(stamp) if _dated(stamp) else None
+    if moment is None:
+        return stamp
+    moment -= timedelta(seconds=seconds)
+    day = jalali.today_jalali(moment.date())
+    if not day:
+        return stamp
+    return "%04d/%02d/%02d %s" % (day + (moment.strftime("%H:%M:%S"),))
+
+
+def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None,
+         feed=None):
     """New letters of the watched types down to the mark, newest first.
 
     Returns (fresh, state). Save `state` only once every letter in `fresh`
@@ -389,41 +602,69 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
     nothing it did not cover, and the next poll reads the same ground again.
 
       through  every watched letter published at or before it is handled.
-               The top of the feed is read down to it (MAX_PAGES_POLL pages
-               at most) and it moves to the newest letter only when the
-               poll got all the way down.
-      sweep    a backlog deeper than that: {top, top_at, floor_at,
+               The top of the feed is read down to it, MARK_MARGIN_SECONDS
+               past it (MAX_PAGES_POLL pages at most), and it moves to the
+               newest letter only when the poll got all the way down.
+      sweep    a backlog deeper than that: {top, top_at, floor, floor_at,
                floor_index}, the stretch from the top letter of the last
-               poll down to its floor having been covered. The next poll
-               reads the new letters above `top`, then jumps to the floor's
-               page -- where it sits now, shifted by the letters published
-               since, one page early -- and walks on toward `through`,
-               sweep_pages a poll at the catch-up's pace. A jump that lands
-               below the floor steps back, so nothing between is skipped.
+               poll down to its floor letter having been covered. The next
+               poll reads the new letters above `top`, then jumps to the
+               floor letter's page -- where it sits now, shifted by the
+               letters published since -- and walks on toward `through`,
+               sweep_pages a poll at the catch-up's pace.
+
+    The jump re-reads one page at most, the floor's own, and finds the
+    floor letter on it. It used to land a page earlier, re-reading two
+    pages a poll where this said one (found 2026-11-11). A page without
+    the floor letter on it (letters gone from the feed shift it) steps
+    back a page -- where the old jump landed -- and on while a page is all
+    older than the floor, so nothing between is skipped; a sweep saved
+    before the floor letter was kept jumps there directly.
 
     Every unseen watched letter on a page read is taken, whatever its date:
     the marks decide how far to read, not what to keep. A page that fails
     (_read: an error, or an empty or short answer short of the feed's end)
     ends the reading where it is, and the marks claim nothing past the
-    pages read whole before it.
+    pages read whole before it. The page a pass ends on below page 1 is
+    read twice before the marks move on it (_confirm), and no mark moves
+    if a page taken as whole turns out short by a Total read after it
+    (_cut_short). An undated letter is taken, but moves no mark: it
+    neither ends a pass nor places a floor.
+
+    `feed` is the pass's record (_read); scan adds 'advanced', whether the
+    pass moved the marks or covered new ground -- what poll() counts stalls
+    by.
     """
 
+    feed = {} if feed is None else feed
+    fresh, after = _scan(client, seen, state, pace, codes, sweep_pages, feed)
+    if after != state and _cut_short(feed) is not None:
+        feed["advanced"] = False
+        return fresh, state
+    return fresh, after
+
+
+def _scan(client, seen, state, pace, codes, sweep_pages, feed):
     through, sweep = state.get("through"), state.get("sweep")
     sweep_pages = SWEEP_PAGES if sweep_pages is None else sweep_pages
+    feed["advanced"] = False
     fresh, taken = [], set()
-    feed = {}                                       # the Total, for _read
 
     def take(letters):
+        found = 0
         for letter in letters:
             number = letter.get("tracing_no")
             if (letter.get("letter_code") in codes and number
                     and number not in seen and number not in taken):
                 taken.add(number)
                 fresh.append(letter)
+                found += 1
+        return found
 
     # ---- the top of the feed, down to ground already covered ------------
     ground = sweep["top_at"] if sweep else through
-    above, reached, page = [], False, 0
+    stop = _before(ground, MARK_MARGIN_SECONDS)
+    above, reached, page, letters = [], False, 0, None
     while page < MAX_PAGES_POLL:
         letters = _read(client, page + 1, pace, feed)
         if letters is None:
@@ -441,12 +682,20 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
         above.extend(letters)
         take(letters)
         stamps = _stamps(letters)
-        if ground is None or (stamps and min(stamps) <= ground):
+        if ground is None or (stamps and min(stamps) <= stop):
             reached = True
             break
 
     if not above:
+        feed["advanced"] = True
         return fresh, state                         # an empty feed: no news
+
+    # Page 1 joins nothing: an old copy of it is only old news, read again
+    # next poll. Any later page that ends the read joins the new letters
+    # to covered ground.
+    if reached and page > 1 and letters and not _confirm(
+            client, page, letters, pace, feed, take):
+        return fresh, state
 
     stamps = _stamps(above)
     top = {"top": above[0].get("tracing_no"),
@@ -458,11 +707,14 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
         # is a backlog. A sweep already under way restarts from here (its
         # stretch is now cut off from this one): pages are re-read, nothing
         # is skipped.
+        feed["advanced"] = True
         return fresh, {"through": through, "sweep": dict(
-            top, floor_at=min(stamps) if stamps else top["top_at"],
+            top, floor=above[-1].get("tracing_no"),
+            floor_at=_earliest(*stamps) or top["top_at"],
             floor_index=len(above) - 1)}
 
     if not sweep:
+        feed["advanced"] = True
         return fresh, {"through": _later(through, top["top_at"]),
                        "sweep": None}
 
@@ -472,11 +724,14 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
     if shift is None:
         shift = sum(1 for l in above
                     if (l.get("published_at") or "") > (sweep["top_at"] or ""))
-    floor_at = sweep["floor_at"]
-    floor_index = sweep["floor_index"] + shift
-    number = max(page + 1, floor_index // PAGE_SIZE)    # one page of overlap
+    floor, floor_at = sweep.get("floor") or None, sweep.get("floor_at")
+    start = floor_index = sweep["floor_index"] + shift
+    # The floor letter's own page; without a floor letter to find there (a
+    # sweep saved before 2026-11-11), the page above it, as it always was.
+    number = max(page + 1, floor_index // PAGE_SIZE + (1 if floor else 0))
     checked = number == page + 1                    # contiguous with the top
-    done, requests = False, 0
+    stepped, done, requests = not floor, False, 0
+    stop = _before(through, MARK_MARGIN_SECONDS)
 
     while requests < sweep_pages:
         time.sleep(CATCH_UP_GAP_SECONDS)
@@ -486,30 +741,38 @@ def scan(client, seen, state, pace=None, codes=FEEDS, sweep_pages=None):
             break                   # the floor stays at the last whole page
         stamps = _stamps(letters)
         if not checked:
-            # Landed below the floor (or past the end): step back, or the
-            # letters in between would never be read.
-            if number > page + 1 and (not letters or (
-                    stamps and max(stamps) < floor_at)):
+            anchored = bool(floor) and any(
+                l.get("tracing_no") == floor for l in letters)
+            if number > page + 1 and not anchored and (
+                    not stepped or not letters or (
+                        stamps and floor_at and max(stamps) < floor_at)):
                 number -= 1
+                stepped = True
                 continue
             checked = True
-        if not letters:
-            done = True                     # the end of the feed, by its Total
-            break
         take(letters)
-        if stamps:
-            floor_at = min(floor_at, min(stamps))
-        floor_index = (number - 1) * PAGE_SIZE + len(letters) - 1
-        if through is None or (stamps and min(stamps) <= through):
-            done = True
+        if not letters or through is None or (stamps and min(stamps) <= stop):
+            # The mark (or the feed's end, by its Total) is reached -- on a
+            # page that must hold before the mark moves over it.
+            done = not letters or _confirm(client, number, letters, pace,
+                                           feed, take)
             break
+        floor = letters[-1].get("tracing_no")
+        floor_at = _earliest(floor_at, *stamps)
+        floor_index = (number - 1) * PAGE_SIZE + len(letters) - 1
         number += 1
 
     if done:
+        feed["advanced"] = True
         return fresh, {"through": _later(through, top["top_at"]),
                        "sweep": None}
+    feed["advanced"] = floor_index > start
     return fresh, {"through": through, "sweep": dict(
-        top, floor_at=floor_at, floor_index=floor_index)}
+        top, floor=floor, floor_at=floor_at, floor_index=floor_index)}
+
+
+class Transient(Exception):
+    """A handler's "try again next poll", with Codal's reason for the queue."""
 
 
 def handle_statement(client, letter, inst):
@@ -523,7 +786,7 @@ def handle_statement(client, letter, inst):
     record, error, kind = codal_sync.parse_letter(client, letter)
     if error:
         if kind == codal.KIND_TRANSIENT:
-            return None                      # queued in watch_retry by poll()
+            raise Transient(error)          # _process queues it, with why
         database.mark_letter_parsed(letter["tracing_no"])
         return "unreadable: %s" % error[:80]
 
@@ -549,7 +812,7 @@ def handle_monthly(client, letter, inst):
     code = str(inst["ins_code"])
     if not got.ok:
         if got.transient:
-            return None
+            raise Transient(got.error or "transient")
         codal_monthly._fail(code, letter, got.error or "unreadable")
         return "unreadable"
     record = monthly_reports.parse(got.data, letter["title"])
@@ -572,10 +835,24 @@ NETWORK_CODES = ("ن-10", "ن-30", persian.normalize(
     codal_announcements.ANNUAL_AGM_DECISIONS))
 
 
-def _process(client, letter, universe, pace, totals, verbose, attempts=0):
+def _process(client, letter, universe, pace, totals, verbose, attempts=0,
+             defer=False):
     """Hand one letter to its handler; mark it seen, or queue it for retry.
 
-    Returns the outcome, None when the letter was queued.
+    Returns (outcome, refused): the outcome, None when the letter was
+    queued; and whether the try failed transiently -- a refusal, what the
+    stop rules in poll() count. With `defer` the letter is queued untried,
+    its tries unchanged.
+
+    A handler that raises is a failed try like a transient one. Until
+    2026-11-11 the exception left the poll and the letter stayed at the
+    head of watch_retry -- tried first, so it failed first -- and every
+    later poll died on it before reading the feed: one poison letter
+    stopped the watch (HTTP-500 filings at the head of the backfill's
+    queue once stalled its campaign the same way). A letter that fails goes
+    behind the others, and after RETRY_LIMIT tries it is given up: marked
+    seen with that outcome and kept, with its last error, in the dead
+    letters --report lists. Nothing is dropped silently.
     """
 
     inst = universe.get(persian.normalize(letter.get("symbol") or ""))
@@ -583,34 +860,58 @@ def _process(client, letter, universe, pace, totals, verbose, attempts=0):
         _mark(letter, None, "outside universe")
         _unqueue(letter["tracing_no"])
         totals["outside_universe"] += 1
-        return "outside universe"
+        return "outside universe", False
+
+    if defer:
+        _queue(letter, attempts, "not tried: Codal refused the letters "
+                                 "before it in the same poll")
+        totals["retry_later"] += 1
+        return None, False
 
     networked = letter["letter_code"] in NETWORK_CODES
-    if letter["letter_code"] in ("ن-10", "ن-30"):
-        # codal_letters is the statement/monthly ledger the per-company
-        # paths read; announcements live in their own table.
-        database.save_codal_letters(str(inst["ins_code"]), [letter])
-    outcome = HANDLERS[letter["letter_code"]](client, letter, inst)
+    error = None
+    try:
+        if letter["letter_code"] in ("ن-10", "ن-30"):
+            # codal_letters is the statement/monthly ledger the per-company
+            # paths read; announcements live in their own table.
+            database.save_codal_letters(str(inst["ins_code"]), [letter])
+        outcome = HANDLERS[letter["letter_code"]](client, letter, inst)
+        refused = outcome is None
+        if refused:
+            error = "transient failure"
+    except Transient as exc:
+        outcome, refused, error = None, True, str(exc)[:200]
+    except Exception as exc:                                    # noqa: BLE001
+        outcome = None
+        refused = codal.classify(exc) == codal.KIND_TRANSIENT
+        error = "%s: %s" % (type(exc).__name__, str(exc)[:160])
     if networked:
-        pace(outcome is None)
+        pace(refused)
 
     if outcome is None:
         attempts += 1
         if attempts < RETRY_LIMIT:
-            _queue(letter, attempts)
+            _queue(letter, attempts, error)
             totals["retry_later"] += 1
-            return None
-        outcome = "gave up after %d transient failures" % attempts
+            return None, refused
+        outcome = "gave up after %d %sfailures" % (
+            attempts, "transient " if refused else "")
+        _bury(letter, attempts, error)
+        totals["given_up"] += 1
+        if verbose:
+            print("  ! %s %s: %s -- %s" % (letter.get("symbol"),
+                                           letter.get("tracing_no"),
+                                           outcome, error), flush=True)
     _mark(letter, str(inst["ins_code"]), outcome)
     _unqueue(letter["tracing_no"])
     if outcome.startswith("stored"):
         totals["stored"] += 1
         if verbose:
-            print("  + %s %s" % (letter.get("symbol"), letter["title"][:70]),
-                  flush=True)
+            print("  + %s %s" % (letter.get("symbol"),
+                                 (letter.get("title") or "")[:70]), flush=True)
     elif outcome.startswith("unreadable"):
         totals["unreadable"] += 1
-    return outcome
+    return outcome, False
 
 
 def poll(since=None, verbose=True, client=None):
@@ -621,7 +922,8 @@ def poll(since=None, verbose=True, client=None):
     pace = codal_monthly.Pacer("watch", verbose)
     universe = _universe()
     totals = {"new": 0, "stored": 0, "outside_universe": 0, "unreadable": 0,
-              "retry_later": 0, "retried": 0}
+              "retry_later": 0, "retried": 0, "given_up": 0}
+    kept = notes()
 
     # What an earlier poll could not finish, from the queue: paging back to
     # find it again is what used to lose it. Two refusals in a row and the
@@ -631,7 +933,7 @@ def poll(since=None, verbose=True, client=None):
     for letter, attempts in list(_queued().values())[:RETRY_PER_POLL]:
         totals["retried"] += 1
         if _process(client, letter, universe, pace, totals, verbose,
-                    attempts) is None:
+                    attempts)[1]:
             refused += 1
             if refused >= 2:
                 break
@@ -647,10 +949,13 @@ def poll(since=None, verbose=True, client=None):
     # A queued letter is not new: it waits its turn rather than costing a
     # second request in the same poll.
     seen = _seen() | set(_queued())
+    feed = {"stored": kept["total"]}
     if since:
-        fresh, state = _catch_up(client, seen, since, pace)
+        fresh, state = _catch_up(client, seen, since, pace, feed)
     else:
-        fresh, state = scan(client, seen, load_state(), pace=pace)
+        fresh, state = scan(client, seen, load_state(), pace=pace, feed=feed)
+    known = [t for t in (feed.get("read"), kept["total"]) if t is not None]
+    largest = max(known) if known else None
     if verbose:
         for letter_code in ("ن-10", "ن-30"):
             print("watch: %s -- %d new letters" % (letter_code, sum(
@@ -658,16 +963,54 @@ def poll(since=None, verbose=True, client=None):
         print("watch: announcements -- %d new letters" % sum(
             1 for l in fresh if l["letter_code"] in codal_announcements.CODES),
             flush=True)
+        # Once a poll, so a feed that stops saying how long it is -- or
+        # says something else -- shows in the log before it shows as a
+        # stall (2026-11-11).
+        print("watch: feed Total %s (largest seen %s)" % (
+            feed.get("read") if feed.get("read") is not None
+            else "none read this poll", largest), flush=True)
 
     # Oldest first, so an interrupted catch-up has stored a contiguous
-    # stretch rather than a scatter.
+    # stretch rather than a scatter. The retry pass's rule holds here too:
+    # two networked letters refused in a row and the rest are queued untried
+    # for the next poll, so the Pacer never waits 15-240 minutes inside a
+    # poll the campaign holds the watch lock for -- six refused new letters
+    # slept 3 h 45 min (the second review, 2026-11-11), a sleep that does
+    # not even run on across a laptop's suspend. Letters that need no
+    # request go on being handled.
+    pace.refused = 0
+    refused = 0
     for letter in reversed(fresh):
         totals["new"] += 1
-        _process(client, letter, universe, pace, totals, verbose)
+        networked = letter["letter_code"] in NETWORK_CODES
+        if networked and refused >= 2:
+            _process(client, letter, universe, pace, totals, verbose,
+                     defer=True)
+            continue
+        refusal = _process(client, letter, universe, pace, totals, verbose)[1]
+        if networked:
+            refused = refused + 1 if refusal else 0
 
     # Only now: every letter the marks claim is handled or queued.
     if state is not None:
         save_state(state)
+
+    values = {}
+    if largest is not None and largest != kept["total"]:
+        values["total"] = str(largest)
+    stall = kept["stall"]
+    if not since:
+        # A routine poll that did not advance: the reason is kept, and a
+        # third in a row is called a stall (the poll's log and --report).
+        stall = {} if feed.get("advanced") else {
+            "polls": int(stall.get("polls") or 0) + 1,
+            "since": stall.get("since") or _now(),
+            "reason": feed.get("failed") or "the sweep's floor did not move"}
+        if stall != kept["stall"]:
+            values["stall"] = json.dumps(stall, ensure_ascii=False) \
+                if stall else ""
+    if values:
+        _save_values(values)
 
     if totals["stored"]:
         fundamental_db.sync_from_market_db()
@@ -675,13 +1018,17 @@ def poll(since=None, verbose=True, client=None):
     if verbose:
         print("watch: %(new)d new, %(stored)d stored, %(outside_universe)d "
               "outside the universe, %(unreadable)d unreadable, "
-              "%(retry_later)d left for the next poll (%(retried)d retried)"
-              % totals, flush=True)
+              "%(retry_later)d left for the next poll (%(retried)d retried), "
+              "%(given_up)d given up" % totals, flush=True)
         if state is not None:
             print("watch: complete through %s%s" % (
                 state.get("through"),
                 "; sweeping back, reached %s" % state["sweep"]["floor_at"]
                 if state.get("sweep") else ""), flush=True)
+        if int(stall.get("polls") or 0) >= STALL_POLLS:
+            print("watch: STALLED -- %d polls in a row have not advanced, "
+                  "since %s: %s" % (stall["polls"], stall.get("since"),
+                                    stall.get("reason")), flush=True)
     return totals
 
 
@@ -790,9 +1137,7 @@ def rewind(day, apply=False, verbose=True):
 def _days_between(first):
     """Jalali days from `first` up to today, as 'YYYY/MM/DD' strings."""
 
-    from datetime import date, timedelta
-
-    import jalali
+    from datetime import date
 
     day = date(*jalali.to_gregorian(*first.split("/")))
     out = []
@@ -803,17 +1148,68 @@ def _days_between(first):
 
 
 def report():
-    _ensure_table()
+    """Where the watch stands. It only reads: nothing is created or saved."""
+
     conn = fundamental_db._connect()
-    for row in conn.execute("""SELECT letter_code, outcome, COUNT(*), MAX(seen_at)
-                               FROM watch_seen GROUP BY 1, 2 ORDER BY 1, 3 DESC"""):
-        print("  %s  %-40s %5d  last %s" % row)
-    queued = conn.execute("SELECT COUNT(*) FROM watch_retry").fetchone()[0]
+    try:
+        rows = conn.execute("""SELECT letter_code, outcome, COUNT(*), MAX(seen_at)
+                               FROM watch_seen GROUP BY 1, 2
+                               ORDER BY 1, 3 DESC""").fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+    queued, head = 0, []
+    try:
+        queued = conn.execute("SELECT COUNT(*) FROM watch_retry").fetchone()[0]
+        # A queue no poll has migrated yet has no error column (_ensure_table).
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(watch_retry)")}
+        head = conn.execute(
+            "SELECT tracing_no, attempts, last_tried, %s FROM watch_retry "
+            "ORDER BY last_tried, rowid LIMIT 5"
+            % ("error" if "error" in columns else "NULL")).fetchall()
+    except sqlite3.OperationalError:
+        pass
     conn.close()
-    state = load_state()
-    print("  complete through %s%s; %d letters waiting for a retry" % (
-        state["through"], "; sweeping back, reached %s" % state["sweep"].get(
-            "floor_at") if state.get("sweep") else "", queued))
+    for row in rows:
+        print("  %s  %-40s %5d  last %s" % row)
+
+    state, kept = load_state(), notes()
+    print("  complete through %s" % state["through"])
+    sweep = state.get("sweep")
+    if sweep:
+        print("  sweeping back: covered from %s (top letter %s) down to %s "
+              "(floor letter %s, about page %d as of the last poll)" % (
+                  sweep.get("top_at"), sweep.get("top"), sweep.get("floor_at"),
+                  sweep.get("floor") or "?",
+                  int(sweep.get("floor_index") or 0) // PAGE_SIZE + 1))
+    else:
+        print("  no sweep under way")
+    print("  largest feed Total seen: %s" % (
+        kept["total"] if kept["total"] is not None else "none yet"))
+    print("  %d letters waiting for a retry%s" % (
+        queued, ", least recently tried first:" if head else ""))
+    for number, attempts, tried, error in head:
+        print("    %s  %s tries, last %s  %s" % (number, attempts, tried,
+                                                 (error or "")[:80]))
+    if kept["dead"]:
+        print("  %d dead letters, given up after %d tries (still in "
+              "watch_seen as 'gave up ...'):" % (len(kept["dead"]),
+                                                 RETRY_LIMIT))
+        for entry in kept["dead"][-20:]:
+            letter = entry.get("letter") or {}
+            print("    %s %s %s %s  %s tries, last error: %s" % (
+                entry.get("tracing_no"), letter.get("letter_code"),
+                letter.get("symbol"), letter.get("published_at"),
+                entry.get("attempts"), entry.get("error")))
+    else:
+        print("  no dead letters")
+    stall = kept["stall"]
+    if int(stall.get("polls") or 0) >= STALL_POLLS:
+        print("  STALLED: %d polls in a row have not advanced, since %s. "
+              "Last reason: %s" % (stall["polls"], stall.get("since"),
+                                   stall.get("reason")))
+    elif stall:
+        print("  the last %d poll(s) did not advance: %s" % (
+            int(stall.get("polls") or 0), stall.get("reason")))
 
 
 def main(argv=None):
