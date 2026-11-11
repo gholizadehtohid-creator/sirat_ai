@@ -329,3 +329,22 @@ class EnsureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeferredSessionRetryTests(unittest.TestCase):
+    """A deferred session is retried in minutes, not after MAX_AGE (2026-11-11)."""
+
+    def test_a_deferred_history_marks_the_session_components_deferred(self):
+        from unittest import mock
+        import bootstrap
+        calls = []
+        with mock.patch.object(bootstrap.database, "set_provenance",
+                               side_effect=lambda scope, status, detail=None: calls.append((scope, status))), \
+                mock.patch.dict(bootstrap._DEFERRED, {"history": True}):
+            bootstrap._mark_fetched("history")
+            bootstrap._mark_fetched("flow")
+            bootstrap._mark_fetched("codal")
+        self.assertEqual(calls, [("bootstrap:history", "deferred"),
+                                 ("bootstrap:flow", "deferred"),
+                                 ("bootstrap:codal", "fetched")])
+        self.assertLess(bootstrap.DEFERRED_RETRY, bootstrap.MAX_AGE["history"])

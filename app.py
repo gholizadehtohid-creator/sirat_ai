@@ -72,6 +72,29 @@ app = Flask(__name__)
 # stat() per render; a silently stale page costs an evening.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+
+@app.before_request
+def _same_origin_only():
+    """Refuse a POST that another site's page sent to this panel.
+
+    The panel binds 127.0.0.1, but a page the user visits can still fire a
+    no-cors POST at it -- /api/bootstrap?force=1, or /api/codal?now=1, which
+    skips the Codal cooldown (the review panel, 2026-11-11). A browser puts
+    the sending page's origin in Origin (or Referer); only this panel's own
+    pages may write.
+    """
+
+    if request.method != "POST":
+        return None
+    sender = request.headers.get("Origin") or request.headers.get("Referer")
+    if not sender:
+        return None                      # not a browser: curl, the tests
+    from urllib.parse import urlparse
+    host = (urlparse(sender).netloc or "").lower()
+    if host == (request.host or "").lower():
+        return None
+    return jsonify({"error": "cross-site request refused"}), 403
+
 CACHE_TTL = 300
 
 # Past CACHE_TTL an entry is still SERVED, up to this age, while a fresh

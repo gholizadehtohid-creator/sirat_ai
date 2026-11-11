@@ -120,7 +120,7 @@ def _day(value):
         return None
 
 
-def _adjusted(bars):
+def _adjusted(bars, ins_code=None):
     """Stored bars with corporate-action gaps scaled out (see module doc).
 
     Safe on the trailing windows loaded here: back_adjust scales backwards from
@@ -130,7 +130,20 @@ def _adjusted(bars):
     untouched, so ordinary names read exactly as before.
     """
 
-    adjusted, _events = back_adjust(bars)
+    from backtest import known_dividends
+
+    adjusted, _events = back_adjust(
+        bars, dividends=known_dividends(ins_code) if ins_code else None)
+
+    # Traded sessions only (the review panel, 2026-11-11). A bar with no
+    # trade is a frozen close: a halt, an AGM, a whole-market closure (68
+    # dead dates, 50 of the last 250), an IPO's placeholder run at 1,000
+    # rials -- and 9,449 of them carry high = low = 0. Left in, they diluted
+    # ATR (فلات 6.64% on raw bars, 2.34% on traded ones), drove RSI to 100 on
+    # a fresh listing, and moved every moving average toward a price nobody
+    # paid.
+    if "volume" in adjusted.columns:
+        adjusted = adjusted[adjusted["volume"].fillna(0) > 0].reset_index(drop=True)
 
     return adjusted
 
@@ -831,13 +844,16 @@ def analyse(symbol, params=None, bars=SERIES_BARS, halted=None):
     # window. required_bars knows the longest lookback the params imply.
     need = indicators.required_bars(params) + bars
 
-    history = database.load_history_by_inscode(ins_code, limit=need)
+    # Twice the need: indicators run on traded sessions only (_adjusted), and
+    # a window of raw bars loses its untraded ones -- the 2026 closure alone
+    # was 49 sessions.
+    history = database.load_history_by_inscode(ins_code, limit=need * 2)
 
     if history is None or history.empty:
         return {"error": "no price history", "symbol": symbol,
                 "ins_code": ins_code}
 
-    frame = indicators.calculate_indicators(_adjusted(history), params)
+    frame = indicators.calculate_indicators(_adjusted(history, ins_code), params)
 
     if frame.empty:
         return {"error": "not enough bars for indicators", "symbol": symbol,
@@ -861,6 +877,17 @@ def analyse(symbol, params=None, bars=SERIES_BARS, halted=None):
     # swing whose extension becomes an objective may start well left of the
     # display window.
     targets = price_targets(frame, latest, sr)
+
+    # Whether the reading can be acted on at all. A name locked at one price
+    # (a queue), one that did not trade in the market's last session, or one
+    # with under MIN_TRADED_FOR_CALL traded sessions gets its reading but no
+    # entry, stop or target: رهیاب showed R/R 2.5 locked at limit-up after a
+    # 39-day halt, شتبریز RSI 100 on 10 traded sessions (the review panel).
+    tradability = _tradability(history, frame)
+    if tradability["note"]:
+        targets = None
+        signal = dict(signal, caveat="⚠ " + tradability["note"] + " " +
+                      (signal.get("caveat") or ""))
 
     # A short tail for the sparkline. Only columns the chart needs, and every
     # value passed through _finite so the JSON never carries NaN.
@@ -902,8 +929,44 @@ def analyse(symbol, params=None, bars=SERIES_BARS, halted=None):
         "levels": sr,
         "signal": signal,
         "targets": targets,
+        "tradability": tradability,
         "series": series,
     }
+
+
+MIN_TRADED_FOR_CALL = 60
+
+
+def _tradability(history, frame):
+    """{traded_sessions, last_traded, locked, note} for one name's bars."""
+
+    import pandas as pd
+
+    out = {"traded_sessions": int(len(frame)), "last_traded": None,
+           "locked": False, "note": None}
+    if history is None or history.empty:
+        return out
+    raw = history.reset_index(drop=True)
+    traded = raw[raw["volume"].fillna(0) > 0] if "volume" in raw.columns else raw
+    if not traded.empty:
+        out["last_traded"] = str(pd.Timestamp(traded["date"].iloc[-1]).date())
+    newest = database.newest_equity_bar()
+    last = raw.iloc[-1]
+    stale = (out["last_traded"] is None or newest is None
+             or out["last_traded"] < str(pd.Timestamp(newest).date()))
+    locked = bool(last.get("volume", 0) and last.get("volume") > 0
+                  and last.get("high") == last.get("low"))
+    out["locked"] = locked
+    if out["traded_sessions"] < MIN_TRADED_FOR_CALL:
+        out["note"] = ("فقط %d جلسه معامله شده؛ برای ورود، حد ضرر و هدف داده‌ی "
+                       "کافی نیست." % out["traded_sessions"])
+    elif stale:
+        out["note"] = ("در آخرین جلسه‌ی بازار معامله نشده (آخرین معامله %s)؛ "
+                       "ورود، حد ضرر و هدف داده نمی‌شود." % (out["last_traded"] or "—"))
+    elif locked:
+        out["note"] = ("آخرین جلسه همه‌ی معاملات در یک قیمت بود (صف)؛ به این "
+                       "قیمت نمی‌شود معامله کرد، پس ورود، حد ضرر و هدف داده نمی‌شود.")
+    return out
 
 
 def _is_nat(value):

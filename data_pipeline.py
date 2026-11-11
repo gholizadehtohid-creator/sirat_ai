@@ -111,7 +111,9 @@ def frame(ins_code=None, bars=None, as_of=None, params=None,
         return None
 
     if not adjusted:
-        bars, _events = back_adjust(bars)
+        from backtest import known_dividends
+        bars, _events = back_adjust(
+            bars, dividends=known_dividends(ins_code) if ins_code else None)
 
     if as_of is not None:
 

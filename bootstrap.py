@@ -577,18 +577,39 @@ STEPS = [
 ]
 
 
-def _mark_fetched(name):
-    """Record a successful fetch, so a retry is paced by attempts not by age."""
+# A history step that DEFERRED the market's session -- the history endpoint
+# had not published it yet, so the run stored nothing for it -- used to
+# count as a fetch and held the retry off for MAX_AGE: on 2026-11-11 the
+# 19:00 run deferred 11-11 and nothing tried again for 12 hours, the basket
+# was built on 11-10 bars and the day's forward entry could not be written
+# (the review panel). A deferred session component is retried after this.
+DEFERRED_RETRY = timedelta(minutes=45)
+_DEFERRED = {}
 
+
+def _mark_fetched(name):
+    """Record a successful fetch, so a retry is paced by attempts not by age.
+
+    A session component whose run deferred the session is recorded as
+    "deferred", which status() retries after DEFERRED_RETRY.
+    """
+
+    deferred = name in SESSION_COMPONENTS and _DEFERRED.get("history")
     database.set_provenance(
-        f"bootstrap:{name}", "fetched",
+        f"bootstrap:{name}", "deferred" if deferred else "fetched",
         f"automatic fetch at {_now().isoformat(timespec='seconds')}"
+        + (" -- the session was deferred, retried shortly" if deferred else "")
     )
 
 
 def _last_fetch(name):
     record = database.get_provenance(f"bootstrap:{name}")
     return _parse(record.get("checked_at")) if record else None
+
+
+def _last_fetch_deferred(name):
+    record = database.get_provenance(f"bootstrap:{name}")
+    return bool(record) and record.get("status") == "deferred"
 
 
 def status(fresh=False):
@@ -640,7 +661,8 @@ def _probe_all():
 
         attempted_recently = (
             fetched_at is not None
-            and (_now() - fetched_at) < MAX_AGE[name]
+            and (_now() - fetched_at) < (
+                DEFERRED_RETRY if _last_fetch_deferred(name) else MAX_AGE[name])
         )
 
         # A fetch made before today's figures were final cannot have found
@@ -746,6 +768,7 @@ def _fetch_history(on_item):
     )
     for message in stats.get("notes") or []:
         _note(message)
+    _DEFERRED["history"] = bool(stats.get("deferred"))
     return bool(stats.get("ok"))
 
 
@@ -1260,6 +1283,16 @@ if __name__ == "__main__":
         seconds = outcome.get("seconds")
         timing = f" ({seconds}s)" if seconds else ""
         print(f"  {name:<12}{outcome['action']}{timing}  {detail}")
+
+    # What each step had to say -- a deferral, a canary, a partial market
+    # watch. The panel shows these; a scheduled run used to drop them, so
+    # its log never said why a step stored nothing (the review panel).
+    notes = [entry["message"] for entry in list(_state["log"])]
+    if notes:
+        print()
+        print("notes:")
+        for message in notes[-20:]:
+            print("  " + message)
 
     failures = [n for n, o in (results or {}).items() if o["action"] == "failed"]
 

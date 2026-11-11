@@ -57,8 +57,12 @@ PROFILES = (
         "label": "متعادل — پیشنهاد اصلی",
         "weights": {"equity": 70, "gold": 30, "fixed": 0},
         "evidence": "tested",
-        "evidence_text": "آزمون E28: نسبت بازده به ریسک بالاتر از ۷۰٪ سهام + "
-                         "۳۰٪ درآمد ثابت (p=0٫015)",
+        # Effect, not a p-value (the review panel, 2026-11-11): E28's
+        # fixed-income leg had no variance, so the test was "gold improves
+        # equity's Sharpe" over 2017-26, a window of rial devaluations only.
+        "evidence_text": "آزمون E28 (۲۰۱۷ تا ۲۰۲۶): نسبت بازده به ریسک بالاتر از "
+                         "۷۰٪ سهام + ۳۰٪ درآمد ثابت؛ آن دوره پر از جهش ارز بود "
+                         "و طلا از آن سود برد",
     },
     {
         "key": "defensive",
@@ -72,8 +76,11 @@ PROFILES = (
         "label": "رشد — تمام سهام",
         "weights": {"equity": 100, "gold": 0, "fixed": 0},
         "evidence": "tested",
-        "evidence_text": "آزمون E27: بازده بالاتر از صندوق درآمد ثابت در "
-                         "۱۴ سال (p=0٫007)؛ بیشترین افت",
+        # p=0.007 assumed independent 20-session blocks; their excess
+        # returns are autocorrelated (rho ~0.3) and Newey-West puts p at
+        # 0.024-0.040 (the review panel, 2026-11-11).
+        "evidence_text": "آزمون E27: در ۱۴ سال (۲۰۰۹ تا ۲۰۲۳) سالانه حدود ۴۳٪ "
+                         "در برابر ۲۰٪ صندوق درآمد ثابت، اسمی؛ بیشترین افت",
     },
 )
 

@@ -524,8 +524,10 @@ class AdjustedBarsTests(unittest.TestCase):
         conn.close()
 
         import indicators
-        self.need = (indicators.required_bars(indicators.DEFAULT_PARAMS)
-                     + technical.SERIES_BARS)
+        # analyse() loads twice its need: it computes on traded sessions only,
+        # and a raw window loses its untraded bars (review panel, 2026-11-11).
+        self.need = 2 * (indicators.required_bars(indicators.DEFAULT_PARAMS)
+                         + technical.SERIES_BARS)
 
     def tearDown(self):
         import database

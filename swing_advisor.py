@@ -150,6 +150,13 @@ def _instruments():
 
         code = str(row.get("ins_code"))
 
+        # A partly paid share («... ۵۰٪ تادیه») owes the unpaid part of its
+        # par on call: its price is not a full share's, and the basket's #1
+        # pick was one (وفردا, the review panel, 2026-11-11).
+        name = row.get("name_fa") or row.get("name") or ""
+        if "تادیه" in name or "تأدیه" in name:
+            continue
+
         out[code] = {
             "symbol": row.get("symbol_fa") or row.get("symbol"),
             "name": row.get("name_fa") or row.get("name"),

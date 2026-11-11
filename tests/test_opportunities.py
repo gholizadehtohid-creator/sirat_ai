@@ -67,3 +67,26 @@ class SleeveTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ParkingBillTests(unittest.TestCase):
+    """The review panel, 2026-11-11: not the top of a list sorted by yield."""
+
+    def test_a_fresh_long_traded_bill_is_chosen_over_a_stale_high_yield(self):
+        import opportunities
+        bills = [
+            {"symbol": "stale", "ytm_pct": 71.0, "days": 60, "price_date": "2026-10-10",
+             "traded_value": 5e9},
+            {"symbol": "short", "ytm_pct": 50.0, "days": 20, "price_date": "2026-11-10",
+             "traded_value": 9e9},
+            {"symbol": "thin", "ytm_pct": 45.0, "days": 200, "price_date": "2026-11-10",
+             "traded_value": 1e8},
+            {"symbol": "good", "ytm_pct": 43.0, "days": 180, "price_date": "2026-11-10",
+             "traded_value": 4e9},
+        ]
+        self.assertEqual(opportunities.parking_bill(bills)["symbol"], "good")
+        self.assertIsNone(opportunities.parking_bill([]))
+
+    def test_the_real_yield_nets_out_inflation(self):
+        import opportunities
+        self.assertAlmostEqual(opportunities.real_yield_pct(43.73, 76.8), -18.7, places=1)

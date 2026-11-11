@@ -691,7 +691,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                         "۱۲ ماه گذشته" if cash_conversion_basis == "ttm"
                         else "دوره"))
             elif cash_conversion >= 1.0:
-                positives.append("نقد عملیاتی بیشتر از سود خالص (کیفیت سود خوب)")
+                positives.append("نقد عملیاتی بیشتر از سود خالص")
         if rec_growth is not None and growth_rev is not None and                 (rec_growth - growth_rev) * 100 > RECEIVABLE_GAP_PCT:
             flag("مطالبات %.0f٪ رشد کرده در برابر فروش %.0f٪ — فروش نسیه یا وصول کند"
                  % (rec_growth * 100, growth_rev * 100))
@@ -790,9 +790,9 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                              "امروز در برابر اخزای %.0f٪ لازم دارد"
                              % (actual_growth * 100, required_growth * 100,
                                 rate * 100))
-    if kind == OPERATING and yield_fwd is not None and yield_fwd > 0             and pe_fwd is not None:
-        positives.append("بازده سود برآوردی %.0f٪ (P/E آینده‌نگر %.1f)"
-                         % (yield_fwd * 100, pe_fwd))
+    # No standing tick for being profitable: "✓ earnings yield X%" on every
+    # company with a profit read as clearance to buy, and E30 tested exactly
+    # this yield as a pick-list and rejected it (the review panel, 2026-11-11).
     if kind == FINANCIAL:
         flag("بانک، بیمه، سرمایه‌گذاری یا هلدینگ: P/E و رشد فروش معیار "
              "ارزش‌گذاری نیست؛ با P/NAV یا P/B و ROE سنجیده می‌شود")

@@ -39,6 +39,11 @@ import database
 # sample, not a property of the pair.
 MIN_OVERLAP = 40
 
+# A name whose last trade is this many days before the rest of the book's
+# newest is halted, and is measured apart rather than shrinking every
+# other name's window to its last trading day.
+STALE_DAYS = 30
+
 # Confidence level for VaR / CVaR, as a percentile of the loss distribution.
 VAR_CONFIDENCE = 0.95
 
@@ -103,6 +108,20 @@ def returns_matrix(ins_codes, bars=None, labels=None):
             continue
 
         series[label] = returns
+
+    if not series:
+        return pd.DataFrame(), dropped
+
+    # Aligned on dates EVERY name traded: one name halted since 2025-09
+    # shrank a whole book's window to the 15 sessions before its halt, and
+    # the card reported a 2025 drawdown of -1.6% "near the peak" for a book
+    # 7.3% under it (the review panel, 2026-11-11). A name with no trade in
+    # the last STALE_DAYS of the others' window is named and left out.
+    newest = max(s.index.max() for s in series.values())
+    for label in [k for k, s in series.items()
+                  if s.index.max() < newest - pd.Timedelta(days=STALE_DAYS)]:
+        dropped.append(label)
+        del series[label]
 
     if not series:
         return pd.DataFrame(), dropped

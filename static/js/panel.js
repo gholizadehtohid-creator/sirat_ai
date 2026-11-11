@@ -1918,6 +1918,14 @@ function toneDot(tone) {
   return `<span class="tone-dot ${cls}" title="${TONE_FA[tone] || ""}"></span>`;
 }
 
+// A link from a feed or a filing, made safe to put in href: esc() stops a
+// quote breaking out of the attribute but lets "javascript:" through, and a
+// relative path (12 stored EIA links) would resolve against this panel.
+function safeUrl(url) {
+  const text = String(url || "").trim();
+  return /^https?:\/\//i.test(text) ? text : "#";
+}
+
 function intelBadges(e, opts = {}) {
   const b = [];
   if (e.is_price_forecast && !opts.hideForecast)
@@ -1931,7 +1939,7 @@ function intelBadges(e, opts = {}) {
 
 function intelItem(e, opts = {}) {
   const title = e.link
-    ? `<a href="${esc(e.link)}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>`
+    ? `<a href="${esc(safeUrl(e.link))}" target="_blank" rel="noopener noreferrer">${esc(e.title)}</a>`
     : esc(e.title);
   const srcs = (e.sources || []).slice(0, 3).join("، ");
   const cats = (e.category_labels || []).slice(0, 2).join("، ");
@@ -2961,13 +2969,17 @@ function renderPortfolio(rep) {
   // another tab).
   const record = (rep.track_record && rep.track_record.windows) || [];
   const recordText = record.length
-    ? "<strong>کارنامه‌ی آزمون همین روش:</strong> " + record.map(w => {
+    ? "<strong>کارنامه‌ی آزمون همین روش — باخت:</strong> " + record.map(w => {
         const [from, to] = String(w.window).split("..");
-        return `${faDay(from, true)} تا ${faDay(to, true)}: سبد ${signed(w.basket_pct, 1, "٪")} ` +
-               `در برابر شاخص کل ${signed(w.tedpix_pct, 1, "٪")}` +
-               (w.risk_free_pct != null ? ` و اوراق ${signed(w.risk_free_pct, 1, "٪")}` : "");
+        // The shortfall in words: a green "+24%" beside the index's +93%
+        // read as a gain (the review panel, 2026-11-11).
+        const behind = w.tedpix_pct != null && w.basket_pct != null ? w.tedpix_pct - w.basket_pct : null;
+        return `${faDay(from, true)} تا ${faDay(to, true)}: سبد ${num(w.basket_pct, 1)}٪ ` +
+               `در برابر شاخص کل ${num(w.tedpix_pct, 1)}٪` +
+               (behind != null ? ` — <strong>${num(behind, 0)} واحد کمتر از شاخص</strong>` : "") +
+               (w.risk_free_pct != null ? `، اوراق ${num(w.risk_free_pct, 1)}٪` : "");
       }).join("؛ ") +
-      `. انتخاب سهم در آزمون بهتر از انتخاب تصادفی نبود (صدک ${record.map(w => num(w.selection_percentile, 0)).join(" و ")}). ` +
+      `. انتخاب سهم در آزمون از انتخاب تصادفی بهتر نبود (بدتر از ${record.map(w => num(100 - w.selection_percentile, 0)).join(" و ")}٪ سبدهای تصادفی). ` +
       "این فهرست نامزدهای بررسی است، نه توصیه‌ی خرید؛ نگه‌داشتن خود بازار و طلا در آزمون‌ها نتیجه‌ی بهتری داشته است.<br>"
     : "";
   banner("portfolioStatus", "portfolioStatusText", record.length ? "" : "is-live",
@@ -3749,7 +3761,7 @@ function renderAnnouncements(d) {
       <td>${esc((r.published_at || "").slice(0, 16))}</td>
       <td><strong>${esc(r.symbol || "")}</strong></td>
       <td>${esc(r.kind_label || r.kind || "")}</td>
-      <td>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || "")}</a>`
+      <td>${r.url ? `<a href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">${esc(r.title || "")}</a>`
                   : esc(r.title || "")}</td>
     </tr>`).join("");
   $("announcementsTable").innerHTML = rows.length ? `<table>
@@ -4360,14 +4372,10 @@ function renderToday() {
       ? (Date.now() - Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(captured) ? captured : `${captured}Z`)) / 60000
       : live.queues?.age_minutes;
     const age = ageTag(Number.isFinite(ageNow) ? ageNow : live.queues?.age_minutes);
-    $("todayMarket").innerHTML =
-      `بازار <strong>${open}</strong>` +
-      (!captured
-        ? " · صف‌ها ثبت نشده"
-        : c.buy != null
-          ? ` · صف خرید <strong>${c.buy}</strong> و صف فروش <strong>${c.sell}</strong>` +
-            (age ? ` — ${age}` : "")
-          : "");
+    // The session's state only: queue counts here invited acting on the
+    // day's mood, which the plan below does not depend on (the review
+    // panel, 2026-11-11). They stay on the live tab.
+    $("todayMarket").innerHTML = `بازار <strong>${open}</strong>` + (captured && age ? ` — ${age}` : "");
   }
 
   if (!rep) {
@@ -4418,11 +4426,14 @@ function renderToday() {
         why = `${signed(f.discount_pct, 1)} نسبت به NAV — ارزان‌ترین صندوق پرمعامله‌ی این بخش`;
       }
     } else if (sleeve === "fixed") {
-      const b = bills.find(x => x.beats_fund && x.traded_value > 1e9);
+      // The server's pick (opportunities.parking_bill): a fresh price, 90+
+      // days, the most traded -- not the top of a list sorted by yield,
+      // whose head was often days from maturity or priced on a stale close.
+      const b = (opp && opp.bills && opp.bills.parking) || null;
       const f = cheapest("fixed");
       if (b) {
         buy = `بخرید: <strong>${esc(b.symbol)}</strong> (اخزا)`;
-        why = `${num(b.ytm_pct, 1)}٪ سالانه تا ${esc(b.maturity_jalali || b.maturity)}، اگر تا سررسید نگه دارید`;
+        why = `${num(b.ytm_pct, 1)}٪ سالانه تا ${esc(b.maturity_jalali || b.maturity)}، اگر تا سررسید نگه دارید — ثابت به ریال، نه واقعی`;
       } else if (f) {
         buy = `بخرید: <strong>${esc(f.symbol)}</strong>`;
         why = "صندوق درآمد ثابت پرمعامله";
@@ -4453,8 +4464,8 @@ function renderToday() {
 
   const h = rep.history && rep.history.profiles ? rep.history.profiles[key] : null;
   $("todayHint").innerHTML = (h
-    ? `این ترکیب از ${esc(rep.history.from)} سالانه ${num(h.cagr_pct, 0)}٪ داده و ` +
-      `بدترین افتش ${num(h.max_drawdown_pct, 0)}٪ بوده است. `
+    ? `این ترکیب از ${esc(rep.history.from)} سالانه ${num(h.cagr_pct, 0)}٪ داده (اسمی؛ با تورم ۴۰ تا ۹۰ درصدی لزوماً سود واقعی نیست) و ` +
+      `بدترین افتش ${num(h.max_drawdown_pct, 0)}٪ بوده است. <strong>کسی که در افت می‌فروشد، این بازده را نمی‌گیرد.</strong> `
     : "") +
     `هر حدود سه ماه، یا وقتی سهم یک بخش بیش از ${num(band, 0)} واحد از هدف دور شد، به همین وزن‌ها برگردانید؛ ` +
     `بین این دو، کاری لازم نیست. ` +

@@ -317,7 +317,10 @@ def _run_v2(equity=None, size=None, max_per_sector=None, risk_pct=None,
             "%.0f%% سرمایه (%s ریال) در سبد سهام نیست — آن را در صندوق درآمد "
             "ثابت یا اوراق خزانه نگه دارید، نه در حساب کارگزاری؛ %s"
             % (idle / equity * 100.0, "{:,.0f}".format(idle),
-               ("اخزا اکنون حدود %.0f٪ سالانه بازده قطعی دارد." % bill)
+               ("اخزا اکنون حدود %.0f٪ سالانه می‌دهد — ثابت به ریال تا سررسید؛ "
+                "با تورم حدود %.0f٪ بازده واقعی‌اش حدود %+.0f٪ است."
+                % (bill, config.INFLATION_RATE,
+                   opportunities.real_yield_pct(bill)))
                if bill else
                ("سود حدود %.0f٪ سالانه بدون ریسک بازار است."
                 % (config.RISK_FREE_RATE * 100.0))))

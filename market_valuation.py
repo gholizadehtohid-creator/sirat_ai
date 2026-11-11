@@ -307,10 +307,16 @@ def update(verbose=True, data=None, rebuild=False):
                     key=lambda p: p["date"])
 
     os.makedirs(os.path.dirname(FILE), exist_ok=True)
-    with open(FILE, "w", encoding="utf-8") as handle:
+    # Written beside and swapped in whole: the panel reads this file while
+    # the evening task writes it, and a run killed mid-write (0xC000013A on
+    # 2026-11-11) left a truncated file that read as "no history" and made
+    # the next update recompute every point since 2022 (review panel).
+    partial = FILE + ".partial"
+    with open(partial, "w", encoding="utf-8") as handle:
         json.dump({"points": points,
                    "computed_at": datetime.now().isoformat(timespec="seconds")},
                   handle, ensure_ascii=False)
+    os.replace(partial, FILE)
     return {"added": added, "points": len(points)}
 
 

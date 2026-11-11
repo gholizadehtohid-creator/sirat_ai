@@ -257,6 +257,34 @@ BILL_YIELD_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 BILL_YIELD_MIN_DAYS = 90               # shorter bills price the next weeks' rate
 
 
+def parking_bill(bills):
+    """The bill to park the fixed-income sleeve in, or None.
+
+    Not the highest yield: the list is sorted by it, and its top was often a
+    series a few days from maturity or priced on a stale close -- a 60-day
+    bill priced 30 days ago at a fair 43% reads ~71% (the review panel,
+    2026-11-11). Among bills of BILL_YIELD_MIN_DAYS or more, priced on the
+    newest date any bill traded and with real turnover, the most traded.
+    """
+
+    rows = [b for b in bills or () if b.get("price_date")]
+    if not rows:
+        return None
+    newest = max(b["price_date"] for b in rows)
+    eligible = [b for b in rows
+                if b.get("days", 0) >= BILL_YIELD_MIN_DAYS
+                and b["price_date"] == newest
+                and (b.get("traded_value") or 0) > 1e9]
+    return max(eligible, key=lambda b: b["traded_value"]) if eligible else None
+
+
+def real_yield_pct(nominal_pct, inflation_pct=None):
+    """A nominal annual yield net of inflation, in percent."""
+
+    inflation = config.INFLATION_RATE if inflation_pct is None else inflation_pct
+    return ((1 + nominal_pct / 100.0) / (1 + inflation / 100.0) - 1) * 100.0
+
+
 def _remember_bill_yield(rows, today):
     """Median yield of the bills with 90+ days to run, written for the outlook."""
 
@@ -272,8 +300,10 @@ def _remember_bill_yield(rows, today):
               "as_of": today.isoformat()}
     try:
         os.makedirs(os.path.dirname(BILL_YIELD_FILE), exist_ok=True)
-        with open(BILL_YIELD_FILE, "w", encoding="utf-8") as handle:
+        partial = BILL_YIELD_FILE + ".partial"    # swapped in whole
+        with open(partial, "w", encoding="utf-8") as handle:
             json.dump(record, handle)
+        os.replace(partial, BILL_YIELD_FILE)
     except OSError:
         return None
     return record
@@ -352,17 +382,21 @@ def report(today=None):
     bills = treasury_bills(today)
     discounts = fund_discounts()
 
-    best_bill = bills["bills"][0] if bills["bills"] else None
+    best_bill = parking_bill(bills["bills"])
+    bills["parking"] = best_bill
 
     summary = []
 
-    if best_bill and best_bill["beats_fund"]:
+    if best_bill:
+        real = real_yield_pct(best_bill["ytm_pct"])
         summary.append(
-            "اوراق خزانه %s تا سررسید %s سالانه %.1f٪ بازده قطعی دارد؛ بیشتر از "
-            "۲۰٪ که تخصیص برای صندوق درآمد ثابت فرض کرده است. بخش درآمد ثابت را "
-            "می‌توان با اخزا پر کرد، و هر سهم یا سبدی باید از همین نرخ بیشتر بدهد."
+            "اوراق خزانه %s تا سررسید %s سالانه %.1f٪ می‌دهد — ثابت به ریال، اگر "
+            "تا سررسید نگه دارید. با تورم حدود %.0f٪، بازده واقعی آن حدود %+.0f٪ "
+            "است%s. بخش درآمد ثابت را می‌توان با اخزا پر کرد."
             % (best_bill["symbol"], best_bill["maturity_jalali"],
-               best_bill["ytm_pct"]))
+               best_bill["ytm_pct"], config.INFLATION_RATE, real,
+               "؛ یعنی قدرت خرید پول کم می‌شود، فقط کمتر از نگه‌داشتن ریال"
+               if real < 0 else ""))
 
     labels = {"gold": "طلا", "equity": "شاخصی", "fixed": "درآمد ثابت",
               "equity_active": "سهامی"}
@@ -383,8 +417,9 @@ def report(today=None):
         "notes": [
             "هیچ‌کدام پیش‌بینی قیمت نیست. تخفیف به NAV یعنی همان دارایی را امروز "
             "ارزان‌تر می‌خرید؛ تضمین نمی‌کند تخفیف بسته شود.",
-            "بازده اخزا فقط در صورت نگه‌داشتن تا سررسید قطعی است؛ فروش زودتر "
-            "به قیمت روز است.",
+            "بازده اخزا فقط به ریال و فقط در صورت نگه‌داشتن تا سررسید ثابت است؛ "
+            "فروش زودتر به قیمت روز است، و با تورم بالاتر از این نرخ، بازده واقعی "
+            "منفی است.",
             "قیمت اخزا آخرین قیمت پایانی است؛ برای سری‌های کم‌معامله ممکن است "
             "قدیمی باشد (ستون ارزش معامله).",
             "کارمزد کارگزار کسر نشده است.",

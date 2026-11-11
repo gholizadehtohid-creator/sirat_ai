@@ -40,7 +40,88 @@ from ranking import rank_stocks
 SCORING_WINDOW = 60
 
 
-def back_adjust(df, threshold=None):
+PLACEHOLDER_RIALS = 10
+
+_DIVIDENDS = {"at": None, "map": {}}
+
+
+def known_dividends(ins_code):
+    """[(Gregorian date, DPS)] of the company's newest recorded AGM dividend,
+    for back_adjust's rule 3 on the LIVE paths (the store keeps one year per
+    company, so backtests over several years do not use it). Cached ten
+    minutes; empty on any failure."""
+
+    import time
+
+    now = time.monotonic()
+    if _DIVIDENDS["at"] is None or now - _DIVIDENDS["at"] > 600:
+        table = {}
+        try:
+            import codal_announcements
+            import jalali
+            for code, row in codal_announcements.latest_dividends().items():
+                published, dps = row.get("published_at"), row.get("dps")
+                if not published or not dps:
+                    continue
+                jy, jm, jd = (int(x) for x in str(published)[:10].split("/"))
+                table[str(code)] = [("%04d-%02d-%02d" % jalali.to_gregorian(
+                    jy, jm, jd), float(dps))]
+        except Exception:                                       # noqa: BLE001
+            table = {}
+        _DIVIDENDS.update(at=now, map=table)
+    return _DIVIDENDS["map"].get(str(ins_code))
+
+# Days around a dividend's published decision in which its price cut is
+# looked for: the letter usually follows the AGM, and the reopening the AGM.
+DIVIDEND_WINDOW_BEFORE = 20
+DIVIDEND_WINDOW_AFTER = 5
+
+
+def _dividend_events(frame, closes, volumes, dividends, taken):
+    """Rule 3 of back_adjust: a known dividend whose cut fell on a traded
+    reopening. Skipped when the window already holds an event (the
+    exchange re-priced the frozen close, rule 2) or no reopening fell by at
+    least half the dividend."""
+
+    if not dividends or "date" not in frame.columns or volumes is None:
+        return []
+
+    import pandas as pd
+
+    dates = pd.to_datetime(frame["date"]).dt.normalize()
+    out = []
+    for when, dps in dividends:
+        try:
+            stamp = pd.Timestamp(when).normalize()
+            dps = float(dps)
+        except (TypeError, ValueError):
+            continue
+        if not dps or dps <= 0:
+            continue
+        lo = stamp - pd.Timedelta(days=DIVIDEND_WINDOW_BEFORE)
+        hi = stamp + pd.Timedelta(days=DIVIDEND_WINDOW_AFTER)
+        window = [i for i in range(1, len(closes)) if lo <= dates.iloc[i] <= hi]
+        if not window or any(i in taken for i in window):
+            continue
+        for i in window:
+            previous = closes[i - 1]
+            if not (volumes[i] > 0 and not volumes[i - 1] > 0) or \
+                    not previous or previous <= PLACEHOLDER_RIALS:
+                continue
+            cut = dps / previous
+            if cut >= 0.5 or closes[i] > previous * (1 - 0.5 * cut):
+                continue
+            out.append({"index": i, "kind": "dividend",
+                        "date": frame["date"].iloc[i],
+                        "factor": 1 - cut,
+                        "ratio": round(1 - cut, 4),
+                        "move_pct": round(-cut * 100, 2)})
+            taken.add(i)
+            break
+    return out
+
+
+def back_adjust(df, threshold=None, dividends=None):
     """Remove capital-increase and dividend gaps from a price series.
 
     TSETMC serves raw prices. A capital increase drops the quoted price
@@ -78,6 +159,30 @@ def back_adjust(df, threshold=None):
     if n < 2:
         return frame, []
 
+    # Three rules since the review panel of 2026-11-11 (technical, quant,
+    # fundamental, market-rules and data-quality reviewers, independently):
+    #
+    #  1. Only DOWNWARD gaps are corporate actions. A capital increase or a
+    #     dividend lowers the base price; nothing on this exchange raises it.
+    #     A rise past the threshold is a reopening without a band -- وبملت
+    #     +12.1% the day after its AGM, اروند +41.5% after a halt -- and
+    #     scaling it out erased real returns (2,823 such rises).
+    #  2. A fall on a bar with NO trade is the exchange re-pricing a frozen
+    #     close, whatever its size: the AGM's dividend (وبملت 1118 -> 1072,
+    #     exactly its DPS of 46; فولاد -55, فملی -450). Under the 12% rule
+    #     those stayed in the series as losses -- most dividends are 3-12%
+    #     of the price, and TEDPIX credits them -- and the next session's
+    #     stop and indicators read them as falls.
+    #  3. `dividends` (date, DPS) the caller knows of are applied at the
+    #     reopening after the AGM halt when the exchange's cut landed on a
+    #     traded bar instead (شستا -8.2% on 10-25 with DPS 210 of 3,680).
+    #
+    # A close of 10 rials or less is a placeholder, not a price, and marks no
+    # event either way.
+    volumes = (frame["volume"].astype(float).fillna(0).to_numpy()
+               if "volume" in frame.columns else None)
+    noise = 0.001
+
     factors = [1.0] * n
     events = []
     running = 1.0
@@ -88,20 +193,35 @@ def back_adjust(df, threshold=None):
 
         previous, current = closes[i - 1], closes[i]
 
-        if previous and previous > 0 and current and current > 0:
+        if previous and previous > PLACEHOLDER_RIALS and current and \
+                current > PLACEHOLDER_RIALS:
 
             ratio = current / previous
+            untraded = volumes is not None and not volumes[i] > 0
 
-            if abs(ratio - 1.0) > threshold:
+            kind = ("gap" if ratio < 1.0 - threshold
+                    else "reset" if untraded and ratio < 1.0 - noise
+                    else None)
+
+            if kind:
                 running *= ratio
                 events.append({
                     "index": i,
+                    "kind": kind,
                     "date": frame["date"].iloc[i] if "date" in frame else None,
                     "ratio": round(ratio, 4),
                     "move_pct": round((ratio - 1.0) * 100, 2),
                 })
 
         factors[i - 1] = running
+
+    for event in _dividend_events(frame, closes, volumes, dividends,
+                                  {e["index"] for e in events}):
+        i = event.pop("index")
+        factor = event.pop("factor")
+        for j in range(i):
+            factors[j] *= factor
+        events.append(dict(event, index=i))
 
     if not events:
         return frame, []
@@ -110,7 +230,7 @@ def back_adjust(df, threshold=None):
         if column in frame.columns:
             frame[column] = frame[column].astype(float) * factors
 
-    events.reverse()
+    events.sort(key=lambda e: e["index"])
 
     return frame, events
 

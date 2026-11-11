@@ -231,35 +231,72 @@ class TestBackAdjust(unittest.TestCase):
         self.assertTrue((frame["volume"] == 1_000_000).all(),
                         "rescaling volume would misstate real turnover")
 
-    def test_an_upward_gap_is_also_adjusted(self):
+    def test_an_upward_gap_is_a_real_move(self):
+        """No corporate action raises a price: a jump is a reopening without
+        a band (وبملت +12.1% after its AGM), and scaling it out erased real
+        returns (review panel, 2026-11-11)."""
+
         closes = [500.0] * 10 + [1000.0] * 10
 
         frame, events = bc.back_adjust(self._series(closes))
 
-        self.assertEqual(len(events), 1)
-        self.assertAlmostEqual(frame["close"].iloc[0], 1000.0, places=6)
+        self.assertEqual(events, [])
+        self.assertAlmostEqual(frame["close"].iloc[0], 500.0, places=6)
+
+    def test_a_cut_on_an_untraded_bar_is_the_exchange_repricing(self):
+        """وبملت 1118 -> 1072 with no trade: exactly its DPS of 46."""
+
+        closes = [1118.0] * 10 + [1072.0] + [1072.0] * 9
+        series = self._series(closes)
+        series.loc[10, "volume"] = 0
+
+        frame, events = bc.back_adjust(series)
+
+        self.assertEqual([e["kind"] for e in events], ["reset"])
+        self.assertAlmostEqual(frame["close"].iloc[0], 1072.0, places=6)
+
+    def test_a_small_fall_on_a_traded_bar_is_left_alone(self):
+        closes = [1118.0] * 10 + [1072.0] * 10
+
+        _frame, events = bc.back_adjust(self._series(closes))
+
+        self.assertEqual(events, [])
+
+    def test_a_known_dividend_is_taken_out_at_the_reopening(self):
+        """شستا: halted for its AGM, reopened 8.2% lower; DPS 210 of 3,680."""
+
+        closes = [3680.0] * 10 + [3680.0, 3680.0] + [3380.0] * 8
+        series = self._series(closes)
+        series.loc[10:11, "volume"] = 0
+        published = str(series["date"].iloc[13].date())
+
+        frame, events = bc.back_adjust(series, dividends=[(published, 210.0)])
+
+        self.assertEqual([e["kind"] for e in events], ["dividend"])
+        self.assertAlmostEqual(frame["close"].iloc[0], 3680.0 - 210.0, places=4)
 
     def test_signals_use_the_adjusted_series(self):
         """The adjustment has to happen before scores are computed, not after."""
 
         price = bars()
 
-        # Drop every price in the first half by 60%, which is what an
-        # unadjusted capital increase looks like in the raw feed.
+        # Drop every price in the second half by 60%, which is what an
+        # unadjusted capital increase looks like in the raw feed: the quoted
+        # price falls overnight by the issue's factor.
         cut = len(price) // 2
         for column in ("open", "high", "low", "close"):
-            price.loc[:cut, column] = price.loc[:cut, column] * 0.4
+            price.loc[cut:, column] = price.loc[cut:, column] * 0.4
 
         trades = bc.signals_for("code", "SYM", price, flow(),
                                 holding_days=20, threshold=0, step=13)
 
         self.assertTrue(trades)
 
-        # No trade may show the artificial +150% snap-back.
-        worst = max(abs(t["return"]) for t in trades)
+        # No trade may show the artificial -60% gap.
+        worst = min(t["return"] for t in trades)
 
-        self.assertLess(worst, 100.0,
-                        "an unadjusted gap leaked into a trade return")
+        self.assertGreater(worst, -50.0,
+                           "an unadjusted gap leaked into a trade return")
 
 
 class TestTrailingExit(unittest.TestCase):
