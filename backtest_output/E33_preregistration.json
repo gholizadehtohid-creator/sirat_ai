@@ -1,0 +1,33 @@
+{
+  "experiment_id": "E33-best-of-cheap-industries",
+  "question": "Would buying the best company of each industry that is cheaper than usual have made money, and more than holding every eligible company? The user's request of 2026-11-11: 'test the assumption that if you buy the best stock from industries cheaper than usual, you profit'.",
+  "researcher": "Claude, at the user's request of 2026-11-11",
+  "what_is_tested": "The panel's own signals, as the user sees them: an industry is 'cheaper than usual' exactly when the market-valuation card labels it so (ارزان‌تر از معمول: its aggregate trailing P/E below the 25th percentile of its own history), and the 'best' company is the one with the highest fundamental score on the Codal fundamentals card (بنیاد).",
+  "how_this_differs_from_E30_E31_E32": "E30 ranked companies by forward earnings yield across the whole market, E31 bought cheap laggards, E32 bought the best forward fundamentals regardless of price. None conditioned on the INDUSTRY being cheap against its own history, and none picked one company per industry.",
+  "multiple_testing": "Pre-2021 filings were checked first: the store holds 28-88 companies per fiscal year for 1394-1398 against 399+ from 1399, and the point-in-time trailing P/E exists for 2-24 companies per date before 2021 -- an older window cannot carry the test. This is therefore the FOURTH selection hypothesis on the 2021-06..2026-10 data (E30, E31, E32 rejected). Bonferroni for four: p < 0.0125.",
+  "data": "Point-in-time filings (backtesting/pit.py), as in E30-E32. Prices back-adjusted for capital increases. Industry membership is today's (no point-in-time sector history) -- a declared limit.",
+  "industry_valuation_on_decision_session_D": {
+    "source": "market_valuation.point(data, D), the function that builds the panel's market P/E card: per industry, the sum of market values over the sum of trailing-twelve-month owners' profit of its operating companies that traded within HALT_EXCLUDE_DAYS and have a fresh, non-suspect trailing year. A point exists only when 200+ companies qualify (from 2022-05).",
+    "history": "the industry's points on the 21-session decision grid up to and including D, counted only with 4+ companies and positive total profit (market_valuation.SECTOR_MIN_COMPANIES); an industry is read only with 12+ such points (SECTOR_MIN_POINTS), D among them",
+    "cheaper_than_usual": "percentile of the industry's P/E at D within its own history (market_valuation._percentile, ties counted half) strictly below 25 -- the panel's label threshold (panel.js valuationWord)"
+  },
+  "eligible_companies_on_D": "operating companies (not EARNINGS_MULTIPLE_NOT_MEANINGFUL), a bar on D, 20-session average traded value >= 5 billion rials (E30's floor), a point-in-time filing history, newest period no older than 7 months, not suspect (fundamental_outlook.suspect_reason), not a retired code, and a fundamental score (fundamental_scoring.score, coverage >= 40%)",
+  "best_company_score": "the fundamentals card's score as it is computed since commit 5c1eadf: financials.ratios on the newest period that carries an income statement, priced at D's close on the filing's capital-line share count carried across later bonus issues (E30's _shares); growth from the filing's stored comparative ratios through financials.comparable_growth; P/E and P/S on the trailing twelve months from fundamental_outlook.analyse; P/E withheld from the score when net profit exceeds 2x operating profit (fundamental_outlook.one_off_reason)",
+  "portfolio": "for each cheap industry, its eligible company with the highest score that can be bought at the D+1 close (not in a buy queue), equal weight across industries; held to the next decision's D+1 close. A decision with no cheap industry holds the control for that period (zero excess).",
+  "execution_costs_dates": "Identical to E30 and imported from examples/outlook_backtest.py: decisions every 21 sessions on E30's grid, buy at the D+1 close, no buys into a buy queue, 1.039% per round trip on turnover, a halted name marked at its last trade.",
+  "window": "Decisions on E30's grid from the first one on which any industry has 12 points of history (expected around 2023-04, the history starting 2022-05) to the last whose exit lies on or before 2026-10-31.",
+  "benchmarks": "B1 every eligible company equal weight (the control). TEDPIX and bills at 30% reported. 1,000 random books holding, each period, as many names as the strategy, drawn from the same eligible list, compared gross of costs.",
+  "hypothesis": {"H1": "The best-of-cheap-industries portfolio beats B1."},
+  "decision_rule": {
+    "ACCEPT": "all of: (1) one-sided Newey-West p < 0.0125 on the per-period log excess over B1, (2) random-null percentile >= 90, (3) positive mean excess in both halves of the window's decisions",
+    "REJECT": "otherwise",
+    "no_retuning": "the 25th-percentile threshold, the score, one company per industry and the cadence are fixed. Reported as diagnostics that cannot change the decision: every company of the cheap industries (does cheapness of the industry help?), the best company of EVERY industry (does the score help?), the threshold at the 50th percentile, cheapness measured relative to the market's P/E, and the cheapest company (highest trailing earnings yield) of each cheap industry."
+  },
+  "declared_limits": [
+    "All of E30's: survivorship, shares from capital lines, dividends under 12% not added back, nominal returns, no monthly reports.",
+    "Industry membership is today's.",
+    "A short window: the industry history starts 2022-05 and needs a year before it can call anything usual.",
+    "Fourth test on the same data (see multiple_testing)."
+  ],
+  "expected_failure": "Industry valuation in Tehran moves with the exchange rate and commodity cycles more than it reverts to its own mean, and E30's ranking by cheapness did no better than the eligible set. A REJECT is the likelier outcome."
+}
