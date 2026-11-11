@@ -285,6 +285,112 @@ class CashConversionTests(unittest.TestCase):
         self.assertFalse(any("نقد عملیاتی تبدیل" in f for f in r["flags"]))
 
 
+def tape(closes, single=(), volume=50_000, value=None):
+    """Bars oldest first; sessions in `single` trade at one price."""
+    import pandas as pd
+    rows = []
+    for i, close in enumerate(closes):
+        one = i in single
+        rows.append({"date": pd.Timestamp("2026-10-01") + pd.Timedelta(days=i),
+                     "open": close, "close": close,
+                     "high": close if one else close * 1.02,
+                     "low": close if one else close * 0.98,
+                     "volume": volume,
+                     "value": value if value is not None else volume * close})
+    return pd.DataFrame(rows)
+
+
+class TradingReadTests(unittest.TestCase):
+    """شصفها, 2026-11-11: P/E 1.6 on a price nobody could deal at."""
+
+    def test_a_thin_queue_locked_narrow_band_share_is_named_so(self):
+        closes = [3170 + 30 * i for i in range(20)]           # +1% a session
+        t = fo.trading_read(tape(closes, single=range(1, 20), value=2e8),
+                            band=(3440, 3470, 3410))
+        self.assertTrue(t["illiquid"])
+        self.assertTrue(t["narrow_band"])
+        self.assertEqual(t["queue_up_sessions"], 19)
+        self.assertEqual(len(t["notes"]), 3)
+        self.assertIn("کم‌معامله", t["notes"][0])
+
+    def test_a_liquid_share_on_an_ordinary_band_has_nothing_to_say(self):
+        t = fo.trading_read(tape([10_000] * 20, value=50e9),
+                            band=(10_000, 10_300, 9_700))
+        self.assertFalse(t["illiquid"])
+        self.assertFalse(t["narrow_band"])
+        self.assertEqual(t["notes"], [])
+
+    def test_a_three_percent_band_cut_to_the_tick_is_not_narrow(self):
+        # 3% of 500 is 15 rials, cut to the 10-rial tick: ±2% on paper.
+        pct, narrow = fo._band_pct((500, 510, 490))
+        self.assertAlmostEqual(pct, 2.0)
+        self.assertFalse(narrow)
+
+    def test_zero_volume_days_count_toward_the_mean(self):
+        bars = tape([1_000] * 20, value=10e9)
+        bars.loc[:9, ["volume", "value"]] = 0                 # half not traded
+        t = fo.trading_read(bars)
+        self.assertAlmostEqual(t["avg_value"], 5e9)
+        self.assertEqual(t["traded_sessions"], 10)
+
+    rows = [period("1405/06/31", 6, 120 * B, 24 * B),
+            period("1404/12/29", 12, 300 * B, 60 * B),
+            period("1404/06/31", 6, 100 * B, 20 * B)]
+
+    def test_a_point_in_time_read_is_not_judged_on_todays_tape(self):
+        r = fo.analyse("x", price=5_000, rows=self.rows, today=(1405, 8, 14),
+                       opportunity=BILLS)
+        self.assertIsNone(r["trading"])
+
+    def test_the_tape_leads_the_warnings_when_given(self):
+        r = fo.analyse("x", price=5_000, rows=self.rows, today=(1405, 8, 14),
+                       opportunity=BILLS, bars=tape([5_000] * 20, value=1e8),
+                       band=(5_000, 5_150, 4_850))
+        self.assertTrue(r["trading"]["illiquid"])
+        self.assertIn("کم‌معامله", r["flags"][0])
+
+
+class ScreenTradingGateTests(unittest.TestCase):
+    """A thin share is named under `thin`, not ranked; a queue note alone
+    does not push a company over max_flags."""
+
+    @staticmethod
+    def fake(code, trading, flags=()):
+        return {"kind": fo.OPERATING, "basis": "separate", "method": "year_completed",
+                "latest": {"age_months": 2, "period_end": "1405/06/31"},
+                "growth": {"revenue_pct": 50.0}, "margins": {"net_pct": 10.0},
+                "valuation": {"pe_forward": 3.0, "earnings_yield_forward_pct": 33.3,
+                              "pb": 1.0, "price_to_nav": None},
+                "flags": list(flags), "trading": trading}
+
+    def test_the_gate(self):
+        from unittest import mock
+        thin = {"illiquid": True, "avg_value": 3e8, "traded_sessions": 15,
+                "sessions": 20, "band_pct": 0.9, "notes": ["thin"]}
+        queued = {"illiquid": False, "notes": ["queue"]}
+        results = {
+            "1": self.fake("1", thin, flags=["thin"]),
+            "2": self.fake("2", queued, flags=["queue", "one real flag"]),
+        }
+        instruments = [{"ins_code": c, "symbol_fa": "s" + c, "name_fa": "",
+                        "sector_name": "x"} for c in results]
+        import codal_announcements
+        with mock.patch.object(fo.database, "load_instruments", return_value=instruments), \
+             mock.patch.object(fo.database, "halted_codes", return_value={}), \
+             mock.patch.object(fo.database, "load_history_tail", return_value={}), \
+             mock.patch.object(fo.database, "load_codal_portfolio_latest", return_value={}), \
+             mock.patch.object(fo, "latest_prices", return_value={}), \
+             mock.patch.object(fo, "exchange_shares", return_value={}), \
+             mock.patch.object(fo, "price_bands", return_value={}), \
+             mock.patch.object(fo, "opportunity_rate", return_value=BILLS), \
+             mock.patch.object(codal_announcements, "latest_dividends", return_value={}), \
+             mock.patch.object(fo, "analyse", side_effect=lambda code, **_: dict(results[code])):
+            s = fo.screen()
+        self.assertEqual(s["excluded"]["illiquid"], 1)
+        self.assertEqual([x["symbol"] for x in s["thin"]], ["s1"])
+        self.assertEqual([r["symbol"] for r in s["ranked"]], ["s2"])
+
+
 class LikeForLikeGrowthTests(unittest.TestCase):
 
     def test_growth_uses_the_filings_own_column_across_a_basis_change(self):

@@ -3754,6 +3754,21 @@ function hurdleCell(h) {
     ` <span class="${ok ? "up" : "down"}">(فعلی ${num(h.actual_growth_pct, 0)}٪)</span>`);
 }
 
+// Whether the price the multiples rest on can be dealt at (trading_read in
+// fundamental_outlook.py): mean daily value, the band, queue sessions.
+function tradingCell(t) {
+  if (!t) return "—";
+  const parts = [`میانگین ${money(t.avg_value)} ریال در روز` +
+    (t.illiquid ? ` <span class="down">(زیر کف ${money(t.floor)})</span>` : "")];
+  if (t.traded_sessions < t.sessions)
+    parts.push(`${num(t.sessions - t.traded_sessions, 0)} جلسه بدون معامله`);
+  if (t.band_pct != null)
+    parts.push(`دامنه ±${num(t.band_pct, 1)}٪` + (t.narrow_band ? ' <span class="down">(محدود)</span>' : ""));
+  if (t.queue_up_sessions) parts.push(`${num(t.queue_up_sessions, 0)} جلسه صف خرید`);
+  if (t.queue_down_sessions) parts.push(`${num(t.queue_down_sessions, 0)} جلسه صف فروش`);
+  return parts.join(" · ");
+}
+
 function renderOutlookDetail(r) {
   const v = r.valuation || {}, g = r.growth || {}, mg = r.margins || {};
   const c = r.cash || {}, b = r.balance || {}, l = r.latest || {};
@@ -3778,6 +3793,7 @@ function renderOutlookDetail(r) {
     ["P/NAV (ارزش خالص دارایی‌ها)", v.price_to_nav == null ? "—" :
       `${num(v.price_to_nav, 2)} — پرتفوی ${esc(v.nav_period || "")}` +
       (v.nav_complete === false ? " (سهام غیربورسی به بهای تمام‌شده؛ NAV کف است)" : "")],
+    ["معاملات ۲۰ جلسه‌ی اخیر", tradingCell(r.trading)],
     ["ارزش بازار", v.market_cap == null ? "—" :
       `${money(v.market_cap)} ریال` + (v.shares_source === "capital"
         ? " (تعداد سهم از سرمایه‌ی صورت مالی؛ از بورس در دست نبود)" : "")],
@@ -3855,6 +3871,12 @@ function renderOutlook(rep) {
   });
   const sus = (rep.suspect || []).map(x =>
     `${esc(x.symbol)} <span class="hint">(${esc(x.reason)}، ${esc(x.period_end)})</span>`).join("، ");
+  // Below the liquidity floor: the board price is not one a buyer can deal
+  // at, so a low P/E on it is not a bargain (شصفها, 2026-11-11).
+  const thin = (rep.thin || []).map(x =>
+    `${esc(x.symbol)} <span class="hint">(${money(x.avg_value)} در روز` +
+    (x.pe_forward != null ? `، P/E آینده‌نگر ${num(x.pe_forward, 1)}` : "") + `)</span>`).join("، ");
+  const thinMore = (rep.thin_count || 0) - (rep.thin || []).length;
   $("outlookTable").innerHTML = (rows.length
     ? table(["نماد", "صنعت", "آخرین دوره", "رشد فروش", "P/E گذشته",
              "P/E آینده‌نگر", "P/E به میانه‌ی صنعت", "بازده سود برآوردی",
@@ -3863,7 +3885,10 @@ function renderOutlook(rep) {
     (fin.length ? `<h3 style="margin-top:16px">بانک، بیمه، سرمایه‌گذاری و هلدینگ
       <span class="hint">— با P/NAV و P/B سنجیده می‌شوند، نه P/E (ارزان‌ترین اول)</span></h3>` +
       table(["نماد", "صنعت", "P/NAV (تاریخ پرتفوی)", "P/B", "ROE دوازده‌ماهه", "بازده نقدی"], fin) : "") +
-    (sus ? `<p class="hint" style="margin-top:12px">⚠ داده‌ی ناممکن — رتبه‌بندی نشد، صورت مالی را دستی ببینید: ${sus}</p>` : "");
+    (sus ? `<p class="hint" style="margin-top:12px">⚠ داده‌ی ناممکن — رتبه‌بندی نشد، صورت مالی را دستی ببینید: ${sus}</p>` : "") +
+    (thin ? `<p class="hint" style="margin-top:12px">⚠ کم‌معامله — رتبه‌بندی نشد؛ قیمت تابلو قیمتی نیست ` +
+      `که بتوان با آن خرید، پس P/E پایینشان ارزانی نیست (ارزان‌نماترین اول): ${thin}` +
+      (thinMore > 0 ? ` و ${num(thinMore, 0)} نماد دیگر` : "") + `</p>` : "");
   const x = rep.excluded || {}, o = rep.opportunity || {};
   // E30 tested this very ranking (registered, 2021-06..2026-10): its top ten
   // returned 35.0%/yr against TEDPIX 44.4% (p=0.24); only the bottom fifth
@@ -3878,6 +3903,7 @@ function renderOutlook(rep) {
     `کنار گذاشته: ${x.no_estimate || 0} بدون صورت مالی سال قبل، ` +
     `${x.basis_gap || 0} که صورت تلفیقی تازه‌شان هنوز منتشر نشده، ` +
     `${x.suspect || 0} با داده‌ی ناممکن، ` +
+    `${x.illiquid || 0} کم‌معامله (میانگین کمتر از ${money(rep.liquidity_floor)} ریال در روز)، ` +
     `${x.stale || 0} با صورت مالی کهنه، ${x.flags || 0} با بیش از یک هشدار، ` +
     `${x.loss || 0} زیان‌ده، ${x.no_filing || 0} بدون صورت مالی، ` +
     `${x.halted || 0} متوقف بیش از یک ماه. ` +

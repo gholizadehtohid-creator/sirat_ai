@@ -86,6 +86,29 @@ SUSPECT_MARGIN_PCT = 100.0
 FINANCIAL = "financial"
 OPERATING = "operating"
 
+# ---- can the price be dealt at? --------------------------------------------
+# Found 2026-11-11, from the user: "how does شصفها have a forward P/E under
+# 2?". The filings were read right -- TSETMC's own P/E was 2.2 against our
+# TTM 2.18 -- but the price was not one anybody could deal at: a ±1% band, all
+# trades at one price above the day before (a buy queue) on 15 of 20
+# sessions, 0.2 billion rials a day where the names below it traded hundreds.
+# A P/E on such a price measures how slowly the board lets it move, not what
+# the market thinks, and it led the ranking. The floor is the one the
+# fundamental screen already gates on (config.MIN_DAILY_VALUE, the mean value
+# of the newest 20 bars, zero days included -- fundamentals.avg_value_20).
+TRADING_SESSIONS = 20
+# Snapshot 2026-11-11: 744 equities at ±3%, 14 at ±2%, 5 at ±1%. A ±3% band
+# on a cheap share reads narrower after the limits are cut to the tick, so
+# one tick is allowed before a band is called narrow.
+NARROW_BAND_PCT = 2.5
+TICK_RIALS = 10
+# Sessions of the 20 whose every trade was at one price: a queue at a band
+# edge. 68 of 904 equities had 10 or more on 2026-11-11.
+LOCKED_SESSIONS = 10
+# Names under the floor listed by screen(), cheapest-looking first; the rest
+# are counted.
+THIN_LISTED = 20
+
 
 def _f(value):
     try:
@@ -292,7 +315,7 @@ _UNSET = object()
 
 def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             monthly_rows=None, dividend=_UNSET, shares=_UNSET, sector=_UNSET,
-            portfolio=_UNSET, opportunity=None):
+            portfolio=_UNSET, opportunity=None, bars=_UNSET, band=_UNSET):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
@@ -301,7 +324,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     codal_announcements.latest_dividends() entry, `shares` the exchange's
     share count, `sector` the instrument's sector name and `portfolio` its
     newest ن-31 filing; screen() passes all of them so 800 companies cost one
-    read each. `opportunity` is opportunity_rate()'s answer.
+    read each. `opportunity` is opportunity_rate()'s answer. `bars` (the
+    newest price bars) and `band` (the snapshot's limits) are trading_read()'s
+    inputs; with `rows` given and neither passed there is no trading read --
+    a point-in-time valuation must not be judged on today's tape.
     """
 
     rows_from_store = rows is None
@@ -325,6 +351,11 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if portfolio is _UNSET:
         portfolio = (database.load_codal_portfolio_latest([ins_code])
                      .get(str(ins_code)) if rows_from_store else None)
+    if bars is _UNSET:
+        bars = (database.load_history_tail([ins_code], TRADING_SESSIONS)
+                .get(str(ins_code)) if rows_from_store else None)
+    if band is _UNSET:
+        band = price_bands().get(str(ins_code)) if rows_from_store else None
     opportunity = opportunity or opportunity_rate()
     today = today or jalali.today_jalali()
 
@@ -737,6 +768,14 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         "positives": positives,
     }
 
+    # What the tape says about the price every multiple above rests on. First
+    # among the warnings: a P/E on a price nobody can deal at is not a
+    # valuation, however right the filing.
+    trading = trading_read(bars, band) if price and not halted else None
+    result["trading"] = trading
+    if trading and trading["notes"]:
+        flags[:0] = trading["notes"]
+
     suspect = suspect_reason(result)
     result["suspect"] = suspect
     if suspect:
@@ -826,6 +865,116 @@ def exchange_shares():
     return {str(code): _f(n) for code, n in rows if _f(n)}
 
 
+def price_bands():
+    """{ins_code: (previous close, upper limit, lower limit)} from the newest
+    market snapshot."""
+
+    conn = database._connect()
+    try:
+        rows = conn.execute("""
+            SELECT s.ins_code, s.prev_close, s.limit_up, s.limit_down
+            FROM market_snapshot s
+            JOIN (SELECT ins_code, MAX(captured_at) at FROM market_snapshot
+                  GROUP BY ins_code) m
+              ON m.ins_code = s.ins_code AND m.at = s.captured_at
+        """).fetchall()
+    except Exception:                                           # noqa: BLE001
+        rows = []
+    finally:
+        conn.close()
+    return {str(code): (_f(prev), _f(up), _f(down))
+            for code, prev, up, down in rows}
+
+
+def _band_pct(band):
+    """Half the day's permitted range as a percent of the previous close,
+    and whether it is narrower than an ordinary ±3% band cut to the tick."""
+
+    prev, up, down = band if band else (None, None, None)
+    if not prev or not up or not down or up <= down or prev <= 0:
+        return None, False
+    half = (up - down) / 2.0
+    pct = half / prev * 100
+    if pct > 50:                        # a malformed row, not a band
+        return None, False
+    return pct, (half + TICK_RIALS) / prev * 100 < NARROW_BAND_PCT
+
+
+def _money_fa(rials):
+    if rials >= 1e12:
+        return "%s هزار میلیارد" % format(round(rials / 1e12, 1), ",g")
+    if rials >= 1e9:
+        return "%s میلیارد" % format(round(rials / 1e9, 1), ",g")
+    return "%s میلیون" % format(round(rials / 1e6), ",")
+
+
+def trading_read(bars, band=None):
+    """Whether the last close is a price anybody can deal at, or None.
+
+    `bars` is the newest TRADING_SESSIONS rows of price_history (oldest
+    first, a DataFrame with date/high/low/close/volume/value), `band` the
+    snapshot's (previous close, upper limit, lower limit). `illiquid` names
+    are not ranked by screen(); `notes` say why, in the panel's words.
+    """
+
+    if bars is None or len(bars) == 0:
+        return None
+
+    bars = bars.tail(TRADING_SESSIONS).reset_index(drop=True)
+    volume = bars["volume"].fillna(0)
+    value = bars["value"].fillna(0) if "value" in bars.columns \
+        else volume * bars["close"].fillna(0)
+    avg_value = float(value.mean())
+
+    traded = int((volume > 0).sum())
+    up = down = 0
+    for i in range(len(bars)):
+        row = bars.iloc[i]
+        if not row["volume"] or row["volume"] <= 0 or row["high"] != row["low"]:
+            continue
+        prev = _f(bars.iloc[i - 1]["close"]) if i > 0 else None
+        price = _f(row["high"])
+        if prev and price and price > prev:
+            up += 1
+        elif prev and price and price < prev:
+            down += 1
+    single = int(((volume > 0) & (bars["high"] == bars["low"])).sum())
+
+    band_pct, narrow = _band_pct(band)
+    illiquid = avg_value < config.MIN_DAILY_VALUE
+
+    notes = []
+    if illiquid:
+        notes.append(
+            "کم‌معامله: میانگین ارزش معاملات %d جلسه‌ی اخیر %s ریال در روز "
+            "(کف: %s)%s — به این قیمت نمی‌شود به اندازه‌ی معنادار خرید یا فروخت"
+            % (len(bars), _money_fa(avg_value),
+               _money_fa(config.MIN_DAILY_VALUE),
+               "، %d جلسه بدون معامله" % (len(bars) - traded)
+               if traded < len(bars) else ""))
+    if narrow:
+        notes.append(
+            "دامنه‌ی نوسان فقط ±%.0f٪ است: قیمت روزی بیش از این جابه‌جا نمی‌شود، "
+            "پس P/E پایین ممکن است عقب ماندن قیمت باشد نه ارزانی" % band_pct)
+    if up >= LOCKED_SESSIONS:
+        notes.append(
+            "در %d جلسه از %d جلسه همه‌ی معاملات در یک قیمت و بالاتر از روز "
+            "قبل بود (صف خرید): خرید به قیمت تابلو عملاً ممکن نیست"
+            % (up, len(bars)))
+    elif down >= LOCKED_SESSIONS:
+        notes.append(
+            "در %d جلسه از %d جلسه همه‌ی معاملات در یک قیمت و پایین‌تر از روز "
+            "قبل بود (صف فروش): قیمت تابلو هنوز به تعادل نرسیده"
+            % (down, len(bars)))
+
+    return {"sessions": len(bars), "traded_sessions": traded,
+            "avg_value": avg_value, "floor": config.MIN_DAILY_VALUE,
+            "illiquid": illiquid, "band_pct": _round(band_pct, 1),
+            "narrow_band": narrow, "single_price_sessions": single,
+            "queue_up_sessions": up, "queue_down_sessions": down,
+            "notes": notes}
+
+
 def opportunity_rate(today=None):
     """The bill yield the outlook measures equity against.
 
@@ -879,19 +1028,27 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     where the portfolio filing allows, else by P/B. Only companies whose
     latest period is recent, with a prior year to complete it, and at most
     `max_flags` warnings, are ranked; the rest are counted, not hidden, and a
-    result that looks like a misread filing is named under `suspect`.
+    result that looks like a misread filing is named under `suspect`. A
+    share trading below the liquidity floor is named under `thin`, the
+    cheapest-looking first: its price is not one a buyer can deal at. The
+    tape's other warnings (a narrow band, a queue) are shown with the row but
+    not counted against `max_flags` -- they say how to deal, not what the
+    company is worth.
     """
 
     instruments = {str(r["ins_code"]): r
                    for r in database.load_instruments(equities_only=True)}
     prices = latest_prices()
     shares = exchange_shares()
+    bands = price_bands()
+    tails = database.load_history_tail(list(instruments), TRADING_SESSIONS)
     portfolios = database.load_codal_portfolio_latest()
     opportunity = opportunity_rate()
 
-    ranked, financials, suspect = [], [], []
+    ranked, financials, suspect, thin = [], [], [], []
     excluded = {"no_filing": 0, "stale": 0, "no_estimate": 0, "flags": 0,
-                "loss": 0, "halted": 0, "suspect": 0, "basis_gap": 0}
+                "loss": 0, "halted": 0, "suspect": 0, "basis_gap": 0,
+                "illiquid": 0}
     halted = database.halted_codes()
     import codal_announcements
     dividends = codal_announcements.latest_dividends()
@@ -903,7 +1060,8 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
         result = analyse(code, price=prices.get(code), today=today,
                          dividend=dividends.get(code), shares=shares.get(code),
                          sector=inst.get("sector_name"),
-                         portfolio=portfolios.get(code), opportunity=opportunity)
+                         portfolio=portfolios.get(code), opportunity=opportunity,
+                         bars=tails.get(code), band=bands.get(code))
         if not result:
             excluded["no_filing"] += 1
             continue
@@ -913,6 +1071,21 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
         if age is not None and age > STALE_MONTHS:
             excluded["stale"] += 1
             continue
+
+        trading = result.get("trading") or {}
+        if trading.get("illiquid"):
+            excluded["illiquid"] += 1
+            v = result["valuation"]
+            thin.append({"symbol": result["symbol"], "kind": result["kind"],
+                         "avg_value": trading["avg_value"],
+                         "traded_sessions": trading["traded_sessions"],
+                         "sessions": trading["sessions"],
+                         "band_pct": trading["band_pct"],
+                         "pe_forward": v["pe_forward"],
+                         "earnings_yield_forward_pct":
+                             v["earnings_yield_forward_pct"]})
+            continue
+        tape_notes = len(trading.get("notes") or ())
 
         if result["kind"] == FINANCIAL:
             if result["valuation"]["pb"] is not None or                     result["valuation"]["price_to_nav"] is not None:
@@ -935,7 +1108,7 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
             suspect.append({"symbol": result["symbol"], "reason": reason,
                             "period_end": result["latest"]["period_end"]})
             continue
-        if len(result["flags"]) > max_flags:
+        if len(result["flags"]) - tape_notes > max_flags:
             excluded["flags"] += 1
             continue
         if min_yield_pct is not None and ey < min_yield_pct:
@@ -962,10 +1135,14 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
         r["valuation"]["price_to_nav"] if r["valuation"]["price_to_nav"]
         is not None else (r["valuation"]["pb"] or 99)))
 
+    thin.sort(key=lambda r: -(r["earnings_yield_forward_pct"] or -1e9))
+
     return {"ranked": ranked[:limit], "count": len(ranked),
             "financials": financials[:limit],
             "financials_count": len(financials),
             "suspect": suspect,
+            "thin": thin[:THIN_LISTED], "thin_count": len(thin),
+            "liquidity_floor": config.MIN_DAILY_VALUE,
             "excluded": excluded,
             "bar_pct": opportunity["rate_pct"],
             "opportunity": opportunity}
