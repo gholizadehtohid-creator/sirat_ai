@@ -146,15 +146,22 @@ def participation(params=None, bars=None, as_of=None):
 
     frames = []
 
+    # Today's read loads every name's tail in one pass (database.
+    # load_history_tail, an indexed search per code on one connection); the
+    # per-name reader opened a connection and a read_sql 902 times
+    # (2026-11-11). A past date keeps the per-name reader, which bounds by it.
+    tails = (database.load_history_tail(codes, bars or 120)
+             if cutoff is None else None)
+
     for code in codes:
 
         # Both bounds go to the database: the newest N sessions on or before
         # the cutoff. Reading the whole series and slicing in pandas returns
         # the same answer but moves ~25x the rows, which turns a sweep over a
         # few hundred dates from minutes into an hour.
-        frame = database.load_history_by_inscode(
-            code, limit=bars or 120, before=cutoff
-        )
+        frame = (tails.get(str(code)) if tails is not None else
+                 database.load_history_by_inscode(code, limit=bars or 120,
+                                                  before=cutoff))
 
         if frame is None or frame.empty or "close" not in frame.columns:
             continue

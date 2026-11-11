@@ -994,11 +994,13 @@ def instrument_counts():
     # "832/818 equities have bars" -- a coverage ratio above 100%, because the
     # gold funds have bars and are not equities. A count that can exceed its own
     # denominator is not a coverage figure.
+    # EXISTS per equity on the (ins_code, date) key: 0.015 s, where the
+    # join over every bar took ~1 s -- and bootstrap.status() runs this on
+    # nearly every panel response (2026-11-11).
     with_history = conn.execute("""
-        SELECT COUNT(DISTINCT p.ins_code)
-        FROM price_history p
-        JOIN instruments i ON i.ins_code = p.ins_code
+        SELECT COUNT(*) FROM instruments i
         WHERE i.is_equity = 1
+          AND EXISTS (SELECT 1 FROM price_history p WHERE p.ins_code = i.ins_code)
     """).fetchone()[0]
 
     conn.close()
@@ -2056,13 +2058,16 @@ def load_client_type_history(ins_code, limit=None):
     return df
 
 
-def load_client_type_tail(ins_codes, sessions):
-    """The most recent `sessions` rows for each of many instruments.
+def _tail_frames(table, columns, ins_codes, sessions):
+    """{ins_code: the newest `sessions` rows, oldest first} from `table`.
 
-    The panel's flow view reads several hundred symbols at once. Doing that one
-    load_client_type_history() call at a time meant a connection and a query
-    per symbol; this is one query, with the per-symbol cut applied in SQL so a
-    long-listed name does not drag its whole history through pandas.
+    One indexed search per code (ORDER BY date DESC LIMIT n on the primary
+    key) on one connection. The first form ranked every stored row with
+    ROW_NUMBER() OVER (PARTITION BY ins_code ORDER BY date DESC) to keep a
+    few hundred per name: 9.35 s for price_history and 8.76 s for
+    client_type_history per call, paid by the technical, smart-money and
+    money-flow cards; this is 1.9 s and 0.63 s with frames equal to the old
+    ones (measured 2026-11-11).
     """
 
     create_database()
@@ -2072,33 +2077,35 @@ def load_client_type_tail(ins_codes, sessions):
     if not codes or sessions <= 0:
         return {}
 
-    columns = ", ".join(CLIENT_TYPE_FIELDS)
-    holes = ", ".join(["?"] * len(codes))
-
+    sql = (f"SELECT ins_code, {', '.join(columns)} FROM {table} "
+           f"WHERE ins_code = ? ORDER BY date DESC LIMIT ?")
+    rows = []
     conn = _connect()
+    try:
+        for code in codes:
+            found = conn.execute(sql, (code, sessions)).fetchall()
+            found.reverse()
+            rows.extend(found)
+    finally:
+        conn.close()
 
-    df = pd.read_sql(f"""
-        SELECT ins_code, date, {columns} FROM (
-            SELECT *, ROW_NUMBER() OVER (
-                PARTITION BY ins_code ORDER BY date DESC
-            ) AS rank
-            FROM client_type_history
-            WHERE ins_code IN ({holes})
-        ) WHERE rank <= ?
-        ORDER BY ins_code, date ASC
-    """, conn, params=codes + [sessions])
-
-    conn.close()
-
-    if df.empty:
+    if not rows:
         return {}
 
+    df = pd.DataFrame(rows, columns=["ins_code"] + list(columns))
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     return {
         str(code): group.drop(columns=["ins_code"]).reset_index(drop=True)
         for code, group in df.groupby("ins_code")
     }
+
+
+def load_client_type_tail(ins_codes, sessions):
+    """The most recent `sessions` flow rows for each of many instruments."""
+
+    return _tail_frames("client_type_history",
+                        ["date"] + list(CLIENT_TYPE_FIELDS), ins_codes, sessions)
 
 
 def halted_codes(days=None):
@@ -2118,14 +2125,28 @@ def halted_codes(days=None):
     if days is None:
         from config import HALT_EXCLUDE_DAYS as days
 
+    # A skip-scan over the distinct codes, with each code's newest bar and
+    # newest TRADED bar read off the (ins_code, date) key: 0.5 s where the
+    # GROUP BY over every bar took 1.6-1.7 s, and technical.analyse called it
+    # once per name -- 22.7 of the gold card's 29 s (2026-11-11).
     create_database()
     conn = _connect()
-    newest = conn.execute("SELECT MAX(date) FROM price_history").fetchone()[0]
-    rows = conn.execute("""
-        SELECT ins_code, MAX(CASE WHEN volume > 0 THEN date END)
-        FROM price_history GROUP BY ins_code
+    scanned = conn.execute("""
+        WITH RECURSIVE c(x) AS (
+          SELECT MIN(ins_code) FROM price_history
+          UNION ALL
+          SELECT (SELECT MIN(ins_code) FROM price_history WHERE ins_code > c.x)
+          FROM c WHERE c.x IS NOT NULL)
+        SELECT x,
+          (SELECT MAX(date) FROM price_history p WHERE p.ins_code = c.x),
+          (SELECT date FROM price_history p WHERE p.ins_code = c.x
+             AND p.volume > 0 ORDER BY date DESC LIMIT 1)
+        FROM c WHERE x IS NOT NULL
     """).fetchall()
     conn.close()
+
+    newest = max((r[1] for r in scanned if r[1]), default=None)
+    rows = [(code, last) for code, _newest, last in scanned]
 
     if not newest:
         return {}
@@ -2143,47 +2164,13 @@ def halted_codes(days=None):
 def load_history_tail(ins_codes, sessions):
     """The most recent `sessions` price bars for each of many instruments.
 
-    One query for a whole-market technical scan, mirroring
-    `load_client_type_tail`: the per-symbol cut is applied in SQL so a
-    long-listed name does not drag its entire history through pandas. Returns
-    {ins_code: DataFrame(oldest first)} -- the shape calculate_indicators wants.
+    {ins_code: DataFrame(oldest first)} -- the shape calculate_indicators
+    wants; see _tail_frames for how it is read.
     """
 
-    create_database()
-
-    codes = [str(c) for c in ins_codes]
-
-    if not codes or sessions <= 0:
-        return {}
-
-    conn = _connect()
-
-    holes = ", ".join(["?"] * len(codes))
-
-    df = pd.read_sql(f"""
-        SELECT ins_code, date, open, high, low, close, volume, value, trades
-        FROM (
-            SELECT *, ROW_NUMBER() OVER (
-                PARTITION BY ins_code ORDER BY date DESC
-            ) AS rank
-            FROM price_history
-            WHERE ins_code IN ({holes})
-        ) WHERE rank <= ?
-        ORDER BY ins_code, date ASC
-    """, conn, params=codes + [sessions])
-
-    conn.close()
-
-    if df.empty:
-        return {}
-
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    return {
-        str(code): group.drop(columns=["ins_code", "rank"], errors="ignore")
-                        .reset_index(drop=True)
-        for code, group in df.groupby("ins_code")
-    }
+    return _tail_frames("price_history",
+                        ["date", "open", "high", "low", "close", "volume",
+                         "value", "trades"], ins_codes, sessions)
 
 
 def inscodes_with_client_type():
@@ -2337,11 +2324,12 @@ def newest_equity_bar():
 
     conn = _connect()
 
+    # Each equity's newest bar off the key, then the newest of those:
+    # 0.014 s instead of 0.47 s for the join over every bar (2026-11-11).
     row = conn.execute("""
-        SELECT MAX(p.date)
-        FROM price_history p
-        JOIN instruments i ON i.ins_code = p.ins_code
-        WHERE i.is_equity = 1
+        SELECT MAX((SELECT MAX(p.date) FROM price_history p
+                    WHERE p.ins_code = i.ins_code))
+        FROM instruments i WHERE i.is_equity = 1
     """).fetchone()
 
     conn.close()

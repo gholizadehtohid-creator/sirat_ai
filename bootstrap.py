@@ -511,10 +511,14 @@ def _flow_session_coverage():
 
     conn = database._connect()
     try:
+        # Each equity's newest traded bar off the (ins_code, date) key, then
+        # the newest of those: 0.09 s instead of 1.6 s for the join over every
+        # bar, on a probe nearly every panel response pays (2026-11-11).
         session = conn.execute("""
-            SELECT MAX(p.date) FROM price_history p
-            JOIN instruments i ON i.ins_code = p.ins_code
-            WHERE i.is_equity = 1 AND p.volume > 0
+            SELECT MAX((SELECT p.date FROM price_history p
+                        WHERE p.ins_code = i.ins_code AND p.volume > 0
+                        ORDER BY p.date DESC LIMIT 1))
+            FROM instruments i WHERE i.is_equity = 1
         """).fetchone()[0]
         if not session:
             return None, 0, 0

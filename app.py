@@ -620,7 +620,7 @@ def api_indices():
     bars = request.args.get("bars", type=int)
     force = request.args.get("refresh") == "1"
 
-    key = cache_key("indices", bars, params_key(params))
+    key = cache_key("indices", data_version(), bars, params_key(params))
 
     def build():
         return indices.analyse_all(params=params, bars=bars)
@@ -765,13 +765,44 @@ def api_smart_money_history():
                     "signals": store.recent_signals(limit=limit)})
 
 
+_SESSION_PROBE = {"at": 0.0, "value": None}
+_SESSION_LOCK = threading.Lock()
+SESSION_PROBE_TTL = 60.0
+
+
+def _session_probe():
+    """market_session.is_trading_now(), at most once a minute for the panel.
+
+    It is two TSETMC requests (the whole market watch and the overview),
+    and every /api/live called it -- the summary tab and the live tab both,
+    on every load -- so an unreachable exchange stalled the first card and
+    each page view sent traffic to a host that blocks bursts (found
+    2026-11-11). Concurrent callers wait for the one probe in flight.
+    """
+
+    import market_session
+
+    with _SESSION_LOCK:
+        now = time.monotonic()
+        if _SESSION_PROBE["value"] is not None and                 now - _SESSION_PROBE["at"] < SESSION_PROBE_TTL:
+            return _SESSION_PROBE["value"]
+        try:
+            value = market_session.is_trading_now()
+        except Exception as exc:                                # noqa: BLE001
+            value = {"trading": None, "traded": 0, "last_trade": None,
+                     "reason": "%s: %s" % (type(exc).__name__, str(exc)[:120])}
+        _SESSION_PROBE.update(at=now, value=value)
+        return value
+
+
 @app.route("/api/live")
 def api_live():
     """The session as it stands: who is locked, what just changed, who is being bought.
 
-    Reads only what monitor.py has already written. Deliberately issues no
-    network request of its own -- a dashboard load must not put traffic on
-    TSETMC, and the collector is at most one poll ahead of this anyway.
+    Reads what monitor.py has already written, plus one session probe
+    (market_session.is_trading_now: two TSETMC requests) shared by every
+    caller for a minute (_session_probe) -- the docstring used to say no
+    request at all while every call made that probe (found 2026-11-11).
 
     NOT MEMOISED. Every other whole-market view here is cached for five
     minutes because it costs a scan; this one is three indexed reads, and a
@@ -790,7 +821,6 @@ def api_live():
     last month. The age is part of the answer.
     """
 
-    import market_session
     import monitor
 
     top = request.args.get("top", type=int) or 15
@@ -801,11 +831,7 @@ def api_live():
     # The feed probe is one call and it is the only honest way to answer
     # "is a session running". Failure here must not take the panel down:
     # the stored half is still worth rendering, and says so.
-    try:
-        session = market_session.is_trading_now()
-    except Exception as exc:                                    # noqa: BLE001
-        session = {"trading": None, "traded": 0, "last_trade": None,
-                   "reason": "%s: %s" % (type(exc).__name__, str(exc)[:120])}
+    session = _session_probe()
 
     return jsonify({
         "session": session,
@@ -1061,7 +1087,8 @@ def api_sectors():
     min_members = request.args.get("min_members", type=int)
     force = request.args.get("refresh") == "1"
 
-    key = cache_key("sectors", approve, bars, min_members, params_key(params))
+    key = cache_key("sectors", data_version(), approve, bars, min_members,
+                    params_key(params))
 
     def build():
         report = sectors.analyse_all(
@@ -1165,7 +1192,7 @@ def api_fundamentals():
     top = max(1, min(request.args.get("top", type=int) or 40, 300))
     force = request.args.get("refresh") == "1"
 
-    key = cache_key("fundamentals", top)
+    key = cache_key("fundamentals", data_version(), top)
 
     def build():
         return _fundamental_report(top)
@@ -1279,7 +1306,7 @@ def api_moneyflow():
 
     top = max(1, min(top or 15, 100))
 
-    key = cache_key("moneyflow", window, top)
+    key = cache_key("moneyflow", data_version(), window, top)
 
     def build():
         return moneyflow.analyse_market(window=window, top=top)

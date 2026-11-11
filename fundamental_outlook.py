@@ -749,7 +749,24 @@ def _round(x, digits=2):
     return None if x is None else round(x, digits)
 
 
-_MARKET_DATE = []
+# The market's newest session, re-read after MARKET_DATE_TTL seconds. It was
+# cached for the life of the process, so a panel started on a session
+# measured every halt against that day: started when 11-03 was newest, it
+# flagged 4 of the 10 names it should have, and priced استقلال, بازرگام, تکنار,
+# چکاوه, شمواد and ولراز on stale closes (found 2026-11-11).
+_MARKET_DATE = {"at": None, "value": None}
+MARKET_DATE_TTL = 120.0
+
+
+def _market_date():
+    import time
+
+    now = time.monotonic()
+    if _MARKET_DATE["at"] is None or now - _MARKET_DATE["at"] > MARKET_DATE_TTL:
+        newest = database.newest_equity_bar()
+        _MARKET_DATE["value"] = None if newest is None else str(newest.date())
+        _MARKET_DATE["at"] = now
+    return _MARKET_DATE["value"]
 
 
 def halted_since(ins_code):
@@ -763,16 +780,13 @@ def halted_since(ins_code):
 
     from datetime import date
 
+    newest = _market_date()
     conn = database._connect()
-    if not _MARKET_DATE:
-        _MARKET_DATE.append(conn.execute(
-            "SELECT MAX(date) FROM price_history").fetchone()[0])
     last = conn.execute(
         "SELECT MAX(date) FROM price_history WHERE ins_code = ? AND volume > 0",
         (str(ins_code),)).fetchone()[0]
     conn.close()
 
-    newest = _MARKET_DATE[0]
     if not newest:
         return None
     if not last:

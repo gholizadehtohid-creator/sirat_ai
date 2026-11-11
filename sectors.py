@@ -361,22 +361,38 @@ def _breadth(histories, params):
     one. When it disagrees with the derived index, believe this.
     """
 
+    # Two moving averages at the last bar, not the whole indicator suite: the
+    # first form ran calculate_indicators (RSI, MACD, Bollinger, ATR/ADX, OBV)
+    # on ~820 members to read MA_FAST and MA_SLOW -- 57 of 99 profiled
+    # seconds of /api/sectors (2026-11-11). Same preprocessing as
+    # calculate_indicators, so the values are the ones it produced. And on
+    # back-adjusted bars, as every other trend reading in the panel: on raw
+    # bars a capital increase put 25 of 793 members on the wrong side of
+    # their slow MA.
+    from technical import _adjusted
+
     above_slow = 0
     above_fast = 0
     counted = 0
 
     for frame in histories.values():
 
-        enriched = calculate_indicators(frame, params)
-
-        if enriched.empty:
+        if frame is None or frame.empty or "close" not in frame.columns:
             continue
 
-        last = enriched.iloc[-1]
+        df = _adjusted(frame)[["date", "close"]].copy()
+        df["close"] = pd.to_numeric(df["close"], errors="coerce")
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df = df.dropna(subset=["date"]).sort_values("date")
+        df = df.dropna(subset=["close"]).reset_index(drop=True)
 
-        slow = last.get("MA_SLOW")
-        fast = last.get("MA_FAST")
-        close = last.get("close")
+        if df.empty:
+            continue
+
+        closes = df["close"]
+        slow = closes.rolling(window=params["ma_slow"]).mean().iloc[-1]
+        fast = closes.rolling(window=params["ma_fast"]).mean().iloc[-1]
+        close = closes.iloc[-1]
 
         if slow is None or slow != slow or close is None or close != close:
             continue

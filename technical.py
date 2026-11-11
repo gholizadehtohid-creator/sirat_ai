@@ -793,7 +793,7 @@ def price_targets(frame, latest, sr):
     }
 
 
-def analyse(symbol, params=None, bars=SERIES_BARS):
+def analyse(symbol, params=None, bars=SERIES_BARS, halted=None):
     """The technical reading for one symbol.
 
     Returns a dict with the resolved instrument, the latest indicator values,
@@ -811,7 +811,10 @@ def analyse(symbol, params=None, bars=SERIES_BARS):
 
     # Halted over config.HALT_EXCLUDE_DAYS: indicators on a frozen close
     # describe a market that no longer exists (user request, 2026-11-05).
-    halted = database.halted_codes().get(str(ins_code), False)
+    # `halted` may be passed in by a caller analysing many names: the map
+    # costs a scan of every bar, and gold_list paid it once per fund
+    # (22.7 of the gold card's 29 s, 2026-11-11).
+    halted = (database.halted_codes() if halted is None else halted)         .get(str(ins_code), False)
     if halted is not False:
         return {"error": "نماد %s %s معامله نشده (متوقف) و تحلیل نمی‌شود."
                          % (symbol, "از %s" % halted if halted else "هیچ‌گاه"),
@@ -1051,12 +1054,14 @@ def gold_list(params=None):
     # interleave network latency with the indicator maths for no gain.
     navs = gold.nav_snapshot([f.get("ins_code") for f in funds])
 
+    halted_map = database.halted_codes()        # once, not once per fund
+
     rows = []
     missing = []
 
     for fund in funds:
         symbol = fund.get("symbol_fa")
-        rep = analyse(symbol, params=params)
+        rep = analyse(symbol, params=params, halted=halted_map)
 
         if rep.get("error"):
             # A fund with no stored history yet -- reported, not silently

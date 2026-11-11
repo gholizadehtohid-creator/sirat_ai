@@ -416,6 +416,11 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
     todo = [r for r in database.load_instruments(equities_only=True)
             if (str(r["ins_code"]) not in have or str(r["ins_code"]) in stale)
             and str(r["ins_code"]) not in halted]
+    # Stale companies first: they hold a DPS the panel shows as current, while
+    # a company with none shows nothing. Alphabetical order spent a whole
+    # throttled run on new listings and never reached the 16 stale ones
+    # (2026-11-11: 39 searched, 29 stored, all 16 still stale).
+    todo.sort(key=lambda r: str(r["ins_code"]) not in stale)
     if limit:
         todo = todo[:limit]
 

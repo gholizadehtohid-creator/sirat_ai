@@ -182,8 +182,21 @@ def _finite(value):
     return number if number == number and abs(number) != float("inf") else None
 
 
+_schema_ready = set()
+
+
 def create_database():
-    """Create the three stages and the refresh log. Idempotent."""
+    """Create the three stages and the refresh log. Idempotent.
+
+    Once per store file per process, like database.create_database: every
+    load_metrics ran the whole schema script, 1,510 times in one /api/outlook
+    (2026-11-11). The file must still exist for the shortcut to hold, so a
+    test that deletes and recreates its store gets a schema.
+    """
+
+    target = path()
+    if target in _schema_ready and os.path.exists(target):
+        return
 
     conn = _connect()
 
@@ -295,6 +308,8 @@ def create_database():
 
     conn.commit()
     conn.close()
+
+    _schema_ready.add(target)
 
 
 def exists():
