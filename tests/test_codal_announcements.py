@@ -106,6 +106,20 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(a.latest_dividends()["123"]["dps"], 55.0)
         self.assertEqual(a.recent(days=None)[0]["kind"], "agm")
 
+    def test_a_recess_notice_stores_no_dps_and_asks_for_no_page(self):
+        # The watch path stored a recess notice's DPS as the year's dividend
+        # (1372609: 380); only the backfill skipped them (2026-11-11).
+        with mock.patch.object(a.codal, "archive_read", return_value=None),                 mock.patch.object(a.codal, "archive_write"):
+            client = mock.Mock()
+            client._get.return_value.content = PAGE.encode("utf-8")
+            outcome = a.handle(client, letter("9", "1405/04/29 12:00:00",
+                                              title=RECESS_SAME_YEAR),
+                               {"ins_code": "123"})
+
+        self.assertTrue(outcome.startswith("stored (recess notice"))
+        self.assertEqual(client._get.call_count, 0)
+        self.assertNotIn("123", a.latest_dividends())
+
     def test_an_amendment_replaces_the_original(self):
         self.handle(letter("1", "1405/04/29 12:00:00"))
         self.handle(letter("2", "1405/05/25 14:00:00"),
@@ -456,6 +470,17 @@ class ReopenTests(unittest.TestCase):
         a.store_announcement(letter("13", "1405/06/01 10:00:00", title=RECESS),
                              "2", "agm")
         self.assertNotIn("2", a.stale_dividends(include_read=True))
+
+    def test_a_dps_taken_from_a_recess_notice_is_due_again(self):
+        # Right year, wrong letter: the year rule cannot see it.
+        recess = letter("15", "1405/04/01 10:00:00", title=RECESS_SAME_YEAR)
+        a.store_announcement(recess, "3", "agm")
+        a.store_dividend("3", "1404/12/29", {"dps": 380.0}, recess)
+        a.store_announcement(letter("16", "1405/05/11 10:00:00"), "3", "agm")
+
+        self.assertEqual(a.stale_dividends()["3"][0], "1404/12/29")
+        a._read_through("3", "1404/12/29")     # read; the decision had none
+        self.assertNotIn("3", a.stale_dividends())
 
     def test_a_short_year_read_without_dps_leaves_the_12_month_year(self):
         # Company 2 holds FY1404's DPS; its newest decision is a 3-month

@@ -289,6 +289,13 @@ def handle(client, letter, inst):
             persian.normalize(ANNUAL_AGM_DECISIONS):
         return "stored"
 
+    # A recess notice (اعلام تنفس) carries the AGM code but decides nothing;
+    # its page can still show a DPS (1372609 showed 380), which the watch
+    # stored as the year's dividend while only the backfill skipped them
+    # (found 2026-11-11). No request for it either.
+    if is_recess(letter.get("title")):
+        return "stored (recess notice: no decision, no DPS)"
+
     fiscal_end = fiscal_year_end(letter.get("title"))
     parsed, error, kind = _fetch_dividend(client, letter)
     if parsed and fiscal_end:
@@ -520,8 +527,9 @@ def stale_dividends(include_read=False):
     conn = fundamental_db._connect()
     tables = _tables(conn)
     if "announcements" in tables:
-        titles = conn.execute("SELECT ins_code, title FROM announcements "
-                              "WHERE letter_code = ?", (code,)).fetchall()
+        titles = conn.execute("SELECT ins_code, title, tracing_no FROM "
+                              "announcements WHERE letter_code = ?",
+                              (code,)).fetchall()
     if "dividends" in tables:
         stored = conn.execute("SELECT ins_code, fiscal_year_end, dps, "
                               "tracing_no FROM dividends").fetchall()
@@ -533,13 +541,20 @@ def stale_dividends(include_read=False):
     if stored and os.path.isfile(database.DATABASE_NAME):
         mconn = database._connect()
         if "codal_letters" in _tables(mconn):
-            titles += mconn.execute("SELECT ins_code, title FROM codal_letters "
-                                    "WHERE letter_code = ?", (code,)).fetchall()
+            titles += mconn.execute("SELECT ins_code, title, tracing_no FROM "
+                                    "codal_letters WHERE letter_code = ?",
+                                    (code,)).fetchall()
         mconn.close()
 
     by_company = {}
-    for ins_code, title in titles:
+    for ins_code, title, _tracing in titles:
         by_company.setdefault(str(ins_code), []).append(title)
+
+    # Rows the watch took from a recess notice before handle() skipped them:
+    # right year, wrong letter (18027801615184692 FY1403: 380 from recess
+    # notice 1372609, the decision 1386657 never read). The year rule cannot
+    # see them, so they are due by their source.
+    recess = {str(t[2]) for t in titles if t[2] and is_recess(t[1])}
 
     rows = {}
     for row in stored:
@@ -556,7 +571,9 @@ def stale_dividends(include_read=False):
         if len(years) > 1 and year not in have and due == 0 \
                 and read_to >= year:
             year = years[1]                     # the short year had none
-        if max(r[1] or "" for r in held) >= year:
+        newest = max(held, key=lambda r: r[1] or "")
+        from_recess = str(newest[3]) in recess
+        if (newest[1] or "") >= year and not from_recess:
             continue
         if due == 0 and read_to >= year and not include_read:
             continue                            # read; it carries no DPS
