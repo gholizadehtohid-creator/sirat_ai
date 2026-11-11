@@ -1197,6 +1197,7 @@ def _fundamental_report(top):
 
     rows = []
     stale = []
+    asset_valued = []
 
     for code, entry in metrics.items():
 
@@ -1228,6 +1229,13 @@ def _fundamental_report(top):
             # filing is worth seeing, just never at the top of a ranking of
             # current fundamentals.
             stale.append(row)
+        elif (instrument.get("sector_name") or "").strip() in                 config.EARNINGS_MULTIPLE_NOT_MEANINGFUL:
+            # An investment company, bank or insurer is valued on its assets
+            # (the outlook card ranks them by P/NAV and P/B). Even with P/E,
+            # profitability and growth left out, the pillars that remain were
+            # rescaled to 100 and five still sat in the top 40 (2026-11-11);
+            # they are counted, not ranked beside operating companies.
+            asset_valued.append(row)
         elif entry.get("score") is not None:
             rows.append(row)
 
@@ -1245,6 +1253,7 @@ def _fundamental_report(top):
             "weak": sum(1 for r in rows if r["score"] < 45),
             "stale": len(stale),
             "halted": len(halted),
+            "asset_valued": len(asset_valued),
         },
         "stale_months": config.CODAL_STALE_MONTHS,
         "median_score": (sorted(scored)[len(scored) // 2] if scored else None),

@@ -2380,6 +2380,8 @@ function renderFundamentals(rep) {
     { k: "بنیاد قوی", v: counts.strong, sub: "امتیاز ۸۰ به بالا" },
     { k: "بنیاد ضعیف", v: counts.weak, sub: "امتیاز زیر ۴۵" },
     { k: "متوقف، کنار گذاشته", v: counts.halted ?? 0, sub: "بیش از یک ماه بدون معامله" },
+    { k: "مالی و سرمایه‌گذاری، جدا", v: num(counts.asset_valued ?? 0, 0),
+      sub: "با P/NAV و P/B در کارت چشم‌انداز سنجیده می‌شوند، نه با سود" },
     { k: "میانه‌ی امتیاز", v: rep.median_score ?? "—",
       sub: "نقطه‌ی میانی بازارِ پوشش‌داده‌شده" },
     { k: "دوره‌های ذخیره‌شده", v: cov.periods || 0,
@@ -3863,7 +3865,14 @@ function renderOutlook(rep) {
       table(["نماد", "صنعت", "P/NAV (تاریخ پرتفوی)", "P/B", "ROE دوازده‌ماهه", "بازده نقدی"], fin) : "") +
     (sus ? `<p class="hint" style="margin-top:12px">⚠ داده‌ی ناممکن — رتبه‌بندی نشد، صورت مالی را دستی ببینید: ${sus}</p>` : "");
   const x = rep.excluded || {}, o = rep.opportunity || {};
-  banner("outlookStatus", "outlookStatusText", "is-live",
+  // E30 tested this very ranking (registered, 2021-06..2026-10): its top ten
+  // returned 35.0%/yr against TEDPIX 44.4% (p=0.24); only the bottom fifth
+  // was informative, as names to avoid. "Untested analysis" understated that
+  // (the 20-year reviewer, 2026-11-11), so the record leads, in amber.
+  banner("outlookStatus", "outlookStatusText", "",
+    "<strong>این رتبه‌بندی آزموده شده است:</strong> خرید ده نام بالای همین فهرست " +
+    "در ۱۴۰۰ تا ۱۴۰۵ سالانه حدود ۳۵٪ داد در برابر ۴۴٪ شاخص کل (آزمون E30، رد شد). " +
+    "فهرست را برای شناخت و پرهیز از پایین آن به کار ببرید، نه برای انتخاب خرید.<br>" +
     `${rep.count} شرکت تولیدی/خدماتی رتبه‌بندی شد (بیشترین بازده سود برآوردی اول) ` +
     `و ${rep.financials_count || 0} شرکت مالی جداگانه. ` +
     `کنار گذاشته: ${x.no_estimate || 0} بدون صورت مالی سال قبل، ` +

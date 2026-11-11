@@ -355,8 +355,15 @@ def status_for(score):
                 if score >= floor)
 
 
-def score(ratios, min_coverage=None):
-    """0-100 fundamental score over whichever pillars could be computed."""
+def score(ratios, min_coverage=None, skip=()):
+    """0-100 fundamental score over whichever pillars could be computed.
+
+    `skip` names pillars that do not apply to this company: for an investment
+    company, a bank or an insurer, Profitability and Growth read last year's
+    disposals and provisioning, not a business (وجامی: a 3-month period at
+    ROE 114% and revenue +341%; والماس ROE 143%; وایرا revenue +1,756% --
+    11 of the card's top 40 on 2026-11-11 were such names).
+    """
 
     min_coverage = FUND_MIN_COVERAGE if min_coverage is None else min_coverage
 
@@ -369,6 +376,10 @@ def score(ratios, min_coverage=None):
     total_weight = 0.0
 
     for label, weight, fn in PILLARS:
+
+        if label in skip:
+            breakdown[label] = None
+            continue
 
         fraction, pillar_notes = fn(ratios)
 

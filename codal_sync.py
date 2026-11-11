@@ -764,7 +764,8 @@ def metrics_for(ins_codes, market_by_code=None, sector_by_code=None):
         withheld = sector in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL
 
         scored = fundamental_scoring.score(
-            dict(ratios, pe=None, earnings_yield=None) if withheld else ratios
+            dict(ratios, pe=None, earnings_yield=None) if withheld else ratios,
+            skip=("Profitability", "Growth") if withheld else (),
         )
 
         notes = list(scored["notes"])
@@ -773,8 +774,9 @@ def metrics_for(ins_codes, market_by_code=None, sector_by_code=None):
             # In place of the scorer's "P/E unavailable (no positive
             # earnings)", which is what it says of any absent P/E and is
             # untrue of a profitable bank.
-            note = (f"Valuation: P/E {ratios['pe']:.1f} withheld — "
-                    f"{sector} is valued on assets, not earnings")
+            note = (f"ارزش‌گذاری: P/E {ratios['pe']:.1f} حساب نشد — "
+                    f"«{sector}» با دارایی سنجیده می‌شود، نه سود؛ "
+                    f"سودآوری و رشد هم به همین دلیل امتیاز نگرفت")
             notes = [note if n.startswith("Valuation: P/E unavailable") else n
                      for n in notes]
             if note not in notes:

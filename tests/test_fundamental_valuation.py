@@ -239,18 +239,22 @@ class CardWithholdsMeaninglessMultiplesTest(unittest.TestCase):
         self.assertAlmostEqual(bank["ratios"]["pe"], 3.0)
         self.assertAlmostEqual(metal["ratios"]["pe"], 3.0)
 
+        # Nor on its profitability or growth: an investment company's,
+        # bank's or insurer's are disposals and provisioning (2026-11-11).
         without_pe = fundamental_scoring.score(
-            dict(bank["ratios"], pe=None, earnings_yield=None))
+            dict(bank["ratios"], pe=None, earnings_yield=None),
+            skip=("Profitability", "Growth"))
 
         self.assertEqual(bank["score"], without_pe["score"])
+        self.assertIsNone(bank["breakdown"]["Profitability"])
+        self.assertIsNone(bank["breakdown"]["Growth"])
         self.assertNotEqual(bank["breakdown"]["Valuation"],
                             metal["breakdown"]["Valuation"])
 
         self.assertIn("Valuation: P/E 3.0 — very cheap", metal["notes"])
         self.assertFalse([n for n in bank["notes"]
-                          if n.startswith("Valuation: P/E")
-                          and "withheld" not in n], bank["notes"])
-        self.assertTrue([n for n in bank["notes"] if "withheld" in n])
+                          if n.startswith("Valuation: P/E")], bank["notes"])
+        self.assertTrue([n for n in bank["notes"] if "حساب نشد" in n])
 
     def test_sectors_are_read_when_the_caller_passes_none(self):
         out = self._metrics(instruments=[
@@ -258,8 +262,8 @@ class CardWithholdsMeaninglessMultiplesTest(unittest.TestCase):
             {"ins_code": "2", "sector_name": self.METAL},
         ])
 
-        self.assertTrue([n for n in out["1"]["notes"] if "withheld" in n])
-        self.assertFalse([n for n in out["2"]["notes"] if "withheld" in n])
+        self.assertTrue([n for n in out["1"]["notes"] if "حساب نشد" in n])
+        self.assertFalse([n for n in out["2"]["notes"] if "حساب نشد" in n])
 
 
 # ==============================
