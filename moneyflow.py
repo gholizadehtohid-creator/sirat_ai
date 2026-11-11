@@ -661,10 +661,27 @@ def market_daily(sessions=60, baseline=250):
 
     import database
 
+    # Per session, so a listing a board move retired still counts on the
+    # sessions it traded: they were the market's flow then, and the typical
+    # range is a year of them. Summed over the live codes only, the series
+    # lost a moved company's flow on every past session the moment the
+    # repair retired its old code (found 2026-11-11). From the first session
+    # the company has a bar under another code the retired one is left out,
+    # so no session counts it twice (database.superseded_listings).
     codes = [str(r["ins_code"])
-             for r in database.load_instruments(equities_only=True)]
+             for r in database.load_instruments(equities_only=True,
+                                                with_superseded=True)]
     if not codes:
         return None
+
+    moved = database.superseded_listings()
+    whole = [c for c in codes if not (moved.get(c) or {}).get("until")]
+    cut = [(c, moved[c]["until"]) for c in codes
+           if (moved.get(c) or {}).get("until")]
+    scope = " OR ".join(
+        ["ins_code IN (%s)" % ",".join("?" * len(whole))]
+        + ["(ins_code = ? AND date < ?)"] * len(cut))
+    scoped = whole + [value for pair in cut for value in pair]
 
     database.create_database()
     conn = database._connect()
@@ -674,7 +691,6 @@ def market_daily(sessions=60, baseline=250):
             "ORDER BY date DESC LIMIT ?", (baseline + 5,))]
         if not dates:
             return None
-        placeholders = ",".join("?" * len(codes))
         rows = conn.execute(f"""
             SELECT date,
                    SUM(individual_buy_value - individual_sell_value),
@@ -683,10 +699,10 @@ def market_daily(sessions=60, baseline=250):
                    SUM(CASE WHEN individual_buy_value > individual_sell_value
                             THEN 1 ELSE 0 END)
             FROM client_type_history
-            WHERE date >= ? AND ins_code IN ({placeholders})
+            WHERE date >= ? AND ({scope})
               AND individual_buy_value IS NOT NULL
               AND individual_sell_value IS NOT NULL
-            GROUP BY date ORDER BY date""", [min(dates)] + codes).fetchall()
+            GROUP BY date ORDER BY date""", [min(dates)] + scoped).fetchall()
     finally:
         conn.close()
 

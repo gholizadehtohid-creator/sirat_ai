@@ -192,6 +192,13 @@ def point(data, decision):
             continue
         if data.position(code, decision) < 0:
             continue                     # not listed yet
+        # A listing a board move retired, once its company trades under the
+        # live code: that code is the company here, with its statements
+        # (pit.filings). It still passes _traded_recently for HALT_EXCLUDE_
+        # DAYS after its last trade, so the company's value and profit could
+        # be summed twice (found 2026-11-11).
+        if data.superseded_on(code, decision):
+            continue
         if not _traded_recently(data, code, decision):
             halted += 1
             continue

@@ -102,12 +102,14 @@ def _mean(values):
 
 def signals_for(ins_code, symbol, bars, flow_rows, holding_days,
                 threshold, step=DEFAULT_STEP, params=None,
-                signal_from=None, signal_to=None):
+                signal_from=None, signal_to=None, signal_before=None):
     """Every technically-approved signal, with its point-in-time flow score.
 
     `signal_from`/`signal_to` bound the signal dates without touching the bars
     behind them, so a regime window is tested with a full warmup rather than
     with whatever indicators can be computed from inside the window alone.
+    `signal_before` is an exclusive bound: a board move's retired listing
+    signals only before its company trades elsewhere (collect).
     """
 
     params = params or DEFAULT_PARAMS
@@ -156,6 +158,9 @@ def signals_for(ins_code, symbol, bars, flow_rows, holding_days,
             continue
 
         if signal_to is not None and signal_date > signal_to:
+            break
+
+        if signal_before is not None and signal_date >= signal_before:
             break
 
         window = frame.iloc[max(0, i - SCORING_WINDOW + 1):i + 1]
@@ -335,6 +340,17 @@ def collect(limit=None, holding_days=20, threshold=70, step=DEFAULT_STEP,
                                             with_superseded=True)
     instruments.sort(key=lambda r: str(r.get("ins_code")))
 
+    # A retired listing signals only before the first session its company
+    # has a bar under another code (database.superseded_listings). Its
+    # frozen zero-volume bars after a move kept signalling beside the live
+    # code's real ones, so one company's session could carry two trades
+    # (found 2026-11-11).
+    moved = {}
+    if any(r.get("kind") == database.SUPERSEDED_KIND for r in instruments):
+        moved = {code: pd.Timestamp(m["until"])
+                 for code, m in database.superseded_listings().items()
+                 if m["until"]}
+
     if limit:
         stride = max(1, len(instruments) // limit)
         instruments = instruments[::stride][:limit]
@@ -377,6 +393,7 @@ def collect(limit=None, holding_days=20, threshold=70, step=DEFAULT_STEP,
             code, symbol, bars, flow_rows,
             holding_days=holding_days, threshold=threshold, step=step,
             signal_from=start_ts, signal_to=end_ts,
+            signal_before=moved.get(code),
         )
 
         trades.extend(found)

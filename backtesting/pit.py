@@ -41,12 +41,10 @@ import hashlib
 import math
 import os
 import pickle
-from datetime import datetime
 
 import pandas as pd
 
 import backtest_config
-import config
 import database
 import jalali
 import news as news_module
@@ -56,6 +54,12 @@ from backtest import back_adjust
 # Kept as a module constant because callers and tests import it by name. The
 # authoritative wording now lives in news.py, beside the interface it describes.
 NEWS_UNAVAILABLE = news_module.NO_HISTORICAL_NEWS
+
+# What stale_sessions() answers for a listing a board move retired, from the
+# first session its company has a bar under another code (superseded_on):
+# stale past any threshold a caller sets, so every universe that filters on
+# staleness drops it there.
+SUPERSEDED_STALE = 10 ** 6
 
 
 def _finite(value):
@@ -77,6 +81,8 @@ class PointInTimeData(object):
         self._bars = {}
         self._flow = {}
         self._instruments = None
+        self._successions = None
+        self._until = {}
         self._filings = None
         self._calendar = None
         self._index = {}
@@ -95,8 +101,12 @@ class PointInTimeData(object):
 
         With the listings a board move retired (database.load_instruments,
         `with_superseded`): a past date sees the company under the code it
-        traded under then. Its trading ends at the move, where the staleness
-        filters drop it like any halted name.
+        traded under then. It leaves on the first session the company has a
+        bar under its live code (superseded_on), where stale_sessions()
+        drops it from every universe that filters on staleness. Each retired
+        listing carries "successor", its company's live code, so a reader of
+        latest figures can count the company once (swing_advisor.
+        sector_medians).
         """
 
         if self._instruments is None:
@@ -112,7 +122,47 @@ class PointInTimeData(object):
                 for row in rows
             }
 
+            self._successions = database.superseded_listings()
+
+            for code, moved in self._successions.items():
+                if moved["until"]:
+                    self._until[code] = pd.Timestamp(moved["until"])
+                if moved["successor"] and code in self._instruments:
+                    self._instruments[code]["successor"] = moved["successor"]
+
         return self._instruments
+
+    def successions(self):
+        """database.superseded_listings(), as loaded with the universe.
+
+        Empty for a universe handed in rather than loaded -- the test doubles
+        set `_instruments` themselves -- so they never touch the disk here.
+        """
+
+        if self._successions is None:
+            if self._instruments is None:
+                self.instruments()
+            if self._successions is None:
+                self._successions = {}
+
+        return self._successions
+
+    def superseded_on(self, ins_code, date):
+        """Whether a board move retired `ins_code` by session `date`.
+
+        True from the first session its company has a bar under another
+        code: from there the company is that code, and this one's prints are
+        frozen zero-volume bars that kept it looking fresh beside the live
+        listing -- both counted, in every universe, until staleness caught
+        up (found 2026-11-11). Decided by bars on or before `date`, so no
+        later knowledge enters.
+        """
+
+        self.successions()
+
+        until = self._until.get(str(ins_code))
+
+        return until is not None and pd.Timestamp(date) >= until
 
     def calendar(self):
         """Session dates of the market, taken from the index series.
@@ -316,7 +366,17 @@ class PointInTimeData(object):
 
         A name whose last print is three weeks old is suspended, and a
         backtest that keeps trading it is trading a fiction.
+
+        A listing a board move retired is SUPERSEDED_STALE from the first
+        session its company trades under another code (superseded_on). Its
+        frozen bars read 0 sessions stale there, so every universe filtering
+        on this -- strategy, alpha_core, swing_strategy, research_factors,
+        swing_backtest -- held the company twice. Positions are priced
+        through bar_on() and bar_after(), which this does not touch.
         """
+
+        if self.superseded_on(ins_code, date):
+            return SUPERSEDED_STALE
 
         frame = self.bars(ins_code)
 
@@ -541,9 +601,54 @@ class PointInTimeData(object):
         for records in out.values():
             records.sort(key=lambda r: (r["visible_from"], r["period_end"]))
 
+        self._carry_filings(out)
+
         self._filings = out
 
         return out
+
+    def _carry_filings(self, out):
+        """Give a board move's live code the statements its retired code filed.
+
+        From the first session the company trades under its live code, the
+        retired code leaves every universe (superseded_on) -- and its
+        statements would leave with it. codal_filings holds one row per
+        filing, under the code it was filed for, so the repair could not copy
+        them to the live code the way it copies codal_financials (seed_import.
+        _carry_over), and the live code started with none: in a point-in-time
+        reading the company had no fundamentals until it filed again.
+
+        Each one is visible under the live code from the later of its own
+        session and that first session, so nothing is known earlier than it
+        was public, and the company is never counted twice on a date. Filed
+        before the live code's own: on a tie the live code's release is the
+        newer one and wins (fundamental_history keeps the last it meets). A
+        filing the live code already holds is not added twice.
+        """
+
+        for old, moved in self.successions().items():
+
+            heir, until = moved.get("successor"), self._until.get(old)
+
+            if not heir or until is None or not out.get(old):
+                continue
+
+            own = out.get(heir, [])
+
+            held = {(r["tracing_no"], r["period_end"], r["period_months"])
+                    for r in own}
+
+            carried = [
+                dict(record, visible_from=max(record["visible_from"], until))
+                for record in out[old]
+                if (record["tracing_no"], record["period_end"],
+                    record["period_months"]) not in held
+            ]
+
+            # Stable, on the session alone: the retired code's releases keep
+            # their own order (older first, so the later release of a period
+            # still wins), and come before the live code's on a tie.
+            out[heir] = sorted(carried + own, key=lambda r: r["visible_from"])
 
     def _first_session_after(self, calendar, stamp, lag_sessions=0):
         """First session whose CLOSE is at or after `stamp`, plus a lag.
@@ -641,9 +746,14 @@ class PointInTimeData(object):
         return ordered[-int(periods):] if periods else ordered
 
     def fundamental_coverage(self, date, ins_codes=None):
-        """Share of the universe with any point-in-time filing on `date`."""
+        """Share of the universe with any point-in-time filing on `date`.
 
-        codes = list(ins_codes or self.instruments())
+        A listing a board move had retired by `date` is not in it: its
+        company is its live code there, which holds its filings (filings()).
+        """
+
+        codes = [code for code in (ins_codes or self.instruments())
+                 if not self.superseded_on(code, date)]
 
         if not codes:
             return 0.0
@@ -680,7 +790,12 @@ class PointInTimeData(object):
 
             have = 0
 
-            for code in codes:
+            # A company once a date: a listing a board move had retired by
+            # then is its live code's decision (fundamental_coverage).
+            present = [code for code in codes
+                       if not self.superseded_on(code, date)]
+
+            for code in present:
 
                 decisions += 1
 
@@ -695,8 +810,9 @@ class PointInTimeData(object):
                 "date": str(date.date()),
                 "year": int(date.year),
                 "covered": have,
-                "universe": len(codes),
-                "coverage": round(have / float(len(codes)), 4),
+                "universe": len(present),
+                "coverage": round(have / float(len(present)), 4)
+                if present else 0.0,
             })
 
         by_year = {}
@@ -729,7 +845,8 @@ class PointInTimeData(object):
             "universe": len(codes),
             "by_date": by_date,
             "by_year": [
-                {"year": year, "coverage": round(v["covered"] / float(v["of"]), 4),
+                {"year": year, "coverage": round(v["covered"] / float(v["of"]), 4)
+                 if v["of"] else 0.0,
                  "decision_dates": v["dates"]}
                 for year, v in sorted(by_year.items())
             ],

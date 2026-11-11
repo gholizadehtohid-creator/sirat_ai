@@ -169,6 +169,7 @@ def analyse_sector(name, group, snapshot_by_code, info_by_code,
     members = group["members"]
 
     histories = {}
+    retired = {}
     rows = []
 
     verdicts = {
@@ -186,6 +187,16 @@ def analyse_sector(name, group, snapshot_by_code, info_by_code,
 
         if history is not None and not history.empty:
             histories[ins_code] = history
+
+        # Its retired listing's sessions, for the index alone (analyse_all):
+        # the newest `bars` of them before the company's first bar elsewhere.
+        for old, until in member.get("retired", ()):
+            past = database.load_history_by_inscode(
+                old, limit=bars,
+                before=(pd.Timestamp(until) - pd.Timedelta(days=1))
+                if until else None)
+            if past is not None and not past.empty:
+                retired[old] = (ins_code, past)
 
         metrics = fundamentals.build(
             history,
@@ -244,7 +255,8 @@ def analyse_sector(name, group, snapshot_by_code, info_by_code,
         ),
     }
 
-    technical, breadth, contributors = _technical(histories, params, bars)
+    technical, breadth, contributors = _technical(histories, params, bars,
+                                                  retired=retired)
 
     return {
         "sector_code": group["sector_code"],
@@ -266,17 +278,35 @@ def analyse_sector(name, group, snapshot_by_code, info_by_code,
     }
 
 
-def _technical(histories, params, bars):
-    """Derived-index technical read plus construction-free breadth."""
+def _technical(histories, params, bars, retired=None):
+    """Derived-index technical read plus construction-free breadth.
 
-    if len(histories) < config.MIN_SECTOR_CONSTITUENTS:
+    `retired` is {retired ins_code: (member ins_code, bars)}: a board-moved
+    member's sessions under its old code. They enter the index, as that
+    company's history, and nothing else -- breadth is each company's
+    reading now, which is its live code's. A company counts once among the
+    constituents and the contributors, under whichever codes it has.
+    """
+
+    retired = retired or {}
+
+    companies = set(histories) | {member for member, _ in retired.values()}
+
+    if len(companies) < config.MIN_SECTOR_CONSTITUENTS:
         return (
-            {"error": f"only {len(histories)} constituents have history "
+            {"error": f"only {len(companies)} constituents have history "
                       f"(need {config.MIN_SECTOR_CONSTITUENTS})"},
             None, []
         )
 
-    frame, contributors = build_sector_index(histories, bars=bars)
+    series = dict(histories)
+    series.update((old, past) for old, (_, past) in retired.items())
+
+    frame, contributors = build_sector_index(series, bars=bars)
+
+    if retired:
+        contributors = sorted({retired[code][0] if code in retired else code
+                               for code in contributors})
 
     breadth = _breadth(histories, params)
 
@@ -415,9 +445,26 @@ def analyse_all(params=None, approve_score=None, bars=None, min_members=None,
     # frozen for months would hold its sector's median at a price and P/E
     # nobody can trade at.
     halted = database.halted_codes()
+
+    # A board move's retired listing, beside its member's live code: its
+    # sessions are the company's history in the derived index, which chains
+    # config.SECTOR_INDEX_BARS sessions of returns. Members are live codes
+    # only, so the repair's retirement took those sessions out of the index
+    # at once (found 2026-11-11). Under the same halt rule as any code, and
+    # only before the company's first bar elsewhere (database.superseded_
+    # listings), so no session counts it twice.
+    retired = {}
+    for code, moved in database.superseded_listings().items():
+        if moved["successor"] and code not in halted:
+            retired.setdefault(moved["successor"], []).append(
+                (code, moved["until"]))
+
     for group in grouped.values():
         group["members"] = [m for m in group["members"]
                             if m["ins_code"] not in halted]
+        for member in group["members"]:
+            if member["ins_code"] in retired:
+                member["retired"] = retired[member["ins_code"]]
 
     for name, group in grouped.items():
 

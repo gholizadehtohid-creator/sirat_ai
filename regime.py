@@ -126,6 +126,16 @@ def participation(params=None, bars=None, as_of=None):
                 for row in database.load_instruments(
                     equities_only=True, with_superseded=as_of is not None)}
 
+    # A retired listing leaves once its company has a bar under another code
+    # on or before the cutoff: from there the company is that code, and the
+    # halt rule alone kept the old one beside it for HALT_EXCLUDE_DAYS after
+    # its last trade (database.superseded_listings, found 2026-11-11).
+    if as_of is not None:
+        for code, moved in database.superseded_listings().items():
+            if moved["until"] and \
+                    pd.Timestamp(moved["until"]) <= pd.Timestamp(as_of):
+                equities.discard(code)
+
     codes = [code for code in database.inscodes_with_history()
              if code in equities]
 

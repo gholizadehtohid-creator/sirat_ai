@@ -94,6 +94,15 @@ def sector_medians(instruments):
 
     Computed once for the whole run. A per-symbol query would be ~800 round trips
     for a figure that is a property of the sector, not of the name.
+
+    One record per company. A point-in-time universe also holds the listings
+    a board move retired, each marked with its live code as "successor"
+    (pit.instruments). The retired code keeps its own statements and the
+    repair copies them to the live code (seed_import._carry_over), so the
+    swing backtest counted such a company twice in its sector's median
+    (found 2026-11-11). The live code's record is used when the universe
+    holds one, else the retired code's -- the newest, after two moves. The
+    panel's universe is live codes only, and reads exactly as before.
     """
 
     latest = fundamental_db.load_latest_metrics()
@@ -101,7 +110,7 @@ def sector_medians(instruments):
     if not latest:
         return {}
 
-    by_sector = {}
+    chosen = {}
 
     for code, record in latest.items():
 
@@ -109,6 +118,18 @@ def sector_medians(instruments):
 
         if not meta:
             continue
+
+        company = str(meta.get("successor") or code)
+
+        # The live code first, then the newer statement.
+        rank = (str(code) == company, str(record.get("period_end") or ""))
+
+        if company not in chosen or rank > chosen[company][0]:
+            chosen[company] = (rank, meta, record)
+
+    by_sector = {}
+
+    for _, meta, record in chosen.values():
 
         sector = (meta.get("sector") or "?").strip() or "?"
 

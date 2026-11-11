@@ -89,6 +89,12 @@ def score_panel(instruments, dates, gate=None, params=None, verbose=True):
     One pass per symbol rather than one per (symbol, date): the indicator
     frame is computed once over the whole history and then read at each date,
     which is the difference between minutes and hours.
+
+    A listing a board move retired is read up to the first session its
+    company has a bar under another code (database.superseded_listings).
+    This panel has no staleness check, and the frozen zero-volume bars after
+    a move kept the old code scoreable beside the live one, so the company
+    could be ranked, and bought, twice (found 2026-11-11).
     """
 
     params = params or DEFAULT_PARAMS
@@ -102,9 +108,17 @@ def score_panel(instruments, dates, gate=None, params=None, verbose=True):
 
     scanned = 0
 
+    moved = {}
+    if any(r.get("kind") == database.SUPERSEDED_KIND for r in instruments):
+        moved = {code: pd.Timestamp(m["until"])
+                 for code, m in database.superseded_listings().items()
+                 if m["until"]}
+
     for instrument in instruments:
 
         ins_code = str(instrument["ins_code"])
+
+        until = moved.get(ins_code)
 
         bars = database.load_history_by_inscode(ins_code)
 
@@ -149,6 +163,9 @@ def score_panel(instruments, dates, gate=None, params=None, verbose=True):
         bar_highs = bars["high"] if "high" in bars.columns else bars["close"]
 
         for date in date_list:
+
+            if until is not None and date >= until:
+                continue               # the company trades elsewhere now
 
             # Last bar on or before the rebalance date. Anything later is the
             # future and would make every result meaningless.

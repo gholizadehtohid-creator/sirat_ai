@@ -870,6 +870,99 @@ def load_instruments(equities_only=False, limit=None, with_superseded=False):
     return [dict(zip(keys, row)) for row in rows]
 
 
+def superseded_listings():
+    """{retired ins_code: {"successor": ins_code or None, "until": date}}.
+
+    A board move leaves one company under two codes: the listing it retired
+    (SUPERSEDED_KIND), whose trading ends at the move, and the live one. A
+    reader that loads both -- a historical universe, a per-session sum --
+    must count the company once on any date, and this says where one ends.
+
+    Paired by the rule the repair itself used (seed_import.reconcile_
+    universe): the same symbol and the same ISIN company code. `successor`
+    is the company's live code, None unless exactly one live code matches.
+    `until` ('YYYY-MM-DD') is the first session after the retired code's
+    first bar on which the company has a bar under another of its codes --
+    the live one, or after two moves the later retired one. Before it the
+    retired code is the company. From it on the company trades elsewhere,
+    and the retired code's own bars there are frozen zero-volume prints
+    (فاسمین's ran 71 sessions past its last trade) beside the live code's
+    real ones. None while no other code of the company has a bar -- true of
+    all 17 retired on 2026-11-11, whose live codes had none yet.
+
+    A reading at date D drops the retired code once D reaches `until`: once
+    another code of the company has a bar on or before D, which is known on
+    D. Until this existed a retired code stayed in point-in-time universes
+    for as long as its frozen bars kept it fresh, or up to config.HALT_
+    EXCLUDE_DAYS past its last trade, beside the live code (found
+    2026-11-11).
+
+    Empty, after one query, when nothing has been retired.
+    """
+
+    # The repair's own pairing. universe sits above this module (see
+    # SUPERSEDED_KIND), so it is imported where it is used; it imports
+    # nothing that imports this module.
+    import universe
+
+    create_database()
+
+    conn = _connect()
+
+    try:
+        retired = [(str(c), s, i) for c, s, i in conn.execute(
+            "SELECT ins_code, symbol_fa, isin FROM instruments "
+            "WHERE kind = ?", (SUPERSEDED_KIND,))]
+
+        if not retired:
+            return {}
+
+        symbols = sorted({s for _, s, _ in retired if s})
+        live = [(str(c), s, i) for c, s, i in conn.execute(
+            "SELECT ins_code, symbol_fa, isin FROM instruments "
+            "WHERE is_equity = 1 AND symbol_fa IN (%s)"
+            % ",".join("?" for _ in symbols), symbols)] if symbols else []
+
+        def company(symbol, isin):
+            code = universe.company_code(isin)
+            return (symbol, code) if symbol and code else None
+
+        groups = {}
+        for code, symbol, isin in live + retired:
+            key = company(symbol, isin)
+            if key is not None:
+                groups.setdefault(key, []).append(code)
+
+        out = {}
+
+        for code, symbol, isin in retired:
+
+            others = [c for c in groups.get(company(symbol, isin), ())
+                      if c != code]
+            heirs = [c for c, s, i in live if c in others]
+
+            first = conn.execute(
+                "SELECT MIN(date) FROM price_history WHERE ins_code = ?",
+                (code,)).fetchone()[0]
+
+            until = None
+            if first and others:
+                until = conn.execute(
+                    "SELECT MIN(date) FROM price_history "
+                    "WHERE ins_code IN (%s) AND date > ?"
+                    % ",".join("?" for _ in others),
+                    others + [first]).fetchone()[0]
+
+            out[code] = {
+                "successor": heirs[0] if len(heirs) == 1 else None,
+                "until": str(until)[:10] if until else None,
+            }
+    finally:
+        conn.close()
+
+    return out
+
+
 def instrument_counts():
     """Universe coverage for the panel."""
 
