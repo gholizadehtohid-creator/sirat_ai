@@ -406,3 +406,73 @@ class LikeForLikeGrowthTests(unittest.TestCase):
         self.assertAlmostEqual(r["growth"]["revenue_pct"], 68.0)
         # The year is still completed from the annual's own basis.
         self.assertAlmostEqual(r["ttm"]["revenue"], (168 + 300 - 130) * B)
+
+
+class SecondAuditTests(unittest.TestCase):
+    """حافرین's one-off, همراه's gap to TSETMC, جوین's early-year doubling."""
+
+    def test_a_profit_outside_the_business_is_named(self):
+        self.assertIsNotNone(fo.one_off_reason(
+            {"net_profit": 23.6 * B, "operating_profit": 3.05 * B}))
+        self.assertIsNotNone(fo.one_off_reason(
+            {"net_profit": 5 * B, "operating_profit": -1 * B}))
+        self.assertIsNone(fo.one_off_reason(
+            {"net_profit": 12 * B, "operating_profit": 10 * B}))
+        self.assertIsNone(fo.one_off_reason({"net_profit": -5 * B,
+                                             "operating_profit": 1 * B}))
+
+    def test_a_gap_to_the_published_pe_is_named(self):
+        self.assertIsNotNone(fo.published_gap_reason(4.8, 8.6))
+        self.assertIsNone(fo.published_gap_reason(2.18, 2.2))
+        self.assertIsNone(fo.published_gap_reason(None, 2.2))
+
+    def test_a_year_projected_from_two_months_is_flagged(self):
+        rows = [period("1405/04/31", 12, 100 * B, 20 * B)]
+        monthly = [{"period_end": "1405/06/31", "template": "manufacturer",
+                    "sales": {"month": 150 * B, "ytd": 300 * B,
+                              "ytd_prev": 100 * B}}]
+        r = fo.analyse("x", price=1_000, rows=rows, monthly_rows=monthly,
+                       today=(1405, 7, 10), opportunity=BILLS)
+        self.assertEqual(r["method"], "monthly_sales")
+        self.assertEqual(r["monthly"]["months_elapsed"], 2)
+        self.assertTrue(any("فقط بر 2 ماه" in f for f in r["flags"]), r["flags"])
+
+    def test_the_trailing_multiples_are_the_outlooks_ttm(self):
+        rows = [period("1405/06/31", 6, 120 * B, 24 * B),
+                period("1404/12/29", 12, 300 * B, 60 * B),
+                period("1404/06/31", 6, 100 * B, 20 * B)]
+        t = fo.trailing_multiples({"c": rows},
+                                  {"c": {"close": 5_000, "total_shares": 1e8}})
+        # market cap 500bn / TTM profit 64bn; revenue 320bn
+        self.assertAlmostEqual(t["c"]["pe"], 7.81, places=2)
+        self.assertAlmostEqual(t["c"]["ps"], 1.56, places=2)
+        self.assertEqual(fo.trailing_multiples({"c": rows}, {}), {})
+
+
+class ScreenDoubtfulTests(unittest.TestCase):
+    """A multiple that is not a valuation is named, not ranked."""
+
+    def test_doubtful_multiples_are_listed_apart(self):
+        from unittest import mock
+        import codal_announcements
+        clean = ScreenTradingGateTests.fake("1", None)
+        doubted = dict(ScreenTradingGateTests.fake("2", None, flags=["one-off"]),
+                       doubts=[{"code": "one_off", "label": "سود غیرعملیاتی"}])
+        results = {"1": clean, "2": doubted}
+        instruments = [{"ins_code": c, "symbol_fa": "s" + c, "name_fa": "",
+                        "sector_name": "x"} for c in results]
+        with mock.patch.object(fo.database, "load_instruments", return_value=instruments), \
+             mock.patch.object(fo.database, "halted_codes", return_value={}), \
+             mock.patch.object(fo.database, "load_history_tail", return_value={}), \
+             mock.patch.object(fo.database, "load_codal_portfolio_latest", return_value={}), \
+             mock.patch.object(fo, "latest_prices", return_value={}), \
+             mock.patch.object(fo, "exchange_shares", return_value={}), \
+             mock.patch.object(fo, "price_bands", return_value={}), \
+             mock.patch.object(fo, "published_pe", return_value={}), \
+             mock.patch.object(fo, "opportunity_rate", return_value=BILLS), \
+             mock.patch.object(codal_announcements, "latest_dividends", return_value={}), \
+             mock.patch.object(fo, "analyse", side_effect=lambda code, **_: dict(results[code])):
+            s = fo.screen()
+        self.assertEqual([r["symbol"] for r in s["ranked"]], ["s1"])
+        self.assertEqual(s["excluded"]["doubtful"], 1)
+        self.assertEqual(s["doubtful"][0]["reasons"], ["سود غیرعملیاتی"])

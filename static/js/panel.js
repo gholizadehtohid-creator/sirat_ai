@@ -2271,6 +2271,9 @@ function fundBadge(status) {
 // and the reader asked (2026-11-05, about the تهران symbols).
 function peCell(x) {
   if (x.pe != null) return num(x.pe, 1);
+  if (x.pe_basis === "ttm" && x.ttm_profit != null && x.ttm_profit <= 0) {
+    return '<span class="hint" title="سود ۱۲ ماه گذشته‌ی سهامداران منفی است">زیان‌ده (۱۲ ماه)</span>';
+  }
   if (x.eps_annual != null && x.eps_annual <= 0) {
     return '<span class="hint" title="سود هر سهم منفی است؛ P/E برای شرکت زیان‌ده معنا ندارد">زیان‌ده</span>';
   }
@@ -2287,10 +2290,19 @@ function peCell(x) {
   return '<span class="hint" title="سود ۱۲ ماهه‌ی سهامداران مثبت نیست یا با سود هر سهم نمی‌خواند">نامعلوم</span>';
 }
 
+// TSETMC's own P/E beside ours: where they part by half, the row's warning
+// says why (consolidated vs separate, a one-off gain).
+function publishedPeCell(x) {
+  if (x.pe_published == null) return "—";
+  const off = x.pe != null && x.pe_published > 0 &&
+    (x.pe / x.pe_published < 0.67 || x.pe / x.pe_published > 1.5);
+  return off ? `<span class="down">${num(x.pe_published, 1)}</span>` : num(x.pe_published, 1);
+}
+
 function fundRows(list) {
   return table(
-    ["نماد", "صنعت", "بنیاد", "امتیاز", "پوشش", "P/E", "P/B", "ROE",
-     "حاشیه خالص", "رشد فروش", "بدهی", "کیفیت سود", "دوره"],
+    ["نماد", "صنعت", "بنیاد", "امتیاز", "پوشش", "P/E (۱۲ ماه)", "P/E بورس", "P/B", "ROE",
+     "حاشیه خالص", "رشد فروش", "بدهی", "کیفیت سود", "دوره", "هشدار"],
     list.map(r => {
       const x = r.ratios || {};
       // How much of the six-pillar model actually ran. A 90 built from two
@@ -2312,14 +2324,19 @@ function fundRows(list) {
         coverCls
           ? `<span class="badge ${coverCls}"><span class="dot"></span>${covered}٪</span>`
           : `${covered}٪`,
-        peCell(x),
+        peCell(x) + (x.pe != null && x.pe_basis === "annualised"
+          ? ' <span class="hint" title="دوره‌ی آخر سالانه‌شده؛ سال قبلِ قابل‌مقایسه ذخیره نشده">*</span>' : ""),
+        publishedPeCell(x),
         num(x.pb, 1),
         x.roe == null ? "—" : `${num(x.roe, 0)}٪`,
         x.net_margin == null ? "—" : `${num(x.net_margin, 0)}٪`,
         signed(x.revenue_growth, 0),
         x.debt_ratio == null ? "—" : `${num(x.debt_ratio, 0)}٪`,
         num(x.earnings_quality, 2),
-        period
+        period,
+        (r.warnings || []).length
+          ? (r.warnings || []).map(w => `<span class="hint">⚠ ${esc(w)}</span>`).join("<br>")
+          : "—"
       ];
     })
   );
@@ -2382,6 +2399,8 @@ function renderFundamentals(rep) {
     { k: "متوقف، کنار گذاشته", v: counts.halted ?? 0, sub: "بیش از یک ماه بدون معامله" },
     { k: "مالی و سرمایه‌گذاری، جدا", v: num(counts.asset_valued ?? 0, 0),
       sub: "با P/NAV و P/B در کارت چشم‌انداز سنجیده می‌شوند، نه با سود" },
+    { k: "کم‌معامله، جدا", v: num(counts.thin ?? 0, 0),
+      sub: "زیر کف نقدشوندگی؛ رتبه‌بندی نمی‌شوند" },
     { k: "میانه‌ی امتیاز", v: rep.median_score ?? "—",
       sub: "نقطه‌ی میانی بازارِ پوشش‌داده‌شده" },
     { k: "دوره‌های ذخیره‌شده", v: cov.periods || 0,
@@ -2406,7 +2425,15 @@ function renderFundamentals(rep) {
     }
   });
 
-  $("fundTable").innerHTML = fundRows(top);
+  // Below the liquidity floor: scored, but not ranked -- a strong company at
+  // a price nobody can deal at is not a buy (شصفها, 2026-11-11).
+  const thin = (rep.thin || []).map(x =>
+    `${esc(x.symbol)} <span class="hint">(امتیاز ${num(x.score, 0)}، ${money(x.avg_value)} در روز)</span>`).join("، ");
+  const thinMore = (counts.thin || 0) - (rep.thin || []).length;
+  $("fundTable").innerHTML = fundRows(top) +
+    (thin ? `<p class="hint" style="margin-top:12px">⚠ کم‌معامله — رتبه‌بندی نشد ` +
+      `(میانگین معاملات زیر ${money(rep.liquidity_floor)} ریال در روز؛ به قیمت تابلو نمی‌شود خرید): ${thin}` +
+      (thinMore > 0 ? ` و ${num(thinMore, 0)} نماد دیگر` : "") + `</p>` : "");
   $("fundWeakTable").innerHTML =
     `<p class="hint">${(rep.bottom || []).length} شرکت با ضعیف‌ترین بنیاد.</p>` +
     fundRows(rep.bottom || []);
@@ -3785,6 +3812,7 @@ function renderOutlookDetail(r) {
     ["سود هر سهم: ۱۲ ماه گذشته / برآورد سال جاری",
       `${num((r.ttm || {}).eps, 0)} / ${num((r.forward || {}).eps, 0)} ریال`],
     ["P/E گذشته / آینده‌نگر", `${num(v.pe_ttm, 1)} / ${num(v.pe_forward, 1)}`],
+    ["P/E اعلامی بورس (TSETMC)", publishedPeCell({pe: v.pe_ttm, pe_published: v.pe_published})],
     ["بازده سود برآوردی", pctCell(v.earnings_yield_forward_pct)],
     ["رشد لازم برای توجیه قیمت (در برابر اخزا) / رشد فعلی",
       r.hurdle && r.hurdle.required_growth_pct != null
@@ -3877,6 +3905,10 @@ function renderOutlook(rep) {
     `${esc(x.symbol)} <span class="hint">(${money(x.avg_value)} در روز` +
     (x.pe_forward != null ? `، P/E آینده‌نگر ${num(x.pe_forward, 1)}` : "") + `)</span>`).join("، ");
   const thinMore = (rep.thin_count || 0) - (rep.thin || []).length;
+  // A multiple that is not a valuation: a one-off profit, a gap to the
+  // exchange's own P/E, a year projected from its first months.
+  const doubt = (rep.doubtful || []).map(x =>
+    `${esc(x.symbol)} <span class="hint">(${(x.reasons || []).map(esc).join("؛ ")})</span>`).join("، ");
   $("outlookTable").innerHTML = (rows.length
     ? table(["نماد", "صنعت", "آخرین دوره", "رشد فروش", "P/E گذشته",
              "P/E آینده‌نگر", "P/E به میانه‌ی صنعت", "بازده سود برآوردی",
@@ -3886,6 +3918,8 @@ function renderOutlook(rep) {
       <span class="hint">— با P/NAV و P/B سنجیده می‌شوند، نه P/E (ارزان‌ترین اول)</span></h3>` +
       table(["نماد", "صنعت", "P/NAV (تاریخ پرتفوی)", "P/B", "ROE دوازده‌ماهه", "بازده نقدی"], fin) : "") +
     (sus ? `<p class="hint" style="margin-top:12px">⚠ داده‌ی ناممکن — رتبه‌بندی نشد، صورت مالی را دستی ببینید: ${sus}</p>` : "") +
+    (doubt ? `<p class="hint" style="margin-top:12px">⚠ P/E غیرقابل اتکا — رتبه‌بندی نشد؛ ` +
+      `این فهرست بر همین P/E مرتب می‌شود و این‌جا P/E ارزش‌گذاری نیست (برای جزئیات نماد را بررسی کنید): ${doubt}</p>` : "") +
     (thin ? `<p class="hint" style="margin-top:12px">⚠ کم‌معامله — رتبه‌بندی نشد؛ قیمت تابلو قیمتی نیست ` +
       `که بتوان با آن خرید، پس P/E پایینشان ارزانی نیست (ارزان‌نماترین اول): ${thin}` +
       (thinMore > 0 ? ` و ${num(thinMore, 0)} نماد دیگر` : "") + `</p>` : "");
@@ -3904,6 +3938,7 @@ function renderOutlook(rep) {
     `${x.basis_gap || 0} که صورت تلفیقی تازه‌شان هنوز منتشر نشده، ` +
     `${x.suspect || 0} با داده‌ی ناممکن، ` +
     `${x.illiquid || 0} کم‌معامله (میانگین کمتر از ${money(rep.liquidity_floor)} ریال در روز)، ` +
+    `${x.doubtful || 0} با P/E غیرقابل اتکا، ` +
     `${x.stale || 0} با صورت مالی کهنه، ${x.flags || 0} با بیش از یک هشدار، ` +
     `${x.loss || 0} زیان‌ده، ${x.no_filing || 0} بدون صورت مالی، ` +
     `${x.halted || 0} متوقف بیش از یک ماه. ` +

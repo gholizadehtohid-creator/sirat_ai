@@ -1220,15 +1220,44 @@ def _fundamental_report(top):
         for _, row in snapshot.iterrows():
             market[str(row.get("ins_code"))] = row.to_dict()
 
+    # Whether each price can be dealt at: the outlook's trading read. شصفها
+    # (±1% band, a buy queue on 14 of 20 sessions, 0.3 billion rials a day)
+    # sat 10th here on a P/E of 2 (2026-11-11); like the outlook, a share
+    # below the liquidity floor is listed apart, not ranked.
+    import fundamental_outlook
+
+    tails = database.load_history_tail(list(by_code),
+                                       fundamental_outlook.TRADING_SESSIONS)
+    bands = fundamental_outlook.price_bands()
+
+    # A name the market watch left out had no price here, so no valuation at
+    # all -- قپیرا ranked first with its Valuation pillar empty (2026-11-11).
+    # Its last traded close stands in; the share count then comes from the
+    # statement's capital line, and the row says so.
+    off_board = set()
+    for code in by_code:
+        if (market.get(code) or {}).get("close"):
+            continue
+        frame = tails.get(code)
+        if frame is None or frame.empty:
+            continue
+        traded = frame[frame["volume"].fillna(0) > 0]
+        if not traded.empty and traded["close"].iloc[-1] > 0:
+            market[code] = {"close": float(traded["close"].iloc[-1])}
+            off_board.add(code)
+
     metrics = codal_sync.metrics_for(list(by_code), market_by_code=market)
 
     rows = []
     stale = []
     asset_valued = []
+    thin = []
 
     for code, entry in metrics.items():
 
         instrument = by_code.get(code, {})
+        trading = fundamental_outlook.trading_read(tails.get(code),
+                                                   bands.get(code))
 
         row = {
             "ins_code": code,
@@ -1249,6 +1278,12 @@ def _fundamental_report(top):
             "breakdown": entry["breakdown"],
             "notes": entry["notes"],
             "ratios": entry.get("ratios") or {},
+            "trading": trading,
+            "warnings": list((trading or {}).get("notes") or []) +
+                        list(entry.get("warnings") or []) +
+                        (["در تابلوی امروز نبود: قیمت از آخرین معامله و تعداد "
+                          "سهم از سرمایه‌ی صورت مالی است (ممکن است کهنه باشد)"]
+                         if code in off_board else []),
         }
 
         if entry.get("stale"):
@@ -1263,10 +1298,14 @@ def _fundamental_report(top):
             # rescaled to 100 and five still sat in the top 40 (2026-11-11);
             # they are counted, not ranked beside operating companies.
             asset_valued.append(row)
+        elif entry.get("score") is not None and trading and \
+                trading.get("illiquid"):
+            thin.append(row)
         elif entry.get("score") is not None:
             rows.append(row)
 
     rows.sort(key=lambda r: r["score"], reverse=True)
+    thin.sort(key=lambda r: r["score"], reverse=True)
     stale.sort(key=lambda r: (r["period_end"] or ""), reverse=True)
 
     scored = [r["score"] for r in rows]
@@ -1281,7 +1320,13 @@ def _fundamental_report(top):
             "stale": len(stale),
             "halted": len(halted),
             "asset_valued": len(asset_valued),
+            "thin": len(thin),
         },
+        "liquidity_floor": config.MIN_DAILY_VALUE,
+        "thin": [{"symbol": r["symbol"], "score": r["score"],
+                  "pe": (r["ratios"] or {}).get("pe"),
+                  "avg_value": (r["trading"] or {}).get("avg_value")}
+                 for r in thin[:fundamental_outlook.THIN_LISTED]],
         "stale_months": config.CODAL_STALE_MONTHS,
         "median_score": (sorted(scored)[len(scored) // 2] if scored else None),
         "top": rows[:top],

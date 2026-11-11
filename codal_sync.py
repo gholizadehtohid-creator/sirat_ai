@@ -696,6 +696,14 @@ def progress():
 # READING WHAT IS STORED
 # ==============================
 
+def _has_income(items):
+    """Whether a stored period carries an income statement at all."""
+
+    items = items or {}
+    return any(items.get(k) is not None
+               for k in ("revenue", "net_profit", "operating_profit"))
+
+
 def metrics_for(ins_codes, market_by_code=None, sector_by_code=None):
     """Fundamental ratios and scores for many companies, from cache only.
 
@@ -725,11 +733,35 @@ def metrics_for(ins_codes, market_by_code=None, sector_by_code=None):
         (r.get("period_end") or "" for r in latest.values()), default=""
     )
 
+    # P/E and P/S on the trailing twelve months where the stored periods
+    # allow, the outlook's TTM (fundamental_outlook.trailing_multiples): the
+    # newest interim annualised read every P/E low in an inflationary year --
+    # median 0.82 of TSETMC's own, against 0.99 on the TTM (2026-11-11).
+    import fundamental_outlook
+
+    periods = database.load_codal_periods(list(latest))
+    trailing = fundamental_outlook.trailing_multiples(
+        periods, market_by_code, sector_by_code)
+
     out = {}
 
     for code, record in latest.items():
 
         items = record.get("items") or {}
+
+        # A newest period stored without an income statement -- وتوکا's six
+        # months had no revenue, no profit, nothing but the balance sheet --
+        # scored 90 on the pillars a balance sheet can fill and ranked second
+        # (2026-11-11). The newest period that has one is read instead.
+        skipped = None
+        if not _has_income(items):
+            usable = next((p for p in periods.get(code) or ()
+                           if _has_income(p.get("items"))), None)
+            if usable:
+                skipped = record.get("period_end")
+                record = dict(usable, title=record.get("title"),
+                              updated_at=usable.get("published_at"))
+                items = record.get("items") or {}
 
         # Valuation is recomputed here rather than read from storage: P/E moves
         # with the price every session while the filing behind it does not, so
@@ -753,6 +785,40 @@ def metrics_for(ins_codes, market_by_code=None, sector_by_code=None):
             if ratios.get(key) is None:
                 ratios[key] = financials.comparable_growth(stored.get(key))
 
+        ttm = trailing.get(code)
+        ratios["pe_annualised"] = ratios.get("pe")
+        if ttm:
+            ratios["pe"] = ttm["pe"]
+            ratios["earnings_yield"] = (round(100.0 / ttm["pe"], 2)
+                                        if ttm["pe"] else None)
+            if ttm["ps"] is not None:
+                ratios["ps"] = ttm["ps"]
+            ratios["pe_basis"] = "ttm"
+            ratios["ttm_period_end"] = ttm["period_end"]
+            ratios["ttm_profit"] = ttm["profit"]
+        else:
+            ratios["pe_basis"] = ("annualised" if ratios.get("annualised")
+                                  else "annual")
+        ratios["pe_published"] = fundamental_outlook._f(
+            (market_by_code.get(code) or {}).get("pe"))
+
+        # Warnings in the reader's words, beside the row: why a P/E here may
+        # not be what it seems.
+        warnings = []
+        one_off = None
+        if skipped:
+            warnings.append("دوره‌ی %s صورت سود و زیان خوانده‌شده ندارد؛ "
+                            "دوره‌ی %s به کار رفت"
+                            % (skipped, record.get("period_end")))
+        if ttm and ttm["profit"] is not None and ttm["profit"] <= 0 and \
+                ratios.get("pe_published"):
+            # فسرب: last year's second half lost 2.2 thousand billion rials,
+            # so the trailing year is a loss; TSETMC still printed 14.5.
+            warnings.append(
+                "سود ۱۲ ماه گذشته در صورت‌های ذخیره‌شده منفی است، ولی بورس "
+                "P/E %.1f نشان می‌دهد؛ صورت‌های مالی را ببینید"
+                % ratios["pe_published"])
+
         # An investment company's P/E is last year's disposals, a bank's and
         # an insurer's a provisioning choice: scored, they put وجامی (P/E 1.16)
         # first and 13 such names in the top 40 on 2026-11-11. Withheld from
@@ -763,12 +829,34 @@ def metrics_for(ins_codes, market_by_code=None, sector_by_code=None):
         sector = (sector_by_code.get(code) or "").strip()
         withheld = sector in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL
 
+        if not withheld:
+            # حافرین: six months' net profit 7.7x its operating profit, P/E
+            # 0.96 -- "very cheap" on a gain outside the business. The P/E is
+            # still shown; it is not scored.
+            one_off = fundamental_outlook.one_off_reason(items)
+            if one_off:
+                warnings.append(one_off)
+            gap = fundamental_outlook.published_gap_reason(
+                ratios.get("pe"), ratios.get("pe_published"))
+            if gap:
+                warnings.append(gap)
+            if ratios.get("pe_basis") == "annualised" and ratios.get("pe"):
+                warnings.append(
+                    "P/E از دوره‌ی %s ماهه‌ی آخر سالانه‌شده است (سال قبلِ "
+                    "قابل‌مقایسه ذخیره نشده)؛ در سال تورمی کمتر از واقع است"
+                    % record.get("period_months"))
+
         scored = fundamental_scoring.score(
-            dict(ratios, pe=None, earnings_yield=None) if withheld else ratios,
+            dict(ratios, pe=None, earnings_yield=None)
+            if withheld or one_off else ratios,
             skip=("Profitability", "Growth") if withheld else (),
         )
 
         notes = list(scored["notes"])
+        if one_off:
+            notes = [("ارزش‌گذاری: P/E امتیاز نگرفت — " + one_off)
+                     if n.startswith("Valuation: P/E unavailable") else n
+                     for n in notes]
 
         if withheld and ratios.get("pe") is not None:
             # In place of the scorer's "P/E unavailable (no positive
@@ -817,6 +905,7 @@ def metrics_for(ins_codes, market_by_code=None, sector_by_code=None):
                 ] if stale else notes
             ),
             "weight_covered": scored["weight_covered"],
+            "warnings": warnings,
         }
 
     return out

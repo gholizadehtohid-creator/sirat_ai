@@ -388,3 +388,72 @@ class ZeroFiledEpsTest(unittest.TestCase):
         self.assertIsNotNone(items)
         self.assertNotEqual(items.get("net_profit") or 0, 0)
         self.assertIsNone(items.get("eps"))
+
+
+# ==============================
+# THE SECOND AUDIT (2026-11-11): TTM, ONE-OFFS, EMPTY PERIODS, THE EXCHANGE
+# ==============================
+
+def period_row(end, months, revenue, net, operating=None, consolidated=False):
+    """A load_codal_periods() row."""
+    items = {"revenue": revenue, "net_profit": net, "net_profit_owners": net,
+             "operating_profit": net if operating is None else operating,
+             "capital": 1_000e9, "equity": 400e9, "equity_owners": 400e9,
+             "total_assets": 1_000e9, "total_liabilities": 600e9}
+    return {"period_end": end, "period_months": months, "audited": True,
+            "consolidated": consolidated, "items": items, "ratios": {},
+            "published_at": end}
+
+
+class CardSecondAuditTest(unittest.TestCase):
+
+    MARKET = {"close": 1_000.0, "total_shares": 1e9, "pe": 10.0}
+    # A half-year of 60bn against last year's 100bn with 40bn in its first
+    # half: TTM 120bn, where the half annualised reads 120bn as well -- so
+    # the profits below differ by half to tell the two apart.
+    HISTORY = [period_row("1405/06/31", 6, 300e9, 70e9),
+               period_row("1404/12/29", 12, 400e9, 100e9),
+               period_row("1404/06/31", 6, 200e9, 40e9)]
+
+    def _metrics(self, periods, latest=None, market=None):
+        latest = latest or {"1": dict(periods[0], title="t", updated_at=None)}
+        with mock.patch.object(database, "load_codal_latest",
+                               return_value=latest), \
+                mock.patch.object(database, "load_codal_periods",
+                                  return_value={"1": periods}):
+            return codal_sync.metrics_for(
+                ["1"], market_by_code={"1": market or self.MARKET},
+                sector_by_code={"1": "فلزات اساسي"})["1"]
+
+    def test_pe_is_on_the_trailing_year_not_the_half_doubled(self):
+        out = self._metrics(self.HISTORY)
+        # TTM 70 + 100 - 40 = 130bn; market cap 1,000bn.
+        self.assertAlmostEqual(out["ratios"]["pe"], 7.69, places=2)
+        self.assertAlmostEqual(out["ratios"]["pe_annualised"], 7.14, places=2)
+        self.assertEqual(out["ratios"]["pe_basis"], "ttm")
+
+    def test_a_profit_far_above_operating_profit_is_not_scored_on_pe(self):
+        rows = [period_row("1405/06/31", 6, 300e9, 70e9, operating=10e9)] + \
+            self.HISTORY[1:]
+        out = self._metrics(rows)
+        self.assertTrue(any("سود عملیاتی" in w for w in out["warnings"]))
+        self.assertFalse([n for n in out["notes"]
+                          if n.startswith("Valuation: P/E 7")], out["notes"])
+
+    def test_a_gap_to_the_exchanges_pe_is_shown(self):
+        out = self._metrics(self.HISTORY, market=dict(self.MARKET, pe=20.0))
+        self.assertTrue(any("اعلامی بورس" in w for w in out["warnings"]))
+        self.assertFalse(any("اعلامی بورس" in w for w in
+                             self._metrics(self.HISTORY)["warnings"]))
+
+    def test_a_newest_period_without_an_income_statement_is_passed_over(self):
+        empty = period_row("1405/09/30", 9, None, None)
+        empty["items"]["operating_profit"] = None
+        out = self._metrics([empty] + self.HISTORY)
+        self.assertEqual(out["period_end"], "1405/06/31")
+        self.assertTrue(any("1405/09/30" in w for w in out["warnings"]))
+
+    def test_without_a_prior_year_the_annualised_pe_stays_and_says_so(self):
+        out = self._metrics(self.HISTORY[:1])
+        self.assertEqual(out["ratios"]["pe_basis"], "annualised")
+        self.assertTrue(any("سالانه‌شده" in w for w in out["warnings"]))

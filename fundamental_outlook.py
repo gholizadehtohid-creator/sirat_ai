@@ -109,6 +109,31 @@ LOCKED_SESSIONS = 10
 # are counted.
 THIN_LISTED = 20
 
+# ---- is the profit the business's, and does the exchange agree? -----------
+# The second audit of 2026-11-11 (the user: "test the fundamental section
+# again for problems of this kind"):
+#  * حافرین earned 23.6 thousand billion rials in six months on an operating
+#    profit of 3.05 -- a gain outside the business -- and read P/E 0.96.
+#    Net profit above ONE_OFF_RATIO x operating profit (or a net profit on an
+#    operating loss) is named, and the fundamentals card does not score a P/E
+#    on it. At 1.5x it named 33 of the outlook's companies, most of them
+#    between 1.5 and 2.0 for reasons that recur: a holding's dividends from
+#    its subsidiaries (پترول 1.76, مبین 1.92), dairy farms' livestock
+#    revaluation (زقیام, تلیسه, زپارس), cement makers' interest income
+#    (سمتاز 1.94). Above 2x the business is the minority of the profit
+#    (حافرین 7.7, کسرام 12.8, نمرینو 44.5, قثابت 3.8).
+#  * TSETMC publishes its own P/E. Ours on the trailing year matched it
+#    (median 0.99, 93% within ±25%) except where a group's consolidated
+#    profit and the parent's own differ (همراه 4.8 vs 8.6, شفا 10.9 vs 38.5):
+#    a gap outside PUBLISHED_PE_BAND is shown, not silently resolved.
+#  * جوین, قپیرا, شلیا: two or three months of monthly sales up 220-240%
+#    against a year whose price step came mid-way, extrapolated to the year
+#    at the +100% cap -- forward profit exactly twice the trailing.
+ONE_OFF_RATIO = 2.0
+PUBLISHED_PE_BAND = (0.67, 1.5)
+EARLY_MONTHS = 4
+EARLY_JUMP = 1.5
+
 
 def _f(value):
     try:
@@ -315,7 +340,8 @@ _UNSET = object()
 
 def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             monthly_rows=None, dividend=_UNSET, shares=_UNSET, sector=_UNSET,
-            portfolio=_UNSET, opportunity=None, bars=_UNSET, band=_UNSET):
+            portfolio=_UNSET, opportunity=None, bars=_UNSET, band=_UNSET,
+            published=_UNSET):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
@@ -327,7 +353,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     read each. `opportunity` is opportunity_rate()'s answer. `bars` (the
     newest price bars) and `band` (the snapshot's limits) are trading_read()'s
     inputs; with `rows` given and neither passed there is no trading read --
-    a point-in-time valuation must not be judged on today's tape.
+    a point-in-time valuation must not be judged on today's tape. `published`
+    is TSETMC's own P/E, read from the snapshot likewise.
     """
 
     rows_from_store = rows is None
@@ -356,6 +383,9 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                 .get(str(ins_code)) if rows_from_store else None)
     if band is _UNSET:
         band = price_bands().get(str(ins_code)) if rows_from_store else None
+    if published is _UNSET:
+        published = (published_pe().get(str(ins_code))
+                     if rows_from_store else None)
     opportunity = opportunity or opportunity_rate()
     today = today or jalali.today_jalali()
 
@@ -665,6 +695,37 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                 flag("تولید «%s» %.0f٪ بیشتر از فروش آن — انباشت موجودی"
                      % (p["name"], (p["production_to_sales"] - 1) * 100))
                 break
+    # Why the multiple itself may not be a valuation: each is a warning on
+    # the row and, in screen(), a reason not to rank it -- the ranking is by
+    # that multiple.
+    doubts = []
+    if kind == OPERATING:
+        # Profit that is not the business's: a P/E on it is not a valuation.
+        one_off = one_off_reason(li)
+        if one_off:
+            flag(one_off)
+            doubts.append({"code": "one_off", "label": "سود غیرعملیاتی"})
+        # Our trailing P/E against the exchange's own.
+        gap = published_gap_reason(pe_ttm, published)
+        if gap:
+            flag(gap)
+            doubts.append({"code": "published_gap",
+                           "label": "P/E ما %.1f، بورس %.1f"
+                                    % (pe_ttm, published)})
+        # A year projected from its first few months of monthly sales.
+        if method == "monthly_sales" and monthly and \
+                monthly["months_elapsed"] <= EARLY_MONTHS and \
+                fwd_net and ttm_net and ttm_net > 0 and \
+                fwd_net >= EARLY_JUMP * ttm_net:
+            flag("برآورد سود سال جاری %.1f برابر سود ۱۲ ماه گذشته است و فقط "
+                 "بر %d ماه گزارش ماهانه تکیه دارد؛ P/E آینده‌نگر خوش‌بینانه "
+                 "است%s"
+                 % (fwd_net / ttm_net, monthly["months_elapsed"],
+                    " (P/E دوازده‌ماهه %.1f)" % pe_ttm
+                    if pe_ttm is not None else ""))
+            doubts.append({"code": "early_year",
+                           "label": "برآورد سال از %d ماه"
+                                    % monthly["months_elapsed"]})
     if monthly:
         ratio = monthly.get("expense_to_income")
         if ratio is not None and monthly.get("template") == "insurance" and ratio > 0.7:
@@ -737,6 +798,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         "forward": {"revenue": fwd_rev, "profit": fwd_net, "eps": eps_fwd},
         "valuation": {"price": price, "market_cap": market_cap,
                       "pe_ttm": _round(pe_ttm), "pe_forward": _round(pe_fwd),
+                      "pe_published": published,
                       "earnings_yield_forward_pct": _pct(yield_fwd),
                       "pb": _round(pb), "roe_ttm_pct": _pct(roe_ttm),
                       "fcf_yield_pct": _pct(fcf_yield),
@@ -766,6 +828,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         "monthly": monthly,
         "flags": flags,
         "positives": positives,
+        "doubts": doubts,
     }
 
     # What the tape says about the price every multiple above rests on. First
@@ -886,6 +949,101 @@ def price_bands():
             for code, prev, up, down in rows}
 
 
+def published_pe():
+    """{ins_code: TSETMC's own P/E} from the newest market snapshot."""
+
+    conn = database._connect()
+    try:
+        rows = conn.execute("""
+            SELECT s.ins_code, s.pe FROM market_snapshot s
+            JOIN (SELECT ins_code, MAX(captured_at) at FROM market_snapshot
+                  GROUP BY ins_code) m
+              ON m.ins_code = s.ins_code AND m.at = s.captured_at
+        """).fetchall()
+    except Exception:                                           # noqa: BLE001
+        rows = []
+    finally:
+        conn.close()
+    return {str(code): _f(pe) for code, pe in rows if _f(pe) and _f(pe) > 0}
+
+
+def one_off_reason(items):
+    """Why a period's net profit is not the business's own, or None."""
+
+    net = _f((items or {}).get("net_profit"))
+    op = _f((items or {}).get("operating_profit"))
+    if net is None or op is None or net <= 0:
+        return None
+    if op <= 0:
+        return ("سود خالص مثبت با زیان عملیاتی: سود از فعالیت اصلی نیست "
+                "(احتمالاً یک‌باره)، پس P/E بر آن ارزش‌گذاری نیست")
+    if net > ONE_OFF_RATIO * op:
+        return ("سود خالص %.1f برابر سود عملیاتی است: بیشتر سود از فعالیت "
+                "اصلی نیست (احتمالاً یک‌باره)، پس P/E بر آن ارزش‌گذاری نیست"
+                % (net / op))
+    return None
+
+
+def published_gap_reason(pe_ours, pe_published):
+    """A note when our trailing P/E and TSETMC's disagree materially."""
+
+    if not pe_ours or not pe_published or pe_ours <= 0 or pe_published <= 0:
+        return None
+    ratio = pe_ours / pe_published
+    if PUBLISHED_PE_BAND[0] <= ratio <= PUBLISHED_PE_BAND[1]:
+        return None
+    return ("P/E دوازده‌ماهه‌ی ما %.1f است و P/E اعلامی بورس %.1f: معمولاً از "
+            "تفاوت صورت تلفیقی و جداگانه یا سودی یک‌باره است؛ پیش از تصمیم "
+            "صورت مالی را ببینید" % (pe_ours, pe_published))
+
+
+def trailing_multiples(periods_by_code, market_by_code, sector_by_code=None):
+    """{ins_code: P/E and P/S on the trailing twelve months} for the
+    fundamentals card, from analyse()'s TTM on the stored periods.
+
+    The card annualised its newest interim: six months x 2. In a year of
+    77% inflation the newest half is the dearest, so every P/E read low --
+    median 0.82 of TSETMC's, 62% within ±25%, against this module's TTM at
+    0.99 and 93% (2026-11-11). `profit` None means no TTM could be built (no
+    prior year stored); the caller keeps its annualised figure and says so.
+    A loss over the trailing year is a TTM too: P/E None, profit <= 0.
+    """
+
+    sector_by_code = sector_by_code or {}
+    bills = {"rate_pct": config.OPPORTUNITY_RATE, "as_of": None,
+             "source": "config"}
+    out = {}
+    for code, rows in (periods_by_code or {}).items():
+        market = market_by_code.get(code) or {}
+        price = _f(market.get("close"))
+        if not rows or not price:
+            continue
+        try:
+            r = analyse(code, price=price, rows=rows, monthly_rows=[],
+                        dividend=None, shares=_f(market.get("total_shares")),
+                        sector=sector_by_code.get(code), portfolio=None,
+                        opportunity=bills, bars=None, band=None,
+                        published=None)
+        except Exception:                                       # noqa: BLE001
+            continue
+        if not r or r["ttm"]["profit"] is None:
+            continue
+        cap = r["valuation"]["market_cap"]
+        pe = r["valuation"]["pe_ttm"]
+        revenue = r["ttm"]["revenue"]
+        out[code] = {
+            "pe": pe if pe is not None and pe < config.PE_ABSURD else None,
+            "ps": _round(cap / revenue) if cap and revenue and revenue > 0
+            else None,
+            "profit": r["ttm"]["profit"],
+            "revenue": revenue,
+            "period_end": r["latest"]["period_end"],
+            "months": r["latest"]["months"],
+            "basis": r["basis"],
+        }
+    return out
+
+
 def _band_pct(band):
     """Half the day's permitted range as a percent of the previous close,
     and whether it is narrower than an ordinary ±3% band cut to the tick."""
@@ -920,25 +1078,26 @@ def trading_read(bars, band=None):
     if bars is None or len(bars) == 0:
         return None
 
-    bars = bars.tail(TRADING_SESSIONS).reset_index(drop=True)
-    volume = bars["volume"].fillna(0)
-    value = bars["value"].fillna(0) if "value" in bars.columns \
-        else volume * bars["close"].fillna(0)
+    import numpy as np
+
+    bars = bars.tail(TRADING_SESSIONS)
+    # Arrays, not a row loop: .iloc per bar made this 9 s of the
+    # fundamentals card's 13 over ~740 names (2026-11-11).
+    volume = bars["volume"].fillna(0).to_numpy(dtype=float)
+    close = bars["close"].to_numpy(dtype=float)
+    value = (bars["value"].fillna(0).to_numpy(dtype=float)
+             if "value" in bars.columns else volume * np.nan_to_num(close))
     avg_value = float(value.mean())
 
     traded = int((volume > 0).sum())
-    up = down = 0
-    for i in range(len(bars)):
-        row = bars.iloc[i]
-        if not row["volume"] or row["volume"] <= 0 or row["high"] != row["low"]:
-            continue
-        prev = _f(bars.iloc[i - 1]["close"]) if i > 0 else None
-        price = _f(row["high"])
-        if prev and price and price > prev:
-            up += 1
-        elif prev and price and price < prev:
-            down += 1
-    single = int(((volume > 0) & (bars["high"] == bars["low"])).sum())
+    high = bars["high"].to_numpy(dtype=float)
+    one_price = (volume > 0) & (high == bars["low"].to_numpy(dtype=float))
+    prev = np.concatenate(([np.nan], close[:-1]))
+    prev[~(prev > 0)] = np.nan                  # no previous close: no side
+    with np.errstate(invalid="ignore"):
+        up = int((one_price & (high > prev)).sum())
+        down = int((one_price & (high < prev)).sum())
+    single = int(one_price.sum())
 
     band_pct, narrow = _band_pct(band)
     illiquid = avg_value < config.MIN_DAILY_VALUE
@@ -1041,14 +1200,15 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     prices = latest_prices()
     shares = exchange_shares()
     bands = price_bands()
+    published = published_pe()
     tails = database.load_history_tail(list(instruments), TRADING_SESSIONS)
     portfolios = database.load_codal_portfolio_latest()
     opportunity = opportunity_rate()
 
-    ranked, financials, suspect, thin = [], [], [], []
+    ranked, financials, suspect, thin, doubtful = [], [], [], [], []
     excluded = {"no_filing": 0, "stale": 0, "no_estimate": 0, "flags": 0,
                 "loss": 0, "halted": 0, "suspect": 0, "basis_gap": 0,
-                "illiquid": 0}
+                "illiquid": 0, "doubtful": 0}
     halted = database.halted_codes()
     import codal_announcements
     dividends = codal_announcements.latest_dividends()
@@ -1061,7 +1221,8 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
                          dividend=dividends.get(code), shares=shares.get(code),
                          sector=inst.get("sector_name"),
                          portfolio=portfolios.get(code), opportunity=opportunity,
-                         bars=tails.get(code), band=bands.get(code))
+                         bars=tails.get(code), band=bands.get(code),
+                         published=published.get(code))
         if not result:
             excluded["no_filing"] += 1
             continue
@@ -1108,6 +1269,17 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
             suspect.append({"symbol": result["symbol"], "reason": reason,
                             "period_end": result["latest"]["period_end"]})
             continue
+        if result.get("doubts"):
+            # The multiple the ranking sorts on is not a valuation here: a
+            # one-off profit, a gap to the exchange's own P/E, a year
+            # projected from two months (the second audit, 2026-11-11).
+            excluded["doubtful"] += 1
+            doubtful.append({"symbol": result["symbol"],
+                             "reasons": [d["label"] for d in result["doubts"]],
+                             "pe_forward": result["valuation"]["pe_forward"],
+                             "earnings_yield_forward_pct":
+                                 result["valuation"]["earnings_yield_forward_pct"]})
+            continue
         if len(result["flags"]) - tape_notes > max_flags:
             excluded["flags"] += 1
             continue
@@ -1136,12 +1308,14 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
         is not None else (r["valuation"]["pb"] or 99)))
 
     thin.sort(key=lambda r: -(r["earnings_yield_forward_pct"] or -1e9))
+    doubtful.sort(key=lambda r: -(r["earnings_yield_forward_pct"] or -1e9))
 
     return {"ranked": ranked[:limit], "count": len(ranked),
             "financials": financials[:limit],
             "financials_count": len(financials),
             "suspect": suspect,
             "thin": thin[:THIN_LISTED], "thin_count": len(thin),
+            "doubtful": doubtful,
             "liquidity_floor": config.MIN_DAILY_VALUE,
             "excluded": excluded,
             "bar_pct": opportunity["rate_pct"],

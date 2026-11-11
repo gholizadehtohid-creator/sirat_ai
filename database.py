@@ -1847,6 +1847,51 @@ def load_codal_latest(ins_codes=None):
     return out
 
 
+def load_codal_periods(ins_codes=None, limit=12):
+    """{ins_code: its newest `limit` stored periods, newest first}, in the
+    shape fundamental_db.load_metrics returns -- what the outlook's TTM is
+    computed from -- in one query (9,817 rows, 0.7 s on 2026-11-11)."""
+
+    create_database()
+
+    if ins_codes:
+        codes = [str(c) for c in ins_codes]
+        where = "WHERE ins_code IN (%s)" % ", ".join(["?"] * len(codes))
+        params = codes
+    else:
+        where, params = "", []
+
+    conn = _connect()
+    try:
+        rows = conn.execute(f"""
+            SELECT ins_code, period_end, period_months, audited, consolidated,
+                   items, ratios, updated_at
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (
+                    PARTITION BY ins_code
+                    ORDER BY period_end DESC, period_months DESC
+                ) AS rank
+                FROM codal_financials {where}
+            ) WHERE rank <= ?
+            ORDER BY ins_code, period_end DESC, period_months DESC
+        """, params + [int(limit)]).fetchall()
+    finally:
+        conn.close()
+
+    out = {}
+    for row in rows:
+        out.setdefault(str(row[0]), []).append({
+            "period_end": row[1],
+            "period_months": row[2],
+            "audited": None if row[3] is None else bool(row[3]),
+            "consolidated": bool(row[4]),
+            "items": _loads(row[5]),
+            "ratios": _loads(row[6]),
+            "published_at": row[7],
+        })
+    return out
+
+
 def _loads(text):
     try:
         return json.loads(text) if text else {}
