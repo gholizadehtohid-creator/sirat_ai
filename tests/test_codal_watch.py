@@ -671,6 +671,73 @@ class PollTests(unittest.TestCase):
         self.assertEqual(tried, ["34", "35"])
         self.assertFalse([c for c in slept.call_args_list if c.args[0] >= 900])
 
+    # ---- the third review (2026-11-11) ----------------------------------
+
+    def test_refusals_between_outside_letters_still_stop_at_two(self):
+        # An outside-universe letter makes no request, yet it used to reset
+        # the fresh loop's count while the Pacer's own count stood: refused,
+        # outside, refused, outside, refused slept 15 minutes on the third.
+        feed = Feed(5, code=lambda n: "ن-10")
+        for item in feed.letters:
+            if int(item["tracing_no"]) % 2 == 0:
+                item["symbol"] = "x"        # not in the universe
+        self.marked_at("1405/08/10 10:00:00")
+        tried, handlers = self.refusing()
+        with mock.patch.object(w, "HANDLERS", handlers), \
+                mock.patch("codal_monthly.Pacer", PACER), \
+                mock.patch.object(w.time, "sleep") as slept:
+            self.poll(feed)
+
+        self.assertEqual(tried, ["1", "3"])
+        self.assertEqual({n: tries for n, (_l, tries) in w._queued().items()},
+                         {"1": 1, "3": 1, "5": 0})
+        self.assertFalse([c for c in slept.call_args_list if c.args[0] >= 900])
+
+    def test_retry_refusals_between_requestless_letters_stop_at_two(self):
+        # The retry pass reset its count on any letter that was not refused,
+        # including one that needed no request at all.
+        import requests
+
+        def page(_client, _number):
+            raise requests.HTTPError("429 Client Error",
+                                     response=mock.Mock(status_code=429))
+
+        tried, handlers = self.refusing()
+        w._ensure_table()
+        for n, code in ((1, "ن-10"), (2, "ن-20"), (3, "ن-10"), (4, "ن-20"),
+                        (5, "ن-10")):
+            w._queue(dict(announcement(n, n), letter_code=code), 1)
+
+        with mock.patch.object(w, "HANDLERS", handlers), \
+                mock.patch("codal_monthly.Pacer", PACER), \
+                mock.patch.object(w.time, "sleep") as slept, \
+                mock.patch.object(w, "_page", side_effect=page):
+            w.poll(verbose=False, client=object())
+
+        self.assertEqual(tried, ["1", "3"])
+        self.assertFalse([c for c in slept.call_args_list if c.args[0] >= 900])
+
+    def test_a_cold_start_does_not_trust_a_small_total_on_every_page(self):
+        # No Total stored yet and a degraded backend answering every page as
+        # if the feed held one letter: page 2 then looked like the feed's end
+        # and the mark jumped over 4-11. The letters already seen prove the
+        # feed holds at least that many.
+        feed = Feed(12)
+        self.marked_at("1405/08/10 10:03:00")
+        for done in feed.letters[9:]:
+            w._mark(done, "1", "stored")
+        feed.cut = 1
+        self.poll(feed)
+
+        state = w.load_state()
+        self.assertEqual(state["through"], "1405/08/10 10:03:00")
+        self.assertIsNone(state.get("sweep"))
+        self.assertNotIn("11", self.seen())
+
+        feed.cut = None
+        self.poll(feed)
+        self.assertTrue({str(n) for n in range(1, 13)} <= self.seen())
+
     # A stall shows.
 
     def test_a_sweep_that_cannot_advance_is_called_stalled(self):

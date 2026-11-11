@@ -860,7 +860,13 @@ def _process(client, letter, universe, pace, totals, verbose, attempts=0,
         _mark(letter, None, "outside universe")
         _unqueue(letter["tracing_no"])
         totals["outside_universe"] += 1
-        return "outside universe", False
+        # None, not False: no request was made, so this letter says nothing
+        # about whether Codal is refusing. False would reset the callers'
+        # refusal count while the Pacer's own count stood, and refused,
+        # outside, refused, outside, refused slept 15+30+60.. minutes inside a
+        # poll holding the watch lock (2026-11-11: 751 of ~1,712 ن-10 letters
+        # in watch_seen are outside the universe, so that order is common).
+        return "outside universe", None
 
     if defer:
         _queue(letter, attempts, "not tried: Codal refused the letters "
@@ -932,13 +938,14 @@ def poll(since=None, verbose=True, client=None):
     refused = 0
     for letter, attempts in list(_queued().values())[:RETRY_PER_POLL]:
         totals["retried"] += 1
-        if _process(client, letter, universe, pace, totals, verbose,
-                    attempts)[1]:
+        refusal = _process(client, letter, universe, pace, totals, verbose,
+                           attempts)[1]
+        if refusal:
             refused += 1
             if refused >= 2:
                 break
-        else:
-            refused = 0
+        elif refusal is not None and letter["letter_code"] in NETWORK_CODES:
+            refused = 0             # only a request that got through resets
     # ...and the Pacer forgets them. It is shared with the scan, so a pass
     # that ended on two refusals left it one short of its 15-minute wait,
     # and a refused feed page 1 (18 in the watch's log by 2026-11-11, every
@@ -949,7 +956,12 @@ def poll(since=None, verbose=True, client=None):
     # A queued letter is not new: it waits its turn rather than costing a
     # second request in the same poll.
     seen = _seen() | set(_queued())
-    feed = {"stored": kept["total"]}
+    # Every letter in watch_seen came from this feed, so their count is a
+    # floor for its Total even before one is stored. Without it the first
+    # poll after a state loss (the cold start) trusted a degraded backend's
+    # small, self-consistent Total and could claim the whole hole: _cut_short
+    # only helps when a later page in the same pass carries the real Total.
+    feed = {"stored": max(kept["total"] or 0, len(_seen())) or None}
     if since:
         fresh, state = _catch_up(client, seen, since, pace, feed)
     else:
@@ -988,7 +1000,7 @@ def poll(since=None, verbose=True, client=None):
                      defer=True)
             continue
         refusal = _process(client, letter, universe, pace, totals, verbose)[1]
-        if networked:
+        if networked and refusal is not None:
             refused = refused + 1 if refusal else 0
 
     # Only now: every letter the marks claim is handled or queued.
