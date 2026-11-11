@@ -374,7 +374,7 @@ class SourceBoundAdapter(HTTPAdapter):
         return super().proxy_manager_for(*args, **kwargs)
 
 
-def build_session(headers=None, bind_source=True, host=None):
+def build_session(headers=None, bind_source=True, host=None, retry_status=None):
     """A configured requests.Session honouring proxy/TLS/retry settings.
 
     `host` selects which host's route this session is bound for. It matters
@@ -382,6 +382,12 @@ def build_session(headers=None, bind_source=True, host=None):
     physical NIC while Codal is reachable through the tunnel -- and a session
     built without it silently inherits TSETMC's binding. Callers that talk to
     something else pass their own host.
+
+    `retry_status` replaces settings.RETRY_STATUS for this session's
+    transport retries. Codal passes the 5xx codes only: behind its WAF a 429
+    or 403 retried at once, up to RETRIES times inside the throttle window,
+    renews the block, and the caller's pacer saw one refusal for four
+    requests (the portfolio review, 2026-11-11).
     """
 
     session = DeadlineSession()
@@ -410,7 +416,8 @@ def build_session(headers=None, bind_source=True, host=None):
             connect=settings.RETRIES,
             read=settings.RETRIES,
             backoff_factor=0.4,
-            status_forcelist=settings.RETRY_STATUS,
+            status_forcelist=(settings.RETRY_STATUS if retry_status is None
+                              else tuple(retry_status)),
             allowed_methods=frozenset(["GET"]),
             respect_retry_after_header=True,
             raise_on_status=False,

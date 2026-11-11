@@ -77,7 +77,7 @@ import settings
 
 # Statements, monthly reports, and since 2026-11-06 the announcements a
 # manual trader acts on (codal_announcements.KINDS).
-FEEDS = ("ن-10", "ن-30") + codal_announcements.CODES
+FEEDS = ("ن-10", "ن-30", "ن-31") + codal_announcements.CODES
 # 200 letters of every type. A quiet day fills ~3 pages, but polls are two
 # hours apart and a month-end deadline day publishes several times that.
 MAX_PAGES_POLL = 10
@@ -775,13 +775,23 @@ class Transient(Exception):
     """A handler's "try again next poll", with Codal's reason for the queue."""
 
 
+class NoRequest(str):
+    """A handler's outcome reached without a request to Codal.
+
+    _process does not pace it and reports its refusal as None, as for a
+    letter outside the universe: an "already stored" between two refusals
+    reset both refusal counts, and a poll in a throttle window went on
+    sending downloads into it (the portfolio review, 2026-11-11).
+    """
+
+
 def handle_statement(client, letter, inst):
     import codal_sync
 
     if str(letter["tracing_no"]) in database.codal_filing_tracing_numbers():
-        return "already stored"
+        return NoRequest("already stored")
     if not letter.get("excel_url"):
-        return "no excel"
+        return NoRequest("no excel")
 
     record, error, kind = codal_sync.parse_letter(client, letter)
     if error:
@@ -804,9 +814,9 @@ def handle_monthly(client, letter, inst):
 
     codal_monthly._ensure_tables()
     if letter["tracing_no"] in codal_monthly._known():
-        return "already stored"
+        return NoRequest("already stored")
     if not letter.get("excel_url"):
-        return "no excel"
+        return NoRequest("no excel")
 
     got = client.fetch_sheets(letter["excel_url"], archive_key=letter["tracing_no"])
     code = str(inst["ins_code"])
@@ -824,14 +834,45 @@ def handle_monthly(client, letter, inst):
     return "stored"
 
 
-HANDLERS = {"ن-10": handle_statement, "ن-30": handle_monthly}
+def handle_portfolio(client, letter, inst):
+    """An investment company's monthly portfolio report (ن-۳۱) -> NAV.
+
+    Not watched until 2026-11-11, when 130 of 141 stored portfolios were
+    still Tir's while the index had risen 72.5% (codal_portfolio.py says
+    how). Only a report newer than the one held is downloaded; a company
+    filing its sales report under this code parses to no portfolio and is
+    marked so, not retried.
+    """
+
+    import codal_portfolio
+
+    code = str(inst["ins_code"])
+    if not letter.get("excel_url"):
+        return NoRequest("no excel")
+    if str(letter["tracing_no"]) in database.known_tracing_numbers(code):
+        return NoRequest("already stored")
+    got = codal_portfolio.fetch_newest(client, code, [letter],
+                                       newest_held=codal_portfolio.held_period(code))
+    if got["transient"]:
+        raise Transient("portfolio download refused")
+    if not got["requested"]:
+        return NoRequest("not newer than the portfolio held")
+    if got["stored"]:
+        return "stored"
+    if got["error"]:
+        return "unreadable: %s" % got["error"][:80]
+    return got["outcome"]
+
+
+HANDLERS = {"ن-10": handle_statement, "ن-30": handle_monthly,
+            "ن-31": handle_portfolio}
 for _code in codal_announcements.CODES:
     HANDLERS[_code] = codal_announcements.handle
 
 # Handlers that put a request on Codal for every letter, and so are paced.
 # An announcement is a row from the feed itself, except an annual AGM's
 # decisions, whose page is fetched for the dividend.
-NETWORK_CODES = ("ن-10", "ن-30", persian.normalize(
+NETWORK_CODES = ("ن-10", "ن-30", "ن-31", persian.normalize(
     codal_announcements.ANNUAL_AGM_DECISIONS))
 
 
@@ -877,9 +918,9 @@ def _process(client, letter, universe, pace, totals, verbose, attempts=0,
     networked = letter["letter_code"] in NETWORK_CODES
     error = None
     try:
-        if letter["letter_code"] in ("ن-10", "ن-30"):
-            # codal_letters is the statement/monthly ledger the per-company
-            # paths read; announcements live in their own table.
+        if letter["letter_code"] in ("ن-10", "ن-30", "ن-31"):
+            # codal_letters is the statement/monthly/portfolio ledger the
+            # per-company paths read; announcements live in their own table.
             database.save_codal_letters(str(inst["ins_code"]), [letter])
         outcome = HANDLERS[letter["letter_code"]](client, letter, inst)
         refused = outcome is None
@@ -891,6 +932,11 @@ def _process(client, letter, universe, pace, totals, verbose, attempts=0,
         outcome = None
         refused = codal.classify(exc) == codal.KIND_TRANSIENT
         error = "%s: %s" % (type(exc).__name__, str(exc)[:160])
+    if isinstance(outcome, NoRequest):
+        # No request, so nothing to pace and nothing said about refusals.
+        _mark(letter, str(inst["ins_code"]), str(outcome))
+        _unqueue(letter["tracing_no"])
+        return str(outcome), None
     if networked:
         pace(refused)
 
@@ -918,6 +964,41 @@ def _process(client, letter, universe, pace, totals, verbose, attempts=0,
     elif outcome.startswith("unreadable"):
         totals["unreadable"] += 1
     return outcome, False
+
+
+def _newest_portfolio_per_company(fresh, universe, totals):
+    """`fresh` with only each company's newest ن-31 letter kept.
+
+    Newest by the period in the title, then by publication, so a
+    same-period correction wins over its original. The rest are saved to
+    codal_letters (the per-company paths still see them) and marked seen.
+    """
+
+    import financials
+
+    best = {}
+    for letter in fresh:
+        if letter["letter_code"] != "ن-31":
+            continue
+        key = persian.normalize(letter.get("symbol") or "")
+        rank = (str(financials.period_end(letter.get("title") or "") or ""),
+                str(letter.get("published_at") or ""))
+        if key not in best or rank > best[key][0]:
+            best[key] = (rank, letter["tracing_no"])
+    keep = {tracing for _rank, tracing in best.values()}
+    out = []
+    for letter in fresh:
+        if letter["letter_code"] != "ن-31" or letter["tracing_no"] in keep:
+            out.append(letter)
+            continue
+        inst = universe.get(persian.normalize(letter.get("symbol") or ""))
+        code = str(inst["ins_code"]) if inst else None
+        if code:
+            database.save_codal_letters(code, [letter])
+        _mark(letter, code, "superseded by a newer portfolio in this poll")
+        _unqueue(letter["tracing_no"])
+        totals["new"] += 1
+    return out
 
 
 def poll(since=None, verbose=True, client=None):
@@ -969,7 +1050,7 @@ def poll(since=None, verbose=True, client=None):
     known = [t for t in (feed.get("read"), kept["total"]) if t is not None]
     largest = max(known) if known else None
     if verbose:
-        for letter_code in ("ن-10", "ن-30"):
+        for letter_code in ("ن-10", "ن-30", "ن-31"):
             print("watch: %s -- %d new letters" % (letter_code, sum(
                 1 for l in fresh if l["letter_code"] == letter_code)), flush=True)
         print("watch: announcements -- %d new letters" % sum(
@@ -990,6 +1071,13 @@ def poll(since=None, verbose=True, client=None):
     # slept 3 h 45 min (the second review, 2026-11-11), a sleep that does
     # not even run on across a laptop's suspend. Letters that need no
     # request go on being handled.
+    # One portfolio report per company per poll: NAV wants the newest, and a
+    # --since catch-up oldest first downloaded every intermediate month (05,
+    # 06, 07 for each of ~135 holders: ~400 downloads where ~135 do -- the
+    # portfolio review, 2026-11-11). The others are listed in the ledger and
+    # marked seen, unread.
+    fresh = _newest_portfolio_per_company(fresh, universe, totals)
+
     pace.refused = 0
     refused = 0
     for letter in reversed(fresh):

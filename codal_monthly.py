@@ -184,10 +184,16 @@ class Pacer:
     to 240: retrying inside codal.ir's throttle window renews the block.
     """
 
-    def __init__(self, label, verbose=True):
+    def __init__(self, label, verbose=True, deadline=None):
         self.label, self.verbose = label, verbose
         self.in_batch = 0
         self.refused = 0
+        # A wall-clock end (time.time()): a cool-off that would run past it
+        # sets `stop` instead of sleeping, so --hours 1.5 cannot become five
+        # hours holding the lock (the portfolio review, 2026-11-11). Wall
+        # clock, not monotonic, so a laptop's suspend counts as time gone.
+        self.deadline = deadline
+        self.stop = False
 
     def __call__(self, transient):
         self.in_batch += 1
@@ -197,6 +203,12 @@ class Pacer:
             self.refused = 0
         if self.refused >= 3:
             wait = min(15 * 2 ** (self.refused - 3), 240) * 60
+            if self.deadline is not None and time.time() + wait > self.deadline:
+                if self.verbose:
+                    print("%s: throttled; a %dm cool-off would pass the time "
+                          "limit -- stopping" % (self.label, wait // 60), flush=True)
+                self.stop = True
+                return
             if self.verbose:
                 print("%s: throttled; waiting %dm" % (self.label, wait // 60),
                       flush=True)
@@ -225,10 +237,11 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None):
         print("monthly: %d companies due" % len(companies), flush=True)
 
     totals = {"checked": 0, "stored": 0, "unreadable": 0, "failed": 0}
-    pace = Pacer("monthly", verbose)
+    pace = Pacer("monthly", verbose,
+                 deadline=time.time() + hours * 3600 if hours else None)
 
     for inst in companies:
-        if deadline and time.monotonic() > deadline:
+        if (deadline and time.monotonic() > deadline) or pace.stop:
             break
 
         code = str(inst["ins_code"])

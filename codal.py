@@ -280,8 +280,12 @@ def shared_session(rebuild=False):
 
     with _SESSION_LOCK:
         if _SHARED_SESSION is None or rebuild:
+            # No transport retry on 429/403: one refusal reaches the
+            # client's limiter and the caller's pacer as one, instead of
+            # four requests inside the throttle window (2026-11-11).
             _SHARED_SESSION = build_session(
-                headers=CodalClient.HEADERS, host=CODAL_HOST
+                headers=CodalClient.HEADERS, host=CODAL_HOST,
+                retry_status=(500, 502, 503, 504)
             )
         return _SHARED_SESSION
 
