@@ -165,8 +165,12 @@ def _instruments():
 
 def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
              positions=None, held=False, index_series=None, fundamental=None,
-             risk_pct=None, shares=None):
+             risk_pct=None, shares=None, band_pct=None):
     """One name, all the way to a signal. Returns None when it cannot be scored.
+
+    `band_pct`, the name's daily price band from today's market watch, is
+    passed by the live scan only (a backtest has no point-in-time watch), so
+    a close at the top of the band blocks a new entry (_entry_blocker).
 
     `fundamental` is the ONE input a historical caller cannot read the same way
     a live one does. The store holds the newest filing for a company; a backtest
@@ -214,7 +218,7 @@ def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
         "adx": _finite(last.get("ADX")),
         "adv": adv,
         "volatility_60": volatility,
-        "entry_blocker": _entry_blocker(frame),
+        "entry_blocker": _entry_blocker(frame, band_pct),
     }
 
     if fundamental is None:
@@ -273,7 +277,13 @@ def evaluate(ins_code, meta, frame, regime=None, medians=None, equity=None,
     return signal
 
 
-def _entry_blocker(frame):
+# How close to the top of its band a close counts as "at the limit": the
+# band is ±3% on most boards, and a close of +2.7% or more on the session high
+# is the buy queue in all but name.
+BAND_TOP_TOLERANCE_PCT = 0.3
+
+
+def _entry_blocker(frame, band_pct=None):
     """Why this name cannot be BOUGHT at the price the plan quotes, or None.
 
     Two conditions, both read off the last bar and neither a threshold:
@@ -303,7 +313,39 @@ def _entry_blocker(frame):
     if state and state.get("locked_up_now"):
         return state.get("reason")
 
+    # CLOSED AT THE TOP OF THE BAND, without a full-day lock. Found
+    # 2026-11-11: 9 of the basket's 10 names had closed +2.8% to +3.0% on a
+    # ±3% band, after +17% to +97% in 60 sessions; the next morning's buy
+    # queue is where a plan priced at that close would have to wait. Live
+    # scan only (band_pct comes from today's watch).
+    if band_pct and band_pct > 0 and len(frame) >= 2 and             {"close", "high"} <= set(frame.columns):
+        close = _finite(frame["close"].iloc[-1])
+        before = _finite(frame["close"].iloc[-2])
+        high = _finite(frame["high"].iloc[-1])
+        if close and before and high and before > 0:
+            change = (close / before - 1) * 100
+            if change >= band_pct - BAND_TOP_TOLERANCE_PCT and                     close >= high * 0.997:
+                return ("در آخرین جلسه در سقف دامنه‌ی نوسان (+%.1f٪) بسته شد — "
+                        "خرید در قیمت پایانی عملاً در صف خرید است" % change)
+
     return None
+
+
+def _bands():
+    """{ins_code: daily band in %} from the stored market watch."""
+
+    try:
+        conn = database._connect()
+        rows = conn.execute("SELECT ins_code, limit_up, prev_close "
+                            "FROM market_snapshot").fetchall()
+        conn.close()
+    except Exception:                                   # noqa: BLE001
+        return {}
+    out = {}
+    for code, limit_up, prev in rows:
+        if limit_up and prev and prev > 0 and limit_up > prev:
+            out[str(code)] = round((limit_up / prev - 1) * 100, 2)
+    return out
 
 
 # The constructions in levels.overhead() that represent a price the market has
@@ -443,6 +485,7 @@ def scan(equity=None, size=None, max_per_sector=None, limit=None,
         snapshot_shares = fundamental_outlook.exchange_shares()
     except Exception:                                           # noqa: BLE001
         snapshot_shares = {}
+    bands = _bands()            # today's price band per name, for the entry check
 
     for number, code in enumerate(codes, start=1):
 
@@ -460,7 +503,8 @@ def scan(equity=None, size=None, max_per_sector=None, limit=None,
                           medians=medians, equity=equity, positions=positions,
                           index_series=index_series,
                           held=code in held_codes, risk_pct=risk_pct,
-                          shares=snapshot_shares.get(str(code)))
+                          shares=snapshot_shares.get(str(code)),
+                          band_pct=bands.get(str(code)))
 
         if signal is None:
             skipped += 1

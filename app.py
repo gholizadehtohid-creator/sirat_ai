@@ -18,6 +18,8 @@ universe. backtest.py and threshold_optimizer.py still work from the command
 line for research on individual names.
 """
 
+import json
+import os
 import sys
 import threading
 import time
@@ -486,9 +488,46 @@ def api_portfolio():
             engine=engine,
         )
 
-    report = memoise(key, build, force=force)
+    report = dict(memoise(key, build, force=force))
+    report["track_record"] = basket_track_record()
 
     return jsonify(_with_autofetch(report, "history", "snapshot"))
+
+
+def basket_track_record():
+    """How the shipped basket did in its registered tests, for the panel.
+
+    The basket is the panel's most concrete card -- share counts, entries,
+    stops, targets -- and its own tests say it lost to the index and picked
+    no better than chance (E26, backtest_output/E26_results.json: the
+    shipped "baseline" engine +24.0% vs TEDPIX +92.9% over 2024-09..2025-12
+    and +4.9% vs +94.4% in 2026, selection at the 18.8th and 1.4th
+    percentile of random baskets). That was a folded note on another tab
+    (found 2026-11-11), so a reader could put 90% of capital behind the
+    strategy with the worst record. None if the results are missing.
+    """
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "backtest_output", "E26_results.json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            windows = json.load(handle)["windows"]
+    except (OSError, ValueError, KeyError):
+        return None
+    out = []
+    for span, w in sorted(windows.items()):
+        try:
+            out.append({
+                "window": span,
+                "basket_pct": w["total_return_pct"]["baseline"],
+                "tedpix_pct": w["benchmarks_pct"]["tedpix"],
+                "risk_free_pct": w["benchmarks_pct"].get("risk_free"),
+                "selection_percentile": w["selection_percentile_vs_random"]
+                ["engine_exits"]["baseline"],
+            })
+        except (KeyError, TypeError):
+            continue
+    return {"source": "E26", "windows": out} if out else None
 
 
 # ==============================

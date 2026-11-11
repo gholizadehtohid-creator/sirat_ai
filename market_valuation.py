@@ -187,6 +187,7 @@ def point(data, decision):
     cap = profit = 0.0
     used = skipped = halted = 0
     by_sector = {}
+    by_company = {}
     for code, inst in data.instruments().items():
         if inst["sector"] in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL:
             continue
@@ -235,6 +236,7 @@ def point(data, decision):
         cap += value
         profit += ttm
         used += 1
+        by_company[str(code)] = [round(value), round(ttm)]
         sector = by_sector.setdefault(inst["sector"] or "بدون صنعت", [0.0, 0.0, 0])
         sector[0] += value
         sector[1] += ttm
@@ -248,7 +250,10 @@ def point(data, decision):
             # [market value, trailing profit, companies] per industry, for
             # reading each against its own history.
             "sectors": {name: [round(c), round(pr), n]
-                        for name, (c, pr, n) in by_sector.items()}}
+                        for name, (c, pr, n) in by_sector.items()},
+            # [market value, trailing profit] per company: what links one
+            # point to the next on the companies both counted (_linked).
+            "by_company": by_company}
 
 
 def load():
@@ -354,6 +359,36 @@ def _sectors(points):
     return out
 
 
+def _linked(points):
+    """The P/E series on a constant composition, or None.
+
+    The raw aggregate moves whenever the set of companies with a usable
+    trailing profit changes. Found 2026-11-11: from 10-10 to 11-08 the count
+    fell from 489 to 423 (140 left out, was 72) and the counted market value
+    by 19% while TEDPIX moved -2%, so "P/E 10.82 -> 6.71, 26th percentile"
+    was largely a change of WHICH companies were counted. Each step is now
+    taken on the companies present at both points and chained from the first
+    point's level, the way an index is linked across a change of members.
+    """
+
+    if not points or any("by_company" not in p for p in points):
+        return None
+    level = points[0]["pe"]
+    out = [level]
+    for before, after in zip(points, points[1:]):
+        common = set(before["by_company"]) & set(after["by_company"])
+        c0 = sum(before["by_company"][k][0] for k in common)
+        p0 = sum(before["by_company"][k][1] for k in common)
+        c1 = sum(after["by_company"][k][0] for k in common)
+        p1 = sum(after["by_company"][k][1] for k in common)
+        if len(common) >= MIN_COMPANIES and min(c0, p0, c1, p1) > 0:
+            level = level * (c1 / p1) / (c0 / p0)
+        else:
+            level = after["pe"]          # no common ground: restart
+        out.append(round(level, 2))
+    return out
+
+
 def summary(opportunity=None):
     """What the panel shows: now, against history, against bills."""
 
@@ -366,17 +401,37 @@ def summary(opportunity=None):
 
     opportunity = opportunity or fo.opportunity_rate()
     now = points[-1]
-    history = [p["pe"] for p in points]
+    linked = _linked(points)
+    # The percentile is read on the linked series when every point carries
+    # its companies; the raw one only says where the counted set stands. The
+    # linked level is anchored at the first point, so it is rescaled to end
+    # at today's real aggregate P/E: the median and bands are then in real
+    # P/E units, as "what the market's P/E was on a comparable footing".
+    # On 2026-11-11 this moved the reading from the 26.5th percentile (raw)
+    # to the 54th: the month's fall was real (the same -38% on the
+    # companies counted at both points), the long-run comparison was not.
+    if linked:
+        scale = now["pe"] / linked[-1] if linked[-1] else 1.0
+        linked = [round(x * scale, 2) for x in linked]
+    history = linked or [p["pe"] for p in points]
     rate = opportunity["rate_pct"]
+    previous = points[-2] if len(points) > 1 else None
     return {
         "available": True,
-        "now": {k: v for k, v in now.items() if k != "sectors"},
-        "percentile": _percentile(history, now["pe"]),
+        "now": {k: v for k, v in now.items() if k not in ("sectors", "by_company")},
+        "linked": linked is not None,
+        "coverage_change": None if previous is None else {
+            "companies_before": previous.get("companies"),
+            "companies_now": now.get("companies"),
+            "date_before": previous.get("date")},
+        "percentile": _percentile(history, history[-1]),
         "median_pe": round(_quantile(history, 0.5), 2),
         "p20_pe": round(_quantile(history, 0.2), 2),
         "p80_pe": round(_quantile(history, 0.8), 2),
         "since": points[0]["date"],
-        "series": [{"date": p["date"], "pe": p["pe"]} for p in points],
+        "series": [{"date": p["date"], "raw_pe": p["pe"],
+                    "pe": p["pe"] if linked is None else linked[n]}
+                   for n, p in enumerate(points)],
         "bill_yield_pct": rate,
         "bill_as_of": opportunity.get("as_of"),
         "yield_gap_pct": round(now["earnings_yield_pct"] - rate, 2),

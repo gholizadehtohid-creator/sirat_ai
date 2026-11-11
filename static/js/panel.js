@@ -2850,10 +2850,27 @@ function renderPortfolio(rep) {
     ? "موتور سوئینگ (v2)"
     : "موتور ترکیبی (v1)";
 
-  banner("portfolioStatus", "portfolioStatusText", "is-live",
-    `<strong>${totals.positions} موقعیت در ${totals.sectors} صنعت.</strong> ` +
+  // The basket's own tests come first, in amber: it is the most concrete card
+  // on the page and its record is the worst (found 2026-11-11 -- the only
+  // caution used to be "(معامله‌ی کاغذی)" in the title and a folded note on
+  // another tab).
+  const record = (rep.track_record && rep.track_record.windows) || [];
+  const recordText = record.length
+    ? "<strong>کارنامه‌ی آزمون همین روش:</strong> " + record.map(w => {
+        const [from, to] = String(w.window).split("..");
+        return `${faDay(from, true)} تا ${faDay(to, true)}: سبد ${signed(w.basket_pct, 1, "٪")} ` +
+               `در برابر شاخص کل ${signed(w.tedpix_pct, 1, "٪")}` +
+               (w.risk_free_pct != null ? ` و اوراق ${signed(w.risk_free_pct, 1, "٪")}` : "");
+      }).join("؛ ") +
+      `. انتخاب سهم در آزمون بهتر از انتخاب تصادفی نبود (صدک ${record.map(w => num(w.selection_percentile, 0)).join(" و ")}). ` +
+      "این فهرست نامزدهای بررسی است، نه توصیه‌ی خرید؛ نگه‌داشتن خود بازار و طلا در آزمون‌ها نتیجه‌ی بهتری داشته است.<br>"
+    : "";
+  banner("portfolioStatus", "portfolioStatusText", record.length ? "" : "is-live",
+    recordText +
+    `<strong>${totals.positions} موقعیت در ${totals.sectors} صنعت (کاغذی).</strong> ` +
     `${basket.candidates} نماد به حد نصاب امتیاز ${settings.min_score} رسیدند. ` +
-    `ریسک کل اگر همه‌ی حد ضررها فعال شوند: ${totals.total_risk_pct}٪ سرمایه. ` +
+    `ریسک کل اگر همه‌ی حد ضررها در قیمت خودشان اجرا شوند: دست‌کم ${totals.total_risk_pct}٪ سرمایه ` +
+    "(در صف فروش و چند روز منفی پشت سر هم، زیان واقعی بیشتر است). " +
     `<span class="hint-inline">— ${engine}</span>`);
 
   const vol = riskRep.volatility || {};
@@ -3983,8 +4000,12 @@ function renderValuation(rep) {
     return;
   }
   const now = rep.now || {};
+  // The level comparable with history is the LINKED one (constant
+  // composition); the raw aggregate shifts whenever the set of companies
+  // with a usable profit changes (489 -> 423 between 10-10 and 11-08).
+  const pe = now.pe;
   tiles("valuationKpis", [
-    { k: "P/E کل بازار", v: num(now.pe, 1),
+    { k: "P/E کل بازار", v: num(pe, 1),
       sub: `${num(now.companies, 0)} شرکت — ${now.date ? faDay(now.date, true) : ""}` },
     { k: "صدک در تاریخچه", v: `${num(rep.percentile, 0)}`,
       sub: `${valuationWord(rep.percentile)} (از ${faDay(rep.since, true)})` },
@@ -3994,7 +4015,8 @@ function renderValuation(rep) {
       sub: `اخزا ${num(rep.bill_yield_pct, 1)}٪ — فاصله ${signed(rep.yield_gap_pct, 1, "")} واحد` },
   ]);
   const data = (rep.series || []).map(p => ({
-    date: p.date, pe: p.pe, median: rep.median_pe, p20: rep.p20_pe, p80: rep.p80_pe,
+    date: p.date, pe: p.pe,
+    median: rep.median_pe, p20: rep.p20_pe, p80: rep.p80_pe,
   }));
   lineChart($("valuationChart"), {
     data, xKey: "date", height: 220,
@@ -4011,11 +4033,13 @@ function renderValuation(rep) {
   // straight, "cheaper than 15%" makes the reader do the subtraction.
   const cheaper = rep.percentile <= 50;
   banner("valuationStatus", "valuationStatusText", "is-live",
-    `بازار با P/E ${num(now.pe, 1)} ${valuationWord(rep.percentile)} است: ` +
+    `بازار با P/E ${num(pe, 1)} ${valuationWord(rep.percentile)} است: ` +
     `${cheaper ? "ارزان‌تر" : "گران‌تر"} از ` +
     `${num(cheaper ? 100 - rep.percentile : rep.percentile, 0)}٪ ماه‌های ` +
     `${faDay(rep.since, true)} تا امروز. ` +
     "زمینه‌ای برای تصمیم تخصیص، نه سیگنال آزموده‌شده." +
+    (rep.linked ? " تاریخچه با ترکیب ثابت ساخته شده: هر ماه با ماه قبل فقط روی شرکت‌های " +
+      "مشترک مقایسه شده تا ورود و خروج شرکت‌ها از شمارش، عدد را جابه‌جا نکند." : "") +
     // Coverage is part of the number: a reader comparing 423 companies today
     // with 489 last month should see it, not infer it.
     (now.left_out != null

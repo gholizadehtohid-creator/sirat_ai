@@ -2615,6 +2615,29 @@ def save_snapshot(df):
 
     conn = _connect()
 
+    # A pre-open watch (before 09:00) carries today's price band and state
+    # but no trading at all: every volume and value is 0. Replacing the last
+    # session's snapshot with it wiped the traded values the fund list, the
+    # allocation's suggested funds and the bill check read, so "امروز چه
+    # کنم؟" came back empty every morning -- exactly when a manual trader
+    # plans the day (found 2026-11-11: 2,506 rows captured 07:00, none
+    # traded). Such a watch keeps each name's last-session volume, value and
+    # trades; prices, band and state are the new watch's.
+    volume_at = columns.index("volume")
+    if rows and not any((r[volume_at] or 0) > 0 for r in rows):
+        held = {str(r[0]): r[1:] for r in conn.execute(
+            "SELECT ins_code, volume, value, trades FROM market_snapshot")}
+        value_at, trades_at = columns.index("value"), columns.index("trades")
+        merged = []
+        for r in rows:
+            last = held.get(str(r[0]))
+            if last and (last[0] or 0) > 0:
+                r = list(r)
+                r[volume_at], r[value_at], r[trades_at] = last
+                r = tuple(r)
+            merged.append(r)
+        rows = merged
+
     conn.execute("DELETE FROM market_snapshot")
 
     conn.executemany(f"""
