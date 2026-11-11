@@ -945,13 +945,17 @@ def superseded_listings():
                 "SELECT MIN(date) FROM price_history WHERE ins_code = ?",
                 (code,)).fetchone()[0]
 
+            # Only the codes that came AFTER this one: a predecessor's
+            # frozen zero-volume tail, running past this code's first
+            # session, is not the company trading elsewhere, and it cut a
+            # middle listing at its own second session (third review).
             until = None
             if first and others:
-                until = conn.execute(
-                    "SELECT MIN(date) FROM price_history "
-                    "WHERE ins_code IN (%s) AND date > ?"
-                    % ",".join("?" for _ in others),
-                    others + [first]).fetchone()[0]
+                starts = [conn.execute(
+                    "SELECT MIN(date) FROM price_history WHERE ins_code = ?",
+                    (other,)).fetchone()[0] for other in others]
+                later = [s for s in starts if s and s > first]
+                until = min(later) if later else None
 
             out[code] = {
                 "successor": heirs[0] if len(heirs) == 1 else None,

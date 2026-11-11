@@ -497,14 +497,18 @@ class SectorIndexTests(MoveFixture):
         # A and B: NEW has too few sessions for a moving average yet.
         self.assertEqual(sector["breadth"]["measured"], 2)
 
-    def test_a_halted_old_code_stays_out_as_it_always_did(self):
+    def test_a_halted_old_code_keeps_only_its_traded_sessions(self):
+        # It used to leave the index once its own halt clock ran out (the
+        # third review): its live member is halt-filtered already, so it
+        # stays, cut at its last real trade -- the frozen tail stays out.
         self.execute("UPDATE price_history SET volume = 0 "
                      "WHERE ins_code = 'OLD' AND date > ?",
                      (str(self.dates[150].date()),))
 
         _, seen = self.analyse()
 
-        self.assertNotIn("OLD", seen)
+        self.assertIn("OLD", seen)
+        self.assertEqual(seen["OLD"]["date"].max(), self.dates[150])
 
 
 class BacktestUniverseTests(MoveFixture):
@@ -556,6 +560,78 @@ class BacktestUniverseTests(MoveFixture):
                             for t in bounded))
         self.assertTrue(any(pd.Timestamp(t["signal_date"]) >= cut
                             for t in unbounded))
+
+
+
+# ---- the third review (2026-11-11) ------------------------------------------
+
+class TwoMovesWithAFrozenTail(MoveFixture):
+    """FIRST -> OLD -> NEW, where FIRST's frozen zero-volume prints run past
+    OLD's first session -- the shape فاسمین's old code has."""
+
+    def setUp(self):
+        MoveFixture.setUp(self)
+        database.save_instruments([
+            {"ins_code": "FIRST", "symbol_fa": "مو", "isin": "IRO3MOVD0001",
+             "kind": "superseded", "board": "farabourse", "is_equity": 0,
+             "sector_name": SECTOR}])
+        self.execute("DELETE FROM price_history WHERE ins_code = 'OLD' "
+                     "AND date < ?", (str(self.dates[100].date()),))
+        self.save_bars("FIRST", [700.0] * 130, [100.0] * 100 + [0.0] * 30)
+
+    def test_a_predecessors_frozen_tail_does_not_end_the_middle_listing(self):
+        listings = database.superseded_listings()
+        self.assertEqual(listings["OLD"]["until"],
+                         str(self.dates[NEW_FIRST].date()))
+
+    def test_the_middle_listing_stays_while_it_is_the_company(self):
+        data = self.data()
+        data.instruments()
+        self.assertEqual(data.stale_sessions("OLD", self.dates[150]), 0)
+
+
+class CarryOrderTests(MoveFixture):
+    """A release the live code holds itself, public before its first bar,
+    against an older carried one: the newer must still win."""
+
+    def test_the_newest_public_filing_wins_after_the_carry(self):
+        self.file("OLD", "old_annual", "1403/12/29", session=100)
+        self.file("NEW", "new_q1", "1404/03/31", session=190, months=3)
+        newest = self.data().fundamental_as_of("NEW", self.dates[NEW_FIRST + 5])
+        self.assertEqual(newest["tracing_no"], "new_q1")
+
+    def test_the_audited_release_of_a_period_still_wins(self):
+        self.file("OLD", "unaudited", "1403/12/29", session=100,
+                  items={"capital": 1e9, "revenue": 1.0})
+        self.file("NEW", "audited", "1403/12/29", session=150, audited=True,
+                  items={"capital": 1e9, "revenue": 2.0})
+        history = self.data().fundamental_history("NEW",
+                                                  self.dates[NEW_FIRST + 5])
+        self.assertEqual([r["tracing_no"] for r in history], ["audited"])
+
+
+class SectorIndexAfterTheOldCodesHalt(MoveFixture):
+    """The company's pre-move sessions stay in the derived index after the
+    retired code's own 30-day halt clock has run out."""
+
+    sessions = 240
+
+    def test_old_sessions_stay_once_the_old_code_is_halted(self):
+        import sectors
+
+        seen = {}
+        build = sectors.build_sector_index
+
+        def spy(histories, bars=None):
+            seen.update(histories)
+            return build(histories, bars=bars)
+
+        self.assertIn("OLD", database.halted_codes())
+        with mock.patch.object(sectors, "build_sector_index", side_effect=spy):
+            sectors.analyse_all(min_members=1)
+        self.assertIn("OLD", seen)
+        self.assertLessEqual(seen["OLD"]["date"].max(),
+                             self.dates[OLD_LAST])
 
 
 if __name__ == "__main__":

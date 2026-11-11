@@ -190,11 +190,14 @@ def analyse_sector(name, group, snapshot_by_code, info_by_code,
 
         # Its retired listing's sessions, for the index alone (analyse_all):
         # the newest `bars` of them before the company's first bar elsewhere.
-        for old, until in member.get("retired", ()):
+        for old, until, last_traded in member.get("retired", ()):
+            # Up to its last real trade: the frozen zero-volume tail after a
+            # move is no session of the company's.
+            cuts = [pd.Timestamp(stamp) for stamp in (
+                (pd.Timestamp(until) - pd.Timedelta(days=1)) if until else None,
+                last_traded) if stamp is not None]
             past = database.load_history_by_inscode(
-                old, limit=bars,
-                before=(pd.Timestamp(until) - pd.Timedelta(days=1))
-                if until else None)
+                old, limit=bars, before=min(cuts) if cuts else None)
             if past is not None and not past.empty:
                 retired[old] = (ins_code, past)
 
@@ -396,6 +399,19 @@ def _breadth(histories, params):
     }
 
 
+def _last_traded(ins_code):
+    """The newest session `ins_code` traded on (volume > 0), or None."""
+
+    conn = database._connect()
+    try:
+        found = conn.execute(
+            "SELECT MAX(date) FROM price_history WHERE ins_code = ? "
+            "AND volume > 0", (str(ins_code),)).fetchone()
+    finally:
+        conn.close()
+    return found[0] if found and found[0] else None
+
+
 def analyse_all(params=None, approve_score=None, bars=None, min_members=None,
                 progress=None):
     """Every sector with enough constituents to be worth aggregating."""
@@ -450,14 +466,18 @@ def analyse_all(params=None, approve_score=None, bars=None, min_members=None,
     # sessions are the company's history in the derived index, which chains
     # config.SECTOR_INDEX_BARS sessions of returns. Members are live codes
     # only, so the repair's retirement took those sessions out of the index
-    # at once (found 2026-11-11). Under the same halt rule as any code, and
-    # only before the company's first bar elsewhere (database.superseded_
-    # listings), so no session counts it twice.
+    # at once (found 2026-11-11). Only before the company's first bar
+    # elsewhere (database.superseded_listings), so no session counts it
+    # twice, and only up to its own last trade. Attached whenever its live
+    # member is (that member is halt-filtered already): the retired code's
+    # own halt clock runs out 30 days after the move, which took the
+    # company's pre-move returns out of the index a month later -- 16 of the
+    # 17 moves were past that (third review, 2026-11-11).
     retired = {}
     for code, moved in database.superseded_listings().items():
-        if moved["successor"] and code not in halted:
+        if moved["successor"]:
             retired.setdefault(moved["successor"], []).append(
-                (code, moved["until"]))
+                (code, moved["until"], _last_traded(code)))
 
     for group in grouped.values():
         group["members"] = [m for m in group["members"]

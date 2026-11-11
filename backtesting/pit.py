@@ -638,17 +638,20 @@ class PointInTimeData(object):
             held = {(r["tracing_no"], r["period_end"], r["period_months"])
                     for r in own}
 
-            carried = [
-                dict(record, visible_from=max(record["visible_from"], until))
-                for record in out[old]
-                if (record["tracing_no"], record["period_end"],
-                    record["period_months"]) not in held
-            ]
+            carried = [record for record in out[old]
+                       if (record["tracing_no"], record["period_end"],
+                           record["period_months"]) not in held]
 
-            # Stable, on the session alone: the retired code's releases keep
-            # their own order (older first, so the later release of a period
-            # still wins), and come before the live code's on a tie.
-            out[heir] = sorted(carried + own, key=lambda r: r["visible_from"])
+            # Both sides from `until` (the live code has no bar before it),
+            # ordered by when each was really public: a release the live
+            # code holds from before `until` -- codal_sync re-keys a retired
+            # code's letters to the live one -- is still newer than an older
+            # carried one and must stay after it, or the older release wins
+            # its period (third review, 2026-11-11).
+            merged = [(max(r["visible_from"], until), r["visible_from"], n, r)
+                      for n, r in enumerate(carried + own)]
+            merged.sort(key=lambda t: (t[0], t[1], t[2]))
+            out[heir] = [dict(r, visible_from=v) for v, _, _, r in merged]
 
     def _first_session_after(self, calendar, stamp, lag_sessions=0):
         """First session whose CLOSE is at or after `stamp`, plus a lag.

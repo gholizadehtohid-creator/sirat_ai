@@ -811,6 +811,47 @@ class IncrementalHistoryTests(unittest.TestCase):
         self.assertEqual(stats["unasked"], 0)
         self.assertTrue(stats["ok"])
 
+    def test_a_sample_of_one_does_not_release_the_sweep(self):
+        """One name on the watch makes a one-request sample; its single
+        live answer met _live_needed(1) and released every two-behind name
+        at a host letting one request in twelve through (third review,
+        2026-11-11: 43 requests, 40 failed, ok True). The run tops up to the
+        canary before it is judged."""
+
+        behind = self.add_two_behind(40)
+        provider = SheddingLoad(
+            watch={"1": watch_row()},
+            history={c: self.full_history() for c in ["1", "2", "3"] + behind},
+            live=1)
+        stats = self.run_with(provider)
+
+        asked = [c for codes, _ in provider.requests for c in codes]
+        self.assertEqual(len(asked), seed_import.HISTORY_CANARY)
+        self.assertGreater(stats["unasked"], 0)
+        self.assertFalse(stats["ok"])
+
+    def test_a_short_unverifiable_sample_is_the_only_request_of_a_retry(self):
+        """Four one-behind names, one live answer: unverifiable. The rest of
+        the run is not asked -- without that rule the canary tops a short
+        sample up to twelve on every retry."""
+
+        traders = ["1", "2", "3"] + self.add_traders(1)
+        behind = self.add_two_behind(20)
+        provider = SheddingLoad(
+            watch={c: watch_row() for c in traders},
+            history={c: self.full_history() for c in traders + behind},
+            live=1)
+
+        for attempt in (1, 2):
+            provider.requests = []
+            stats = self.run_with(provider)
+
+            self.assertEqual(len(provider.requests), 1, attempt)
+            self.assertEqual(sorted(provider.requests[0][0]), sorted(traders))
+            self.assertEqual(stats["unasked"], len(behind))
+            self.assertEqual(stats["deferred"], len(traders))
+            self.assertFalse(stats["ok"])
+
     def test_the_canary_and_the_sample_share_one_bar(self):
         self.assertEqual([seed_import._live_needed(n)
                           for n in (1, 2, 3, 11, 12, 13, 40)],

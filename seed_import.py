@@ -1331,7 +1331,13 @@ def update_history(full_count=300, verbose=True, progress=None):
     # one per name. As first written one live answer released the rest: a
     # host shedding load that let one request in twelve through got the
     # whole sweep.
-    if work and not answering():
+    # Judged only once the run has asked HISTORY_CANARY names: a sample that
+    # decided on one or two names (an evening when only those were a session
+    # behind) passed the bar on a single live answer and released ~800
+    # failing requests at a host letting one in twelve through (third review,
+    # 2026-11-11). Topping up to the canary costs a healthy host nothing:
+    # those names are fetched anyway.
+    if work and (probe["asked"] < HISTORY_CANARY or not answering()):
         work.sort(key=lambda item: traded.get(item[0], ""), reverse=True)
         room = max(0, HISTORY_CANARY - probe["asked"])
         fetch(work[:room])
