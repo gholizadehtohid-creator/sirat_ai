@@ -291,3 +291,30 @@ class TestLatestPortfolioSkipsAMisread(unittest.TestCase):
         finally:
             database.DATABASE_NAME = original
             os.unlink(path)
+
+
+class TestImpossibleStake(unittest.TestCase):
+    """زکوثر 1405/07 listed a holding at ten times its shares (2026-11-12)."""
+
+    @staticmethod
+    def sheet(shares_held):
+        columns = pd.MultiIndex.from_tuples([
+            ("نام شرکت", "نام شرکت"),
+            ("سرمایه (میلیون ریال)", "سرمایه (میلیون ریال)"),
+            ("ارزش اسمی هر سهم (ریال)", "ارزش اسمی هر سهم (ریال)"),
+            ("ابتدای دوره", "تعداد سهام"),
+            ("تغییرات", "تعداد سهام"),
+            ("انتهای دوره", "بهای تمام شده"),
+            ("انتهای دوره", "ارزش بازار"),
+        ])
+        rows = [["کشت و صنعت", "2,404,787", "1,000", shares_held, "0", "100", "200"],
+                ["جمع", None, None, None, None, "100", "200"]]
+        return pd.DataFrame(rows, columns=columns)
+
+    def test_a_stake_over_one_and_a_half_times_the_company_is_named(self):
+        self.assertEqual(nav._inconsistent_rows(self.sheet("17,576,613,100"), 1), 1)
+
+    def test_a_large_but_possible_stake_is_not(self):
+        # 73.1%, and 121% (a capital column older than the investee's raise)
+        self.assertEqual(nav._inconsistent_rows(self.sheet("1,757,661,310"), 1), 0)
+        self.assertEqual(nav._inconsistent_rows(self.sheet("2,920,000,000"), 1), 0)

@@ -138,6 +138,15 @@ OTHER_OPERATING_SHARE = 0.3
 # A portfolio filing (ن-31) older than this many months prices NAV on that
 # month's market; past it the listed holdings are carried at the index's move.
 NAV_STALE_MONTHS = 1
+# An operating company gets a P/NAV only when its listed portfolio is at
+# least this share of its market value: a holding listed under its
+# subsidiaries' industry, not a manufacturer with a few shares on the side.
+HOLDING_LISTED_SHARE = 0.2
+# The parent's equity this many months before the portfolio is named.
+EQUITY_GAP_MONTHS = 6
+# Today's share count this much above the statement's capital is a raise
+# since the statement.
+RAISE_TOLERANCE = 0.05
 PUBLISHED_PE_BAND = (0.67, 1.5)
 EARLY_MONTHS = 4
 EARLY_JUMP = 1.5
@@ -236,6 +245,17 @@ def choose_basis(periods, today=None):
         # the separate one. Named apart so the gap is not read as no data.
         return separate, "separate_fallback"
     return consolidated, "consolidated"
+
+
+def _months_between(earlier, later):
+    """Whole months from one Jalali 'YYYY/MM/..' to another, or None."""
+
+    try:
+        y1, m1 = (int(p) for p in str(earlier).split("/")[:2])
+        y2, m2 = (int(p) for p in str(later).split("/")[:2])
+    except (TypeError, ValueError):
+        return None
+    return (y2 - y1) * 12 + (m2 - m1)
 
 
 def _age_months(period_end, today=None):
@@ -615,7 +635,18 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # holdings the exchange lists under their subsidiaries' industries
     # (cement, mining, pharma, autos), and their P/NAV was never computed
     # (2026-11-11). Their ranking stays on earnings; P/NAV is shown beside.
-    if portfolio:
+    # An operating company with a small listed portfolio is not valued on
+    # it: حکشتی (a shipping line), خکرمان (a car maker, 1.3% of its value
+    # listed) and وثخوز (a developer) read P/NAV 3.8-5.7 as book equity (the
+    # NAV verification, 2026-11-12). A holding listed under its subsidiaries'
+    # industry is (سیدکو, تاصیکو): its listed portfolio is a large part of
+    # what it is worth.
+    nav_notes = []
+    listed_value = _f((portfolio or {}).get("listed_market"))
+    holding_like = kind == FINANCIAL or (
+        market_cap and listed_value and
+        listed_value >= HOLDING_LISTED_SHARE * market_cap)
+    if portfolio and holding_like:
         import nav as nav_module
         # The book equity the portfolio's gains are added to is the separate
         # statement NEAREST the portfolio's date: equity from 1405/06 on top of
@@ -626,6 +657,29 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             _f(own["items"].get("equity"))
         nav_result = nav_module.net_asset_value(portfolio, own_equity)
         price_to_nav = nav_module.price_to_nav(market_cap, nav_result)
+        # Three reasons the figure may not be what it seems (the NAV
+        # verification of 2026-11-12 recomputed 32 portfolios from the raw
+        # filings: 25 agreed, these were the rest).
+        if (portfolio.get("inconsistent_rows") or 0) > 0:
+            nav_notes.append(
+                "گزارش پرتفوی ناسازگار است: در %d ردیف سهم مالکیت بیش از ۱۰۰٪ "
+                "سرمایه‌ی شرکتِ سرمایه‌پذیر است (خطای تایپی در گزارش)؛ P/NAV "
+                "حساب نشد" % portfolio["inconsistent_rows"])
+            price_to_nav = None
+        gap = _months_between(own.get("end"), portfolio.get("period_end"))
+        if price_to_nav is not None and gap is not None and gap > EQUITY_GAP_MONTHS:
+            nav_notes.append(
+                "حقوق صاحبان سهام شرکت مادر از دوره‌ی %s است، %d ماه پیش از "
+                "پرتفوی (صورت جداگانه‌ی تازه‌تر ذخیره نشده)؛ P/NAV تقریبی است"
+                % (own.get("end"), gap))
+        own_capital = _f(own["items"].get("capital"))
+        if price_to_nav is not None and shares and own_capital and \
+                shares > own_capital / PAR_VALUE * (1 + RAISE_TOLERANCE):
+            nav_notes.append(
+                "تعداد سهم امروز %.0f٪ بیشتر از سرمایه‌ی صورت مالی است (افزایش "
+                "سرمایه پس از دوره)؛ اگر نقدی بوده، پولش هنوز در حقوق صاحبان "
+                "سهام نیست و P/NAV بیش از واقع است"
+                % ((shares / (own_capital / PAR_VALUE) - 1) * 100))
         # 130 of 141 portfolios were 1405/04/31 while TEDPIX had risen 72.5%
         # since: every P/NAV was struck on July's prices, by a different
         # amount per name, so the list's ORDER was wrong too. Past
@@ -801,6 +855,11 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if kind == FINANCIAL:
         flag("بانک، بیمه، سرمایه‌گذاری یا هلدینگ: P/E و رشد فروش معیار "
              "ارزش‌گذاری نیست؛ با P/NAV یا P/B و ROE سنجیده می‌شود")
+        # Valued on NAV, so what weakens the NAV is a warning on the row; an
+        # operating holding's notes stay beside its P/NAV, not among the
+        # warnings its earnings ranking counts.
+        for note in nav_notes:
+            flag(note)
         if nav_stale:
             flag("پرتفوی ثبت‌شده مال %s است و شاخص کل از آن زمان %s تغییر کرده؛ "
                  "P/NAV به قیمت‌های آن روز %.2f است%s"
@@ -858,6 +917,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                       "price_to_nav_est": _round(price_to_nav_est),
                       "nav_stale": nav_stale,
                       "nav_index_move_pct": _pct(nav_move),
+                      "nav_notes": nav_notes,
                       "nav": (nav_result or {}).get("nav"),
                       "nav_complete": (nav_result or {}).get("complete"),
                       "nav_period": (portfolio or {}).get("period_end")

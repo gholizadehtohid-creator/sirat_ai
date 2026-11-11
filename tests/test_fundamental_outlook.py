@@ -476,3 +476,35 @@ class ScreenDoubtfulTests(unittest.TestCase):
         self.assertEqual([r["symbol"] for r in s["ranked"]], ["s1"])
         self.assertEqual(s["excluded"]["doubtful"], 1)
         self.assertEqual(s["doubtful"][0]["reasons"], ["سود غیرعملیاتی"])
+
+
+class NavScopeTests(unittest.TestCase):
+    """The NAV verification of 2026-11-12: who gets a P/NAV, and its caveats."""
+
+    rows = [basis_period("1405/06/31", 6, 50 * B, 20 * B, False)]
+
+    def analyse(self, sector, listed_market, shares=1e9, price=1_000, **portfolio):
+        pf = {"listed_market": listed_market, "listed_cost": listed_market / 4,
+              "listed_unrealised": listed_market * 0.75, "unlisted_cost": 0,
+              "holdings": 5, "period_end": "1405/07/30"}
+        pf.update(portfolio)
+        return fo.analyse("x", price=price, rows=self.rows, today=(1405, 8, 14),
+                          sector=sector, shares=shares, portfolio=pf, opportunity=BILLS)
+
+    def test_a_manufacturer_with_a_few_listed_shares_gets_no_pnav(self):
+        r = self.analyse("خودرو و ساخت قطعات", listed_market=10 * B)      # 1% of 1,000bn
+        self.assertIsNone(r["valuation"]["price_to_nav"])
+
+    def test_a_holding_listed_under_its_subsidiaries_industry_does(self):
+        r = self.analyse("سيمان، آهك و گچ", listed_market=800 * B)
+        self.assertIsNotNone(r["valuation"]["price_to_nav"])
+
+    def test_an_impossible_stake_withholds_the_pnav_and_says_so(self):
+        r = self.analyse("سرمايه گذاريها", listed_market=800 * B, inconsistent_rows=1)
+        self.assertIsNone(r["valuation"]["price_to_nav"])
+        self.assertTrue(any("ناسازگار" in n for n in r["valuation"]["nav_notes"]))
+
+    def test_a_raise_since_the_statement_is_named(self):
+        # capital 100bn rials = 100m shares; the exchange counts 150m.
+        r = self.analyse("سرمايه گذاريها", listed_market=80 * B, shares=1.5e8)
+        self.assertTrue(any("افزایش" in n for n in r["valuation"]["nav_notes"]))

@@ -519,6 +519,12 @@ def _add_missing_columns(conn):
         "codal_status": [
             ("error_kind", "TEXT"),
         ],
+        # Holding rows whose stake reads over 100% of the investee: a typo
+        # in the filing (زکوثر 1405/07: one row ten times its shares), which
+        # made a NAV four times too high (2026-11-12).
+        "codal_portfolio": [
+            ("inconsistent_rows", "INTEGER"),
+        ],
     }
 
     for table, columns in wanted.items():
@@ -1716,15 +1722,17 @@ def save_codal_portfolio(ins_code, record):
     cursor = conn.execute("""
     INSERT INTO codal_portfolio
         (ins_code, period_end, tracing_no, title, listed_cost, listed_market,
-         listed_unrealised, unlisted_cost, holdings, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         listed_unrealised, unlisted_cost, holdings, updated_at,
+         inconsistent_rows)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (ins_code, period_end) DO UPDATE SET
         tracing_no = excluded.tracing_no, title = excluded.title,
         listed_cost = excluded.listed_cost,
         listed_market = excluded.listed_market,
         listed_unrealised = excluded.listed_unrealised,
         unlisted_cost = excluded.unlisted_cost,
-        holdings = excluded.holdings, updated_at = excluded.updated_at
+        holdings = excluded.holdings, updated_at = excluded.updated_at,
+        inconsistent_rows = excluded.inconsistent_rows
     WHERE %s
     """ % _not_older("codal_portfolio"), (
         str(ins_code), record["period_end"], tracing_no,
@@ -1732,6 +1740,7 @@ def save_codal_portfolio(ins_code, record):
         record.get("listed_market"), record.get("listed_unrealised"),
         record.get("unlisted_cost"), record.get("holdings"),
         datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        record.get("inconsistent_rows"),
         published, published,
     ))
 
@@ -1764,7 +1773,7 @@ def load_codal_portfolio_latest(ins_codes=None):
     rows = conn.execute(f"""
         SELECT ins_code, period_end, tracing_no, title, listed_cost,
                listed_market, listed_unrealised, unlisted_cost, holdings,
-               updated_at
+               updated_at, inconsistent_rows
         FROM (
             SELECT *, ROW_NUMBER() OVER (
                 PARTITION BY ins_code ORDER BY
@@ -1798,6 +1807,7 @@ def load_codal_portfolio_latest(ins_codes=None):
             "unlisted_cost": row[7],
             "holdings": row[8],
             "updated_at": row[9],
+            "inconsistent_rows": row[10],
         }
 
     return out

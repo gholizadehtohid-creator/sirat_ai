@@ -3843,6 +3843,8 @@ function renderOutlookDetail(r) {
       `${num(v.price_to_nav, 2)} — پرتفوی ${esc(v.nav_period || "")}` +
       (v.nav_stale && v.price_to_nav_est != null
         ? ` (کهنه؛ با حرکت شاخص حدود ${num(v.price_to_nav_est, 2)}، تخمینی)` : "") +
+      ((v.nav_notes || []).length
+        ? `<br><span class="hint">⚠ ${(v.nav_notes || []).map(esc).join("<br>⚠ ")}</span>` : "") +
       (v.nav_complete === false ? " (سهام غیربورسی به بهای تمام‌شده؛ NAV کف است)" : "")],
     ["معاملات ۲۰ جلسه‌ی اخیر", tradingCell(r.trading)],
     ["ارزش بازار", v.market_cap == null ? "—" :

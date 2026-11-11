@@ -350,7 +350,7 @@ def run(hours=DEFAULT_HOURS, limit=DEFAULT_LIMIT, verbose=True, client=None):
     return totals
 
 
-def reparse_archived(verbose=True):
+def reparse_archived(verbose=True, only_empty=True):
     """Re-read, from the raw archive, every stored portfolio that read as
     empty -- no listed cost, value or gain under holdings. No request.
 
@@ -368,8 +368,9 @@ def reparse_archived(verbose=True):
     conn = database._connect()
     rows = conn.execute(
         "SELECT ins_code, period_end, tracing_no, title FROM codal_portfolio "
-        "WHERE COALESCE(listed_cost, 0) = 0 AND COALESCE(listed_market, 0) = 0 "
-        "AND COALESCE(listed_unrealised, 0) = 0 AND COALESCE(holdings, 0) > 0"
+        + ("" if not only_empty else
+           "WHERE COALESCE(listed_cost, 0) = 0 AND COALESCE(listed_market, 0) = 0 "
+           "AND COALESCE(listed_unrealised, 0) = 0 AND COALESCE(holdings, 0) > 0")
     ).fetchall()
     conn.close()
 
@@ -398,9 +399,11 @@ def reparse_archived(verbose=True):
         if database.save_codal_portfolio(code, record):
             out["repaired"] += 1
     if verbose:
-        print("portfolio: %(empty)d read as empty -- %(repaired)d repaired from "
-              "the archive, %(no_archive)d without an archived copy, "
-              "%(still_empty)d still empty" % out, flush=True)
+        print(("portfolio: %(empty)d read as empty" if only_empty else
+               "portfolio: %(empty)d re-read") +
+              " -- %(repaired)d rewritten from the archive, %(no_archive)d "
+              "without an archived copy, %(still_empty)d still empty" % out,
+              flush=True)
     return out
 
 
@@ -429,13 +432,16 @@ def main(argv=None):
     parser.add_argument("--reparse-archived", action="store_true",
                         help="re-read empty-looking portfolios from the raw "
                              "archive (no request)")
+    parser.add_argument("--all", action="store_true",
+                        help="with --reparse-archived: every archived "
+                             "portfolio, not only the empty-looking ones")
     args = parser.parse_args(argv)
 
     if args.report:
         report()
         return 0
     if args.reparse_archived:
-        reparse_archived()
+        reparse_archived(only_empty=not args.all)
         report()
         return 0
 

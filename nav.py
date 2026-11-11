@@ -172,6 +172,51 @@ def _rows_sum(frame, column, upto):
     return total if seen else None
 
 
+STAKE_IMPOSSIBLE = 1.5
+
+
+def _inconsistent_rows(frame, upto):
+    """Holding rows whose stake is over STAKE_IMPOSSIBLE of the investee's shares.
+
+    Shares held (start + change, or the end count) against the investee's
+    shares outstanding, from the row's own capital (million rials) and par.
+    A stake over 100% is a typo in the filing -- زکوثر's 1405/07 report
+    listed زشریف at ten times its shares, a 731% stake, and its NAV read four
+    times too high (the NAV verification, 2026-11-12). Rows without the
+    columns are not judged.
+    """
+
+    if upto is None:
+        return 0
+    capital = _column(frame, "سرمایه", "سرمایه")
+    par = _column(frame, "ارزش اسمی", "ارزش اسمی")
+    start = _column(frame, "ابتدای دوره", "تعداد سهام")
+    change = _column(frame, "تغییرات", "تعداد سهام")
+    end = _column(frame, END_OF_PERIOD, "تعداد سهام")
+    if capital is None or par is None or (end is None and start is None):
+        return 0
+    first = frame.columns[0]
+    bad = 0
+    for i in range(upto):
+        label = _text(frame.iloc[i][first])
+        if not label or label.startswith("جمع"):
+            continue
+        cap = _value_at(frame, i, capital)
+        nominal = _value_at(frame, i, par)
+        held = _value_at(frame, i, end) if end is not None else None
+        if held is None and start is not None:
+            held = (_value_at(frame, i, start) or 0) +                 (_value_at(frame, i, change) or 0 if change is not None else 0)
+        if not cap or not nominal or not held:
+            continue
+        outstanding = cap * 1_000_000 / nominal
+        # 1.5, not 1.05: a row's capital column can predate the investee's
+        # own capital increase (میدکو's filing read its 82.6% stake as
+        # 121.5%), while a typo multiplies the stake (زکوثر: 731%).
+        if outstanding > 0 and held / outstanding > STAKE_IMPOSSIBLE:
+            bad += 1
+    return bad
+
+
 def _total_or_sum(frame, total, column):
     """The filed total, or the holdings' sum where the total reads zero.
 
@@ -258,6 +303,8 @@ def extract_portfolio(sheets):
             out["listed_unrealised"] = (market - cost) * scale
 
         out["has_market_value"] = out["listed_market"] is not None
+
+        out["inconsistent_rows"] = _inconsistent_rows(listed, total)
 
         # Holdings are the rows above the total that carry a company name.
         if total is not None:
