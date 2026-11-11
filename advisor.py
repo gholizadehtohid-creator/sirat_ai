@@ -304,12 +304,23 @@ def _run_v2(equity=None, size=None, max_per_sector=None, risk_pct=None,
     idle = equity - invested if equity else 0.0
 
     if equity and idle / equity >= 0.05:
+        # The rate quoted is the one every card quotes: the traded bills' own
+        # yield when it is known (43-44% on 2026-11-10), not the 23% policy
+        # rate -- four different hurdles across the panel was the review's
+        # complaint (2026-11-11).
+        try:
+            import opportunities
+            bill = (opportunities.remembered_bill_yield() or {}).get("yield_pct")
+        except Exception:                                   # noqa: BLE001
+            bill = None
         notes.append(
             "%.0f%% سرمایه (%s ریال) در سبد سهام نیست — آن را در صندوق درآمد "
-            "ثابت نگه دارید، نه در حساب کارگزاری؛ سود حدود %.0f%% سالانه "
-            "بدون ریسک بازار است."
+            "ثابت یا اوراق خزانه نگه دارید، نه در حساب کارگزاری؛ %s"
             % (idle / equity * 100.0, "{:,.0f}".format(idle),
-               config.RISK_FREE_RATE * 100.0))
+               ("اخزا اکنون حدود %.0f٪ سالانه بازده قطعی دارد." % bill)
+               if bill else
+               ("سود حدود %.0f٪ سالانه بدون ریسک بازار است."
+                % (config.RISK_FREE_RATE * 100.0))))
 
     policy = out.get("policy") or {}
 

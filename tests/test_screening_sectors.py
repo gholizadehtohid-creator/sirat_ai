@@ -109,7 +109,7 @@ class TestEarningsMultipleApplicability(unittest.TestCase):
         fraction, note = screening._score_profitability(metrics)
 
         self.assertIsNone(fraction)
-        self.assertIn("withheld", note)
+        self.assertIn("حساب نشد", note)
 
 
 class TestLossMakingGate(unittest.TestCase):

@@ -144,6 +144,28 @@ function fmt(v, digits = 1) {
   return v.toFixed(digits);
 }
 
+// An x label in the calendar the rest of the panel speaks. The series carry
+// ISO dates; printed as "26-11-10" they sat beside Jalali dates everywhere
+// else on the page (found 2026-11-11). Anything that is not an ISO date is
+// passed through, so non-date axes are unchanged.
+const FA_AXIS = (() => {
+  try {
+    return new Intl.DateTimeFormat("fa-IR-u-ca-persian",
+      { year: "2-digit", month: "2-digit", day: "2-digit", timeZone: "Asia/Tehran" });
+  } catch (_err) {
+    return null;
+  }
+})();
+
+export function axisDate(value) {
+  const text = String(value ?? "");
+  if (FA_AXIS && /^\d{4}-\d{2}-\d{2}/.test(text)) {
+    const day = new Date(text.slice(0, 10) + "T12:00:00Z");
+    if (!Number.isNaN(day.getTime())) return FA_AXIS.format(day);
+  }
+  return text.slice(2);
+}
+
 function axisText(parent, x, y, text, extra = {}) {
   const t = el("text", {
     x, y,
@@ -391,7 +413,7 @@ export function lineChart(container, opts) {
   const last = points.length - 1;
   points.forEach((d, i) => {
     if (i % every && !(i === last && i % every >= every / 2)) return;
-    axisText(svg, X(i), h - 10, String(d[xKey]).slice(2), { "text-anchor": "middle" });
+    axisText(svg, X(i), h - 10, (opts.xFormat || axisDate)(d[xKey]), { "text-anchor": "middle" });
   });
 
   el("line", {
@@ -645,7 +667,7 @@ export function areaLine(container, opts) {
     baseline = 100, format = (v) => fmt(v, 1), tooltip = null
   } = opts;
 
-  if (!data.length) { container.innerHTML = '<div class="empty">No trades to plot</div>'; return; }
+  if (!data.length) { container.innerHTML = '<div class="empty">معامله‌ای برای نمایش نیست</div>'; return; }
 
   const padL = 54, padR = 18, padT = 14, padB = 30;
   const width = Math.max(container.clientWidth || 520, 320);
@@ -678,7 +700,7 @@ export function areaLine(container, opts) {
     x1: padL, x2: padL + plotW, y1: beY, y2: beY,
     stroke: tok("--axis"), "stroke-width": 1
   }, svg);
-  axisText(svg, padL + plotW, beY - 6, "break-even", {
+  axisText(svg, padL + plotW, beY - 6, "سر به سر", {
     "text-anchor": "end", "font-size": 10.5
   });
 
@@ -711,7 +733,7 @@ export function areaLine(container, opts) {
   const every = Math.max(1, Math.ceil(data.length / 6));
   data.forEach((d, i) => {
     if (i % every && i !== data.length - 1) return;
-    axisText(svg, X(i), h - 10, String(d[xKey]).slice(2), { "text-anchor": "middle" });
+    axisText(svg, X(i), h - 10, (opts.xFormat || axisDate)(d[xKey]), { "text-anchor": "middle" });
   });
 
   const dot = el("circle", {

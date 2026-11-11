@@ -196,23 +196,23 @@ def _score_profitability(m):
     # Same objection as the valuation component: a yield computed on a
     # disposal gain is not a yield the holder can expect again.
     if not m.get("earnings_multiple_meaningful", True):
-        return None, (f"earnings yield {yield_pct:.1f}% withheld — "
-                      f"realised gains are not recurring earnings")
+        return None, (f"بازده سود {yield_pct:.1f}٪ حساب نشد — "
+                      f"سود فروش سرمایه‌گذاری تکرارشونده نیست")
 
     hurdle = config.RISK_FREE_RATE * 100
 
     ratio = yield_pct / hurdle if hurdle else 0
 
     if ratio >= 1.5:
-        return 1.0, f"earnings yield {yield_pct:.1f}% — well above the {hurdle:.0f}% rate"
+        return 1.0, f"بازده سود {yield_pct:.1f}٪ — بسیار بالاتر از نرخ سیاستی {hurdle:.0f}٪"
     if ratio >= 1.0:
-        return 0.8, f"earnings yield {yield_pct:.1f}% — beats the {hurdle:.0f}% rate"
+        return 0.8, f"بازده سود {yield_pct:.1f}٪ — بالاتر از نرخ سیاستی {hurdle:.0f}٪"
     if ratio >= 0.7:
-        return 0.5, f"earnings yield {yield_pct:.1f}% — near the {hurdle:.0f}% rate"
+        return 0.5, f"بازده سود {yield_pct:.1f}٪ — نزدیک نرخ سیاستی {hurdle:.0f}٪"
     if ratio >= 0.4:
-        return 0.25, f"earnings yield {yield_pct:.1f}% — below the {hurdle:.0f}% rate"
+        return 0.25, f"بازده سود {yield_pct:.1f}٪ — کمتر از نرخ سیاستی {hurdle:.0f}٪"
 
-    return 0.05, f"earnings yield {yield_pct:.1f}% — far below the {hurdle:.0f}% rate"
+    return 0.05, f"بازده سود {yield_pct:.1f}٪ — بسیار کمتر از نرخ سیاستی {hurdle:.0f}٪"
 
 
 def _score_liquidity(m):

@@ -2583,6 +2583,22 @@ def load_sector_members():
     return grouped
 
 
+def traded_sessions():
+    """{ins_code: sessions it traded on (volume > 0)} over price_history.
+
+    How long a name has really traded, which its first stored bar does not
+    say: most listings begin with a run of zero-volume bars. About 1 s.
+    """
+
+    conn = _connect()
+    try:
+        rows = conn.execute("SELECT ins_code, COUNT(*) FROM price_history "
+                            "WHERE volume > 0 GROUP BY ins_code").fetchall()
+    finally:
+        conn.close()
+    return {str(code): count for code, count in rows}
+
+
 def save_snapshot(df):
     """Replace the stored whole-market snapshot."""
 

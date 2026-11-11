@@ -465,6 +465,11 @@ def _current_from(frames, window):
     return str(pd.Timestamp(sessions[min(window, len(sessions)) - 1]).date())
 
 
+# Below this many traded sessions (price_history) a name is a new listing: left out of
+# the rankings (see analyse_market), not out of the market totals.
+YOUNG_LISTING_SESSIONS = 60
+
+
 def analyse_market(limit=None, top=15, window=None, min_sessions=None):
     """Whole-market flow from stored client-type data.
 
@@ -510,6 +515,7 @@ def analyse_market(limit=None, top=15, window=None, min_sessions=None):
     readings = []
     insufficient = 0
     stale = 0
+    traded = database.traded_sessions()
 
     for code in codes:
 
@@ -555,6 +561,15 @@ def analyse_market(limit=None, top=15, window=None, min_sessions=None):
             ),
             "sessions_positive": reading["sessions_positive"],
             "last_date": reading["last_date"],
+            # Fewer flow sessions than YOUNG_LISTING_SESSIONS: an initial
+            # offering, where retail "buying" is the allotment and the queue
+            # (فساپ led the strongest-power list at 1,052 on 2026-11-10 with 32
+            # retail buyers against 14,614 sellers; شتبریز, listed 10-28, was
+            # second). Kept in the market totals, left out of the rankings.
+            # Unknown (no bars stored) is not young: only a counted short
+            # history tags a name.
+            "young": str(code) in traded
+                     and traded[str(code)] < YOUNG_LISTING_SESSIONS,
         })
 
     # A share that traded 40 million rials all week can post a +90% net figure
@@ -564,8 +579,10 @@ def analyse_market(limit=None, top=15, window=None, min_sessions=None):
     floor = config.MIN_DAILY_VALUE * window
 
     liquid = [row for row in scored if row["turnover"] >= floor]
+    young = sum(1 for row in liquid if row["young"])
+    seasoned = [row for row in liquid if not row["young"]]
 
-    ranked = sorted(liquid, key=lambda r: r["net_pct"], reverse=True)
+    ranked = sorted(seasoned, key=lambda r: r["net_pct"], reverse=True)
 
     coverage = database.client_type_coverage()
 
@@ -584,6 +601,7 @@ def analyse_market(limit=None, top=15, window=None, min_sessions=None):
             "insufficient": insufficient,
             "halted": halted_count,
             "stale": stale,
+            "young": young,
         },
         "market": aggregate(readings),
         # The market aggregate is every scored name; these two lists are the
@@ -591,7 +609,7 @@ def analyse_market(limit=None, top=15, window=None, min_sessions=None):
         "inflow": ranked[:top],
         "outflow": list(reversed(ranked[-top:])) if ranked else [],
         "strongest_power": sorted(
-            [r for r in liquid if r["power_ratio"] is not None],
+            [r for r in seasoned if r["power_ratio"] is not None],
             key=lambda r: r["power_ratio"], reverse=True
         )[:top],
     }

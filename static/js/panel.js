@@ -141,8 +141,41 @@ function num(v, digits = 2) {
     ? "—" : Number(v).toFixed(digits);
 }
 
+// The engines' status codes are English; the reader is not. Shown in
+// Persian, with the code kept in the tooltip for anyone checking the logs.
+const STATUS_FA = {
+  "STRONG BUY CANDIDATE": "نامزد قوی خرید",
+  "BUY WATCHLIST": "دیده‌بان خرید",
+  "WATCHLIST": "دیده‌بان",
+  "HOLD / WAIT": "نگه‌داری / صبر",
+  "NO ENTRY": "ورود نه",
+  "NO TRADE": "بدون معامله",
+  "NO DATA": "بدون داده",
+  "BULL": "صعودی", "BEAR": "نزولی", "SIDEWAYS": "خنثی",
+  "Strong": "قوی", "Moderate": "متوسط", "Weak": "ضعیف",
+  "APPROVED": "تأیید", "PROVISIONAL": "مشروط", "REJECTED": "رد",
+  "BUY": "خرید", "SELL": "فروش", "HOLD": "نگه‌داری", "AVOID": "پرهیز",
+};
+
+const VOL_FA = {
+  LOW_VOLATILITY: "نوسان کم", NORMAL_VOLATILITY: "نوسان عادی",
+  HIGH_VOLATILITY: "نوسان بالا", EXTREME_VOLATILITY: "نوسان بسیار بالا",
+};
+
+function votesText(rep) {
+  // regime.py counts the rules' votes per side: {"bull": 3, "bear": 0, ...}.
+  const votes = rep.votes || {};
+  const counts = Object.values(votes).filter(v => typeof v === "number");
+  const total = counts.reduce((a, b) => a + b, 0);
+  const agree = votes[String(rep.regime || "").toLowerCase()];
+  if (total > 0 && typeof agree === "number") return `${num(agree, 0)} از ${num(total, 0)}`;
+  return rep.confidence == null ? "—" : `${num(rep.confidence * 100, 0)}٪`;
+}
+
 function badge(status, map = STATUS_CLASS) {
-  return `<span class="badge ${map[status] || "neutral"}"><span class="dot"></span>${status}</span>`;
+  const label = STATUS_FA[status] || status;
+  return `<span class="badge ${map[status] || "neutral"}" title="${esc(String(status ?? ""))}">` +
+         `<span class="dot"></span>${esc(String(label ?? ""))}</span>`;
 }
 
 function signed(v, digits = 2, suffix = "%") {
@@ -347,13 +380,14 @@ function renderRegime(rep) {
     {
       k: "رژیم بازار",
       v: badge(rep.regime, REGIME_CLASS),
-      sub: rep.volatility_regime || "—"
+      sub: VOL_FA[rep.volatility_regime] || rep.volatility_regime || "—"
     },
     { k: "نقد هدف", v: `${rep.cash_target_pct}%`, sub: `حداکثر ${rep.max_invested_pct}% سرمایه‌گذاری` },
-    // regime.py sends the majority's share of the votes as a 0-1 fraction.
-    // Printed bare it read "1" in a row of percentage tiles.
-    { k: "اطمینان", v: rep.confidence == null ? "—" : `${num(rep.confidence * 100, 0)}%`,
-      sub: "سهم رأی اکثریت" },
+    // The votes themselves, not "confidence 100%": three rules agreeing is a
+    // count, and E27 found that timing the market on such rules did not pay
+    // (the 20-year reviewer's point, 2026-11-11).
+    { k: "رأی‌ها", v: votesText(rep),
+      sub: "توافق قواعد روند، نه احتمال؛ زمان‌بندی با این قواعد در آزمون سودی نداشت" },
     {
       k: "مشارکت بازار",
       v: part.above_slow_ma_pct != null ? `${part.above_slow_ma_pct}%` : "—",
@@ -845,7 +879,7 @@ function renderIndexCard(index, prefix, rep) {
       sub: badge(t.status || "NO DATA") },
     { k: "سیگنال تکنیکال", v: call,
       sub: sig.call ? `خالص ${signed(sig.net, 0, "")} از ${sig.total} رأی` : "بدون رأی" },
-    { k: "روند", v: t.trend || "—", sub: `RSI ${num(t.rsi, 1)}` },
+    { k: "روند", v: TREND_FA[t.trend] || t.trend || "—", sub: `RSI ${num(t.rsi, 1)}` },
     { k: "۲۰ روزه", v: signed(r["20d"]), sub: "بازده" },
     { k: "۶۰ روزه", v: signed(r["60d"]), sub: "بازده" }
   ]);
@@ -2441,7 +2475,11 @@ function renderMoneyflow(rep) {
     `<strong>${counts.scored} نماد در ${rep.window} جلسه‌ی اخیر سنجیده شد</strong> ` +
     `(${counts.liquid} نماد بالای کف نقدشوندگی ${money(rep.min_turnover)} ریال). ` +
     `داده تا ${esc(cov.last_date || "—")}، ` +
-    `${cov.with_flow || 0} از ${cov.equities || 0} سهم پوشش دارند.`);
+    `${cov.with_flow || 0} از ${cov.equities || 0} سهم پوشش دارند.` +
+    (counts.young
+      ? ` ${num(counts.young, 0)} عرضه‌ی اولیه (کمتر از ۶۰ جلسه معامله) از فهرست‌ها کنار ` +
+        "گذاشته شد: خرید حقیقی آن‌ها سهمیه‌ی عرضه و صف است، نه پول هوشمند."
+      : ""));
 
   tiles("flowKpis", [
     {

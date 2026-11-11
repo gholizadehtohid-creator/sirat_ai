@@ -386,6 +386,15 @@ class TestAnalyseMarketIsCurrent(unittest.TestCase):
         database.DATABASE_NAME = self.path
         database.create_database()
 
+        # These names carry a bar or two each: a seasoned history is assumed
+        # here, and the new-listing rule is tested on its own below.
+        from unittest import mock
+        patch = mock.patch.object(database, "traded_sessions",
+                                  lambda: {c: 500 for c in ("live", "halted",
+                                                            "stale", "recent")})
+        patch.start()
+        self.addCleanup(patch.stop)
+
         newest = str(self.CALENDAR[-1].date())
         cal = self.CALENDAR
 
@@ -454,6 +463,22 @@ class TestAnalyseMarketIsCurrent(unittest.TestCase):
         self.assertEqual(report["counts"]["stale"], 0)
         self.assertEqual(report["counts"]["halted"], 1)
         self.assertEqual(report["current_from"], str(self.CALENDAR[-10].date()))
+
+    def test_a_new_listing_is_counted_but_not_ranked(self):
+        """An initial offering's retail "buying" is the allotment and the
+        queue: فساپ led the strongest-power list at 1,052 (2026-11-10)."""
+
+        from unittest import mock
+
+        import database
+
+        with mock.patch.object(database, "traded_sessions",
+                               lambda: {"live": 12, "recent": 500}):
+            report = moneyflow.analyse_market(top=15)
+
+        self.assertEqual(self.listed(report), {"recent"})
+        self.assertEqual(report["counts"]["young"], 1)
+        self.assertEqual(report["market"]["instruments"], 2)   # still summed
 
 
 if __name__ == "__main__":
