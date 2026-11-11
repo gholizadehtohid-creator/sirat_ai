@@ -136,9 +136,28 @@ async function getJSON(url, opts) {
   return body;
 }
 
+// One number format for the whole panel: Persian digits, the Persian
+// thousands separator and decimal mark, from the browser itself. The digits
+// used to come from B Yekan, a font only this PC has: on a phone the page
+// mixed "902" and "26%" with "۷۰۰,۰۰۰,۰۰۰", and prices had no grouping at
+// all ("۱۰۲۱۷۴۲") -- found 2026-11-11.
+const FA_NUMBER = {};
+
+function faNumber(digits) {
+  if (!FA_NUMBER[digits]) {
+    try {
+      FA_NUMBER[digits] = new Intl.NumberFormat("fa-IR", {
+        minimumFractionDigits: digits, maximumFractionDigits: digits });
+    } catch (_err) {
+      FA_NUMBER[digits] = { format: x => Number(x).toFixed(digits) };
+    }
+  }
+  return FA_NUMBER[digits];
+}
+
 function num(v, digits = 2) {
-  return (v === null || v === undefined || Number.isNaN(v))
-    ? "—" : Number(v).toFixed(digits);
+  if (v === null || v === undefined || v === "" || Number.isNaN(Number(v))) return "—";
+  return faNumber(digits).format(Number(v));
 }
 
 // The engines' status codes are English; the reader is not. Shown in
@@ -178,24 +197,32 @@ function badge(status, map = STATUS_CLASS) {
          `<span class="dot"></span>${esc(String(label ?? ""))}</span>`;
 }
 
-function signed(v, digits = 2, suffix = "%") {
-  if (v === null || v === undefined) return "—";
+function signed(v, digits = 2, suffix = "٪") {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return "—";
   const cls = v > 0 ? "up" : v < 0 ? "down" : "";
-  return `<span class="${cls}">${v > 0 ? "+" : ""}${v.toFixed(digits)}${suffix}</span>`;
+  const body = num(Math.abs(v), digits);
+  return `<span class="${cls}">${v > 0 ? "+" : v < 0 ? "−" : ""}${body}${suffix === "%" ? "٪" : suffix}</span>`;
 }
 
 // Rial amounts run to billions; abbreviate but keep the sign meaningful.
 // A trillion tier is not decorative here: whole-market turnover is quadrillions
 // of rials, and without it the money-flow totals render as "1189993.49B".
+// In Persian units ("۲۰٫۵ میلیارد") rather than Latin K/M/B/T beside
+// Persian text.
 function money(v) {
-  if (v === null || v === undefined) return "—";
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return "—";
   const a = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (a >= 1e12) return `${sign}${(a / 1e12).toFixed(2)}T`;
-  if (a >= 1e9) return `${sign}${(a / 1e9).toFixed(2)}B`;
-  if (a >= 1e6) return `${sign}${(a / 1e6).toFixed(1)}M`;
-  if (a >= 1e3) return `${sign}${(a / 1e3).toFixed(0)}K`;
-  return `${sign}${a.toFixed(0)}`;
+  const sign = v < 0 ? "−" : "";
+  if (a >= 1e12) return `${sign}${num(a / 1e12, 2)} هزار میلیارد`;
+  if (a >= 1e9) return `${sign}${num(a / 1e9, 2)} میلیارد`;
+  if (a >= 1e6) return `${sign}${num(a / 1e6, 1)} میلیون`;
+  if (a >= 1e3) return `${sign}${num(a / 1e3, 0)} هزار`;
+  return `${sign}${num(a, 0)}`;
+}
+
+// The currency code the engines send, as the reader says it.
+function currencyName(code) {
+  return code === "IRR" || !code ? "ریال" : code;
 }
 
 function table(headers, rows) {
@@ -220,10 +247,12 @@ function setLoading(on) {
 function banner(id, textId, kind, html) {
   const node = $(id);
   if (!node) return;
-  node.classList.remove("is-error", "is-live");
+  // "is-idle" is waiting or loading: neutral, not the amber of a warning
+  // (every banner used to start amber, so "در حال بارگذاری…" read as a fault).
+  node.classList.remove("is-error", "is-live", "is-idle");
   if (kind) node.classList.add(kind);
   node.querySelector(".icon").textContent =
-    kind === "is-live" ? "✓" : kind === "is-error" ? "✕" : "⚠";
+    kind === "is-live" ? "✓" : kind === "is-error" ? "✕" : kind === "is-idle" ? "…" : "⚠";
   $(textId).innerHTML = html;
 }
 
@@ -301,7 +330,7 @@ function renderBanner(rep) {
   const b = $("banner");
   const t = $("bannerText");
 
-  b.classList.remove("is-live", "is-error");
+  b.classList.remove("is-live", "is-error", "is-idle");
 
   const prov = rep && rep.provenance;
 
@@ -341,7 +370,7 @@ function renderBanner(rep) {
 
   t.innerHTML = `<strong>داده‌ی ذخیره‌شده‌ی واقعی.</strong> ` +
     `${counts.universe} نماد، ${rep.have_history || 0} نماد دارای سابقه‌ی قیمت` +
-    (snap.rows ? `، تصویر بنیادی ${snap.rows} سطر (${snap.captured_at})`
+    (snap.rows ? `، تصویر بنیادی ${num(snap.rows, 0)} سطر (${faTime(snap.captured_at)})`
                : `، بدون تصویر بنیادی — EPS و P/E در دسترس نیست`) +
     `. برای دریافت مجدد «به‌روزرسانی داده‌ها» را بزنید.`;
 }
@@ -382,7 +411,7 @@ function renderRegime(rep) {
       v: badge(rep.regime, REGIME_CLASS),
       sub: VOL_FA[rep.volatility_regime] || rep.volatility_regime || "—"
     },
-    { k: "نقد هدف", v: `${rep.cash_target_pct}%`, sub: `حداکثر ${rep.max_invested_pct}% سرمایه‌گذاری` },
+    { k: "نقد هدف", v: `${rep.cash_target_pct}٪`, sub: `حداکثر ${rep.max_invested_pct}٪ سرمایه‌گذاری` },
     // The votes themselves, not "confidence 100%": three rules agreeing is a
     // count, and E27 found that timing the market on such rules did not pay
     // (the 20-year reviewer's point, 2026-11-11).
@@ -390,7 +419,7 @@ function renderRegime(rep) {
       sub: "توافق قواعد روند، نه احتمال؛ زمان‌بندی با این قواعد در آزمون سودی نداشت" },
     {
       k: "مشارکت بازار",
-      v: part.above_slow_ma_pct != null ? `${part.above_slow_ma_pct}%` : "—",
+      v: part.above_slow_ma_pct != null ? `${part.above_slow_ma_pct}٪` : "—",
       sub: `از ${part.instruments || 0} نماد بالای MA${part.slow_ma || ""}`
     },
     {
@@ -412,7 +441,7 @@ function renderRegime(rep) {
         { label: `بالای MA${part.slow_ma}`, value: part.above_slow_ma_pct }
       ],
       max: 100,
-      format: (v) => `${fmt(v, 0)}%`
+      format: (v) => `${fmt(v, 0)}٪`
     });
   } else {
     $("participationChart").innerHTML = '<div class="empty">مشارکت محاسبه نشد</div>';
@@ -802,7 +831,7 @@ function renderIndexTargets(prefix, tg) {
       sub: `از ${Object.values(tg.overhead_sources || {}).filter(v => v !== null).length} منبع سطحی` },
     { k: "بیشترین حرکت یک‌جلسه‌ای",
       v: tg.max_session_move_pct === null || tg.max_session_move_pct === undefined
-        ? "—" : `${num(tg.max_session_move_pct, 2)}%`,
+        ? "—" : `${num(tg.max_session_move_pct, 2)}٪`,
       sub: "سقف سرعت تجربی در همین پنجره" }
   ]);
 
@@ -1285,7 +1314,7 @@ function renderTechnical(rep) {
     { k: "MACD", v: n(L.macd, 2),
       sub: `سیگنال ${n(L.macd_signal, 2)} · هیستوگرام ${n(L.macd_hist, 2)}` },
     { k: "%B بولینگر", v: n(L.bb_pct, 2),
-      sub: `پهنای باند ${n(L.bb_width, 1)}%` },
+      sub: `پهنای باند ${n(L.bb_width, 1)}٪` },
     { k: "ATR%", v: n(L.atr_pct, 2),
       sub: `ADX ${n(L.adx, 1)} · ${adxNote(L)}` },
     // Volume against its own average. "Above average" is the reading; the raw
@@ -2104,7 +2133,7 @@ function renderSectors(rep) {
       value: s.fundamental.approval_rate * 100
     })),
     max: 100,
-    format: (v) => `${fmt(v, 0)}%`
+    format: (v) => `${fmt(v, 0)}٪`
   });
 
   $("sectorFundTable").innerHTML = table(
@@ -2115,7 +2144,7 @@ function renderSectors(rep) {
         `<a href="#" class="link sector-row" data-index="${i}">${esc(s.sector_name)}</a>`,
         f.constituents,
         f.median_score ?? "—",
-        f.approval_rate == null ? "—" : `${(f.approval_rate * 100).toFixed(0)}%`,
+        f.approval_rate == null ? "—" : `${(f.approval_rate * 100).toFixed(0)}٪`,
         f.published_sector_pe ?? "—",
         f.median_pe ?? "—",
         money(f.total_market_cap)
@@ -2155,7 +2184,7 @@ function renderSectors(rep) {
         value: s.breadth.pct_above_slow_ma
       })),
     max: 100,
-    format: (v) => `${fmt(v, 0)}%`
+    format: (v) => `${fmt(v, 0)}٪`
   });
 
   $("sectorTechTable").innerHTML = table(
@@ -2170,7 +2199,7 @@ function renderSectors(rep) {
           esc(s.sector_name),
           t.score,
           t.trend || "—",
-          b ? `${b.pct_above_slow_ma}%` : "—",
+          b ? `${b.pct_above_slow_ma}٪` : "—",
           signed(t.returns ? t.returns["60d"] : null),
           esc(s.index_method || "—")
         ];
@@ -2192,7 +2221,7 @@ function showSectorMembers(sector) {
         // behind; showing the number would rank it as if it could.
         m.scored ? m.fundamental_score : "—",
         m.verdict, m.pe ?? "—",
-        m.earnings_yield == null ? "—" : `${m.earnings_yield}%`,
+        m.earnings_yield == null ? "—" : `${m.earnings_yield}٪`,
         money(m.avg_value_20), signed(m.return_60d), m.bars
       ])
     );
@@ -2281,14 +2310,14 @@ function fundRows(list) {
         fundBadge(r.status),
         r.score,
         coverCls
-          ? `<span class="badge ${coverCls}"><span class="dot"></span>${covered}%</span>`
-          : `${covered}%`,
+          ? `<span class="badge ${coverCls}"><span class="dot"></span>${covered}٪</span>`
+          : `${covered}٪`,
         peCell(x),
         num(x.pb, 1),
-        x.roe == null ? "—" : `${num(x.roe, 0)}%`,
-        x.net_margin == null ? "—" : `${num(x.net_margin, 0)}%`,
+        x.roe == null ? "—" : `${num(x.roe, 0)}٪`,
+        x.net_margin == null ? "—" : `${num(x.net_margin, 0)}٪`,
         signed(x.revenue_growth, 0),
-        x.debt_ratio == null ? "—" : `${num(x.debt_ratio, 0)}%`,
+        x.debt_ratio == null ? "—" : `${num(x.debt_ratio, 0)}٪`,
         num(x.earnings_quality, 2),
         period
       ];
@@ -2368,10 +2397,10 @@ function renderFundamentals(rep) {
       const x = row.ratios || {};
       return `<div class="t-title">${esc(d.label)}</div>
         <div class="t-row"><span>امتیاز بنیادی</span><b>${row.score}</b></div>
-        <div class="t-row"><span>ROE</span><b>${num(x.roe, 0)}%</b></div>
+        <div class="t-row"><span>ROE</span><b>${num(x.roe, 0)}٪</b></div>
         <div class="t-row"><span>P/E</span><b>${num(x.pe, 1)}</b></div>
-        <div class="t-row"><span>رشد فروش</span><b>${num(x.revenue_growth, 0)}%</b></div>
-        <div class="t-row"><span>پوشش مدل</span><b>${Math.round((row.weight_covered || 0) * 100)}%</b></div>`;
+        <div class="t-row"><span>رشد فروش</span><b>${num(x.revenue_growth, 0)}٪</b></div>
+        <div class="t-row"><span>پوشش مدل</span><b>${Math.round((row.weight_covered || 0) * 100)}٪</b></div>`;
     }
   });
 
@@ -2494,7 +2523,7 @@ function renderMoneyflow(rep) {
     },
     {
       k: "گستردگی",
-      v: `${market.breadth_pct.toFixed(0)}%`,
+      v: `${market.breadth_pct.toFixed(0)}٪`,
       sub: `${market.inflow_count} از ${market.instruments} نماد ورود پول داشتند`
     },
     {
@@ -2526,12 +2555,12 @@ function renderMoneyflow(rep) {
   divergingBar($("flowNetChart"), {
     data: extremes.map(r => ({ label: r.symbol, value: r.net_pct })),
     height: 260,
-    format: (v) => `${fmt(v, 0)}%`,
+    format: (v) => `${fmt(v, 0)}٪`,
     tooltip: (d) => {
       const row = extremes.find(r => r.symbol === d.label) || {};
       return `<div class="t-title">${esc(d.label)}</div>
         <div class="t-row"><span>خالص حقیقی</span><b>${money(row.net_individual)}</b></div>
-        <div class="t-row"><span>٪ از گردش</span><b>${num(row.net_pct, 1)}%</b></div>
+        <div class="t-row"><span>٪ از گردش</span><b>${num(row.net_pct, 1)}٪</b></div>
         <div class="t-row"><span>قدرت خریدار</span><b>${row.power_ratio ?? "—"}</b></div>
         <div class="t-row"><span>امتیاز جریان</span><b>${row.score}</b></div>`;
     }
@@ -2548,7 +2577,7 @@ function renderMoneyflow(rep) {
       const row = power.find(r => r.symbol === d.label) || {};
       return `<div class="t-title">${esc(d.label)}</div>
         <div class="t-row"><span>قدرت خریدار</span><b>${num(row.power_ratio, 2)}</b></div>
-        <div class="t-row"><span>٪ از گردش</span><b>${num(row.net_pct, 1)}%</b></div>
+        <div class="t-row"><span>٪ از گردش</span><b>${num(row.net_pct, 1)}٪</b></div>
         <div class="t-row"><span>امتیاز جریان</span><b>${row.score}</b></div>`;
     }
   });
@@ -2664,7 +2693,7 @@ function renderScreen(rep) {
         r.symbol,
         ...FUND_COMPONENTS.map(k => r.fundamental_breakdown?.[k] ?? "—"),
         r.fundamental_score,
-        `${Math.round((r.weight_covered || 0) * 100)}%`
+        `${Math.round((r.weight_covered || 0) * 100)}٪`
       ])
     );
   } else {
@@ -2708,7 +2737,7 @@ function renderScreen(rep) {
             t.trend ?? "—",
             r.final_status ?? "—",
             cr.pe != null ? num(cr.pe, 1) : (m.pe == null ? "—" : m.pe),
-            cr.roe == null ? "—" : `${num(cr.roe, 0)}%`,
+            cr.roe == null ? "—" : `${num(cr.roe, 0)}٪`,
             signed(cr.revenue_growth, 0),
             divergence
           ];
@@ -2747,7 +2776,7 @@ function renderScreen(rep) {
         `${rep.have_history} از ${rep.counts.universe} سهم کندل ذخیره‌شده دارند`],
       ["تصویر بنیادی (EPS، P/E، ارزش بازار)",
         snap.rows ? "✓ بارگذاری شد" : "✗ موجود نیست",
-        snap.rows ? `${snap.rows} سطر، ثبت ${snap.captured_at}`
+        snap.rows ? `${num(snap.rows, 0)} سطر، ثبت ${faTime(snap.captured_at)}`
                   : "نیازمند مسیر فعال به tsetmc — SIRAT_PROXY_URL"],
       ["ارائه‌دهنده", rep.provider || "—", "منبع فعال داده"]
     ]
@@ -2917,24 +2946,24 @@ function renderPortfolio(rep) {
     { k: "موقعیت‌ها", v: totals.positions, sub: `در ${totals.sectors} صنعت` },
     {
       k: "سرمایه‌گذاری‌شده",
-      v: `${totals.invested_pct}%`,
-      sub: `${money(totals.invested)} ${basket.currency}`
+      v: `${totals.invested_pct}٪`,
+      sub: `${money(totals.invested)} ${currencyName(basket.currency)}`
     },
     {
       k: "نقد",
-      v: `${(100 - totals.invested_pct).toFixed(1)}%`,
-      sub: `${money(totals.cash)} ${basket.currency}`
+      v: `${(100 - totals.invested_pct).toFixed(1)}٪`,
+      sub: `${money(totals.cash)} ${currencyName(basket.currency)}`
     },
     {
       k: "ریسک کل",
-      v: `<span class="down">${totals.total_risk_pct}%</span>`,
+      v: `<span class="down">${totals.total_risk_pct}٪</span>`,
       sub: "اگر همه‌ی حد ضررها بخورند"
     },
     {
       k: "نوسان سبد",
-      v: vol.annualised_pct != null ? `${vol.annualised_pct}%` : "—",
+      v: vol.annualised_pct != null ? `${vol.annualised_pct}٪` : "—",
       sub: vol.undiversified_pct != null
-        ? `بدون تنوع: ${vol.undiversified_pct}%` : "سالانه"
+        ? `بدون تنوع: ${vol.undiversified_pct}٪` : "سالانه"
     },
     {
       k: "نسبت تنوع‌بخشی",
@@ -2966,8 +2995,8 @@ function renderPortfolio(rep) {
       p.risk_reward != null ? `1:${p.risk_reward}` : "—",
       (p.shares ?? 0).toLocaleString(),
       money(p.position_value),
-      p.weight_pct != null ? `${p.weight_pct}%` : "—",
-      p.risk_pct != null ? `${p.risk_pct}%` : "—",
+      p.weight_pct != null ? `${p.weight_pct}٪` : "—",
+      p.risk_pct != null ? `${p.risk_pct}٪` : "—",
       esc(bindingLabel(p.scaled_by || p.bound_by))
     ])
   );
@@ -2981,7 +3010,7 @@ function renderPortfolio(rep) {
         value: s.pct_of_invested
       })),
       max: Math.max(...exposure.map(s => s.pct_of_invested), 10),
-      format: (v) => `${fmt(v, 1)}%`
+      format: (v) => `${fmt(v, 1)}٪`
     });
   } else {
     $("allocationChart").innerHTML = '<div class="empty">داده‌ای نیست</div>';
@@ -3011,9 +3040,9 @@ function renderRisk(riskRep, basket) {
   $("riskTable").innerHTML = table(
     ["سنجه", "مقدار", "معنی"],
     [
-      ["نوسان سالانه", vol.annualised_pct != null ? `${vol.annualised_pct}%` : "—",
+      ["نوسان سالانه", vol.annualised_pct != null ? `${vol.annualised_pct}٪` : "—",
         "انحراف معیار بازده سبد"],
-      ["اگر کاملاً همبسته بود", vol.undiversified_pct != null ? `${vol.undiversified_pct}%` : "—",
+      ["اگر کاملاً همبسته بود", vol.undiversified_pct != null ? `${vol.undiversified_pct}٪` : "—",
         "میانگین وزنی نوسان تک‌تک نمادها"],
       ["نسبت تنوع‌بخشی", vol.diversification_ratio ?? "—",
         "فاصله‌ی این دو، همان تنوع است"],
@@ -3021,19 +3050,19 @@ function renderRisk(riskRep, basket) {
         "نزدیک ۱ یعنی تنوع اسمی است"],
       [`VaR ${varRep.confidence ? Math.round(varRep.confidence * 100) : 95}٪ روزانه`,
         varRep.historical_pct != null
-          ? `${varRep.historical_pct}% (${money(varRep.historical_rials)})` : "—",
+          ? `${varRep.historical_pct}٪ (${money(varRep.historical_rials)})` : "—",
         "بدترین روز در ۹۵٪ موارد"],
       ["CVaR / زیان مورد انتظار",
         varRep.conditional_pct != null
-          ? `${varRep.conditional_pct}% (${money(varRep.conditional_rials)})` : "—",
+          ? `${varRep.conditional_pct}٪ (${money(varRep.conditional_rials)})` : "—",
         "میانگین زیان وقتی از VaR رد شود"],
       ["بدترین جلسه‌ی مشاهده‌شده",
-        varRep.worst_day_pct != null ? `${varRep.worst_day_pct}%` : "—",
+        varRep.worst_day_pct != null ? `${varRep.worst_day_pct}٪` : "—",
         `در ${varRep.sessions || 0} جلسه`],
       [`بتا نسبت به ${esc(riskRep.benchmark || "شاخص")}`, beta.beta ?? "—",
         beta.r_squared != null ? `R² ${beta.r_squared}` : "حساسیت به بازار"],
       ["حداکثر افت تاریخی",
-        dd.max_drawdown_pct != null ? `${dd.max_drawdown_pct}%` : "—",
+        dd.max_drawdown_pct != null ? `${dd.max_drawdown_pct}٪` : "—",
         dd.peak_date ? `${dd.peak_date} → ${dd.trough_date}` : "قله تا کف"],
       ["تعداد مؤثر موقعیت‌ها", conc.effective_positions ?? "—",
         `از ${conc.positions || 0} موقعیت واقعی`]
@@ -3227,7 +3256,7 @@ function renderBootstrap(p) {
       fill.style.width = "";
     }
     bar.setAttribute("aria-valuenow", pct.toFixed(0));
-    $("loadPct").textContent = `${pct.toFixed(0)}%`;
+    $("loadPct").textContent = `${pct.toFixed(0)}٪`;
 
     const parts = [];
     if (overall.steps_total) {
@@ -3439,9 +3468,18 @@ function renderAllocation(rep) {
   bulletList("allocationNotes", [rep.rebalance.text, ...(rep.notes || [])]);
   renderToday();
 
-  banner("allocationStatus", "allocationStatusText", h ? "is-live" : "",
+  // The tests behind these profiles (E27, E28) measured the edge against a
+  // 20% fixed-income return; bills pay 43-44% today, about what TEDPIX made a
+  // year over 2023-26 (46.6%). Said here, on the card that leans on them
+  // (the 20-year reviewer, 2026-11-11).
+  const bill = state.valuation && state.valuation.bill_yield_pct;
+  banner("allocationStatus", "allocationStatusText", h ? "" : "",
     h ? `سابقه‌ی ${esc(h.from)} تا ${esc(h.to)} — صندوق درآمد ثابت در همین ` +
-        `دوره ${num(h.fixed_income.cagr_pct, 0)}٪ در سال فرض شده است.`
+        `دوره ${num(h.fixed_income.cagr_pct, 0)}٪ در سال فرض شده است. ` +
+        `<strong>برتری سهام و طلا در آزمون‌ها نسبت به همین ۲۰٪ سنجیده شده؛ ` +
+        `اوراق خزانه امروز ${bill ? `حدود ${num(bill, 0)}٪` : "بسیار بیشتر از آن"} ` +
+        "می‌دهد و در ۱۴۰۲ تا ۱۴۰۵ بازده شاخص کل (حدود ۴۷٪ در سال) تقریباً با همین نرخ برابر بوده است؛ " +
+        "پس برتری ترکیب‌ها بر اوراقِ امروز ثابت نشده است.</strong>"
       : "سابقه‌ی شاخص یا صندوق‌های طلا در دیتابیس نیست — ارقام تاریخی " +
         "محاسبه نشد.");
 }
@@ -3563,6 +3601,20 @@ function tomanCell(v) {
   const b = Math.round(toBillionToman(v));
   const cls = b > 0 ? "up" : b < 0 ? "down" : "";
   return `<span class="${cls}">${b > 0 ? "+" : ""}${b.toLocaleString("fa-IR")}</span>`;
+}
+
+// A stored UTC timestamp as the reader's clock reads it: Jalali date and
+// Tehran time, instead of the raw "2026-11-11T03:30:55+00:00" the banner and
+// the screen printed (found 2026-11-11).
+function faTime(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return esc(String(iso));
+    return d.toLocaleString("fa-IR-u-ca-persian", {
+      timeZone: "Asia/Tehran", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit" });
+  } catch (_err) { return esc(String(iso)); }
 }
 
 function faDay(iso, withYear = false) {
@@ -3858,6 +3910,7 @@ function holdingsText() {
 }
 
 function renderHoldings(rep) {
+  state.holdingsBook = rep;           // the today card sizes against it
   const rows = rep.rows || [];
   const warn = rep.warnings || [];
   const flagged = rows.filter(r => ((r.outlook || {}).flags || []).length).length;
@@ -3870,6 +3923,7 @@ function renderHoldings(rep) {
   ]);
   $("holdingsWarnings").innerHTML = warn.map(w => `<li>⚠ ${esc(w)}</li>`).join("");
   renderHoldingsRisk(rep.risk);
+  if (state.allocation) renderToday();   // the plan is sized on this book
 
   const body = rows.map(r => {
     if (r.error) {
@@ -3965,7 +4019,7 @@ async function loadHoldings(force = false) {
       "فهرستی ثبت نشده است. نمادهایی را که دارید بنویسید و «ذخیره و بررسی» را بزنید.");
     return;
   }
-  banner("holdingsStatus", "holdingsStatusText", "", "در حال بررسی…");
+  banner("holdingsStatus", "holdingsStatusText", "is-idle", "در حال بررسی…");
   try {
     // POST: the list is the reader's own book, and a query string would land
     // in the server's request log line by line.
@@ -4030,6 +4084,8 @@ function renderValuationSectors(rows) {
 }
 
 function renderValuation(rep) {
+  state.valuation = rep;              // the allocation card quotes its bill rate
+  if (state.allocation) renderAllocation(state.allocation);
   if (!rep.available) {
     banner("valuationStatus", "valuationStatusText", "", esc(rep.reason || "در دسترس نیست"));
     $("valuationKpis").innerHTML = "";
@@ -4143,8 +4199,10 @@ async function prefetchTabs(first) {
 
 function showTab(name) {
   if (!TAB_LOADERS[name]) name = "summary";
-  document.querySelectorAll(".tab").forEach(b =>
-    b.classList.toggle("is-active", b.dataset.tab === name));
+  document.querySelectorAll(".tab").forEach(b => {
+    b.classList.toggle("is-active", b.dataset.tab === name);
+    b.setAttribute("aria-selected", b.dataset.tab === name ? "true" : "false");
+  });
   document.querySelectorAll(".tab-panel").forEach(p =>
     p.classList.toggle("is-active", p.dataset.tab === name));
   try { localStorage.setItem("sirat-tab", name); } catch (e) { /* private mode */ }
@@ -4239,6 +4297,14 @@ function renderToday() {
   const pending = state.opportunitiesFailed ? "قیمت‌ها خوانده نشد"
     : opp ? "قیمتی برای این بخش خوانده نشد" : "در حال خواندن قیمت‌ها…";
 
+  // The user's own book, when they entered quantities in «سبد من»: the plan
+  // is a rebalance of THAT, not of the default capital. As first written the
+  // card sized a 1-billion-rial example while the holdings card right below
+  // held 20 billion with gold at 100% of a 30% target (found 2026-11-11).
+  const book = state.holdingsBook;
+  const own = book && book.total_value > 0 ? sleevesOf(book.rows || []) : null;
+  const base = own ? book.total_value : null;
+
   const items = Object.entries(profile.weights).filter(([, w]) => w > 0).map(([sleeve, w]) => {
     let buy = "", why = "";
     if (sleeve === "gold" || sleeve === "equity") {
@@ -4258,9 +4324,19 @@ function renderToday() {
         why = "صندوق درآمد ثابت پرمعامله";
       }
     }
+    let amount = `${num(Math.round((profile.amounts || {})[sleeve] || 0), 0)} <span class="pct">ریال</span>`;
+    if (own) {
+      const have = own[sleeve] || 0;
+      const gap = base * w / 100 - have;
+      const now = base ? have / base * 100 : 0;
+      amount = `الان ${num(now, 0)}٪ · هدف ${num(w, 0)}٪ → ` +
+        (Math.abs(gap) < base * 0.02
+          ? "<strong>نزدیک هدف</strong>"
+          : `<strong>${gap > 0 ? "بخرید" : "بفروشید"} ${money(Math.abs(gap))}</strong> <span class="pct">ریال</span>`);
+    }
     return `<div class="today-item">
-      <div class="pct">${w}٪ ${esc(labels[sleeve] || sleeve)}</div>
-      <div class="amt">${Math.round((profile.amounts || {})[sleeve] || 0).toLocaleString("fa-IR")} <span class="pct">ریال</span></div>
+      <div class="pct">${num(w, 0)}٪ ${esc(labels[sleeve] || sleeve)}</div>
+      <div class="amt">${amount}</div>
       <div class="buy">${buy || `<span class="hint">${pending}</span>`}</div>
       <div class="why">${why}</div>
     </div>`;
@@ -4275,6 +4351,23 @@ function renderToday() {
     : "") +
     `هر حدود سه ماه به همین وزن‌ها برگردانید. ` +
     `<span class="hint">${esc(profile.evidence_text || "")}</span>`;
+}
+
+// Which allocation sleeve a holdings row belongs to: a share is "equity";
+// a fund by its name -- gold, fixed income, or an equity fund.
+function sleevesOf(rows) {
+  const out = {};
+  rows.forEach(r => {
+    const value = Number(r.value) || 0;
+    if (!value) return;
+    const name = String(r.name || "");
+    const sleeve = r.equity ? "equity"
+      : /طلا|سکه|زر/.test(name) ? "gold"
+      : /درآمد ثابت|ثابت|اوراق/.test(name) ? "fixed"
+      : "equity";
+    out[sleeve] = (out[sleeve] || 0) + value;
+  });
+  return out;
 }
 
 // Repaints whatever each slot holds, on every tab switch, resize, theme toggle
@@ -4447,14 +4540,45 @@ const EVENT_FA = {
   left_limit_down:    "از کف دامنه برگشت",
 };
 
+// Tehran's trading clock, read off the browser's clock: Saturday to
+// Wednesday, 09:00-12:35 (Iran keeps UTC+3:30 all year since 2022). Holidays
+// are not known here, so the day after one may read a session early.
+const TEHRAN_OFFSET_MIN = 210;
+const SESSION_DAYS = new Set([6, 0, 1, 2, 3]);      // Sat..Wed (getUTCDay)
+
+function sessionClock(nowMs = Date.now()) {
+  const t = new Date(nowMs + TEHRAN_OFFSET_MIN * 60000);   // UTC fields = Tehran wall clock
+  const mins = t.getUTCHours() * 60 + t.getUTCMinutes();
+  const open = SESSION_DAYS.has(t.getUTCDay()) && mins >= 540 && mins <= 755;
+  let back = 0;
+  for (; back < 8; back++) {
+    const d = new Date(t.getTime() - back * 86400000);
+    if (SESSION_DAYS.has(d.getUTCDay()) && (back > 0 || mins >= 540)) break;
+  }
+  const day = new Date(t.getTime() - back * 86400000);
+  const startTehran = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 9, 0);
+  return { open, lastStartMs: startTehran - TEHRAN_OFFSET_MIN * 60000 };
+}
+
+// Stale by the market's clock, not the wall clock. As first written anything
+// over an hour old was "کهنه" in red, so outside trading hours and at
+// weekends most of the panel was red while the green strip above said all
+// was current (found 2026-11-11). While the market is open the hour rule
+// stands; while it is shut, a capture is stale only if it predates the start
+// of the last session.
 function ageTag(minutes) {
   if (minutes === null || minutes === undefined) return "";
-  const stale = minutes > LIVE_STALE_MINUTES;
+  const { open, lastStartMs } = sessionClock();
+  const stale = open
+    ? minutes > LIVE_STALE_MINUTES
+    : Date.now() - minutes * 60000 < lastStartMs;
   const text = minutes < 90
-    ? `${minutes.toFixed(0)} دقیقه پیش`
-    : `${(minutes / 60).toFixed(1)} ساعت پیش`;
+    ? `${num(minutes, 0)} دقیقه پیش`
+    : minutes < 48 * 60
+      ? `${num(minutes / 60, 1)} ساعت پیش`
+      : `${num(minutes / 1440, 0)} روز پیش`;
   return `<span class="age-tag${stale ? " stale" : ""}">${text}${
-    stale ? " — کهنه" : ""}</span>`;
+    stale ? " — کهنه" : open ? "" : " — بازار بسته"}</span>`;
 }
 
 async function loadLive() {
@@ -4525,7 +4649,7 @@ async function loadLive() {
       sub: "همین حالا، از روی تابلو" },
     { k: "آخرین عکس دفتر", v: q.age_minutes === null
         || q.age_minutes === undefined ? "—" : `${q.age_minutes.toFixed(0)}′`,
-      sub: q.captured_at ? esc(q.captured_at.slice(11, 16)) + " UTC" : "ثبت نشده" },
+      sub: q.captured_at ? faTime(q.captured_at) : "ثبت نشده" },
   ]);
 
   renderQueueSide("liveBuyTable", "liveBuyHint", q.buy, q, "خرید");
@@ -4805,8 +4929,8 @@ getJSON("/api/status").then(status => {
   $("footnote").textContent =
     `${status.total_bars.toLocaleString()} کندل ذخیره‌شده` +
     (status.date_min ? ` از ${status.date_min} تا ${status.date_max}` : "") +
-    ` · سرمایه‌ی پیش‌فرض ${status.config.equity.toLocaleString()} ${status.config.currency}` +
-    ` · ریسک هر موقعیت ${status.config.risk_per_trade_pct}%`;
+    ` · سرمایه‌ی پیش‌فرض ${num(status.config.equity, 0)} ${currencyName(status.config.currency)}` +
+    ` · ریسک هر موقعیت ${status.config.risk_per_trade_pct}٪`;
 }).catch(() => {});
 
 /* ---------- the guide ----------

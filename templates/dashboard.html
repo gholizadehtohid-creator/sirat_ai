@@ -18,7 +18,7 @@
     </div>
   </header>
 
-  <div id="banner" class="banner">
+  <div id="banner" class="banner is-idle" aria-live="polite">
     <span class="icon">…</span>
     <div id="bannerText">در حال خواندن وضعیت داده‌ها…</div>
   </div>
@@ -77,7 +77,7 @@
 
 
 
-  <section class="tab-panel" data-tab="summary">
+  <section class="tab-panel" role="tabpanel" data-tab="summary">
 
   <!-- A first-visit nudge towards the guide; hidden once dismissed. -->
   <div class="guide-nudge hidden" id="guideNudge" dir="rtl" lang="fa">
@@ -128,7 +128,7 @@
         <span class="hint">فهرست فقط در همین مرورگر ذخیره می‌شود؛ پنل آن را فقط برای محاسبه می‌خواند و جایی نگه نمی‌دارد.</span>
       </div>
     </div>
-    <div id="holdingsStatus" class="banner" style="margin-top:4px">
+    <div id="holdingsStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="holdingsStatusText">فهرستی ثبت نشده است.</div>
     </div>
     <div class="kpi-row" id="holdingsKpis"></div>
@@ -204,7 +204,7 @@
         می‌شمارد، نه صندوق‌ها. این گزارش است، نه سیگنال خرید یا فروش.</p>
       </div>
     </details>
-    <div id="marketflowStatus" class="banner" style="margin-top:4px">
+    <div id="marketflowStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="marketflowStatusText">در حال بارگذاری…</div>
     </div>
     <div class="kpi-row" id="marketflowKpis"></div>
@@ -235,7 +235,7 @@
       از درآمد ثابت بود (E28). چند معامله در سال، با دست — بدون نیاز به API.
     </p>
 
-    <div id="allocationStatus" class="banner" style="margin-top:4px">
+    <div id="allocationStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="allocationStatusText">در حال بارگذاری…</div>
     </div>
 
@@ -261,7 +261,7 @@
       P/E کل بازار — ارزش بازار همه‌ی شرکت‌های تولیدی و خدماتی ÷ سود ۱۲ ماه
       گذشته‌ی آن‌ها — در برابر تاریخچه‌ی خودش از خرداد ۱۴۰۱ و در برابر بازده اخزا.
     </p>
-    <div id="valuationStatus" class="banner" style="margin-top:4px">
+    <div id="valuationStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="valuationStatusText">در حال بارگذاری…</div>
     </div>
     <div class="kpi-row" id="valuationKpis"></div>
@@ -312,7 +312,7 @@
       می‌دهد.
     </p>
 
-    <div id="opportunitiesStatus" class="banner" style="margin-top:4px">
+    <div id="opportunitiesStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="opportunitiesStatusText">در حال بارگذاری… (حدود یک دقیقه)</div>
     </div>
 
@@ -369,7 +369,7 @@
         متن کامل اطلاعیه را بخوانید.</p>
       </div>
     </details>
-    <div id="announcementsStatus" class="banner" style="margin-top:4px">
+    <div id="announcementsStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="announcementsStatusText">در حال بارگذاری…</div>
     </div>
     <div class="table-wrap" id="announcementsTable" style="margin-top:12px"></div>
@@ -377,7 +377,7 @@
 
   </section>
 
-  <section class="tab-panel" data-tab="stocks">
+  <section class="tab-panel" role="tabpanel" data-tab="stocks">
 
   <!-- Portfolio controls. The indicator windows below are tuning; these are
        the decisions that change what the basket actually is. -->
@@ -462,7 +462,7 @@
       ثابت از سرمایه را ببرد، و سقف صنعت اجباری است — نه ترجیح.
     </p>
 
-    <div id="portfolioStatus" class="banner" style="margin-top:4px">
+    <div id="portfolioStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="portfolioStatusText">هنوز اجرا نشده.</div>
     </div>
 
@@ -511,7 +511,7 @@
 
   </section>
 
-  <section class="tab-panel" data-tab="live">
+  <section class="tab-panel" role="tabpanel" data-tab="live">
 
   <div class="section-title">رصد زنده‌ی بازار</div>
 
@@ -538,7 +538,7 @@
       می‌کرد، پس وجود کندل چیزی را ثابت نمی‌کند.
     </p>
 
-    <div id="liveStatus" class="banner" style="margin-top:4px">
+    <div id="liveStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span>
       <div id="liveStatusText">در حال خواندن…</div>
     </div>
@@ -596,7 +596,7 @@
 
   </section>
 
-  <section class="tab-panel" data-tab="analysis">
+  <section class="tab-panel" role="tabpanel" data-tab="analysis">
 
   <div class="section-title">تحلیل‌ها — هر بخش را باز کنید</div>
 
@@ -617,7 +617,7 @@
       شاخص هم‌وزن، و مشارکت بازار.
     </p>
 
-    <div id="regimeStatus" class="banner" style="margin-top:4px">
+    <div id="regimeStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="regimeStatusText">هنوز اجرا نشده.</div>
     </div>
 
@@ -663,7 +663,7 @@
       نمی‌شود.
     </p>
 
-    <div id="technicalStatus" class="banner" style="margin-top:4px">
+    <div id="technicalStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="technicalStatusText">یک نماد وارد کنید.</div>
     </div>
 
@@ -763,7 +763,7 @@
       ثانیه طول می‌کشد و نتیجه تا تغییر داده cache می‌شود.
     </p>
 
-    <div id="topTechnicalStatus" class="banner" style="margin-top:4px">
+    <div id="topTechnicalStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span>
       <div id="topTechnicalStatusText">برای رتبه‌بندی دکمه را بزنید.</div>
     </div>
@@ -787,7 +787,7 @@
       را پیش‌بینی می‌کند نه بازده را. اسکن کل بازار چند ده ثانیه طول می‌کشد.
     </p>
 
-    <div id="inflowStatus" class="banner" style="margin-top:4px">
+    <div id="inflowStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span>
       <div id="inflowStatusText">برای یافتن سهم‌ها دکمه را بزنید.</div>
     </div>
@@ -821,7 +821,7 @@
       سهم به آن‌ها رسیده، نه اندازه‌ی انتقال.
     </p>
 
-    <div id="smartMoneyStatus" class="banner" style="margin-top:4px">
+    <div id="smartMoneyStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span>
       <div id="smartMoneyStatusText">برای اجرای اسکنر دکمه را بزنید.</div>
     </div>
@@ -868,7 +868,7 @@
       نکرده نشان ندهد.
     </p>
 
-    <div id="goldStatus" class="banner" style="margin-top:4px">
+    <div id="goldStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span>
       <div id="goldStatusText">برای تحلیل دکمه را بزنید.</div>
     </div>
@@ -903,7 +903,7 @@
       نمی‌کند. اخبار به موتور تصمیم‌گیری متصل نیست.
     </p>
 
-    <div id="intelStatus" class="banner" style="margin-top:4px">
+    <div id="intelStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span>
       <div id="intelStatusText">برای دریافت اخبار دکمه را بزنید.</div>
     </div>
@@ -942,7 +942,7 @@
       موضوع صریحاً اعلام می‌شود، نه اینکه ضمنی فرض شود.
     </p>
 
-    <div id="capIndexStatus" class="banner" style="margin-top:4px">
+    <div id="capIndexStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="capIndexStatusText">هنوز اجرا نشده.</div>
     </div>
 
@@ -1042,7 +1042,7 @@
       نمی‌بیند.
     </p>
 
-    <div id="ewIndexStatus" class="banner" style="margin-top:4px">
+    <div id="ewIndexStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="ewIndexStatusText">هنوز اجرا نشده.</div>
     </div>
 
@@ -1180,7 +1180,7 @@
       </div>
     </details>
 
-    <div id="sectorStatus" class="banner" style="margin-top:4px">
+    <div id="sectorStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="sectorStatusText">هنوز اجرا نشده.</div>
     </div>
 
@@ -1318,7 +1318,7 @@
       </div>
     </details>
 
-    <div id="fundStatus" class="banner" style="margin-top:4px">
+    <div id="fundStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="fundStatusText">هنوز اجرا نشده.</div>
     </div>
 
@@ -1467,7 +1467,7 @@
         عوض می‌کند.</p>
       </div>
     </details>
-    <div id="outlookStatus" class="banner" style="margin-top:4px">
+    <div id="outlookStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="outlookStatusText">اجرا نشده.</div>
     </div>
     <div id="outlookDetail" style="margin-top:12px"></div>
@@ -1504,7 +1504,7 @@
       تأیید مستقل. اینجا فقط یک جهت محاسبه می‌شود.
     </p>
 
-    <div id="flowStatus" class="banner" style="margin-top:4px">
+    <div id="flowStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="flowStatusText">هنوز اجرا نشده.</div>
     </div>
 
@@ -1564,7 +1564,7 @@
       هرگز به‌عنوان ردشده.
     </p>
 
-    <div id="screenStatus" class="banner" style="margin-top:4px">
+    <div id="screenStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
       <span class="icon">…</span><div id="screenStatusText">هنوز اجرا نشده.</div>
     </div>
 

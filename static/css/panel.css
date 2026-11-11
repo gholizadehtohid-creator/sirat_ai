@@ -11,7 +11,7 @@
 
   --text-primary:    #111827;
   --text-secondary:  #4b5563;
-  --text-muted:      #8b94a3;
+  --text-muted:      #6b7280;
 
   --grid:            #e5e8ee;
   --axis:            #ccd2dc;
@@ -42,7 +42,7 @@
   --series-5:        #e87ba4;
   --series-6:        #008300;
 
-  --diverge-pos:     #2a78d6;
+  --diverge-pos:     #1a7f37;
   --diverge-neg:     #e34948;
   --diverge-mid:     #eef1f5;
 
@@ -98,7 +98,7 @@
     --series-5:       #d55181;
     --series-6:       #008300;
 
-    --diverge-pos:    #3987e5;
+    --diverge-pos:    #2fb34a;
     --diverge-neg:    #e66767;
     --diverge-mid:    #2b3650;
 
@@ -139,7 +139,7 @@
   --series-5:       #d55181;
   --series-6:       #008300;
 
-  --diverge-pos:    #3987e5;
+  --diverge-pos:    #2fb34a;
   --diverge-neg:    #e66767;
   --diverge-mid:    #2b3650;
 
@@ -1748,6 +1748,25 @@ select:hover, input[type="number"]:hover, input[type="text"]:hover {
 
 .banner.is-error {
   background: color-mix(in srgb, var(--status-critical) 7%, var(--surface-1));
+}
+
+/* Waiting or loading: neutral, so it does not read as a warning. */
+.banner.is-idle {
+  background: var(--surface-1);
+  border-inline-start-color: var(--border);
+  color: var(--text-secondary);
+}
+
+/* A sign belongs to its number: in a right-to-left line "+32.5%" rendered
+   as "32.5%+" and "-1,300" split into "1,300 -" (2026-11-11). */
+.up, .down { unicode-bidi: isolate; direction: ltr; display: inline-block; }
+.tile .v { text-align: right; }
+
+/* Phones: two KPI tiles a row instead of one 140-px tile per row (the
+   summary tab was ~2,000 px of tiles at 400 px wide). */
+@media (max-width: 560px) {
+  .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tile .v { font-size: 20px; }
 }
 
 /* ---------- card guides (the question-mark folds) ---------- */
