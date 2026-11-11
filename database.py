@@ -2571,20 +2571,31 @@ def load_sector_members():
     return grouped
 
 
-def traded_sessions():
+def traded_sessions(cap=250):
     """{ins_code: sessions it traded on (volume > 0)} over price_history.
 
     How long a name has really traded, which its first stored bar does not
     say: most listings begin with a run of zero-volume bars. About 1 s.
     """
 
+    # Counted only up to `cap` per name, off the (ins_code, date) key: a rule
+    # that asks "fewer than 60 sessions?" needs no more, and the GROUP BY
+    # over every bar cost 1.2 s on each money-flow read (2026-11-11).
     conn = _connect()
     try:
-        rows = conn.execute("SELECT ins_code, COUNT(*) FROM price_history "
-                            "WHERE volume > 0 GROUP BY ins_code").fetchall()
+        codes = [r[0] for r in conn.execute(
+            "SELECT ins_code FROM instruments")]
+        out = {}
+        for code in codes:
+            n = conn.execute(
+                "SELECT COUNT(*) FROM (SELECT 1 FROM price_history WHERE "
+                "ins_code = ? AND volume > 0 ORDER BY date DESC LIMIT ?)",
+                (code, cap)).fetchone()[0]
+            if n:
+                out[str(code)] = n
     finally:
         conn.close()
-    return {str(code): count for code, count in rows}
+    return out
 
 
 def save_snapshot(df):

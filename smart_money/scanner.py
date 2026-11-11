@@ -465,6 +465,14 @@ def scan(top=20, min_turnover=MIN_TURNOVER, params=None, persist=True,
 
     frames = database.load_history_tail(codes, SCAN_BARS)
 
+    # Back-adjusted, as every other price reading in the panel: on raw bars a
+    # capital increase moved 35 of 789 names into another range class --
+    # سصفها read at 0.6% of its range ("at the floor") where it sat at 71%,
+    # شساخت and دفرا at 15% and 30% where they were at the ceiling and passed
+    # the ceiling gate (2026-11-11). A series without a gap is untouched.
+    from technical import _adjusted
+    frames = {code: _adjusted(frame) for code, frame in frames.items()}
+
     # One date for the whole cross-section, before anything is read off it.
     as_of = _as_of(frames)
 
