@@ -435,6 +435,15 @@ def extract(sheets, index=0):
 
     _derive(items)
 
+    # A filed EPS of exactly 0 beside a non-zero profit is a template row the
+    # company left at zero (.xls-era filings often left every "سود (زیان) پایه
+    # هر سهم" row at 0), not the company's figure. Kept, it blocked the EPS
+    # that ratios() derives from profit and shares, so P/E went blank: 28 of
+    # the 146 EPS recoveries in the archive were such zeros (2026-11-11).
+    if items.get("eps") == 0 and (items.get("net_profit_owners")
+                                  or items.get("net_profit")) not in (None, 0):
+        items["eps"] = None
+
     return items
 
 
@@ -686,6 +695,13 @@ def ratios(current, previous=None, market=None, months=None):
     out["market_cap"] = price * shares if price and shares else None
 
     filed_eps = _finite(current.get("eps"))
+
+    # The same zero as extract() refuses, for the filings parsed before it
+    # did: 977 stored, 10 of them a live equity's latest period on
+    # 2026-11-11 (شستا, شساخت, وشستان, تدبیر ...). A real EPS rounds to zero
+    # only on a profit too small to matter, where deriving changes nothing.
+    if filed_eps == 0 and owners_profit not in (None, 0):
+        filed_eps = None
 
     # EPS from the filing is the audited figure; deriving it from profit and
     # share count is the fallback for a template that does not print it.

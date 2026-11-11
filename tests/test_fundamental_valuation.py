@@ -352,3 +352,35 @@ class SharedGrowthRuleTests(unittest.TestCase):
             inflation=35.0)
         self.assertTrue(all("not comparable" not in n for n in notes))
         self.assertIsNotNone(fraction)
+
+
+class ZeroFiledEpsTest(unittest.TestCase):
+    """A filed EPS of exactly 0 beside a non-zero profit is a template row
+    left at zero (385814: net profit 14,173 bn, every basic-EPS row 0); it
+    must not block the EPS and P/E derived from profit and shares."""
+
+    def test_ratios_derive_eps_past_a_zero_row(self):
+        statement = dict(SHASAFAHA, eps=0.0)
+        r = financials.ratios(statement, market=SHASAFAHA_MARKET, months=6)
+
+        self.assertTrue(r.get("eps_derived"))
+        self.assertGreater(r["eps"], 0)
+        self.assertIsNotNone(r["pe"])
+
+    def test_a_zero_eps_with_no_profit_stays_zero(self):
+        statement = dict(SHASAFAHA, eps=0.0, net_profit=0.0)
+        r = financials.ratios(statement, market=SHASAFAHA_MARKET, months=6)
+
+        self.assertEqual(r["eps"], 0.0)
+
+    def test_extract_leaves_eps_blank_on_a_zero_row(self):
+        import codal
+        items = financials.extract(codal.split_sheets(
+            "<h2>صورت سود و زیان</h2><table>"
+            "<tr><td>سود (زیان) خالص</td><td>14,173,000</td><td>9,000,000</td></tr>"
+            "<tr><td>سود (زیان) پایه هر سهم</td><td>0</td><td>0</td></tr>"
+            "</table>"))
+
+        self.assertIsNotNone(items)
+        self.assertNotEqual(items.get("net_profit") or 0, 0)
+        self.assertIsNone(items.get("eps"))
