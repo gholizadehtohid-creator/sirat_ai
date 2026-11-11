@@ -771,10 +771,26 @@ class TestCooldownEscalation(unittest.TestCase):
     """Retrying a rate limit renews it; the client has to actually wait."""
 
     def setUp(self):
+        # Never the tree's own store. Run from C:/SIRAT-AI that is the LIVE
+        # sirat_market.db: a CI run on 2026-11-11 rewrote its real
+        # "codal:cooldown" row, which also erases a cooldown Codal imposed.
+        import tempfile
+        from unittest import mock
+        import database
+
+        handle, self.store = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        self.patch = mock.patch.object(database, "DATABASE_NAME", self.store)
+        self.patch.start()
         codal_sync.clear_cooldown()
 
     def tearDown(self):
-        codal_sync.clear_cooldown()
+        self.patch.stop()
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.remove(self.store + suffix)
+            except OSError:
+                pass
 
     def test_no_cooldown_by_default(self):
         self.assertEqual(codal_sync.cooling_off(), 0)
