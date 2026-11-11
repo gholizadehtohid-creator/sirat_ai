@@ -1767,7 +1767,17 @@ def load_codal_portfolio_latest(ins_codes=None):
                updated_at
         FROM (
             SELECT *, ROW_NUMBER() OVER (
-                PARTITION BY ins_code ORDER BY period_end DESC
+                PARTITION BY ins_code ORDER BY
+                    -- A report that read as an empty portfolio (holdings but
+                    -- no listed cost, value or gain: a misread total row)
+                    -- does not hide an older one that read (2026-11-11: the
+                    -- first catch-up replaced شستا's valid Tir portfolio with
+                    -- a misread Mehr one, and its P/NAV disappeared).
+                    CASE WHEN COALESCE(listed_cost, 0) = 0
+                          AND COALESCE(listed_market, 0) = 0
+                          AND COALESCE(listed_unrealised, 0) = 0
+                          AND COALESCE(holdings, 0) > 0 THEN 1 ELSE 0 END,
+                    period_end DESC
             ) AS rn
             FROM codal_portfolio {where}
         ) WHERE rn = 1

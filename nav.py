@@ -147,6 +147,48 @@ def _value_at(frame, row_index, column):
         return None
 
 
+def _rows_sum(frame, column, upto):
+    """The sum of `column` over the holding rows above `upto`.
+
+    Holding rows: a name, not a «جمع ...» subtotal. None when no row carries
+    a number.
+    """
+
+    if column is None or upto is None:
+        return None
+    first = frame.columns[0]
+    total, seen = 0.0, False
+    for i in range(upto):
+        label = _text(frame.iloc[i][first])
+        if not label or label.startswith("جمع"):
+            continue
+        try:
+            value = codal.parse_number(frame.iloc[i][column])
+        except (KeyError, IndexError):
+            value = None
+        if value is not None:
+            total += value
+            seen = True
+    return total if seen else None
+
+
+def _total_or_sum(frame, total, column):
+    """The filed total, or the holdings' sum where the total reads zero.
+
+    Codal's export leaves the «جمع» rows at 0 when the filer's form computed
+    them on screen: شستا's 1405/07 portfolio listed eleven holdings worth
+    7,056 thousand billion rials under a total of 0, and 11 of the first 36
+    portfolios caught up on 2026-11-11 read as an empty portfolio. The
+    holdings are summed only when the total is missing or zero.
+    """
+
+    filed = _value_at(frame, total, column)
+    if filed:
+        return filed
+    summed = _rows_sum(frame, column, total)
+    return summed if summed else filed
+
+
 def _pick(sheets, names):
     """The first matching sheet's first table, or None."""
 
@@ -198,11 +240,13 @@ def extract_portfolio(sheets):
 
         total = _total_row(listed)
 
-        cost = _value_at(listed, total, _column(listed, END_OF_PERIOD, COST))
-        market = _value_at(listed, total,
-                           _column(listed, END_OF_PERIOD, MARKET_VALUE))
-        gain = _value_at(listed, total,
-                         _column(listed, END_OF_PERIOD, UNREALISED))
+        cost = _total_or_sum(listed, total, _column(listed, END_OF_PERIOD, COST))
+        market = _total_or_sum(listed, total,
+                               _column(listed, END_OF_PERIOD, MARKET_VALUE))
+        gain = _total_or_sum(listed, total,
+                             _column(listed, END_OF_PERIOD, UNREALISED))
+        if not gain and cost and market:
+            gain = None                 # derived below from market - cost
 
         out["listed_cost"] = cost * scale if cost is not None else None
         out["listed_market"] = market * scale if market is not None else None
@@ -228,7 +272,8 @@ def extract_portfolio(sheets):
 
         total = _total_row(unlisted)
 
-        cost = _value_at(unlisted, total, _column(unlisted, END_OF_PERIOD, COST))
+        cost = _total_or_sum(unlisted, total,
+                             _column(unlisted, END_OF_PERIOD, COST))
 
         out["unlisted_cost"] = cost * scale if cost is not None else None
 

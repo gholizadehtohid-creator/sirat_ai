@@ -241,3 +241,53 @@ class TestNavScoring(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestZeroTotalRows(unittest.TestCase):
+    """Codal's export can leave the «جمع» rows at 0 (شستا, 1405/07, 2026-11-11)."""
+
+    def test_a_zero_total_is_replaced_by_the_holdings_sum(self):
+        listed = portfolio_sheet([("سرمایه گذاری صبا تامین", "346", "1,171"),
+                                  ("سرمایه گذاری صدر تامین", "123", "996")],
+                                 total_cost="0", total_market="0", total_gain="0")
+        out = nav.extract_portfolio({"صورت وضعیت پرتفوی سهام قابل معامله در بازار سرمایه": [listed]})
+        # The subtotal row («جمع سهام درج شده», 1/1) is not a holding.
+        self.assertEqual(out["listed_cost"], (346 + 123) * MILLION)
+        self.assertEqual(out["listed_market"], (1171 + 996) * MILLION)
+        self.assertEqual(out["listed_unrealised"], (1171 + 996 - 346 - 123) * MILLION)
+
+    def test_a_filed_total_is_kept_as_filed(self):
+        listed = portfolio_sheet([("الف", "10", "20")], total_cost="11",
+                                 total_market="25", total_gain="14")
+        out = nav.extract_portfolio({"صورت وضعیت پرتفوی سهام قابل معامله در بازار سرمایه": [listed]})
+        self.assertEqual(out["listed_market"], 25 * MILLION)
+
+
+class TestLatestPortfolioSkipsAMisread(unittest.TestCase):
+    """A newer report that read as empty does not hide an older one that read."""
+
+    def test_the_newest_readable_portfolio_is_the_latest(self):
+        import tempfile
+        import database
+        handle, path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        original = database.DATABASE_NAME
+        database.DATABASE_NAME = path
+        try:
+            database.create_database()
+            database.save_codal_portfolio("c", {"period_end": "1405/04/31", "tracing_no": "1",
+                                                "listed_cost": 1.0, "listed_market": 3.0,
+                                                "listed_unrealised": 2.0, "holdings": 5})
+            database.save_codal_portfolio("c", {"period_end": "1405/07/30", "tracing_no": "2",
+                                                "listed_cost": 0.0, "listed_market": 0.0,
+                                                "listed_unrealised": 0.0, "holdings": 16})
+            latest = database.load_codal_portfolio_latest(["c"])["c"]
+            self.assertEqual(latest["period_end"], "1405/04/31")
+            database.save_codal_portfolio("c", {"period_end": "1405/07/30", "tracing_no": "2",
+                                                "listed_cost": 1.5, "listed_market": 7.0,
+                                                "listed_unrealised": 5.5, "holdings": 16})
+            self.assertEqual(database.load_codal_portfolio_latest(["c"])["c"]["period_end"],
+                             "1405/07/30")
+        finally:
+            database.DATABASE_NAME = original
+            os.unlink(path)

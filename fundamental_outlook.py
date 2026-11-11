@@ -610,7 +610,12 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # equity is the parent's: the newest SEPARATE period when there is one.
     nav_result = price_to_nav = price_to_nav_est = nav_move = None
     nav_stale = False
-    if kind == FINANCIAL and portfolio:
+    # Every company that files a portfolio, not only those the exchange
+    # files under a financial industry: سیدکو, تاصیکو, برکت and خگستر are
+    # holdings the exchange lists under their subsidiaries' industries
+    # (cement, mining, pharma, autos), and their P/NAV was never computed
+    # (2026-11-11). Their ranking stays on earnings; P/NAV is shown beside.
+    if portfolio:
         import nav as nav_module
         # The book equity the portfolio's gains are added to is the separate
         # statement NEAREST the portfolio's date: equity from 1405/06 on top of

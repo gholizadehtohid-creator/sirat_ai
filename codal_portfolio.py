@@ -350,6 +350,60 @@ def run(hours=DEFAULT_HOURS, limit=DEFAULT_LIMIT, verbose=True, client=None):
     return totals
 
 
+def reparse_archived(verbose=True):
+    """Re-read, from the raw archive, every stored portfolio that read as
+    empty -- no listed cost, value or gain under holdings. No request.
+
+    For the reports parsed before nav learnt to sum the holdings when Codal's
+    export leaves the «جمع» rows at zero (2026-11-11). A report without an
+    archived copy (parsed before 2026-11-05) is counted and left: the next
+    newer report replaces it.
+    """
+
+    import gzip
+    import os
+
+    import nav
+
+    conn = database._connect()
+    rows = conn.execute(
+        "SELECT ins_code, period_end, tracing_no, title FROM codal_portfolio "
+        "WHERE COALESCE(listed_cost, 0) = 0 AND COALESCE(listed_market, 0) = 0 "
+        "AND COALESCE(listed_unrealised, 0) = 0 AND COALESCE(holdings, 0) > 0"
+    ).fetchall()
+    conn.close()
+
+    out = {"empty": len(rows), "repaired": 0, "no_archive": 0, "still_empty": 0}
+    for code, period, tracing, title in rows:
+        path = os.path.join(codal.ARCHIVE_DIR, str(tracing)[-2:],
+                            "%s.gz" % tracing)
+        if not tracing or not os.path.exists(path):
+            out["no_archive"] += 1
+            continue
+        with gzip.open(path, "rb") as handle:
+            body = handle.read()
+        text = body.decode("utf-8", errors="replace") \
+            if body[:8] != b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" else body
+        try:
+            sheets = codal.split_sheets(text) if isinstance(text, str) \
+                else codal.split_sheets_xls(text)
+        except Exception:                                       # noqa: BLE001
+            sheets = None
+        portfolio = nav.extract_portfolio(sheets) if sheets else None
+        if not portfolio or not portfolio.get("listed_market"):
+            out["still_empty"] += 1
+            continue
+        record = dict(portfolio, period_end=period, tracing_no=tracing,
+                      title=title)
+        if database.save_codal_portfolio(code, record):
+            out["repaired"] += 1
+    if verbose:
+        print("portfolio: %(empty)d read as empty -- %(repaired)d repaired from "
+              "the archive, %(no_archive)d without an archived copy, "
+              "%(still_empty)d still empty" % out, flush=True)
+    return out
+
+
 def report():
     """How old the held portfolios are."""
 
@@ -372,9 +426,16 @@ def main(argv=None):
     parser.add_argument("--hours", type=float, default=DEFAULT_HOURS)
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
     parser.add_argument("--report", action="store_true")
+    parser.add_argument("--reparse-archived", action="store_true",
+                        help="re-read empty-looking portfolios from the raw "
+                             "archive (no request)")
     args = parser.parse_args(argv)
 
     if args.report:
+        report()
+        return 0
+    if args.reparse_archived:
+        reparse_archived()
         report()
         return 0
 
