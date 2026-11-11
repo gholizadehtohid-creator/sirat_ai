@@ -1,6 +1,8 @@
 """codal_announcements: what the watch keeps, and the dividend per share."""
 
 import os
+import pathlib
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -43,6 +45,11 @@ SHORT_YEAR = "تصمیمات مجمع عمومی عادی سالیانه دور�
 # کیبیسی's: the meeting adjourned; nothing was decided.
 RECESS = ("تصمیمات مجمع عمومی عادی سالیانه دوره ۱۲ ماهه منتهی به "
           "۱۴۰۵/۱۲/۲۹(اعلام تنفس)")
+
+# A recess of the year the decision that follows it settles: 3 of the 5
+# recess notices on file share their fiscal year with one (2026-11-11).
+RECESS_SAME_YEAR = ("تصمیمات مجمع عمومی عادی سالیانه دوره ۱۲ ماهه منتهی به "
+                    "۱۴۰۴/۱۲/۲۹(اعلام تنفس)")
 
 
 def letter(tracing, published, code="ن-52",
@@ -176,7 +183,8 @@ class BackfillTests(unittest.TestCase):
                 os.unlink(path)
 
     def run_backfill(self, pages, letters):
-        """`pages`: served in request order, or {tracing_no: page}."""
+        """`pages`: served in request order, or {tracing_no: page}; a page
+        that is an exception is raised instead."""
 
         instruments = [{"ins_code": "1", "symbol_raw": "x"},
                        {"ins_code": "2", "symbol_raw": "y"}]
@@ -187,6 +195,8 @@ class BackfillTests(unittest.TestCase):
                 page = pages[url.rsplit("=", 1)[-1]]
             else:
                 page = pages.pop(0)
+            if isinstance(page, Exception):
+                raise page
             return mock.Mock(content=page.encode("utf-8"))
 
         client._get.side_effect = get
@@ -205,6 +215,15 @@ class BackfillTests(unittest.TestCase):
             (ins_code,))}
         conn.close()
         return years
+
+    def marks(self):
+        """dividend_reread: {ins_code: (fiscal year read down from, due)}."""
+
+        conn = fundamental_db._connect()
+        marks = {r[0]: (r[1], r[2]) for r in conn.execute(
+            "SELECT ins_code, fiscal_year_end, due FROM dividend_reread")}
+        conn.close()
+        return marks
 
     def test_a_letter_without_dps_falls_through_to_the_next(self):
         # Two letters for one fiscal year -- an amendment without the row,
@@ -282,6 +301,24 @@ class BackfillTests(unittest.TestCase):
         self.assertEqual(self.stored_years("1"), {"1404/12/29": 55.0})
         self.assertEqual(self.client._get.call_count, 1)
 
+    def test_a_recess_notice_of_the_year_being_read_is_not_read_either(self):
+        # decision_years() leaves recess notices out of the years; this is
+        # the letter choice within a year. Read after its decision turned
+        # out to carry no DPS, the recess page is one more request, and its
+        # form can hold a DividendPerShare row. It happened: the 2026-11-06
+        # backfill read decision 1386657 (no DPS), then recess notice
+        # 1372609 of the same FY1403, and stored its 380 as
+        # 18027801615184692's DPS (18:32:31, :33, :35 UTC).
+        result = self.run_backfill(
+            {"1": FORM_WITHOUT_DPS, "2": PAGE},
+            [[letter("1", "1405/05/06 18:04:16"),
+              letter("2", "1405/04/20 10:00:00", title=RECESS_SAME_YEAR)],
+             []])
+
+        self.assertEqual(result["stored"], 0)
+        self.assertEqual(self.client._get.call_count, 1)
+        self.assertEqual(self.stored_years("1"), {})
+
     # ---- a DPS older than the newest decision on file ---------------------
 
     def hold_an_older_year(self):
@@ -317,6 +354,32 @@ class BackfillTests(unittest.TestCase):
 
         self.assertEqual(searched.count("x"), 1)
         self.assertEqual(self.stored_years("1"), {"1403/12/30": 40.0})
+
+    def test_a_refused_decision_page_is_not_recorded_as_read(self):
+        # Recorded as read after one refused page, a stale company would not
+        # be searched again until a newer decision appeared.
+        import requests
+
+        self.hold_an_older_year()
+        searched = []
+
+        def letters(_client, symbol):
+            searched.append(symbol)
+            return [letter("11", "1405/05/01 10:00:00")] if symbol == "x" else []
+
+        refused = requests.HTTPError("500 Server Error: Internal Server Error",
+                                     response=mock.Mock(status_code=500))
+        result = self.run_backfill({"11": refused}, letters)
+
+        self.assertEqual((result["stored"], result["refused"]), (0, 1))
+        self.assertNotIn("1", self.marks())
+        self.assertIn("1", a.stale_dividends())
+
+        self.run_backfill({"11": PAGE}, letters)
+
+        self.assertEqual(searched.count("x"), 2)
+        self.assertEqual(self.stored_years("1"),
+                         {"1403/12/30": 40.0, "1404/12/29": 55.0})
 
 
 class ReopenTests(unittest.TestCase):
@@ -404,6 +467,109 @@ class ReopenTests(unittest.TestCase):
         a._read_through("2", "1405/03/31")
 
         self.assertNotIn("2", a.stale_dividends(include_read=True))
+
+
+# The store as the live one was on 2026-11-11: announcements and dividends,
+# no dividend_reread (which ensure_tables() creates since the DPS marks).
+BEFORE_MARKS = """
+    CREATE TABLE announcements (
+        tracing_no TEXT PRIMARY KEY, ins_code TEXT, symbol TEXT,
+        letter_code TEXT, kind TEXT, title TEXT, published_at TEXT,
+        url TEXT, seen_at TEXT);
+    CREATE TABLE dividends (
+        ins_code TEXT, fiscal_year_end TEXT, dps REAL, capital REAL,
+        tracing_no TEXT, published_at TEXT, stored_at TEXT,
+        PRIMARY KEY (ins_code, fiscal_year_end));
+"""
+
+
+class DryRunTests(unittest.TestCase):
+    """--repair-stale-dps without --apply writes nothing. It created the
+    dividend_reread table in the live store, and through a read-only
+    connection it failed: "attempt to write a readonly database"."""
+
+    def setUp(self):
+        import database
+
+        self.database = database
+        handle, self.market = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        os.unlink(self.path)
+        self.original = database.DATABASE_NAME
+        database.DATABASE_NAME = self.market
+        self.previous = fundamental_db.set_path(self.path)
+        database.create_database()
+        fundamental_db.create_database()
+        conn = fundamental_db._connect()
+        conn.executescript(BEFORE_MARKS)
+        conn.close()
+        a.store_dividend("1", "1403/12/30", {"dps": 40.0},
+                         letter("10", "1404/05/01 10:00:00", title=OLDER_YEAR))
+        a.store_announcement(letter("11", "1405/05/01 10:00:00"), "1", "agm")
+
+    def tearDown(self):
+        self.database.DATABASE_NAME = self.original
+        fundamental_db.set_path(self.previous)
+        for path in (self.market, self.path):
+            for suffix in ("", "-wal", "-shm"):
+                try:
+                    os.unlink(path + suffix)
+                except OSError:                 # absent, or held open
+                    pass
+
+    def store(self):
+        """Every schema object of the store, and every table's row count."""
+
+        conn = sqlite3.connect(self.path)
+        schema = conn.execute("SELECT type, name, sql FROM sqlite_master "
+                              "ORDER BY type, name").fetchall()
+        counts = {name: conn.execute("SELECT COUNT(*) FROM %s" % name).fetchone()
+                  for kind, name, _sql in schema if kind == "table"}
+        conn.close()
+        return schema, counts
+
+    def test_the_dry_run_reads_a_store_opened_read_only(self):
+        store = pathlib.Path(self.path).as_uri() + "?mode=ro"
+        market = pathlib.Path(self.market).as_uri() + "?mode=ro"
+
+        with mock.patch.object(fundamental_db, "_connect",
+                               lambda: sqlite3.connect(store, uri=True)), \
+                mock.patch.object(self.database, "_connect",
+                                  lambda: sqlite3.connect(market, uri=True)):
+            result = a.reopen_stale_dividends(verbose=False)
+
+        self.assertEqual(result, {"companies": 1, "due": 1, "applied": False})
+
+    def test_the_dry_run_leaves_a_store_without_the_marks_table_as_it_was(self):
+        before = self.store()
+
+        result = a.reopen_stale_dividends(verbose=False)
+
+        self.assertEqual((result["companies"], result["due"]), (1, 1))
+        self.assertEqual(self.store(), before)
+        self.assertNotIn("dividend_reread", [name for _k, name, _s in before[0]])
+
+    def test_no_store_at_all_holds_nothing_and_is_not_created(self):
+        absent = self.path + ".absent.db"
+        self.addCleanup(lambda: [os.unlink(absent + suffix) for suffix
+                                 in ("", "-wal", "-shm")
+                                 if os.path.exists(absent + suffix)])
+        fundamental_db.set_path(absent)
+
+        self.assertEqual(a.stale_dividends(), {})
+        self.assertEqual(a.reopen_stale_dividends(verbose=False)["companies"], 0)
+        self.assertFalse(os.path.exists(absent))
+
+    def test_apply_creates_the_table_it_writes_to(self):
+        a.reopen_stale_dividends(apply=True, verbose=False)
+
+        conn = fundamental_db._connect()
+        marks = conn.execute("SELECT ins_code, fiscal_year_end, due "
+                             "FROM dividend_reread").fetchall()
+        conn.close()
+        self.assertEqual(marks, [("1", "1404/12/29", 1)])
 
 
 if __name__ == "__main__":

@@ -249,8 +249,16 @@ INCOME_ITEMS = {
         ["متوقف شده", "هر سهم", "عملیات در حال تداوم"],
     ),
     "net_profit_owners": (["مالکان شرکت اصلی"], []),
+    # "پایه هر سهم" is last, so it is only ever a substring match tried
+    # after the other two. The 1404-era template labels basic EPS "سود
+    # (زیان) پایه هر سهم", which "سود پایه هر سهم" misses by the "(زیان)",
+    # and where that filing's "خالص هر سهم" row is empty it had no EPS at
+    # all: 1516177, and 58 of an 80-filing sample of the 202 archived among
+    # the 575 stored with a net profit and no EPS (2026-11-11). Any earlier,
+    # it would displace the "خالص هر سهم" figure filings parse now (1534498:
+    # 3,374 for 3,306).
     "eps": (
-        ["سود پایه هر سهم", "سود (زیان) خالص هر سهم"],
+        ["سود پایه هر سهم", "سود (زیان) خالص هر سهم", "پایه هر سهم"],
         ["عملیاتی", "غیرعملیاتی", "ناشی از"],
     ),
     "capital": (["سرمایه"], ["افزایش سرمایه", "در جریان"]),

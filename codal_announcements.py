@@ -40,7 +40,6 @@ nothing: the meeting adjourned.
 
 import argparse
 import re
-import sqlite3
 import sys
 from datetime import datetime, timezone
 
@@ -111,6 +110,13 @@ def ensure_tables():
     """)
     conn.commit()
     conn.close()
+
+
+def _tables(conn):
+    """The tables a store holds. Asking writes nothing, unlike ensure_tables()."""
+
+    return {row[0] for row in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table'")}
 
 
 # ==============================
@@ -493,29 +499,43 @@ def stale_dividends(include_read=False):
     `include_read`, those read ones too: what the repair lists and marks.
     Decisions on file: the announcements table, and the letter index the
     per-company sync fills (sirat_market.db).
+
+    Reads only: the --repair-stale-dps dry run is this. It called
+    ensure_tables(), and once that created dividend_reread too, the dry
+    run wrote that table into the live store while printing "nothing
+    written" -- and through a read-only connection it failed outright
+    (found 2026-11-11 by the review). A store or table not there yet holds
+    nothing: no dividends, no decisions, no marks. backfill_dividends()
+    and --apply create the tables before they write.
     """
+
+    import os
 
     import database
 
-    ensure_tables()
+    if not fundamental_db.exists():
+        return {}
     code = persian.normalize(ANNUAL_AGM_DECISIONS)
+    titles, stored, reread = [], [], {}
     conn = fundamental_db._connect()
-    titles = conn.execute("SELECT ins_code, title FROM announcements "
-                          "WHERE letter_code = ?", (code,)).fetchall()
-    stored = conn.execute("SELECT ins_code, fiscal_year_end, dps, tracing_no "
-                          "FROM dividends").fetchall()
-    try:
+    tables = _tables(conn)
+    if "announcements" in tables:
+        titles = conn.execute("SELECT ins_code, title FROM announcements "
+                              "WHERE letter_code = ?", (code,)).fetchall()
+    if "dividends" in tables:
+        stored = conn.execute("SELECT ins_code, fiscal_year_end, dps, "
+                              "tracing_no FROM dividends").fetchall()
+    if "dividend_reread" in tables:
         reread = {str(r[0]): (r[1] or "", r[2]) for r in conn.execute(
             "SELECT ins_code, fiscal_year_end, due FROM dividend_reread")}
-    except sqlite3.OperationalError:            # a read-only look, pre-table
-        reread = {}
     conn.close()
 
-    database.create_database()
-    mconn = database._connect()
-    titles += mconn.execute("SELECT ins_code, title FROM codal_letters "
-                            "WHERE letter_code = ?", (code,)).fetchall()
-    mconn.close()
+    if stored and os.path.isfile(database.DATABASE_NAME):
+        mconn = database._connect()
+        if "codal_letters" in _tables(mconn):
+            titles += mconn.execute("SELECT ins_code, title FROM codal_letters "
+                                    "WHERE letter_code = ?", (code,)).fetchall()
+        mconn.close()
 
     by_company = {}
     for ins_code, title in titles:

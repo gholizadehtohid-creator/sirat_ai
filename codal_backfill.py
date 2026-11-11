@@ -486,12 +486,22 @@ def repair_superseded(apply=False, verbose=True):
     them. The dry run counts those rows and their items. A document the
     archive holds is re-parsed from it with today's extractor, offline,
     and a fuller parse is written to codal_filings too, so the fundamental
-    store carries it (on 2026-11-11 the 6 archived ones gained nothing:
-    today's extractor finds no owners' lines in those audited releases
-    either). The rest are listed by tracing number for a targeted
-    re-parse, which needs the network and is not done here. All are
-    written: the newest release is the right one, line items or not (and
-    none of the 129 was a company's latest period).
+    store carries it (on 2026-11-11, of the 6 archived ones only 1516177
+    gains -- its EPS, once financials read "سود (زیان) پایه هر سهم"; the
+    other five carry no owners' lines as Codal exported them: separate
+    statements, or a consolidated heading with no table under it). The
+    rest are listed by tracing number for a targeted re-parse, which
+    needs the network and is not done here. All are written: the newest
+    release is the right one, line items or not (and none of the 129 was
+    a company's latest period) --
+
+    -- except where the newest release's parse lacks a whole statement the
+    held one has (database.statements_lost): that is a failed read, not a
+    thinner one, and writing it would replace a usable row. 472469 has no
+    balance sheet or cash flow statement, 1212323 no income statement
+    (2026-11-11). Those are kept, reported as "newest release unparsed"
+    for a targeted re-parse, and save_codal_financials refuses them on any
+    path.
     """
 
     stale = superseded_periods()
@@ -499,7 +509,7 @@ def repair_superseded(apply=False, verbose=True):
     # What each row would lose, before and after the archive re-parse.
     lost_before, lost_after = {}, {}
     thinner_before = thinner_after = 0
-    reparsed, unarchived, unparsed, plan = 0, [], [], []
+    reparsed, unarchived, unparsed, plan, kept = 0, [], [], [], []
 
     for held, best in stale:
         lost = _present(held["items"]) - _present(best["items"])
@@ -516,6 +526,11 @@ def repair_superseded(apply=False, verbose=True):
                 unarchived.append(best["tracing_no"])
             else:
                 unparsed.append((best["tracing_no"], why, sorted(lost)))
+        missing = database.statements_lost(
+            held["items"], (best if record is None else record)["items"])
+        if missing:
+            kept.append((best["tracing_no"], held["tracing_no"], missing))
+            continue
         if lost:
             thinner_after += 1
             for key in lost:
@@ -570,14 +585,14 @@ def repair_superseded(apply=False, verbose=True):
               "losing_items": thinner_before, "items_lost": lost_before,
               "reparsed": reparsed, "still_losing_items": thinner_after,
               "items_still_lost": lost_after, "not_archived": unarchived,
-              "not_reparsed": unparsed}
+              "not_reparsed": unparsed, "kept_unparsed": kept}
 
     if verbose:
         print("repair: %d periods in codal_financials hold an older release "
               "than codal_filings has; %d are the company's latest period%s"
               % (len(stale), len(on_latest), "" if apply else
-                 " -- dry run, nothing written (--apply rewrites them)"),
-              flush=True)
+                 " -- dry run, nothing written (--apply rewrites %d of them)"
+                 % len(plan)), flush=True)
         for name, count in sorted(kinds.items(), key=lambda kv: -kv[1]):
             print("    %4d  %s" % (count, name), flush=True)
         examples = on_latest + [pair for pair in stale if pair not in on_latest]
@@ -596,8 +611,9 @@ def repair_superseded(apply=False, verbose=True):
               "parse carries (rows per item: %s)"
               % (thinner_before, by_rows(lost_before) or "-"), flush=True)
         print("  re-parsed from the raw archive with today's extractor, "
-              "offline, and fuller: %d; still losing items after that: %d"
-              % (reparsed, thinner_after), flush=True)
+              "offline, and fuller: %d; written still losing items: %d; "
+              "kept, the newest release unparsed: %d"
+              % (reparsed, thinner_after, len(kept)), flush=True)
         for tracing_no, why, keys in unparsed:
             print("  archived, kept as stored -- %s: %s (%s)"
                   % (why, tracing_no, ", ".join(keys)), flush=True)
@@ -605,6 +621,10 @@ def repair_superseded(apply=False, verbose=True):
             print("  not in the raw archive (%d; a targeted re-parse needs "
                   "the network): %s" % (len(unarchived), " ".join(unarchived)),
                   flush=True)
+        for newest, held_no, missing in kept:
+            print("  newest release unparsed, kept: %s has no %s, which the "
+                  "held %s has -- not written; it needs a targeted re-parse"
+                  % (newest, " and no ".join(missing), held_no), flush=True)
         if apply:
             print("repair: %d rows rewritten" % written, flush=True)
 

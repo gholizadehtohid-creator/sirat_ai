@@ -1409,6 +1409,45 @@ def _not_older(table):
             "OR ? >= %s" % (table, held, held))
 
 
+# What a parse must carry to stand for each statement: financials.ratios'
+# provenance flags -- has_income (revenue or net profit), has_balance (total
+# assets), has_cashflow (operating cash flow). Spelled here too so this
+# module imports nothing above it; the tests hold the two equal.
+STATEMENT_ITEMS = (
+    ("income statement", ("revenue", "net_profit")),
+    ("balance sheet", ("total_assets",)),
+    ("cash flow statement", ("operating_cash_flow",)),
+)
+
+
+def _figure(value):
+    """A number a parse found: finite, as financials._finite reads one."""
+
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+
+    return number == number and abs(number) != float("inf")
+
+
+def statements_lost(held, incoming):
+    """The statements one parse's items (`held`) carry and another's lack."""
+
+    held = held if isinstance(held, dict) else {}
+    incoming = incoming if isinstance(incoming, dict) else {}
+
+    return [name for name, keys in STATEMENT_ITEMS
+            if any(_figure(held.get(key)) for key in keys)
+            and not any(_figure(incoming.get(key)) for key in keys)]
+
+
+def _statements_lost_sql(held, incoming):
+    """statements_lost() over two stored `items` blobs, for an upsert's WHERE."""
+
+    return 1 if statements_lost(_loads(held), _loads(incoming)) else 0
+
+
 def save_codal_financials(ins_code, record):
     """Upsert one company-period of parsed financials.
 
@@ -1421,7 +1460,18 @@ def save_codal_financials(ins_code, record):
     first. 531 periods held a superseded release, 74 of them a company's
     latest (ملت 1405/06/31 held 1614602, not the correction 1619771), while
     the fundamental store, which already ranked by publication, held the
-    right one. Returns 1 if the row was written, 0 if it held a newer one.
+    right one.
+
+    Nor does a newer release replace the held one when its parse lacks a
+    statement the held parse has (STATEMENT_ITEMS): that is a failed read
+    of the statement, not the company's word on it, and newest-wins alone
+    let it through. Found 2026-11-11 in the --repair-superseded dry run:
+    472469's parse has no balance sheet or cash flow statement, 1212323's
+    no income statement, and the releases held for those periods have all
+    three. codal_filings keeps every release as parsed; the repair names
+    these for a targeted re-parse. A re-parse of the held letter itself
+    always may. Returns 1 if the row was written, 0 if it held a newer
+    release or a statement the incoming parse lacks.
     """
 
     if not record or not record.get("period_end"):
@@ -1430,6 +1480,8 @@ def save_codal_financials(ins_code, record):
     create_database()
 
     conn = _connect()
+    conn.create_function("statements_lost", 2, _statements_lost_sql,
+                         deterministic=True)
 
     tracing_no = record.get("tracing_no")
     tracing_no = None if tracing_no is None else str(tracing_no)
@@ -1445,7 +1497,9 @@ def save_codal_financials(ins_code, record):
         audited = excluded.audited, consolidated = excluded.consolidated,
         items = excluded.items, ratios = excluded.ratios,
         updated_at = excluded.updated_at
-    WHERE %s
+    WHERE (%s)
+      AND (excluded.tracing_no IS codal_financials.tracing_no
+           OR NOT statements_lost(codal_financials.items, excluded.items))
     """ % _not_older("codal_financials"), (
         str(ins_code), record["period_end"], record.get("period_months"),
         tracing_no, record.get("title"),
