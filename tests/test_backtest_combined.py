@@ -334,3 +334,33 @@ class TestTrailingExit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestUntradedMovesBothWays(unittest.TestCase):
+    """The full test, 2026-11-12: an untraded rise was kept, its fall removed."""
+
+    @staticmethod
+    def series(closes, volumes):
+        return pd.DataFrame({
+            "date": pd.bdate_range("2026-01-01", periods=len(closes)),
+            "open": closes, "high": closes, "low": closes, "close": closes,
+            "volume": volumes})
+
+    def test_an_untraded_round_trip_leaves_no_gain(self):
+        # حریل: 4550 traded, a bogus 3050 and back to 4550 untraded, 4470 traded
+        frame, _ = bc.back_adjust(self.series([4550.0, 3050.0, 4550.0, 4470.0],
+                                              [1e6, 0, 0, 1e6]))
+        net = frame["close"].iloc[-1] / frame["close"].iloc[0] - 1
+        self.assertAlmostEqual(net, 4470 / 4550 - 1, places=6)
+
+    def test_a_traded_reopening_rise_is_still_kept(self):
+        frame, events = bc.back_adjust(self.series([1118.0, 1072.0, 1202.0],
+                                                   [1e6, 0, 1e6]))
+        self.assertEqual([e["kind"] for e in events], ["reset"])
+        self.assertAlmostEqual(frame["close"].iloc[-1] / frame["close"].iloc[-2] - 1,
+                               1202 / 1072 - 1, places=6)
+
+    def test_a_pre_listing_placeholder_is_not_a_return(self):
+        frame, _ = bc.back_adjust(self.series([1000.0, 1000.0, 65000.0, 66000.0],
+                                              [0, 0, 1e6, 1e6]))
+        self.assertAlmostEqual(frame["close"].iloc[0], 65000.0, places=4)

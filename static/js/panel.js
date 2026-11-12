@@ -4029,19 +4029,24 @@ function renderHoldings(rep) {
               "—", "—", "—", "—", "—", "—", "—", "—"];
     }
     if (r.bill) {
-      const b = billQuote(r.symbol);
+      // Priced on the server from the bills card's last read; the bills read
+      // in this page stand in when the server had none.
+      const b = r.price ? { price: r.price, ytm_pct: r.ytm_pct } : billQuote(r.symbol);
       return [`<strong>${esc(r.symbol)}</strong> <span class="hint">اخزا — درآمد ثابت</span>`,
               b ? num(b.price, 0) : "—", "—", r.quantity == null ? "—" : num(r.quantity, 0),
-              b && r.quantity ? `${money(b.price * r.quantity)} ریال` : "—", "—",
-              b ? `<span class="hint">${num(b.ytm_pct, 1)}٪ سالانه تا سررسید</span>` : '<span class="hint">قیمت اخزا هنوز خوانده نشده</span>',
+              b && r.quantity ? money(b.price * r.quantity) : "—",
+              r.weight_pct == null ? "—" : `${num(r.weight_pct, 1)}٪`,
+              b && b.ytm_pct != null ? `<span class="hint">${num(b.ytm_pct, 1)}٪ سالانه تا سررسید</span>` : '<span class="hint">قیمت اخزا هنوز خوانده نشده</span>',
               "—", "—", "—"];
     }
     const o = r.outlook || {};
     const flags = o.flags || [];
     // A move past the price band is a capital increase, a unit split or a
     // reopening: shown, but not in the colour of a day's gain or loss.
-    const chg = r.halted_since
-      ? `<span class="down">متوقف از ${esc(r.halted_since)}</span>`
+    const chg = r.halted
+      ? `<span class="down">متوقف ${r.halted_since ? `از ${esc(r.halted_since)}` : "— هرگز معامله نشده"}</span>`
+      : r.missed_last_session
+        ? `<span class="hint" title="در آخرین جلسه معامله نشد؛ قیمت، قیمت آخرین معامله است">بی‌معامله از ${esc(r.last_trade || "")}</span>`
       : (r.change_pct == null ? "—"
         : r.change_beyond_band
           ? `<span class="hint" title="بیش از دامنه‌ی نوسان روزانه: احتمالاً افزایش سرمایه، تقسیم واحد یا بازگشایی نماد — نه سود یا زیان واقعی">⚠ ${num(r.change_pct, 1)}٪</span>`
@@ -4053,14 +4058,19 @@ function renderHoldings(rep) {
         : '<span class="up">✓ بدون هشدار</span>');
     const pe = !r.equity ? "—"
       : o.kind === "financial"
-        ? (o.price_to_nav == null ? '<span class="hint">مالی</span>' : `P/NAV ${num(o.price_to_nav, 2)}`)
+        ? (o.price_to_nav == null ? '<span class="hint">مالی</span>'
+          : o.nav_stale && o.price_to_nav_est != null
+            ? `P/NAV ~${num(o.price_to_nav_est, 2)} <span class="hint" title="${esc((o.nav_notes || []).join("\n"))}">(تخمینی؛ پرتفوی ${esc(o.nav_period || "")}: ${num(o.price_to_nav, 2)})</span>`
+            : `P/NAV ${num(o.price_to_nav, 2)}` + (o.nav_period ? ` <span class="hint">(${esc(o.nav_period)})</span>` : ""))
         : (o.pe_forward == null ? "—" : num(o.pe_forward, 1));
     const div = !r.dividend ? "—"
       : !r.dividend.dps ? '<span class="hint">بدون سود نقدی</span>'
-        : `${num(r.dividend.dps, 0)} <span class="hint">(${pctCell(r.dividend.yield_pct, 1)})</span>`;
+        : r.dividend.stale
+          ? `<span class="hint" title="مجمع سال بعد ثبت نشده؛ بازده امروز حساب نشد">${num(r.dividend.dps, 0)} — سال ${esc(r.dividend.fiscal_year_end || "")}، قدیمی</span>`
+          : `${num(r.dividend.dps, 0)} <span class="hint">(${pctCell(r.dividend.yield_pct, 1)})</span>`;
     const a = (r.announcements || [])[0];
     const ann = a
-      ? `<a href="https://www.codal.ir${esc(a.url || "")}" target="_blank" rel="noopener">${esc((a.title || "").slice(0, 40))}${(a.title || "").length > 40 ? "…" : ""}</a>` +
+      ? `<a href="${esc(safeUrl(/^https?:/i.test(a.url || "") ? a.url : `https://codal.ir${a.url || ""}`))}" target="_blank" rel="noopener">${esc((a.title || "").slice(0, 40))}${(a.title || "").length > 40 ? "…" : ""}</a>` +
         ` <span class="hint">${esc((a.published_at || "").slice(0, 10))}</span>`
       : '<span class="hint">در ۹۰ روز اخیر نبوده</span>';
     return [`<strong>${esc(r.symbol)}</strong> <span class="hint">${esc((r.name || "").slice(0, 22))}</span>`,
@@ -4103,7 +4113,12 @@ function renderHoldingsRisk(risk) {
       sub: dd.current_pct == null ? ""
         : (dd.current_pct < -0.5 ? `اکنون ${num(Math.abs(dd.current_pct), 0)}٪ زیر قله` : "اکنون نزدیک قله") },
   ]);
-  const notes = [`${num(risk.sessions, 0)} جلسه‌ی مشترک، ${num(risk.names_measured, 0)} نماد`];
+  const notes = [`${num(risk.sessions, 0)} جلسه‌ی مشترک، ${num(risk.names_measured, 0)} نماد` +
+    (risk.measured_pct != null && risk.measured_pct < 99.5
+      ? ` — فقط ${num(risk.measured_pct, 0)}٪ ارزش سبد؛ این اعداد ریسک همان بخش است` : "")];
+  if ((risk.proxied || []).length) {
+    notes.push(`صندوق بدون سابقه‌ی روزانه، به جای آن: ${esc(risk.proxied.join("، "))}`);
+  }
   if (risk.average_correlation != null) {
     notes.push(`میانگین همبستگی دوبه‌دو ${num(risk.average_correlation, 2)}`);
   }
@@ -4410,21 +4425,40 @@ function renderToday() {
   const mine = book && (book.rows || []).some(r => r.quantity) ? sleevesOf(book.rows || []) : null;
   const own = mine && mine.total > 0 ? mine.sleeves : null;
   const base = own ? mine.total : null;
-  // A position without a price is left out of the total, so every weight
-  // and every amount computed from it is wrong by that position: no
-  // instruction is given until it is priced.
-  const blocked = mine && mine.unpriced.length ? mine.unpriced : null;
+  // A position without a price is left out of the total, and a line that
+  // could not be read (an unknown symbol, a quantity in two pieces) may be a
+  // position too: every weight and amount computed without them is wrong by
+  // their value, so no instruction is given until they are fixed.
+  const blocked = mine && (mine.unpriced.length || mine.errors.length)
+    ? mine.unpriced.concat(mine.errors) : null;
   // The allocation's own rule: back to target when a sleeve drifts more than
   // this many points (allocation.DRIFT_BAND_PCT), or every ~60 sessions. The
   // card switched to "buy/sell X" at 2% of the book -- five times as often.
   const band = (rep.rebalance && rep.rebalance.drift_band_pct) || 10;
 
-  const items = Object.entries(profile.weights).filter(([, w]) => w > 0).map(([sleeve, w]) => {
-    let buy = "", why = "";
+  // The sleeves to show: the profile's, and any the reader holds that the
+  // profile gives 0% -- a held sleeve the card skipped was never sold, and
+  // the others' "buy" had nothing to pay for it (the full test, 2026-11-12).
+  const weights = Object.assign({}, profile.weights);
+  if (own) Object.keys(own).forEach(k => { if (own[k] > 0 && !(k in weights)) weights[k] = 0; });
+  const shown = Object.entries(weights).filter(([k, w]) => w > 0 || (own && own[k] > 0));
+
+  // One decision for the whole book, then each sleeve's part of it. Decided
+  // per sleeve, one could read "in range, nothing to do" beside another's
+  // "buy 5 billion" with no sale to fund it (the full test). The rule: when
+  // any sleeve is past the band, every sleeve goes back to target -- the
+  // sales then pay for the purchases, since the base is the sleeves' total.
+  const nowPct = (k) => base ? (own[k] || 0) / base * 100 : 0;
+  const rebalance = own && !blocked && shown.some(([k, w]) => Math.abs(nowPct(k) - w) > band);
+  const heldIn = (sleeve) => ((book && book.rows) || [])
+    .filter(r => r.sleeve === sleeve && r.quantity && !r.error).map(r => r.symbol);
+
+  const items = shown.map(([sleeve, w]) => {
+    let pick = "", why = "";
     if (sleeve === "gold" || sleeve === "equity") {
       const f = cheapest(sleeve);
       if (f) {
-        buy = `بخرید: <strong>${esc(f.symbol)}</strong>`;
+        pick = `<strong>${esc(f.symbol)}</strong>`;
         why = `${signed(f.discount_pct, 1)} نسبت به NAV — ارزان‌ترین صندوق پرمعامله‌ی این بخش`;
       }
     } else if (sleeve === "fixed") {
@@ -4434,30 +4468,43 @@ function renderToday() {
       const b = (opp && opp.bills && opp.bills.parking) || null;
       const f = cheapest("fixed");
       if (b) {
-        buy = `بخرید: <strong>${esc(b.symbol)}</strong> (اخزا)`;
+        pick = `<strong>${esc(b.symbol)}</strong> (اخزا)`;
         why = `${num(b.ytm_pct, 1)}٪ سالانه تا ${esc(b.maturity_jalali || b.maturity)}، اگر تا سررسید نگه دارید — ثابت به ریال، نه واقعی`;
       } else if (f) {
-        buy = `بخرید: <strong>${esc(f.symbol)}</strong>`;
+        pick = `<strong>${esc(f.symbol)}</strong>`;
         why = "صندوق درآمد ثابت پرمعامله";
       }
     }
     let amount = `${num(Math.round((profile.amounts || {})[sleeve] || 0), 0)} <span class="pct">ریال</span>` +
       ` <span class="hint">(مثال برای سرمایه‌ی ${money(rep.equity)} ریال؛ دارایی خودتان را در «سبد من» وارد کنید)</span>`;
+    // What the instrument line says: an order only where this sleeve buys.
+    let line = pick ? `بخرید: ${pick}` : `<span class="hint">${pending}</span>`;
     if (own) {
-      const have = own[sleeve] || 0;
-      const gap = base * w / 100 - have;
-      const now = base ? have / base * 100 : 0;
-      amount = `الان ${num(now, 0)}٪ · هدف ${num(w, 0)}٪ → ` +
-        (blocked
-          ? `<span class="hint">ارزش ${blocked.map(esc).join("، ")} معلوم نیست؛ دستوری داده نمی‌شود</span>`
-          : Math.abs(now - w) <= band
-            ? `<strong>در محدوده‌ی هدف</strong> <span class="hint">(±${num(band, 0)} واحد) — کاری لازم نیست</span>`
-            : `<strong>${gap > 0 ? "بخرید" : "بفروشید"} ${money(Math.abs(gap))}</strong> <span class="pct">ریال</span>`);
+      const gap = base * w / 100 - (own[sleeve] || 0);
+      const now = nowPct(sleeve);
+      const small = Math.abs(gap) < base * 0.005;
+      const act = blocked ? "blocked" : !rebalance ? "hold" : small ? "none" : gap > 0 ? "buy" : "sell";
+      // Functions, not strings: only the chosen one is built (`blocked` is
+      // null on every other path).
+      amount = `الان ${num(now, 0)}٪ · هدف ${num(w, 0)}٪ → ` + {
+        blocked: () => `<span class="hint">ارزش ${blocked.map(esc).join("، ")} معلوم نیست؛ دستوری داده نمی‌شود</span>`,
+        hold: () => `<strong>در محدوده‌ی هدف</strong> <span class="hint">(همه‌ی بخش‌ها درون ±${num(band, 0)} واحد) — کاری لازم نیست</span>`,
+        none: () => `<strong>بدون تغییر</strong> <span class="hint">(کمتر از نیم درصد سبد)</span>`,
+        buy: () => `<strong>بخرید ${money(gap)}</strong> <span class="pct">ریال</span>`,
+        sell: () => `<strong>بفروشید ${money(-gap)}</strong> <span class="pct">ریال</span>`,
+      }[act]();
+      const held = heldIn(sleeve);
+      line = act === "buy"
+        ? (pick ? `بخرید: ${pick}` : `<span class="hint">${pending}</span>`)
+        : act === "sell"
+          ? (held.length ? `از دارایی خودتان در این بخش: <strong>${held.map(esc).join("، ")}</strong>` : "")
+          : (pick ? `<span class="hint">ابزار این بخش، اگر روزی خرید لازم شد: ${pick}</span>` : "");
+      if (act === "sell") why = "";
     }
     return `<div class="today-item">
       <div class="pct">${num(w, 0)}٪ ${esc(labels[sleeve] || sleeve)}</div>
       <div class="amt">${amount}</div>
-      <div class="buy">${buy || `<span class="hint">${pending}</span>`}</div>
+      <div class="buy">${line}</div>
       <div class="why">${why}</div>
     </div>`;
   });
@@ -4472,7 +4519,7 @@ function renderToday() {
     `هر حدود سه ماه، یا وقتی سهم یک بخش بیش از ${num(band, 0)} واحد از هدف دور شد، به همین وزن‌ها برگردانید؛ ` +
     `بین این دو، کاری لازم نیست. ` +
     (mine && mine.outside.length
-      ? `<span class="hint">${mine.outside.map(esc).join("، ")} (صندوق اهرمی یا مختلط) در هیچ‌کدام از سه بخش شمرده نشد. </span>`
+      ? `<span class="hint">${mine.outside.map(esc).join("، ")} در هیچ‌کدام از سه بخش نیست و در درصدها و مبالغ بالا حساب نشد. </span>`
       : "") +
     `<span class="hint">${esc(profile.evidence_text || "")}</span>`;
 }
@@ -4491,24 +4538,27 @@ function billQuote(symbol) {
 // 40 fixed-income funds ending «-د» as equity and «زر» equity funds as gold
 // (the panel review, 2026-11-11). A bill is priced from the bills read here.
 function sleevesOf(rows) {
-  const out = {}, unpriced = [], outside = [];
+  const out = {}, unpriced = [], outside = [], errors = [];
   let total = 0;
   rows.forEach(r => {
+    if (r.error) { errors.push(r.symbol); return; }
     let value = Number(r.value) || 0;
-    if (r.bill) {
+    if (r.bill && !value) {
       const b = billQuote(r.symbol);
       value = b && r.quantity ? b.price * r.quantity : 0;
     }
     if (!value) {
-      if (r.quantity && !r.error) unpriced.push(r.symbol);
+      if (r.quantity) unpriced.push(r.symbol);
       return;
     }
-    total += value;
     const sleeve = r.sleeve !== undefined ? r.sleeve : (r.equity ? "equity" : null);
+    // Outside the three sleeves (a leveraged or mixed fund): not in the base
+    // the plan is sized on, so the plan's sales pay for its purchases.
     if (!sleeve) { outside.push(r.symbol); return; }
+    total += value;
     out[sleeve] = (out[sleeve] || 0) + value;
   });
-  return { sleeves: out, total, unpriced, outside };
+  return { sleeves: out, total, unpriced, outside, errors };
 }
 
 // Repaints whatever each slot holds, on every tab switch, resize, theme toggle

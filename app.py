@@ -965,7 +965,8 @@ def api_holdings():
 
     def build():
         import holdings
-        return holdings.review(holdings.parse(text))
+        entries, errors = holdings.parse_with_errors(text)
+        return holdings.review(entries, parse_errors=errors)
 
     try:
         return jsonify(memoise(key, build, force=force))

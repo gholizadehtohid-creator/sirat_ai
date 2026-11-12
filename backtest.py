@@ -19,6 +19,8 @@ admin panel can vary them.
 
 import math
 
+import numpy as np
+
 import pandas as pd
 
 import config
@@ -86,9 +88,13 @@ def _dividend_events(frame, closes, volumes, dividends, taken):
     if not dividends or "date" not in frame.columns or volumes is None:
         return []
 
+    import numpy as np
     import pandas as pd
 
-    dates = pd.to_datetime(frame["date"]).dt.normalize()
+    # Dates as one int64 array, compared in bulk: a .iloc per bar per
+    # dividend added ~13.6 s to every v2 scan (the full test, 2026-11-12).
+    dates = pd.to_datetime(frame["date"]).dt.normalize().to_numpy(
+        dtype="datetime64[ns]").astype("int64")
     out = []
     for when, dps in dividends:
         try:
@@ -98,9 +104,10 @@ def _dividend_events(frame, closes, volumes, dividends, taken):
             continue
         if not dps or dps <= 0:
             continue
-        lo = stamp - pd.Timedelta(days=DIVIDEND_WINDOW_BEFORE)
-        hi = stamp + pd.Timedelta(days=DIVIDEND_WINDOW_AFTER)
-        window = [i for i in range(1, len(closes)) if lo <= dates.iloc[i] <= hi]
+        lo = (stamp - pd.Timedelta(days=DIVIDEND_WINDOW_BEFORE)).value
+        hi = (stamp + pd.Timedelta(days=DIVIDEND_WINDOW_AFTER)).value
+        window = [int(i) for i in np.nonzero((dates >= lo) & (dates <= hi))[0]
+                  if i >= 1]
         if not window or any(i in taken for i in window):
             continue
         for i in window:
@@ -162,13 +169,14 @@ def back_adjust(df, threshold=None, dividends=None):
     # Three rules since the review panel of 2026-11-11 (technical, quant,
     # fundamental, market-rules and data-quality reviewers, independently):
     #
-    #  1. Only DOWNWARD gaps are corporate actions. A capital increase or a
-    #     dividend lowers the base price; nothing on this exchange raises it.
-    #     A rise past the threshold is a reopening without a band -- وبملت
+    #  1. On a TRADED bar only a downward gap is a corporate action: a rise
+    #     past the threshold there is a reopening without a band -- وبملت
     #     +12.1% the day after its AGM, اروند +41.5% after a halt -- and
     #     scaling it out erased real returns (2,823 such rises).
-    #  2. A fall on a bar with NO trade is the exchange re-pricing a frozen
-    #     close, whatever its size: the AGM's dividend (وبملت 1118 -> 1072,
+    #  2. A move on a bar with NO trade, either way and whatever its size, is
+    #     the exchange re-pricing a frozen close (a capital reduction raises
+    #     it; a dividend or an increase lowers it), and so are the bars before
+    #     a name's first trade: the AGM's dividend (وبملت 1118 -> 1072,
     #     exactly its DPS of 46; فولاد -55, فملی -450). Under the 12% rule
     #     those stayed in the series as losses -- most dividends are 3-12%
     #     of the price, and TEDPIX credits them -- and the next session's
@@ -182,6 +190,13 @@ def back_adjust(df, threshold=None, dividends=None):
     volumes = (frame["volume"].astype(float).fillna(0).to_numpy()
                if "volume" in frame.columns else None)
     noise = 0.001
+    # The bars before a name's first trade are a placeholder (an IPO's run
+    # at 1,000 rials), not prices: the jump onto the first traded bar was
+    # kept as a return (the full test, 2026-11-12).
+    first_trade = None
+    if volumes is not None:
+        traded_at = np.nonzero(volumes > 0)[0]
+        first_trade = int(traded_at[0]) if len(traded_at) else None
 
     factors = [1.0] * n
     events = []
@@ -198,9 +213,17 @@ def back_adjust(df, threshold=None, dividends=None):
 
             ratio = current / previous
             untraded = volumes is not None and not volumes[i] > 0
+            pre_listing = first_trade is not None and i <= first_trade
 
+            # A move on a bar with no trade is the exchange re-pricing a
+            # frozen close, in EITHER direction: a capital reduction raises
+            # the base, and a bogus print that rose and fell back on untraded
+            # bars kept its rise as a gain while its fall was taken out
+            # (حریل +46.6% instead of -1.8%; the full test, 2026-11-12).
+            # Traded bars stay down-only: a rise there is a real reopening.
             kind = ("gap" if ratio < 1.0 - threshold
-                    else "reset" if untraded and ratio < 1.0 - noise
+                    else "reset" if (untraded or pre_listing)
+                    and abs(ratio - 1.0) > noise
                     else None)
 
             if kind:

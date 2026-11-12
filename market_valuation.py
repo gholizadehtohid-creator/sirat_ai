@@ -69,6 +69,10 @@ def _factor(data, code, when):
     i = data.position(code, when)
     if frame is None or i < 0:
         return None
+    # The share-count factor (capital increases only), not the price one:
+    # that folds in dividends since 2026-11-11 (pit.share_factors).
+    if "share_factor" in frame.columns:
+        return float(frame["share_factor"].iloc[i])
     raw = float(frame["raw_close"].iloc[i] or 0)
     return float(frame["close"].iloc[i]) / raw if raw > 0 else None
 

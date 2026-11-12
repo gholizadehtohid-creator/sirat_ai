@@ -20,6 +20,23 @@ class ParseTests(unittest.TestCase):
             holdings.parse("فولاد 1000، شپنا 5000\nزر 20000, وبملت\r\nفولاد ۵۰۰"),
             [("فولاد", 1500.0), ("شپنا", 5000.0), ("زر", 20000.0), ("وبملت", None)])
 
+    def test_thousands_separators_are_one_quantity(self):
+        # The broker apps write «1,000,000»; the comma split read it as one
+        # share and a symbol «000» (the full test, 2026-11-12).
+        self.assertEqual(
+            holdings.parse("فولاد 1,000,000, شپنا 2,500\nزر ۱٬۲۰۰"),
+            [("فولاد", 1000000.0), ("شپنا", 2500.0), ("زر", 1200.0)])
+        self.assertEqual(holdings.parse("فولاد,شپنا 300,وبملت"),
+                         [("فولاد", None), ("شپنا", 300.0), ("وبملت", None)])
+
+    def test_a_quantity_in_two_pieces_is_an_error_not_a_guess(self):
+        entries, errors = holdings.parse_with_errors("فولاد 12 500\nشپنا 100")
+        self.assertEqual(entries, [("فولاد", None), ("شپنا", 100.0)])
+        self.assertIn("فولاد", errors)
+        book = holdings._summarise([{"symbol": "فولاد", "quantity": None,
+                                     "error": errors["فولاد"], "parse_error": True}])
+        self.assertTrue(any("12 500" in w for w in book["warnings"]))
+
     def test_nothing_is_an_empty_book(self):
         self.assertEqual(holdings.parse(""), [])
         self.assertEqual(holdings.parse(" ,، \n "), [])
@@ -32,7 +49,8 @@ class ParseTests(unittest.TestCase):
 def row(symbol, value, sector="فلزات", flags=0, halted=None, equity=True):
     return {"symbol": symbol, "value": value, "sector": sector, "as_of": "2026-11-10",
             "equity": equity,
-            "halted_since": halted,
+            "halted": halted is not None,
+            "halted_since": halted or None,
             "outlook": {"flags": ["x"] * flags} if flags is not None else None}
 
 
@@ -58,6 +76,17 @@ class SummaryTests(unittest.TestCase):
         self.assertTrue(any("3 هشدار" in w for w in warnings))
         self.assertTrue(any("متوقف" in w for w in warnings))
         self.assertTrue(any("زززز" in w for w in warnings))
+
+    def test_a_name_that_never_traded_is_halted_not_fine(self):
+        # In the halted map with None: halted.get() read it as trading, and it
+        # stood at its placeholder price with no warning (the full test).
+        warnings = holdings._summarise([row("الف", 100, halted="")])["warnings"]
+        self.assertTrue(any("الف" in w and "هیچ‌گاه" in w for w in warnings))
+
+    def test_a_name_that_missed_the_last_session_is_said_to_have(self):
+        r = dict(row("الف", 100), missed_last_session=True, last_trade="2026-11-07")
+        warnings = holdings._summarise([r])["warnings"]
+        self.assertTrue(any("2026-11-07" in w for w in warnings))
 
     def test_no_quantities_means_no_weights_and_no_concentration(self):
         out = holdings._summarise([row("الف", None), row("ب", None)])
@@ -87,6 +116,8 @@ class FundBookTests(unittest.TestCase):
         self.assertEqual(holdings.sleeve_of(fund("صندوق شاخص30 شرکت فیروزه-سهام")), "equity")
         self.assertEqual(holdings.sleeve_of(fund("صندوق طلای عیار مفید")), "gold")
         self.assertIsNone(holdings.sleeve_of(fund("صندوق اهرمی کاریزما")))
+        # A rights issue is the company's shares (it fell in no sleeve).
+        self.assertEqual(holdings.sleeve_of({"kind": "rights", "is_equity": 0}), "equity")
 
     def test_a_fund_without_bars_is_priced_from_the_market_watch(self):
         from unittest import mock
@@ -99,6 +130,32 @@ class FundBookTests(unittest.TestCase):
         self.assertEqual((close, previous, as_of, source),
                          (46972.0, 46500.0, "2026-11-11", "snapshot"))
 
+    def test_the_fresher_of_bar_and_market_watch_prices_the_row(self):
+        # In the evening, before the history step: the bar is a session behind.
+        import pandas as pd
+        bars = pd.DataFrame({"date": ["2026-11-09", "2026-11-10"], "close": [100.0, 101.0]})
+        with mock.patch.object(holdings.database, "load_history_by_inscode",
+                               return_value=bars), \
+             mock.patch.object(holdings.database, "_connect") as connect:
+            connect.return_value.execute.return_value.fetchone.return_value = (
+                105.0, 105.0, 101.0, "2026-11-11T15:30:09+00:00")
+            self.assertEqual(holdings._last_two("x"),
+                             (105.0, 101.0, "2026-11-11", "snapshot"))
+            connect.return_value.execute.return_value.fetchone.return_value = (
+                105.0, 105.0, 101.0, "2026-11-10T15:30:09+00:00")
+            self.assertEqual(holdings._last_two("x"),
+                             (101.0, 100.0, "2026-11-10", "history"))
+
+    def test_a_capture_is_dated_by_the_session_it_prices(self):
+        # UTC stamps; Tehran is +3:30; Thursday/Friday and pre-09:00 belong
+        # to the session before.
+        self.assertEqual(holdings.snapshot_session("2026-11-11T15:30:00+00:00"), "2026-11-11")
+        self.assertEqual(holdings.snapshot_session("2026-11-12T03:00:00"), "2026-11-11")
+        self.assertEqual(holdings.snapshot_session("2026-11-13T10:00:00"), "2026-11-11")
+        self.assertEqual(holdings.snapshot_session("2026-11-14T04:00:00"), "2026-11-11")
+        self.assertEqual(holdings.snapshot_session("2026-11-14T06:00:00"), "2026-11-14")
+        self.assertIsNone(holdings.snapshot_session("not a time"))
+
 
 class BookRiskTests(unittest.TestCase):
     """The reader's own book through the basket's risk arithmetic."""
@@ -107,7 +164,7 @@ class BookRiskTests(unittest.TestCase):
         import risk
         seen = {}
 
-        def analyse(positions, equity=None):
+        def analyse(positions, equity=None, proxies=None):
             seen["positions"], seen["equity"] = positions, equity
             return {"available": True, "sessions": 120, "names_measured": 2,
                     "names_dropped": [], "volatility": {"annualised_pct": 30.0},
@@ -120,7 +177,8 @@ class BookRiskTests(unittest.TestCase):
                 {"symbol": "ب", "ins_code": "2", "value": 40.0, "sector": None},
                 {"symbol": "پ", "ins_code": "3", "value": None},
                 {"symbol": "ت", "error": "نماد پیدا نشد"}]
-        with mock.patch.object(risk, "analyse", side_effect=analyse):
+        with mock.patch.object(risk, "analyse", side_effect=analyse), \
+             mock.patch.object(holdings, "_proxies", return_value=({}, [])):
             out = holdings._risk(rows, 100.0)
         self.assertEqual([p["symbol"] for p in seen["positions"]], ["الف", "ب"])
         # The rial base is the measured holdings (risk.py), not a passed equity.
@@ -136,6 +194,38 @@ class BookRiskTests(unittest.TestCase):
         self.assertTrue(holdings._beyond_band(-40.0))
         self.assertFalse(holdings._beyond_band(2.9))
         self.assertFalse(holdings._beyond_band(None))
+
+    def test_the_band_is_the_symbols_own(self):
+        # A gold fund's ±10% day is a day, not a capital increase.
+        gold = (1000.0, 1100.0, 900.0)
+        self.assertFalse(holdings._beyond_band(-9.8, gold))
+        self.assertTrue(holdings._beyond_band(-12.0, gold))
+        self.assertTrue(holdings._beyond_band(4.0, (1000.0, 1030.0, 970.0)))
+
+    def test_funds_and_bills_without_bars_stand_in_on_what_they_hold(self):
+        import pandas as pd
+        index = pd.DataFrame({"date": pd.date_range("2026-01-01", periods=5),
+                              "close": [100.0, 101.0, 99.0, 102.0, 103.0]})
+        rows = [{"symbol": "اطلس", "ins_code": "1", "value": 70.0, "equity": False,
+                 "sleeve": "equity", "name": "صندوق س.توسعه اطلس مفید-س"},
+                {"symbol": "هم", "ins_code": "2", "value": 10.0, "equity": False,
+                 "sleeve": "equity", "name": "صندوق شاخصی هم‌وزن"},
+                {"symbol": "اوند", "ins_code": "3", "value": 10.0, "equity": False,
+                 "sleeve": "fixed", "name": "آوند مفید-د"},
+                {"symbol": "اخزا412", "bill": True, "value": 10.0, "ytm_pct": 40.0},
+                {"symbol": "فولاد", "ins_code": "4", "value": 5.0, "equity": True}]
+        with mock.patch.object(holdings.database, "load_index_history",
+                               return_value=index) as load_index, \
+             mock.patch.object(holdings.database, "load_history_by_inscode",
+                               return_value=pd.DataFrame()):
+            proxies, named = holdings._proxies(rows)
+        self.assertEqual(sorted(proxies), ["1", "2", "3", "bill:اخزا412"])
+        self.assertEqual(len(named), 4)
+        import config
+        codes = [c.args[0] for c in load_index.call_args_list]
+        self.assertIn(config.INDICES["TEDPIX_EW"]["insCode"], codes)
+        self.assertAlmostEqual(proxies["bill:اخزا412"].iloc[0], 1.4 ** (1 / 240) - 1)
+        self.assertAlmostEqual(proxies["1"].iloc[0], 0.01)
 
 
 class ValuationSummaryTests(unittest.TestCase):
@@ -184,7 +274,7 @@ class RouteTests(unittest.TestCase):
     def test_the_list_travels_in_the_body_not_the_url(self):
         seen = {}
 
-        def review(entries):
+        def review(entries, parse_errors=None):
             seen["entries"] = entries
             return {"rows": [], "warnings": [], "count": len(entries)}
 

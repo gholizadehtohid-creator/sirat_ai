@@ -45,6 +45,7 @@ import pickle
 import pandas as pd
 
 import backtest_config
+import config
 import database
 import jalali
 import news as news_module
@@ -68,6 +69,34 @@ def _finite(value):
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
+
+
+def share_factors(n, events, threshold=None):
+    """Per bar, the factor that carries a share count to the newest bar.
+
+    back_adjust's own factor (adjusted / raw close) folds in every price
+    event, and since 2026-11-11 that includes dividends and small untraded
+    re-pricings -- which change the price, not the number of shares. The
+    valuation card and the outlook backtests multiplied share counts by it,
+    so every dividend payer's market value read a few percent low (the full
+    test, 2026-11-12). Only an event of at least the adjustment threshold --
+    a capital increase or reduction -- changes the share count here.
+    """
+
+    import numpy as np
+
+    threshold = (getattr(config, "PRICE_ADJUST_THRESHOLD", 12.0)
+                 if threshold is None else threshold) / 100.0
+    big = {e["index"]: e["ratio"] for e in events or ()
+           if e.get("kind") in ("gap", "reset")
+           and e.get("ratio") and abs(e["ratio"] - 1.0) >= threshold}
+    out = np.ones(n)
+    running = 1.0
+    for i in range(n - 1, 0, -1):
+        if i in big:
+            running *= big[i]
+        out[i - 1] = running
+    return out
 
 
 class PointInTimeData(object):
@@ -253,8 +282,9 @@ class PointInTimeData(object):
                 # price as it was printed: a valuation multiple. See
                 # valuation_price().
                 frame["raw_close"] = frame["close"].astype(float)
-                frame, _ = back_adjust(frame)
+                frame, events = back_adjust(frame)
                 frame = frame.copy()
+                frame["share_factor"] = share_factors(len(frame), events)
                 frame["date"] = pd.to_datetime(frame["date"])
                 frame = frame.sort_values("date").reset_index(drop=True)
                 self._bars[key] = frame

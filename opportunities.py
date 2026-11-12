@@ -118,6 +118,19 @@ def maturity_jalali(name):
     return "14%s/%s/%s" % (yy, mm, dd)
 
 
+def _settles(price_date, today):
+    """The settlement day of a trade on `price_date` (T+1), or today's."""
+
+    from datetime import timedelta
+
+    text = str(price_date or "").replace("-", "")
+    try:
+        traded = date(int(text[:4]), int(text[4:6]), int(text[6:8]))
+    except (TypeError, ValueError):
+        return today + timedelta(days=1)
+    return traded + timedelta(days=1)
+
+
 def bill_yield(price, maturity, today):
     """Annual yield to maturity of a zero-coupon bill, or None."""
 
@@ -225,7 +238,10 @@ def treasury_bills(today=None):
 
         maturity = maturity_of(info["name"])
         price = quote["close"] or quote["last"]
-        ytm = bill_yield(price, maturity, today)
+        # From the day after the price traded (T+1 settlement), not from
+        # today: a 60-day bill priced 30 days ago at a fair 43% read ~71%
+        # counted from today (the full test, 2026-11-12).
+        ytm = bill_yield(price, maturity, _settles(quote.get("date"), today))
 
         if ytm is None:
             continue
@@ -246,6 +262,7 @@ def treasury_bills(today=None):
     rows.sort(key=lambda r: -r["ytm_pct"])
 
     _remember_bill_yield(rows, today)
+    _remember_bill_quotes(rows)
 
     return {"bills": rows, "fund_rate_pct": FUND_RATE * 100, "error": None}
 
@@ -255,6 +272,29 @@ def treasury_bills(today=None):
 BILL_YIELD_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                "data", "bill_yield.json")
 BILL_YIELD_MIN_DAYS = 90               # shorter bills price the next weeks' rate
+
+# Every bill's last quote, for the holdings card to price a bill the user
+# holds (bills are not in the instrument list).
+BILL_QUOTES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "data", "bill_quotes.json")
+
+
+def _remember_bill_quotes(rows):
+    import json
+    import persian
+
+    quotes = {persian.normalize(r["symbol"]).replace(" ", ""):
+              {k: r.get(k) for k in ("symbol", "price", "price_date", "ytm_pct",
+                                     "maturity_jalali", "days")}
+              for r in rows}
+    try:
+        os.makedirs(os.path.dirname(BILL_QUOTES_FILE), exist_ok=True)
+        partial = BILL_QUOTES_FILE + ".partial"
+        with open(partial, "w", encoding="utf-8") as handle:
+            json.dump(quotes, handle, ensure_ascii=False)
+        os.replace(partial, BILL_QUOTES_FILE)
+    except OSError:
+        pass
 
 
 def parking_bill(bills):

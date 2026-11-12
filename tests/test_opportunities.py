@@ -51,6 +51,44 @@ class YieldTests(unittest.TestCase):
         self.assertGreater(op.bill_yield(999_999, date(2027, 1, 1), today), 0)
 
 
+class SettlementTests(unittest.TestCase):
+    """A bill's yield runs from the day after its price traded (T+1), not
+    from today: a stale close read a fair 43% as ~71% (the full test)."""
+
+    def test_the_trade_date_settles_the_next_day(self):
+        self.assertEqual(op._settles("20261011", date(2026, 11, 12)), date(2026, 10, 12))
+        self.assertEqual(op._settles("2026-11-11", date(2026, 11, 12)), date(2026, 11, 12))
+
+    def test_no_trade_date_settles_tomorrow(self):
+        self.assertEqual(op._settles(None, date(2026, 11, 12)), date(2026, 11, 13))
+        self.assertEqual(op._settles("junk", date(2026, 11, 12)), date(2026, 11, 13))
+
+    def test_a_stale_price_is_not_read_as_a_higher_yield(self):
+        maturity = date(2027, 1, 10)
+        traded = op._settles("20261011", date(2026, 11, 12))
+        fair = op.bill_yield(920_000, maturity, traded)
+        from_today = op.bill_yield(920_000, maturity, date(2026, 11, 12))
+        self.assertLess(fair, from_today)
+
+
+class BillQuotesTests(unittest.TestCase):
+
+    def test_the_last_quotes_are_kept_for_the_holdings_card(self):
+        import json
+        import tempfile
+        from unittest import mock
+        folder = tempfile.mkdtemp()
+        path = os.path.join(folder, "bill_quotes.json")
+        rows = [{"symbol": "اخزا 412", "price": 900_000, "price_date": "20261111",
+                 "ytm_pct": 43.0, "maturity_jalali": "1406/04/12", "days": 200}]
+        with mock.patch.object(op, "BILL_QUOTES_FILE", path):
+            op._remember_bill_quotes(rows)
+        with open(path, encoding="utf-8") as handle:
+            quotes = json.load(handle)
+        self.assertEqual(quotes["اخزا412"]["price"], 900_000)
+        self.assertFalse(os.path.exists(path + ".partial"))
+
+
 class SleeveTests(unittest.TestCase):
 
     def test_names_map_to_allocation_sleeves(self):

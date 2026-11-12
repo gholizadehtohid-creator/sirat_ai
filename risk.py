@@ -48,19 +48,62 @@ STALE_DAYS = 30
 VAR_CONFIDENCE = 0.95
 
 
+def _measured_pct(positions, matrix):
+    total = sum(p.get("position_value") or 0 for p in positions)
+    if not total or matrix.empty:
+        return None
+    measured = sum(p.get("position_value") or 0 for p in positions
+                   if p["symbol"] in matrix.columns)
+    return round(measured / total * 100, 1)
+
+
 def _annualise(daily_std):
     return daily_std * math.sqrt(config.TRADING_DAYS_PER_YEAR) * 100
 
 
-def returns_matrix(ins_codes, bars=None, labels=None):
+def _move_limits(codes):
+    """{ins_code: the largest daily move its own band permits, as a fraction}.
+
+    From the newest market watch's limits, plus slack. A flat 3.6% -- right
+    for a ±3% share -- dropped 11.6% of a gold fund's real sessions (its band
+    is ±10%) as "corporate actions", and the plan's gold sleeve read about a
+    third less risky than it is (the full test, 2026-11-12).
+    """
+
+    out = {}
+    try:
+        import fundamental_outlook
+        bands = fundamental_outlook.price_bands()
+    except Exception:                                           # noqa: BLE001
+        return out
+    for code in codes:
+        band = bands.get(str(code))
+        prev, up, down = band if band else (None, None, None)
+        if prev and up and down and prev > 0:
+            width = max(up / prev - 1.0, 1.0 - down / prev)
+            if 0 < width < 0.5:
+                out[str(code)] = width + BAND_SLACK
+    return out
+
+
+BAND_SLACK = 0.006
+
+
+def returns_matrix(ins_codes, bars=None, labels=None, proxies=None):
     """Daily returns for several instruments, aligned on shared dates.
 
     Returns (frame, dropped). The frame has one column per instrument that had
     usable history; `dropped` names the ones that did not, so a caller never
     silently computes a five-name correlation matrix for a ten-name basket.
+
+    `proxies` maps an ins_code with no daily bars of its own to a stand-in
+    return series (an index fund to its index); the column is labelled as
+    given, and the caller says so.
     """
 
     bars = bars or config.HISTORY_BARS
+    proxies = proxies or {}
+    limits = _move_limits(ins_codes)
 
     series = {}
     dropped = []
@@ -70,6 +113,10 @@ def returns_matrix(ins_codes, bars=None, labels=None):
         label = labels[n] if labels else str(code)
 
         frame = database.load_history_by_inscode(code, limit=bars)
+
+        if (frame is None or frame.empty or "close" not in frame.columns)                 and str(code) in proxies:
+            series[label] = proxies[str(code)]
+            continue
 
         if frame is None or frame.empty or "close" not in frame.columns:
             dropped.append(label)
@@ -100,7 +147,7 @@ def returns_matrix(ins_codes, bars=None, labels=None):
         # An unadjusted capital increase shows up as a single enormous negative
         # return that no amount of averaging survives. Drop moves outside what
         # the price band physically permits.
-        limit = config.CORPORATE_ACTION_THRESHOLD / 100.0
+        limit = limits.get(str(code), config.CORPORATE_ACTION_THRESHOLD / 100.0)
         returns = returns[returns.abs() <= limit]
 
         if len(returns) < MIN_OVERLAP:
@@ -387,7 +434,8 @@ def sector_exposure(positions):
     return rows
 
 
-def analyse(positions, equity=None, bars=None, benchmark_key="TEDPIX"):
+def analyse(positions, equity=None, bars=None, benchmark_key="TEDPIX",
+            proxies=None):
     """Full risk report for a built portfolio.
 
     `equity` is still accepted, for the callers that pass it, and no longer
@@ -405,7 +453,8 @@ def analyse(positions, equity=None, bars=None, benchmark_key="TEDPIX"):
     codes = [p["ins_code"] for p in positions]
     labels = [p["symbol"] for p in positions]
 
-    matrix, dropped = returns_matrix(codes, bars=bars, labels=labels)
+    matrix, dropped = returns_matrix(codes, bars=bars, labels=labels,
+                                     proxies=proxies)
 
     exposure = sector_exposure(positions)
 
@@ -419,6 +468,10 @@ def analyse(positions, equity=None, bars=None, benchmark_key="TEDPIX"):
         "sessions": int(matrix.shape[0]) if not matrix.empty else 0,
         "names_measured": int(matrix.shape[1]) if not matrix.empty else 0,
         "names_dropped": dropped,
+        # The share of the book's value the figures describe: the holdings
+        # card printed risk measured on 29% of a book as the book's (the
+        # full test, 2026-11-12).
+        "measured_pct": _measured_pct(positions, matrix),
         "sector_exposure": exposure,
         "concentration": concentration(weights),
         "notes": [],

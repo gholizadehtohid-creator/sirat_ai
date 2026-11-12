@@ -200,6 +200,60 @@ class SharesTests(unittest.TestCase):
         self.assertEqual(r["valuation"]["shares_source"], "exchange")
         self.assertAlmostEqual(r["valuation"]["pe_forward"], 69.44, places=2)
         self.assertAlmostEqual(r["forward"]["eps"], 72.0)
+        self.assertFalse(any(d["code"] == "shares" for d in r["doubts"]))
+
+    rows = [period("1405/06/31", 6, 120 * B, 24 * B),
+            period("1404/12/29", 12, 300 * B, 60 * B),
+            period("1404/06/31", 6, 100 * B, 20 * B)]
+
+    def test_a_count_from_the_capital_line_alone_is_a_doubt(self):
+        # کاریز: never in the market watch, valued on its capital line (the
+        # full test, 2026-11-12) -- the multiple is not a valuation to rank.
+        r = fo.analyse("x", price=5_000, rows=self.rows, today=(1405, 8, 14),
+                       opportunity=BILLS)
+        self.assertEqual(r["valuation"]["shares_source"], "capital")
+        self.assertIn("shares", [d["code"] for d in r["doubts"]])
+        self.assertTrue(any("خط سرمایه" in f for f in r["flags"]))
+
+    def test_a_capital_line_far_from_the_agm_does_not_rescale_the_dividend(self):
+        # The AGM's capital is 100 million rials (100,000 shares), the line
+        # 100 billion (1e8 shares): one is misread, and the DPS stays as voted.
+        far = {"dps": 500.0, "capital": 100.0, "fiscal_year_end": "1404/12/29"}
+        r = fo.analyse("x", price=5_000, rows=self.rows, today=(1405, 8, 14),
+                       dividend=far, opportunity=BILLS)
+        self.assertEqual(r["valuation"]["dps"], 500.0)
+        self.assertTrue(any("برابر فاصله" in f for f in r["flags"]))
+        # Agreeing within SHARES_DISAGREE: the count rescales it as before.
+        near = dict(far, capital=50_000.0)          # 5e7 shares at the AGM
+        r = fo.analyse("x", price=5_000, rows=self.rows, today=(1405, 8, 14),
+                       dividend=near, opportunity=BILLS)
+        self.assertAlmostEqual(r["valuation"]["dps"], 250.0)
+
+    def test_a_financial_with_a_doubtful_count_is_not_ranked(self):
+        result = {"symbol": "x", "kind": fo.FINANCIAL, "sector": "بیمه",
+                  "latest": {"period_end": "1405/06/31", "age_months": 2},
+                  "valuation": {"pb": 1.0, "price_to_nav": None, "pe_forward": None,
+                                "earnings_yield_forward_pct": None},
+                  "doubts": [{"code": "shares", "label": "تعداد سهم تأییدنشده"}],
+                  "flags": [], "trading": {}}
+        from unittest import mock
+        import codal_announcements
+        instruments = [{"ins_code": "1", "symbol_fa": "x", "name_fa": "",
+                        "sector_name": "بیمه"}]
+        with mock.patch.object(fo.database, "load_instruments", return_value=instruments), \
+             mock.patch.object(fo.database, "halted_codes", return_value={}), \
+             mock.patch.object(fo.database, "load_history_tail", return_value={}), \
+             mock.patch.object(fo.database, "load_codal_portfolio_latest", return_value={}), \
+             mock.patch.object(fo, "latest_prices", return_value={}), \
+             mock.patch.object(fo, "exchange_shares", return_value={}), \
+             mock.patch.object(fo, "price_bands", return_value={}), \
+             mock.patch.object(fo, "published_pe", return_value={}), \
+             mock.patch.object(fo, "opportunity_rate", return_value=BILLS), \
+             mock.patch.object(codal_announcements, "latest_dividends", return_value={}), \
+             mock.patch.object(fo, "analyse", side_effect=lambda code, **_: dict(result)):
+            out = fo.screen()
+        self.assertEqual(out["financials"], [])
+        self.assertEqual([d["symbol"] for d in out["doubtful"]], ["x"])
 
 
 class HurdleTests(unittest.TestCase):

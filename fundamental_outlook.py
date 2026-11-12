@@ -150,6 +150,10 @@ RAISE_TOLERANCE = 0.05
 PUBLISHED_PE_BAND = (0.67, 1.5)
 EARLY_MONTHS = 4
 EARLY_JUMP = 1.5
+# The statement's capital line against the AGM's capital, as share counts:
+# past this ratio either way one of them is misread (a raise between the two
+# is real but rarely 6x).
+SHARES_DISAGREE = 6.0
 
 
 def _f(value):
@@ -555,6 +559,18 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if not shares or shares <= 0:
         shares = capital / PAR_VALUE if capital else None
         shares_source = "capital" if shares else None
+    # A name the market watch has never listed (133 equities) is valued on
+    # its capital line alone, and nothing checks it: کاریز's read 465 billion
+    # shares against its AGM's 2.4 billion, and its dividend came out at 0.6
+    # rials (the full test, 2026-11-12). The AGM's capital is a second
+    # reading; past SHARES_DISAGREE either way the count is not used to
+    # rescale the dividend, and in every case the multiple is a doubt.
+    agm_shares = None
+    if dividend and _f(dividend.get("capital")):
+        agm_shares = _f(dividend.get("capital")) * 1_000_000 / PAR_VALUE
+    shares_disagree = bool(shares_source == "capital" and shares and agm_shares
+                           and not (1 / SHARES_DISAGREE <= shares / agm_shares
+                                    <= SHARES_DISAGREE))
 
     # Owners' part of the group's profit: what a shareholder's EPS is.
     ttm_net_total = ttm_net
@@ -570,7 +586,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     yield_fwd = _div(fwd_net, market_cap)
 
     # Cash dividend of the last annual AGM (ن-52), against today's price.
-    dps, dividend_stale = dps_today(dividend, shares, all_periods)
+    dps, dividend_stale = dps_today(dividend, None if shares_disagree else shares,
+                                    all_periods)
     dividend_yield = (_div(dps, price) if dps is not None and price
                       and not dividend_stale else None)
 
@@ -788,6 +805,13 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # the row and, in screen(), a reason not to rank it -- the ranking is by
     # that multiple.
     doubts = []
+    if shares_source == "capital":
+        flag("تعداد سهم از خط سرمایه‌ی صورت مالی است، نه از بورس (نماد در "
+             "دیده‌بان بازار نیامده)%s؛ ارزش بازار و ضریب‌ها تأیید نشده‌اند"
+             % (" و با سرمایه‌ی مجمع %.1f برابر فاصله دارد"
+                % max(shares / agm_shares, agm_shares / shares)
+                if shares_disagree else ""))
+        doubts.append({"code": "shares", "label": "تعداد سهم تأییدنشده"})
     if kind == OPERATING:
         # Profit that is not the business's: a P/E on it is not a valuation.
         one_off = one_off_reason(li)
@@ -1455,6 +1479,14 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
             continue
         tape_notes = len(trading.get("notes") or ())
 
+        if result["kind"] == FINANCIAL and result.get("doubts"):
+            excluded["doubtful"] += 1
+            doubtful.append({"symbol": result["symbol"],
+                             "reasons": [d["label"] for d in result["doubts"]],
+                             "pe_forward": result["valuation"]["pe_forward"],
+                             "earnings_yield_forward_pct":
+                                 result["valuation"]["earnings_yield_forward_pct"]})
+            continue
         if result["kind"] == FINANCIAL:
             if result["valuation"]["pb"] is not None or                     result["valuation"]["price_to_nav"] is not None:
                 financials.append(result)

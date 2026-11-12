@@ -343,5 +343,55 @@ class TestRiskAnalyseVarBase(unittest.TestCase):
                                places=6)
 
 
+
+class TestOwnBandAndProxies(unittest.TestCase):
+    """The full test, 2026-11-12: a flat 3.6% dropped a gold fund's real
+    ±10% days, and funds without bars left the plan's own book measured on
+    its gold alone."""
+
+    def bars(self, moves):
+        closes = [100.0]
+        for m in moves:
+            closes.append(closes[-1] * (1 + m))
+        return pd.DataFrame({"date": pd.date_range("2026-01-01", periods=len(closes)),
+                             "close": closes, "volume": [1000] * len(closes)})
+
+    def test_a_gold_funds_ordinary_day_is_kept_and_a_split_is_not(self):
+        moves = [0.01, -0.01] * 30 + [-0.098, 0.5]
+        with mock.patch.object(risk.database, "load_history_by_inscode",
+                               return_value=self.bars(moves)), \
+             mock.patch("fundamental_outlook.price_bands",
+                        return_value={"g": (1000.0, 1100.0, 900.0)}):
+            frame, dropped = risk.returns_matrix(["g"])
+        self.assertEqual(dropped, [])
+        self.assertAlmostEqual(frame["g"].min(), -0.098, places=6)
+        self.assertLess(frame["g"].max(), 0.5)
+
+    def test_a_flat_threshold_still_guards_a_name_without_a_band(self):
+        moves = [0.01, -0.01] * 30 + [-0.098]
+        with mock.patch.object(risk.database, "load_history_by_inscode",
+                               return_value=self.bars(moves)), \
+             mock.patch("fundamental_outlook.price_bands", return_value={}):
+            frame, _ = risk.returns_matrix(["s"])
+        self.assertGreater(frame["s"].min(), -0.05)
+
+    def test_a_fund_without_bars_stands_in_on_its_proxy(self):
+        proxy = pd.Series([0.01, -0.02] * 30,
+                          index=pd.date_range("2026-01-02", periods=60))
+        with mock.patch.object(risk.database, "load_history_by_inscode",
+                               return_value=pd.DataFrame()), \
+             mock.patch("fundamental_outlook.price_bands", return_value={}):
+            frame, dropped = risk.returns_matrix(["f", "x"], proxies={"f": proxy})
+        self.assertEqual(dropped, ["x"])
+        self.assertEqual(list(frame.columns), ["f"])
+
+    def test_the_measured_share_of_the_book_is_reported(self):
+        frame = pd.DataFrame({"الف": [0.01, 0.02]})
+        positions = [{"symbol": "الف", "position_value": 75.0},
+                     {"symbol": "ب", "position_value": 25.0}]
+        self.assertEqual(risk._measured_pct(positions, frame), 75.0)
+        self.assertIsNone(risk._measured_pct(positions, pd.DataFrame()))
+
+
 if __name__ == "__main__":
     unittest.main()
