@@ -472,5 +472,39 @@ class ValuationPriceTest(unittest.TestCase):
         self.assertIsNotNone(ratios["pb"])
 
 
+class UntradedBarTests(unittest.TestCase):
+    """The full test, 2026-11-12: bars stored with a high and low of 0 on a
+    session nothing traded tripled ATR (ملت 5.34% for 3.2%)."""
+
+    def test_an_untraded_bar_has_no_range(self):
+        import pandas as pd
+        import data_pipeline
+        bars = pd.DataFrame({"date": ["d1", "d2", "d3"],
+                             "open": [100.0, 0.0, 101.0],
+                             "high": [102.0, 0.0, 103.0],
+                             "low": [99.0, 0.0, 100.0],
+                             "close": [101.0, 101.0, 102.0],
+                             "volume": [10.0, 0.0, 12.0]})
+        out = data_pipeline.flatten_untraded(bars)
+        self.assertEqual(out.loc[1, ["open", "high", "low"]].tolist(), [101.0] * 3)
+        self.assertEqual(out.loc[0, "high"], 102.0)            # traded: kept
+        self.assertEqual(bars.loc[1, "high"], 0.0)             # input untouched
+
+    def test_atr_is_not_inflated_by_a_zero_bar(self):
+        import numpy as np
+        import pandas as pd
+        import data_pipeline
+        n = 400
+        close = 1000 + np.cumsum(np.where(np.arange(n) % 2, 10.0, -10.0))
+        bars = pd.DataFrame({"date": pd.bdate_range("2026-01-01", periods=n).strftime("%Y-%m-%d"),
+                             "open": close, "high": close + 15, "low": close - 15,
+                             "close": close, "volume": 100.0})
+        clean = data_pipeline.frame(bars=bars, adjusted=True)
+        dirty_bars = bars.copy()
+        dirty_bars.loc[n - 5, ["open", "high", "low", "volume"]] = 0.0
+        dirty = data_pipeline.frame(bars=dirty_bars, adjusted=True)
+        self.assertLess(dirty["ATR"].iloc[-1], clean["ATR"].iloc[-1] * 1.3)
+
+
 if __name__ == "__main__":
     unittest.main()

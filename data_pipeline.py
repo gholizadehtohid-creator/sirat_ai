@@ -82,6 +82,34 @@ def load_bars(ins_code, limit=None):
         ins_code, limit=WINDOW_BARS if limit is None else limit)
 
 
+def flatten_untraded(bars):
+    """A bar nothing traded on, as a bar with no range: open, high and low
+    at its close.
+
+    TSETMC stores some untraded sessions with a high and low of 0 (9,442
+    bars). The true range across one ran from the close to zero, and ATR --
+    the basket's stop distance and its position size -- read ملت at 5.34%
+    for 3.2%: 74 names' stops at least a point too wide, 18 pinned at the
+    18% ceiling (the full test, 2026-11-12). The bar stays, so the session
+    calendar the backtest walks is unchanged.
+    """
+
+    if bars is None or "close" not in bars.columns:
+        return bars
+    volume = bars["volume"] if "volume" in bars.columns else None
+    dead = (volume.fillna(0) <= 0) if volume is not None else False
+    for column in ("high", "low"):
+        if column in bars.columns:
+            dead = dead | (bars[column].fillna(0) <= 0)
+    if not getattr(dead, "any", lambda: False)():
+        return bars
+    bars = bars.copy()
+    for column in ("open", "high", "low"):
+        if column in bars.columns:
+            bars.loc[dead, column] = bars.loc[dead, "close"]
+    return bars
+
+
 def frame(ins_code=None, bars=None, as_of=None, params=None,
           window=WINDOW_BARS, adjusted=False):
     """The indicator frame a v2 decision is made from. None when unusable.
@@ -133,6 +161,8 @@ def frame(ins_code=None, bars=None, as_of=None, params=None,
 
     if len(bars) < minimum_bars(params) + 1:
         return None
+
+    bars = flatten_untraded(bars)
 
     try:
         return calculate_indicators(bars.reset_index(drop=True), params)

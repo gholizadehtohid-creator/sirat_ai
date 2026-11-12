@@ -233,6 +233,16 @@ def create_database():
     )
     """)
 
+    # The dates in the flow table: DISTINCT date and MAX(date) scanned all
+    # 1.7 million rows, 1.4 s on the summary tab's first paint (the full
+    # test, 2026-11-12). Built once, ~3 s and ~33 MB. A read-only connection
+    # (the test suite's) cannot build it and goes on without it.
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS ix_cth_date "
+                       "ON client_type_history (date)")
+    except sqlite3.OperationalError:
+        pass
+
     # ---- Codal: filings, parsed financials, and per-symbol sync state ------
     #
     # The announcement index. Cheap to refresh (one ~16KB search per symbol)
@@ -2407,6 +2417,22 @@ def newest_equity_bar():
     return None if pd.isna(stamp) else stamp.to_pydatetime()
 
 
+_TURNOVER_CACHE = {}
+
+
+def _store_state(path):
+    """What changes when the store is written: the file and its WAL."""
+
+    state = []
+    for name in (path, path + "-wal"):
+        try:
+            st = os.stat(name)
+            state.append((st.st_mtime_ns, st.st_size))
+        except OSError:
+            state.append(None)
+    return (os.path.abspath(path), tuple(state))
+
+
 def market_turnover(limit=None):
     """Total rials traded per session, summed across stored EQUITIES.
 
@@ -2435,6 +2461,17 @@ def market_turnover(limit=None):
     load_instruments(with_superseded).
     """
 
+    # One GROUP BY over every equity bar, 3-4 s, ran eight times in one
+    # panel load (the full test, 2026-11-12). Kept per state of the file and
+    # its WAL: any write moves one of them, so a cached answer is never one
+    # write old.
+    key = _store_state(DATABASE_NAME)
+    cached = _TURNOVER_CACHE.get(key)
+    if cached is not None:
+        df = cached.copy()
+        return df.tail(limit).reset_index(drop=True) if limit else df
+    _TURNOVER_CACHE.clear()
+
     create_database()
 
     conn = _connect()
@@ -2461,7 +2498,8 @@ def market_turnover(limit=None):
         return df
 
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.dropna(subset=["date"])
+    df = df.dropna(subset=["date"]).reset_index(drop=True)
+    _TURNOVER_CACHE[key] = df.copy()
 
     if limit:
         df = df.tail(limit)

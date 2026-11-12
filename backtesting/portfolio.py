@@ -402,6 +402,13 @@ class Portfolio(object):
         if position is None or bar is None:
             return None, None
 
+        # Nothing traded, so nothing filled: an untraded bar stored with a low
+        # of 0 "hit" every stop at the stop's own price, on a session with no
+        # trade in it (the full test, 2026-11-12).
+        volume = _finite(bar.get("volume"))
+        if volume is not None and volume <= 0:
+            return None, None
+
         cfg = self.cfg
 
         high = _finite(bar.get("high"))

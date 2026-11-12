@@ -401,3 +401,41 @@ class ScheduledRetryTests(unittest.TestCase):
         bootstrap._DEFERRED.clear()
         self.assertEqual(bootstrap.retry_deferred(now=self.now, sleep=self.sleep), 0)
         self.assertEqual(self.slept, [])
+
+
+class StatusSingleFlightTests(unittest.TestCase):
+    """A page load's five loaders each ran their own 2 s probe at once."""
+
+    def test_concurrent_callers_share_one_probe(self):
+        import threading
+        import time as _time
+        calls = []
+
+        def probe():
+            calls.append(1)
+            _time.sleep(0.3)
+            return {"x": {"needs_fetch": False}}
+
+        with bootstrap._status_lock:
+            bootstrap._status_cache.update(value=None, at=None)
+        with mock.patch.object(bootstrap, "_probe_all", side_effect=probe):
+            out = []
+            threads = [threading.Thread(target=lambda: out.append(bootstrap.status()))
+                       for _ in range(5)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        with bootstrap._status_lock:
+            bootstrap._status_cache.update(value=None, at=None)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(out), 5)
+        self.assertTrue(all(o == {"x": {"needs_fetch": False}} for o in out))
+
+    def test_fresh_always_probes(self):
+        with mock.patch.object(bootstrap, "_probe_all", return_value={}) as probe:
+            bootstrap.status(fresh=True)
+            bootstrap.status(fresh=True)
+        self.assertEqual(probe.call_count, 2)
+        with bootstrap._status_lock:
+            bootstrap._status_cache.update(value=None, at=None)

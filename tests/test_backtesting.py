@@ -378,6 +378,19 @@ class TestExits(unittest.TestCase):
         self.assertEqual(reason, "stop")
         self.assertEqual(price, 950.0)
 
+    def test_a_session_nothing_traded_fills_nothing(self):
+        """An untraded bar stored with a low of 0 "hit" every stop (the full
+        test, 2026-11-12)."""
+
+        book = self._book_with_position(trail_atr_multiple=0.0)
+
+        self.assertEqual(book.exit_signal(
+            "AAA", {"high": 0.0, "low": 0.0, "close": 960.0, "volume": 0}),
+            (None, None))
+        reason, _ = book.exit_signal(
+            "AAA", {"high": 1010.0, "low": 940.0, "close": 960.0, "volume": 5})
+        self.assertEqual(reason, "stop")
+
     def test_target_fires_on_the_high(self):
 
         book = self._book_with_position(trail_atr_multiple=0.0)

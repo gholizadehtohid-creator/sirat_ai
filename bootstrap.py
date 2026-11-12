@@ -231,6 +231,9 @@ _last_failure = {}
 
 _status_lock = threading.Lock()
 _status_cache = {"at": None, "value": None}
+# The probe in flight, if any: a page load's five loaders each ran their own
+# 2 s probe at once (the full test, 2026-11-12). Late callers wait for it.
+_status_inflight = {"event": None}
 
 
 def _now():
@@ -669,9 +672,30 @@ def status(fresh=False):
     if not fresh:
         with _status_lock:
             cached, at = _status_cache["value"], _status_cache["at"]
-
-        if cached is not None and (time.monotonic() - at) < STATUS_TTL:
-            return cached
+            if cached is not None and (time.monotonic() - at) < STATUS_TTL:
+                return cached
+            running = _status_inflight["event"]
+            if running is None:
+                running = _status_inflight["event"] = threading.Event()
+                owner = True
+            else:
+                owner = False
+        if not owner:
+            running.wait(timeout=120)
+            with _status_lock:
+                if _status_cache["value"] is not None:
+                    return _status_cache["value"]
+            return _probe_all()
+        try:
+            report = _probe_all()
+            with _status_lock:
+                _status_cache["value"] = report
+                _status_cache["at"] = time.monotonic()
+            return report
+        finally:
+            with _status_lock:
+                _status_inflight["event"] = None
+            running.set()
 
     report = _probe_all()
 

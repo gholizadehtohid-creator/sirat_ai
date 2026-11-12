@@ -101,5 +101,53 @@ class MarketTurnoverTests(unittest.TestCase):
         self.assertAlmostEqual(state["ratio"], 1.0, places=6)
 
 
+class TurnoverCacheTests(unittest.TestCase):
+    """One GROUP BY per state of the store, not eight per panel load."""
+
+    def setUp(self):
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        self.original = database.DATABASE_NAME
+        database.DATABASE_NAME = self.path
+        database.create_database()
+        database.save_instruments([{"ins_code": "eq1", "symbol_fa": "الف",
+                                    "kind": "equity", "is_equity": True}])
+
+    def tearDown(self):
+        database.DATABASE_NAME = self.original
+        database._TURNOVER_CACHE.clear()
+        try:
+            os.unlink(self.path)
+        except OSError:
+            pass
+
+    def save(self, values, start="2026-06-01"):
+        dates = pd.bdate_range(start, periods=len(values))
+        database.save_history("eq1", pd.DataFrame({
+            "date": dates, "close": 1000.0, "volume": 10.0, "value": values}))
+
+    def test_a_second_read_of_the_same_store_runs_no_query(self):
+        from unittest import mock
+        self.save([1.0, 2.0, 3.0])
+        first = database.market_turnover()
+        with mock.patch.object(database, "_connect",
+                               side_effect=AssertionError("queried again")):
+            again = database.market_turnover(limit=2)
+        self.assertEqual(again["turnover"].tolist(), [2.0, 3.0])
+        self.assertEqual(len(first), 3)
+
+    def test_a_write_is_seen(self):
+        self.save([1.0, 2.0, 3.0])
+        self.assertEqual(len(database.market_turnover()), 3)
+        self.save([4.0], start="2026-06-08")
+        self.assertEqual(len(database.market_turnover()), 4)
+
+    def test_the_caller_cannot_change_the_cached_answer(self):
+        self.save([1.0, 2.0])
+        frame = database.market_turnover()
+        frame.loc[0, "turnover"] = -1
+        self.assertEqual(database.market_turnover()["turnover"].tolist(), [1.0, 2.0])
+
+
 if __name__ == "__main__":
     unittest.main()
