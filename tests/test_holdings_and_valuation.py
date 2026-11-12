@@ -439,5 +439,31 @@ class TradedRecentlyTests(unittest.TestCase):
         self.assertFalse(mv._traded_recently(self.data, "missing", "2026-11-08"))
 
 
+class LatestPricesTests(unittest.TestCase):
+    """The outlook prices on the newest session a trade set (the full test)."""
+
+    def test_the_watch_beats_an_older_bar_and_an_untraded_bar_is_not_a_price(self):
+        import sqlite3
+        import fundamental_outlook as fo
+        conn = sqlite3.connect(":memory:")
+        conn.executescript("""
+            CREATE TABLE price_history (ins_code TEXT, date TEXT, close REAL, volume REAL);
+            CREATE TABLE market_snapshot (ins_code TEXT, close REAL, captured_at TEXT);
+            INSERT INTO price_history VALUES ('a', '2026-11-10', 100, 5), ('a', '2026-11-11', 99, 0);
+            INSERT INTO price_history VALUES ('b', '2026-11-10', 200, 5);
+            INSERT INTO market_snapshot VALUES ('b', 210, '2026-11-11T15:30:00+00:00');
+            INSERT INTO market_snapshot VALUES ('a', 0, '2026-11-11T15:30:00+00:00');
+        """)
+
+        class Keep:
+            def __init__(self, c): self.c = c
+            def execute(self, *a): return self.c.execute(*a)
+            def close(self): pass
+
+        with mock.patch.object(fo.database, "_connect", return_value=Keep(conn)):
+            prices = fo.latest_prices()
+        self.assertEqual(prices, {"a": 100.0, "b": 210.0})
+
+
 if __name__ == "__main__":
     unittest.main()

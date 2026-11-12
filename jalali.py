@@ -62,16 +62,7 @@ def to_gregorian(jy, jm, jd):
     if not 1 <= jd <= month_length:
         raise ValueError("Jalali day out of range: %s/%s/%s" % (jy, jm, jd))
 
-    shifted = jy + 1595
-
-    days = (
-        -355668
-        + 365 * shifted
-        + (shifted // 33) * 8
-        + ((shifted % 33) + 3) // 4
-        + jd
-        + ((jm - 1) * 31 if jm < 7 else (jm - 7) * 30 + 186)
-    )
+    days = _day_number(jy, jm, jd)
 
     gy = 400 * (days // 146097)
     days %= 146097
@@ -106,15 +97,29 @@ def to_gregorian(jy, jm, jd):
     return gy, gm, gd
 
 
-def is_jalali_leap(jy):
-    """Leap year under the 33-year cycle the day count above assumes.
+def _day_number(jy, jm, jd):
+    """Days from the conversion's epoch, by the 33-year cycle."""
 
-    Kept consistent with to_gregorian() on purpose: a different leap rule here
-    would make month 12 accept a day the conversion then places in the next
-    year, which is the one error in this file that would not raise.
+    shifted = jy + 1595
+    return (
+        -355668
+        + 365 * shifted
+        + (shifted // 33) * 8
+        + ((shifted % 33) + 3) // 4
+        + jd
+        + ((jm - 1) * 31 if jm < 7 else (jm - 7) * 30 + 186)
+    )
+
+
+def is_jalali_leap(jy):
+    """Leap year by the very day count to_gregorian() uses.
+
+    The 2820-year formula this replaced disagreed with that count in ten
+    years of 1206-1498: 1437/12/30 was accepted and landed on 1438/01/01
+    (the full test, 2026-11-12) -- a wrong date that does not raise.
     """
 
-    return ((jy + 2346) * 683) % 2820 < 683
+    return _day_number(jy + 1, 1, 1) - _day_number(jy, 1, 1) == 366
 
 
 # "1405/05/21 17:53:31" or "1405/05/21" or "۱۴۰۵/۰۵/۲۱". Persian digits are

@@ -208,6 +208,12 @@ def _periods(rows):
     return out
 
 
+def _has_income(items):
+    items = items or {}
+    return any(items.get(k) is not None
+               for k in ("revenue", "net_profit", "operating_profit"))
+
+
 def _monthly_revenue(periods):
     values = sorted(v for v in (_div(_f(p["items"].get("revenue")), p["months"])
                                 for p in periods) if v and v > 0)
@@ -431,6 +437,18 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
 
     if not all_periods:
         return None
+
+    # A period stored without an income statement (وتوکا's and غبهنوش's six
+    # months: a balance sheet and nothing else) is no reading of earnings: as
+    # the newest it left the TTM unbuildable, and the card fell back to an
+    # annualised quarter (the full test, 2026-11-12). Skipped here, once, for
+    # the card, the scan and the outlook alike; kept when nothing else is.
+    with_income = [p for p in all_periods if _has_income(p["items"])]
+    skipped_period = None
+    if with_income and len(with_income) < len(all_periods):
+        if all_periods[0] is not with_income[0]:
+            skipped_period = all_periods[0]["end"]
+        all_periods = with_income
 
     ps, basis = choose_basis(all_periods, today)
     kind = FINANCIAL if (sector or "").strip() in \
@@ -916,6 +934,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                    "audited": latest["audited"], "published": latest["published"],
                    "age_months": age_months,
                    "consolidated": latest["consolidated"]},
+        "skipped_period": skipped_period,
         "has_prior_year": bool(annual_prev),
         "has_same_period": bool(same_prev),
         "method": method,
@@ -1035,16 +1054,45 @@ def halted_since(ins_code):
 
 
 def latest_prices():
-    """{ins_code: last stored close}, one query for the whole universe."""
+    """{ins_code: the newest price a trade set}, one query per source.
+
+    The newest TRADED bar's close, or the market watch's close when its
+    session is newer: on 11-11 the bars stopped at 11-10 while the watch and
+    the fundamentals card had 11-11, and the outlook, the dividend yield and
+    P/NAV were priced a session behind the card beside them (شستا 3,590
+    against 3,690; the full test, 2026-11-12). An untraded bar's close is a
+    carried price, not one a trade set, and is not used.
+    """
+
+    import holdings
 
     conn = database._connect()
-    rows = conn.execute("""
-        SELECT p.ins_code, p.close FROM price_history p
-        JOIN (SELECT ins_code, MAX(date) d FROM price_history GROUP BY ins_code) m
-          ON m.ins_code = p.ins_code AND m.d = p.date
-    """).fetchall()
-    conn.close()
-    return {str(code): _f(close) for code, close in rows}
+    try:
+        rows = conn.execute("""
+            SELECT p.ins_code, p.close, p.date FROM price_history p
+            JOIN (SELECT ins_code, MAX(date) d FROM price_history
+                  WHERE volume > 0 GROUP BY ins_code) m
+              ON m.ins_code = p.ins_code AND m.d = p.date
+        """).fetchall()
+        try:
+            snaps = conn.execute("""
+                SELECT s.ins_code, s.close, s.captured_at FROM market_snapshot s
+                JOIN (SELECT ins_code, MAX(captured_at) at FROM market_snapshot
+                      GROUP BY ins_code) m
+                  ON m.ins_code = s.ins_code AND m.at = s.captured_at
+                WHERE s.close > 0
+            """).fetchall()
+        except Exception:                                       # noqa: BLE001
+            snaps = []
+    finally:
+        conn.close()
+    out = {str(code): (_f(close), str(day)[:10]) for code, close, day in rows}
+    for code, close, captured in snaps:
+        session = holdings.snapshot_session(captured)
+        held = out.get(str(code))
+        if session and _f(close) and (held is None or session > held[1]):
+            out[str(code)] = (_f(close), session)
+    return {code: close for code, (close, _day) in out.items()}
 
 
 def exchange_shares():
@@ -1264,8 +1312,14 @@ def trailing_multiples(periods_by_code, market_by_code, sector_by_code=None):
         cap = r["valuation"]["market_cap"]
         pe = r["valuation"]["pe_ttm"]
         revenue = r["ttm"]["revenue"]
+        # Uncapped: on a positive trailing profit a P/E of 60 or more is the
+        # market's real multiple (کفرا 72.3 against TSETMC's 72.5, ثغرب 88.1
+        # against 88.2). Capped at PE_ABSURD it showed «نامعلوم» with a
+        # "profit not positive" tooltip and dropped out of the score, which
+        # raised it (the full test, 2026-11-12). The cap stays where a single
+        # filing's ratio may be a misread (financials.ratios).
         out[code] = {
-            "pe": pe if pe is not None and pe < config.PE_ABSURD else None,
+            "pe": pe,
             "ps": _round(cap / revenue) if cap and revenue and revenue > 0
             else None,
             "profit": r["ttm"]["profit"],

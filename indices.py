@@ -121,15 +121,25 @@ def load_series(key, bars=None):
         return frame.reset_index(drop=True), None
 
     # Inner join: the analysed window is where BOTH a published index value
-    # and a trustworthy turnover figure exist.
+    # and a trustworthy turnover figure exist. A newer index close without
+    # turnover (11-11: the index stored, the bars not yet) is kept aside so
+    # the card can say the analysis stops a session short of it -- dropping
+    # it silently flipped the 20-day return's sign (the full test).
+    newest = frame.iloc[-1]
     merged = frame.merge(turnover, on="date", how="inner")
+    if not merged.empty and newest["date"] > merged["date"].iloc[-1]:
+        merged.attrs["stored_through"] = (newest["date"], float(newest["close"]))
 
     merged = merged.rename(columns={"turnover": "volume"})
 
+    stored = merged.attrs.get("stored_through")
     if bars:
         merged = merged.tail(bars)
+    merged = merged.reset_index(drop=True)
+    if stored:
+        merged.attrs["stored_through"] = stored
 
-    return merged.reset_index(drop=True), "market turnover (sum of traded value)"
+    return merged, "market turnover (sum of traded value)"
 
 
 # ==============================
@@ -702,6 +712,10 @@ def analyse(key, params=None, bars=None):
         "first_date": enriched["date"].iloc[0].strftime("%Y-%m-%d"),
         "last_date": last["date"].strftime("%Y-%m-%d"),
         "close": float(last["close"]),
+        "stored_date": (frame.attrs["stored_through"][0].strftime("%Y-%m-%d")
+                        if frame.attrs.get("stored_through") else None),
+        "stored_close": (frame.attrs["stored_through"][1]
+                         if frame.attrs.get("stored_through") else None),
         "params": params,
         "returns": _returns(enriched),
         "technical": technical_score,

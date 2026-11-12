@@ -436,3 +436,30 @@ class AnalyseContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class StoredThroughTests(unittest.TestCase):
+    """A newer index close without turnover is named, not dropped silently."""
+
+    def test_the_newest_stored_close_is_kept_aside(self):
+        import pandas as pd
+        from unittest import mock
+        days = pd.date_range("2026-10-01", periods=5)
+        index = pd.DataFrame({"date": days, "close": [1.0, 2.0, 3.0, 4.0, 5.0]})
+        turnover = pd.DataFrame({"date": days[:4], "turnover": [9.0] * 4})
+        with mock.patch.object(indices.database, "load_index_history", return_value=index), \
+                mock.patch.object(indices, "_turnover_series", return_value=turnover):
+            frame, source = indices.load_series("TEDPIX", bars=3)
+        self.assertEqual(len(frame), 3)
+        self.assertEqual(frame.attrs["stored_through"], (days[4], 5.0))
+
+    def test_nothing_is_kept_aside_when_they_end_together(self):
+        import pandas as pd
+        from unittest import mock
+        days = pd.date_range("2026-10-01", periods=5)
+        index = pd.DataFrame({"date": days, "close": [1.0] * 5})
+        turnover = pd.DataFrame({"date": days, "turnover": [9.0] * 5})
+        with mock.patch.object(indices.database, "load_index_history", return_value=index), \
+                mock.patch.object(indices, "_turnover_series", return_value=turnover):
+            frame, _ = indices.load_series("TEDPIX")
+        self.assertNotIn("stored_through", frame.attrs)

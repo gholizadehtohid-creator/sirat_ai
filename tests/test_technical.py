@@ -355,27 +355,45 @@ class VolumeVoteTests(unittest.TestCase):
         self.assertIn("معامله", vote["reason"])
 
 
+def _live_universe():
+    """The live equity list, or a skip when there is no database file.
+
+    Only a missing file skips: a broken schema or an OperationalError used to
+    be swallowed into a skip too, and the test then passed by not running
+    (the full test, 2026-11-12).
+    """
+
+    import config
+    import database
+    if not os.path.exists(config.DATABASE_NAME):
+        raise unittest.SkipTest("no database")
+    if not database.load_instruments(equities_only=True):
+        raise unittest.SkipTest("empty universe")
+
+
 class TopTechnicalTests(unittest.TestCase):
-    """The whole-market ranking: liquidity floor, ordering, and caveat."""
+    """The whole-market ranking: liquidity floor, ordering, and caveat.
+
+    One scan for the class: each test recomputed it, and six of them were
+    91% of this module's 225 s (the full test, 2026-11-12).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        _live_universe()
+        cls.rep = technical.top_technical(top=10)
 
     def test_shape_and_ordering(self):
-        import database
-        try:
-            n = len(database.load_instruments(equities_only=True))
-        except Exception:                                          # noqa: BLE001
-            self.skipTest("no database")
-        if not n:
-            self.skipTest("empty universe")
-
-        rep = technical.top_technical(top=5)
+        rep = self.rep
+        top = rep["top"][:5]
 
         self.assertIn("top", rep)
-        self.assertLessEqual(len(rep["top"]), 5)
+        self.assertLessEqual(len(rep["top"]), 10)
         self.assertIn("caveat", rep)
         self.assertIn("E19", rep["caveat"])
 
         # scores descend
-        scores = [r["score"] for r in rep["top"]]
+        scores = [r["score"] for r in top]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
         # every ranked name cleared the liquidity floor -- the whole point
@@ -389,14 +407,8 @@ class TopTechnicalTests(unittest.TestCase):
         """A floor that excludes nothing is not a floor. On real TSE data many
         names sit below MIN_DAILY_VALUE, so illiquid_skipped must be > 0 and
         the parts must never over-count the universe."""
-        import database
-        try:
-            if not database.load_instruments(equities_only=True):
-                self.skipTest("empty universe")
-        except Exception:                                          # noqa: BLE001
-            self.skipTest("no database")
 
-        rep = technical.top_technical(top=10)
+        rep = self.rep
         c = rep["counts"]
 
         self.assertGreater(c["illiquid_skipped"], 0,
@@ -412,19 +424,13 @@ class TopTechnicalTests(unittest.TestCase):
 class BestTechnicalInflowTests(unittest.TestCase):
     """The intersection: technically strong AND taking money in."""
 
-    def _has_db(self):
-        import database
-        try:
-            return bool(database.load_instruments(equities_only=True))
-        except Exception:                                          # noqa: BLE001
-            return False
+    @classmethod
+    def setUpClass(cls):
+        _live_universe()
+        cls.rep = technical.best_technical_inflow(top=15)
 
     def test_every_row_meets_both_conditions(self):
-        if not self._has_db():
-            self.skipTest("no database")
-
-        rep = technical.best_technical_inflow(top=15)
-
+        rep = self.rep
         for r in rep["top"]:
             # strong technical
             self.assertGreaterEqual(r["score"], rep["min_score"])
@@ -436,28 +442,19 @@ class BestTechnicalInflowTests(unittest.TestCase):
     def test_counts_are_a_shrinking_funnel(self):
         """liquid >= strong_technical >= strong_and_inflow: each condition can
         only remove names, never add them."""
-        if not self._has_db():
-            self.skipTest("no database")
-
-        c = technical.best_technical_inflow(top=15)["counts"]
+        c = self.rep["counts"]
         self.assertGreaterEqual(c["liquid"], c["strong_technical"])
         self.assertGreaterEqual(c["strong_technical"], c["strong_and_inflow"])
 
     def test_json_safe_and_caveated(self):
-        if not self._has_db():
-            self.skipTest("no database")
-
-        rep = technical.best_technical_inflow(top=15)
+        rep = self.rep
         json.dumps(rep, ensure_ascii=False, allow_nan=False)
         self.assertIn("caveat", rep)
         # the doubled caveat names the flow research specifically
         self.assertIn("E21", rep["caveat"])
 
     def test_ranked_by_score_descending(self):
-        if not self._has_db():
-            self.skipTest("no database")
-        top = technical.best_technical_inflow(top=15)["top"]
-        scores = [r["score"] for r in top]
+        scores = [r["score"] for r in self.rep["top"]]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
 

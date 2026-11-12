@@ -5,8 +5,14 @@ than trusting a label, this re-runs the authenticity check and wipes the price
 tables unless they pass -- so the only way data survives here is by being
 demonstrably genuine.
 
-    python purge_simulated.py            # check, and purge if not real
+    python purge_simulated.py            # check, and say what would go
+    python purge_simulated.py --yes      # check, and purge if convicted
     python purge_simulated.py --force    # wipe price data unconditionally
+
+Only a SIMULATED verdict -- a failed DISCRIMINATING test, the holiday
+calendar -- purges, and only with --yes after the counts are printed. An
+UNVERIFIED verdict (a structural test real data can also fail) never does
+(the full test, 2026-11-12).
 
 This is only as good as the verdict it acts on, and that verdict has been
 wrong before: a miscalibrated Nowruz window once had this delete bars fetched
@@ -19,10 +25,10 @@ import sqlite3
 import sys
 
 import authenticity
-from database import DATABASE_NAME, VERIFIED_REAL, create_database, set_provenance
+from database import DATABASE_NAME, SIMULATED, create_database, set_provenance
 
 
-def purge(force=False):
+def purge(force=False, confirmed=False):
 
     create_database()
 
@@ -30,8 +36,11 @@ def purge(force=False):
         result = authenticity.verify(record=True)
         print(f"authenticity verdict: {result['status'].upper()}")
         print(f"  {result['summary']}")
-        if result["status"] == VERIFIED_REAL:
-            print("\nData is genuine — nothing purged.")
+        convicted = result["status"] == SIMULATED and any(
+            c["discriminating"] and c["passed"] is False
+            for c in result.get("checks") or ())
+        if not convicted:
+            print("\nNot convicted by a discriminating test — nothing purged.")
             return 0
 
     conn = sqlite3.connect(DATABASE_NAME)
@@ -43,6 +52,15 @@ def purge(force=False):
                 f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         except sqlite3.OperationalError:
             counts[table] = 0
+
+    if not (force or confirmed):
+        conn.close()
+        print("\nWould delete:")
+        for table, n in counts.items():
+            print(f"  {table:<18} {n} rows")
+        print("\nNothing deleted. Back up the database, run "
+              "`python test_authenticity.py`, and rerun with --yes to purge.")
+        return 0
 
     for table in ("market_data", "price_history", "market_snapshot"):
         try:
@@ -78,4 +96,4 @@ def purge(force=False):
 
 
 if __name__ == "__main__":
-    purge(force="--force" in sys.argv)
+    purge(force="--force" in sys.argv, confirmed="--yes" in sys.argv)

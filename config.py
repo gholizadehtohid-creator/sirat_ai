@@ -1103,13 +1103,14 @@ REGIME_SCORE_BEAR = 15.0
 # risk_engine -- one knob, named twice, rather than two knobs doing one job.
 #
 # THESE NUMBERS ARE A RISK POLICY AND NOT A MEASURED EDGE, and on the one window
-# that can be measured the evidence points the other way. Over 23 decision dates
-# (weight_optimizer.py, section 6) the mode labels sorted forward returns like
-# this:
+# that can be measured the evidence points the other way. On the corrected
+# swing cache, pre-2026 dates only (the full test, 2026-11-12; the earlier
+# 23-date table read the cache before its look-ahead fix and dates inside the
+# 2026 holdout), the mode labels sorted forward returns like this:
 #
-#     AGGRESSIVE   11 dates   +1.06% mean   worst -11.56%
-#     DEFENSIVE    10 dates   +4.35% mean   worst  -5.25%
-#     NORMAL        2 dates  +20.37% mean   worst +14.95%
+#     AGGRESSIVE    9 dates   +0.31% mean   worst -10.16%
+#     DEFENSIVE     7 dates   +3.06% mean   worst  -2.59%
+#     NORMAL        1 date   +17.86%
 #
 # The bearish label was followed by BETTER 20-session returns than the bullish
 # one, and both double-digit losses landed on AGGRESSIVE dates. So cutting size
@@ -1119,11 +1120,12 @@ REGIME_SCORE_BEAR = 15.0
 #
 # The multipliers are kept anyway, because capping exposure when the index is
 # falling is a statement about how much can be lost when the read is WRONG, and
-# 23 periods spanning roughly one cycle cannot settle that. But nothing here
+# 17 periods spanning roughly one cycle cannot settle that. But nothing here
 # should be described as validated, and the honest next step is to measure
 # regime.py's detector as a timing signal in its own right.
 #
-# The entry floor below is a different matter: it IS measured, on the same data.
+# The entry floor below is a policy of the same kind: its measured effect rests
+# on one skipped date.
 TRADING_MODE_BUDGET = {
     "AGGRESSIVE": 1.0,
     "NORMAL": 0.85,
@@ -1147,24 +1149,25 @@ REGIME_SIDEWAYS_MAX_MULTIPLIER = 0.7
 # the buy band than a calm market would require. Exits are untouched: a floor
 # that also raised the exit threshold would liquidate a whole book on the
 # session the market turned defensive, which is selling the bottom by policy.
-# MEASURED, on the same 23 decision dates, compounding an equal-weight top-10
-# basket and treating a period with no qualifying name as FLAT rather than as
-# absent -- which is the only comparison that is fair, since the floor changes
-# how many periods are traded at all:
+# NOT A MEASUREMENT -- a risk policy. The table that stood here (146% at +0,
+# 129% at +10, "3.9 points of drawdown at an unchanged Sharpe") came from the
+# swing cache before its look-ahead fix [[swing-weights-lookahead]], used dates
+# inside the 2026 holdout, and had no risk-free hurdle in its Sharpe. The full
+# test (2026-11-12) re-ran it on the corrected cache, pre-2026 dates only (17
+# dates, 7 of them DEFENSIVE), the current evaluate() -- skipped periods
+# dropped, the risk-free rate subtracted, 1.04% per round trip:
 #
 #     floor    total return    max drawdown    Sharpe    periods sat out
-#      +0         146.3%          -15.5%        1.63           0
-#      +5         126.0%          -11.6%        1.62           3
-#     +10         128.6%          -11.6%        1.66           3
-#     +15         105.6%          -11.6%        1.45           3
-#     +20          87.4%          -11.9%        1.28           4
+#      +0          44.0%          -14.9%        0.32           0
+#      +5          44.1%          -11.8%        0.38           1
+#     +10          50.4%          -10.7%        0.51           1
+#     +15          39.5%          -12.9%        0.34           2
+#     +20          36.3%          -11.3%        0.39           4
 #
-# +10 buys 3.9 points of drawdown for 17.7 points of two-year return at an
-# unchanged Sharpe. That trade is taken because the stated objective is the
-# return-to-risk ratio rather than the return -- but the whole effect rests on
-# three skipped dates, one of which would have returned +20%, and the Sharpe
-# differences here are inside the noise of 23 periods. Set this back to 0 and
-# nothing else in the system needs to change.
+# The +10 effect rests on ONE skipped date of 17; on the full corrected window,
+# holdout included, its drawdown gain shrinks to 0.17 points. It is kept as a
+# policy (do not buy as freely into a defensive market), not as an edge. Set
+# this back to 0 and nothing else in the system needs to change.
 #
 # SELECTIVE's 5 is an interpolation, not a measurement: no date in the window was
 # labelled SELECTIVE, so the floor above was measured on DEFENSIVE dates alone.

@@ -565,3 +565,28 @@ class NavScopeTests(unittest.TestCase):
         # capital 100bn rials = 100m shares; the exchange counts 150m.
         r = self.analyse("سرمايه گذاريها", listed_market=80 * B, shares=1.5e8)
         self.assertTrue(any("افزایش" in n for n in r["valuation"]["nav_notes"]))
+
+
+class IncomeLessPeriodTests(unittest.TestCase):
+    """The full test, 2026-11-12: a newest period with only a balance sheet
+    left the card's TTM unbuildable, and it fell back to an annualised
+    quarter (غبهنوش 5.38 against a TTM of 15.5)."""
+
+    def test_a_balance_sheet_only_period_is_skipped_and_named(self):
+        rows = [period("1405/06/31", 6, None, None),
+                period("1405/03/31", 3, 60 * B, 12 * B),
+                period("1404/12/29", 12, 300 * B, 60 * B),
+                period("1404/03/31", 3, 50 * B, 10 * B)]
+        rows[0]["items"] = {"capital": 100 * B, "total_equity": 500 * B}
+        r = fo.analyse("x", price=5_000, rows=rows, today=(1405, 8, 14),
+                       shares=1e8, opportunity=BILLS)
+        self.assertEqual(r["skipped_period"], "1405/06/31")
+        self.assertEqual(r["latest"]["period_end"], "1405/03/31")
+        self.assertIsNotNone(r["ttm"]["profit"])
+
+    def test_a_dear_multiple_on_a_real_profit_is_kept(self):
+        rows = [period("1405/06/31", 6, 120 * B, 1 * B),
+                period("1404/12/29", 12, 300 * B, 2 * B),
+                period("1404/06/31", 6, 100 * B, 1 * B)]
+        t = fo.trailing_multiples({"c": rows}, {"c": {"close": 5_000, "total_shares": 1e8}})
+        self.assertGreater(t["c"]["pe"], 60)            # 500bn on 2bn

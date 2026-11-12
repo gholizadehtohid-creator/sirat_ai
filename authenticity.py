@@ -67,6 +67,11 @@ TABLE_PRIORITY = ("price_history", "market_data")
 # before then, so it samples this many series.
 BAND_SAMPLE_SERIES = 60
 
+# The band is judged on each series' newest bars only: today's ±3% has not
+# always been the band, and moves from 2001-2010 under wider ones counted
+# against real data (the full test, 2026-11-12).
+BAND_RECENT_BARS = 500
+
 
 def _key_column(table):
     return KEY_COLUMNS.get(table, "symbol")
@@ -195,6 +200,7 @@ def check_price_band(conn, table="market_data"):
     moves = []
     for series in by_symbol.values():
         series.sort()
+        series = series[-BAND_RECENT_BARS:]
         for i in range(1, len(series)):
             prev = series[i - 1][1]
             current = series[i][1]
@@ -372,8 +378,14 @@ def verify(table=None, record=True):
             "exchange data: " + "; ".join(c["name"] for c in hard_failures)
         )
     elif soft_failures:
-        status = SIMULATED
-        summary = ("fails a basic structural test: "
+        # A structural test a real series can fail (a band that moved, a
+        # weekend print) is a warning, not a conviction: a SIMULATED verdict
+        # is what lets purge_simulated.py delete the price tables, and only a
+        # discriminating failure -- the holiday calendar -- may produce it
+        # (the full test, 2026-11-12).
+        status = UNVERIFIED
+        summary = ("fails a non-discriminating structural test, which real "
+                   "data can also fail -- not a conviction: "
                    + "; ".join(c["name"] for c in soft_failures))
     elif any(c["passed"] is None for c in checks):
         status = UNVERIFIED

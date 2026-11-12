@@ -904,6 +904,10 @@ function renderIndexCard(index, prefix, rep) {
 
   banner(prefix + "Status", prefix + "StatusText", "is-live",
     `<strong>${esc(index.name)}</strong> — ${index.bars} جلسه تا ${index.last_date}. ` +
+    (index.stored_date
+      ? `شاخص ذخیره‌شده تا ${esc(index.stored_date)} (${num(index.stored_close, 0)})؛ تحلیل تا ${esc(index.last_date)}، ` +
+        "چون گردش معاملات روز آخر هنوز ذخیره نشده است. "
+      : "") +
     `مؤلفه‌ی حجم از ${esc(index.volume_source || "هیچ منبعی")} تغذیه شده.`);
 
   const call = sig.call
@@ -3985,6 +3989,8 @@ function renderOutlook(rep) {
   banner("outlookStatus", "outlookStatusText", "",
     "<strong>این رتبه‌بندی آزموده شده است:</strong> خرید ده نام بالای همین فهرست " +
     "در ۱۴۰۰ تا ۱۴۰۵ سالانه حدود ۳۵٪ داد در برابر ۴۴٪ شاخص کل (آزمون E30، رد شد). " +
+    "قیمت‌های آن آزمون سود نقدی را نداشتند و شاخص کل دارد، پس فاصله‌ی واقعی حدود ۳ تا ۴ واحد در سال کمتر است؛ " +
+    "حکم رد عوض نمی‌شود: ده نام بالا از نگه‌داشتن همه‌ی شرکت‌های واجد شرایط بهتر نبودند. " +
     "فهرست برای شناخت شرکت‌هاست، نه انتخاب خرید. (اینکه پایین فهرست بدتر بود فقط مشاهده‌ی جانبی همان آزمون است و خودش آزموده نشده.)<br>" +
     `${rep.count} شرکت تولیدی/خدماتی رتبه‌بندی شد (بیشترین بازده سود برآوردی اول) ` +
     `و ${rep.financials_count || 0} شرکت مالی جداگانه. ` +
