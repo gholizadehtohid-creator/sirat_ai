@@ -633,7 +633,34 @@ TARGET_CAVEAT = (
 )
 
 
-def price_targets(frame, latest, sr):
+def symbol_band_pct(ins_code):
+    """The name's own daily band, in percent, from its newest market-watch
+    row; None without one. A hard-coded 3% printed «3%» for a gold fund
+    (±10%) and the wrong session floor for ±2% and ±1% names (the full
+    test, 2026-11-12)."""
+
+    if not ins_code:
+        return None
+    conn = database._connect()
+    try:
+        row = conn.execute(
+            "SELECT prev_close, limit_up, limit_down FROM market_snapshot "
+            "WHERE ins_code = ? ORDER BY captured_at DESC LIMIT 1",
+            (str(ins_code),)).fetchone()
+    except Exception:                                           # noqa: BLE001
+        row = None
+    finally:
+        conn.close()
+    if not row:
+        return None
+    prev, up, down = (_finite(x) for x in row)
+    if not prev or not up or not down or prev <= 0:
+        return None
+    width = max(up / prev - 1.0, 1.0 - down / prev) * 100
+    return round(width, 1) if 0 < width < 50 else None
+
+
+def price_targets(frame, latest, sr, band_pct=None):
     """Where a move from here would end, and what it costs to be wrong.
 
     Reuses the production trade path rather than inventing a panel-only rule:
@@ -682,7 +709,7 @@ def price_targets(frame, latest, sr):
     # The exchange caps a session at PRICE_BAND_PCT. However strong the read,
     # a 9% target cannot be reached in fewer than three limit-up sessions, and
     # a reader looking at a target with no time attached will assume otherwise.
-    band = _finite(config.PRICE_BAND_PCT) or 3.0
+    band = _finite(band_pct) or _finite(config.PRICE_BAND_PCT) or 3.0
     t1_pct = _finite(measured.get("target_1_pct"))
     band_sessions = (int(math.ceil(t1_pct / band))
                      if t1_pct and t1_pct > 0 else None)
@@ -758,8 +785,9 @@ def price_targets(frame, latest, sr):
                      "شکستن همان مقاومت است" % overhead_pct)
     if band_sessions and not no_room:
         notes.append(
-            "دامنه‌ی نوسان %.0f%% است — رسیدن به هدف اول دست‌کم %d سشن کامل "
-            "لازم دارد، حتی در بهترین حالت" % (band, band_sessions))
+            "دامنه‌ی نوسان %s%% است — رسیدن به هدف اول دست‌کم %d سشن کامل "
+            "لازم دارد، حتی در بهترین حالت"
+            % (("%.1f" % band).rstrip("0").rstrip("."), band_sessions))
     if not structural:
         notes.append("سوئینگ کاملی برای اهداف ساختاری یافت نشد یا همه‌ی "
                      "بسط‌ها زیر قیمت‌اند")
@@ -876,7 +904,7 @@ def analyse(symbol, params=None, bars=SERIES_BARS, halted=None):
     # Targets run on the full frame for the same reason the levels do: the
     # swing whose extension becomes an objective may start well left of the
     # display window.
-    targets = price_targets(frame, latest, sr)
+    targets = price_targets(frame, latest, sr, band_pct=symbol_band_pct(ins_code))
 
     # Whether the reading can be acted on at all. A name locked at one price
     # (a queue), one that did not trade in the market's last session, or one

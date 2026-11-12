@@ -1092,12 +1092,18 @@ const TREND_FA = {
   "Uptrend": "روند صعودی",
   "Weak Downtrend": "روند نزولی ضعیف",
   "Downtrend": "روند نزولی",
+  "Recovery": "بالای میانگین بلند، زیر کوتاه",
+  "Bearish": "نزولی",
+  "Not Traded": "معامله نشده",
   "Unknown": "نامشخص"
 };
 
+// Rising is not coloured green: a trend on one stock is a reading, not a
+// call (STATUS_CLASS).
 const TREND_CLASS = {
-  "Strong Uptrend": "good", "Uptrend": "good",
-  "Weak Downtrend": "warn", "Downtrend": "bad", "Unknown": "neutral"
+  "Strong Uptrend": "neutral", "Uptrend": "neutral", "Recovery": "neutral",
+  "Weak Downtrend": "warn", "Downtrend": "bad", "Bearish": "bad",
+  "Not Traded": "neutral", "Unknown": "neutral"
 };
 
 // ADX measures a trend's STRENGTH and is silent about its direction; +DI/-DI
@@ -2216,7 +2222,7 @@ function renderSectors(rep) {
         return [
           esc(s.sector_name),
           t.score,
-          t.trend || "—",
+          esc(TREND_FA[t.trend] || t.trend || "—"),
           b ? `${b.pct_above_slow_ma}٪` : "—",
           signed(t.returns ? t.returns["60d"] : null),
           esc(s.index_method || "—")
@@ -2277,12 +2283,16 @@ const FUND_PILLARS = [
   "Financial health", "Cash flow", "Earnings quality"
 ];
 
+// No green on a stock-level reading (STATUS_CLASS): a "Strong" in green read
+// as a buy, and no ranking here beat the index (the full test, 2026-11-12).
+const FUND_FA = { Strong: "قوی", Good: "خوب", Fair: "متوسط", Weak: "ضعیف", Poor: "بسیار ضعیف" };
+
 function fundBadge(status) {
-  const cls = status === "Strong" ? "good"
-    : status === "Good" ? "good"
+  const cls = status === "Strong" || status === "Good" ? "neutral"
     : status === "Fair" ? "warning"
     : status === "Weak" ? "serious" : "critical";
-  return `<span class="badge ${cls}"><span class="dot"></span>${esc(status)}</span>`;
+  return `<span class="badge ${cls}" title="${esc(String(status ?? ""))}"><span class="dot"></span>` +
+         `${esc(FUND_FA[status] || status || "—")}</span>`;
 }
 
 // An empty P/E said nothing about why. Three different facts sit behind it,
@@ -2494,7 +2504,7 @@ async function loadFundamentals(force = false) {
 // A flow score is a 0-100 like every other score on this page, but the bands
 // mean something different: 50 is the market's own middle, not a pass mark.
 function flowBadge(label) {
-  const cls = label === "ورود پول حقیقی" ? "good"
+  const cls = label === "ورود پول حقیقی" ? "neutral"
     : label === "خروج پول حقیقی" ? "critical" : "warning";
   return `<span class="badge ${cls}"><span class="dot"></span>${esc(label)}</span>`;
 }
@@ -3361,7 +3371,7 @@ function renderBootstrap(p) {
     ? (running ? `${elapsed} از شروع` : `کل زمان ${elapsed}`) : "";
 
   $("loadLog").textContent = (p.log || []).length
-    ? p.log.map(l => `${(l.at || "").replace("T", " ").replace("+00:00", "")}  ${l.message}`).join("\n")
+    ? p.log.map(l => `${tehranClock(l.at)}  ${l.message}`).join("\n")
     : "در این نوبت چیزی دریافت نشده است.";
 }
 
@@ -3656,6 +3666,16 @@ function tomanCell(v) {
 // A stored UTC timestamp as the reader's clock reads it: Jalali date and
 // Tehran time, instead of the raw "2026-11-11T03:30:55+00:00" the banner and
 // the screen printed (found 2026-11-11).
+// A server stamp (UTC) as Tehran's clock, seconds kept: the live events and
+// the load log printed the UTC digits, 3h30 early (the full test).
+function tehranClock(iso) {
+  if (!iso) return "—";
+  const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+  if (Number.isNaN(d.getTime())) return esc(String(iso));
+  return d.toLocaleTimeString("fa-IR", { timeZone: "Asia/Tehran", hour: "2-digit",
+                                        minute: "2-digit", second: "2-digit" });
+}
+
 function faTime(iso) {
   if (!iso) return "—";
   try {
@@ -3796,7 +3816,7 @@ const OUTLOOK_BASIS = {
 // The price's growth hurdle against the bill yield, as one readable cell.
 function hurdleCell(h) {
   if (!h || h.required_growth_pct == null) return "—";
-  if (h.required_growth_pct <= 0) return '<span class="up">لازم نیست</span>';
+  if (h.required_growth_pct <= 0) return '<span class="hint">لازم نیست</span>';
   const ok = h.cushion_pct != null && h.cushion_pct >= 0;
   return `${num(h.required_growth_pct, 0)}٪` + (h.actual_growth_pct == null ? "" :
     ` <span class="${ok ? "up" : "down"}">(فعلی ${num(h.actual_growth_pct, 0)}٪)</span>`);
@@ -3862,6 +3882,12 @@ function renderOutlookDetail(r) {
   ];
   const flags = (r.flags || []).map(f => `<li>⚠ ${esc(f)}</li>`).join("");
   const pos = (r.positives || []).map(f => `<li>✓ ${esc(f)}</li>`).join("");
+  // A lookup without the ranking showed its ticks with nothing of the
+  // record: the ranking these numbers feed lost to the index (E30-E33).
+  const record = '<p class="hint help-warn">این اعداد برای شناخت شرکت‌اند، نه انتخاب خرید: ' +
+    'خرید ده نام بالای رتبه‌بندی بنیادی در ۱۴۰۰ تا ۱۴۰۵ سالانه حدود ۳۵٪ داد در برابر ۴۴٪ ' +
+    'شاخص کل (E30، رد شد)؛ هیچ‌کدام از آزمون‌های E30 تا E33 از شاخص جلو نزد ' +
+    '(این ارقام بدون سود نقدی‌اند و فاصله را حدود ۳ تا ۴ واحد در سال بیشتر نشان می‌دهند).</p>';
 
   // The monthly activity report (ن-۳۰): newer than any statement.
   let monthlyHtml = "";
@@ -3895,7 +3921,7 @@ function renderOutlookDetail(r) {
   }
 
   $("outlookDetail").innerHTML =
-    `<h3>${esc(r.symbol || "")} <span class="hint">${esc(r.name || "")}</span></h3>` +
+    `${record}<h3>${esc(r.symbol || "")} <span class="hint">${esc(r.name || "")}</span></h3>` +
     table(["شاخص", "مقدار"], rows) + monthlyHtml +
     `<ul class="evidence" style="margin-top:8px">${flags}${pos}</ul>`;
 }
@@ -4817,7 +4843,7 @@ async function loadLive() {
   // restated here rather than echoed.
   let detail = (s.traded === null || s.traded === undefined)
     ? esc(s.reason || "")
-    : `${s.traded} نماد گردش معامله دارند`;
+    : `${num(s.traded, 0)} نماد گردش معامله دارند`;
 
   if (tick) {
     detail += ` · آخرین تیک جمع‌آورنده: ${esc(tick.outcome)} ${
@@ -4836,10 +4862,10 @@ async function loadLive() {
       sub: `از ${counts.instruments ?? "—"} سهم` },
     { k: "صف فروش", v: counts.sell ?? "—",
       sub: `از ${counts.instruments ?? "—"} سهم` },
-    { k: "نمادهای دارای گردش", v: s.traded ?? "—",
+    { k: "نمادهای دارای گردش", v: s.traded === null || s.traded === undefined ? "—" : num(s.traded, 0),
       sub: "همین حالا، از روی تابلو" },
     { k: "آخرین عکس دفتر", v: q.age_minutes === null
-        || q.age_minutes === undefined ? "—" : `${q.age_minutes.toFixed(0)}′`,
+        || q.age_minutes === undefined ? "—" : `${num(q.age_minutes, 0)} دقیقه`,
       sub: q.captured_at ? faTime(q.captured_at) : "ثبت نشده" },
   ]);
 
@@ -4883,7 +4909,7 @@ function renderLiveEvents(events) {
   $("liveEventsTable").innerHTML = table(
     ["زمان", "نماد", "چه شد", "آخرین"],
     events.map(e => [
-      `${esc((e.observed_at || "").slice(11, 19))} ${ageTag(e.age_minutes)}`,
+      `${tehranClock(e.observed_at)} ${ageTag(e.age_minutes)}`,
       esc(e.symbol || e.ins_code),
       esc(EVENT_FA[e.event] || e.event),
       num(e.last, 0),

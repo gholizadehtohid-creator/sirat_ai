@@ -331,6 +331,8 @@ class LiveStateTests(unittest.TestCase):
 
         self.assertIsNone(state["trading"])
         self.assertIn("unreadable", state["reason"])
+        # Unknown, not "0 symbols trading" (the full test, 2026-11-12).
+        self.assertIsNone(state["traded"])
 
     def test_an_unreadable_overview_is_also_unknown(self):
         """Without a date the tape cannot be placed in time."""
@@ -340,6 +342,7 @@ class LiveStateTests(unittest.TestCase):
 
         self.assertIsNone(state["trading"])
         self.assertIn("overview", state["reason"])
+        self.assertIsNone(state["traded"])
 
     def test_an_empty_payload_is_also_unknown(self):
         self.assertIsNone(self.ask([])["trading"])

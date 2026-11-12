@@ -277,7 +277,10 @@ class HurdleTests(unittest.TestCase):
 
     def test_a_yield_above_the_bills_needs_no_growth(self):
         r = self.analyse(1_500)          # yield 48%
-        self.assertTrue(any("نیاز ندارد" in p for p in r["positives"]))
+        self.assertLessEqual(r["hurdle"]["required_growth_pct"], 0)
+        # A fact in the hurdle row, not a green tick: the ranking that sorts
+        # on this yield lost to the index (E30; the full test, 2026-11-12).
+        self.assertFalse(any("نیاز ندارد" in p for p in r["positives"]))
 
 
 class FinancialTests(unittest.TestCase):

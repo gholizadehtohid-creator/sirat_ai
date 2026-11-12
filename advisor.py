@@ -53,6 +53,12 @@ V2 = "v2"
 ENGINES = (V1, V2)
 
 
+
+def _fa_digits(text):
+    """Latin digits as Persian ones, for a sentence the panel prints as is."""
+
+    return str(text).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+
 def engine_name(engine=None):
     """Which engine a caller asked for, normalised. Unknown names fall back.
 
@@ -297,33 +303,20 @@ def _run_v2(equity=None, size=None, max_per_sector=None, risk_pct=None,
                      % (out["book"].get("reason") or
                         "سیگنال خریدی تولید نشد یا محدودیت‌های سبد اجازه ندادند."))
 
-    # The unallocated share is part of the advice, not a remainder. The v2 book
-    # averaged 80-85% cash over 2024-09..2026-11 (E26); left in a current
-    # account that money loses to inflation while a fixed-income fund pays
-    # about the policy rate with no market risk.
+    # The v2 book averaged 80-85% cash over 2024-09..2026-11 (E26), and its
+    # backtest credits that cash with the fixed-income fund rate.
     idle = equity - invested if equity else 0.0
 
     if equity and idle / equity >= 0.05:
-        # The rate quoted is the one every card quotes: the traded bills' own
-        # yield when it is known (43-44% on 2026-11-10), not the 23% policy
-        # rate -- four different hurdles across the panel was the review's
-        # complaint (2026-11-11).
-        try:
-            import opportunities
-            bill = (opportunities.remembered_bill_yield() or {}).get("yield_pct")
-        except Exception:                                   # noqa: BLE001
-            bill = None
+        # The paper book's own accounting, not an instruction on real
+        # capital: "put 71% in bills" contradicted the allocation card, whose
+        # tested mix holds no fixed income (the full test, 2026-11-12).
         notes.append(
-            "%.0f%% سرمایه (%s ریال) در سبد سهام نیست — آن را در صندوق درآمد "
-            "ثابت یا اوراق خزانه نگه دارید، نه در حساب کارگزاری؛ %s"
-            % (idle / equity * 100.0, "{:,.0f}".format(idle),
-               ("اخزا اکنون حدود %.0f٪ سالانه می‌دهد — ثابت به ریال تا سررسید؛ "
-                "با تورم حدود %.0f٪ بازده واقعی‌اش حدود %+.0f٪ است."
-                % (bill, config.INFLATION_RATE,
-                   opportunities.real_yield_pct(bill)))
-               if bill else
-               ("سود حدود %.0f٪ سالانه بدون ریسک بازار است."
-                % (config.RISK_FREE_RATE * 100.0))))
+            "در این سبد کاغذی %s٪ سرمایه نقد می‌ماند (%s ریال؛ در آزمون با نرخ "
+            "صندوق درآمد ثابت حساب شده). تقسیم واقعی سرمایه میان سهام، طلا و "
+            "درآمد ثابت را کارت «چقدر در سهام، طلا و درآمد ثابت؟» تعیین می‌کند."
+            % (_fa_digits("%.0f" % (idle / equity * 100.0)),
+               _fa_digits("{:,.0f}".format(idle).replace(",", "٬"))))
 
     policy = out.get("policy") or {}
 

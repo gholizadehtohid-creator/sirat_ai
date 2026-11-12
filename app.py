@@ -73,27 +73,64 @@ app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 
+# The names this panel answers to. A DNS-rebinding page points its own name
+# at 127.0.0.1: its requests then carry Host evil.example and an Origin that
+# "matches" it, and the same-origin check below let them through -- a POST
+# /api/codal?now=1 skipped the Codal cooldown that way (the full test,
+# 2026-11-12). Any other Host is refused before a route runs, GET included,
+# which also keeps such a page from reading the panel's answers.
+ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", SERVER_HOST.lower()})
+
+
+def _hostname(netloc):
+    from urllib.parse import urlsplit
+    try:
+        return (urlsplit("//" + (netloc or "")).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _refuse(reason):
+    return jsonify({"error": "cross-site request refused: %s" % reason}), 403
+
+
 @app.before_request
 def _same_origin_only():
-    """Refuse a POST that another site's page sent to this panel.
+    """Refuse what another site's page sent to this panel.
 
     The panel binds 127.0.0.1, but a page the user visits can still fire a
-    no-cors POST at it -- /api/bootstrap?force=1, or /api/codal?now=1, which
-    skips the Codal cooldown (the review panel, 2026-11-11). A browser puts
-    the sending page's origin in Origin (or Referer); only this panel's own
-    pages may write.
+    request at it -- /api/bootstrap?force=1, or /api/codal?now=1, which skips
+    the Codal cooldown (the review panel, 2026-11-11). Three checks:
+
+    - the Host must be this machine's (DNS rebinding);
+    - an /api/ request the browser marks as cross-site or same-site
+      (Sec-Fetch-Site) is refused whatever its method: GET routes with
+      ?refresh=1 or a new cache key start ~100 TSETMC requests and write
+      files and research rows, and a top-level GET carries no Origin
+      (the full test, 2026-11-12);
+    - a POST's Origin (or Referer) must be this panel; "null" is refused.
+
+    A request with none of these headers is not a browser (curl, the tests)
+    and passes; a typed URL or bookmark sends Sec-Fetch-Site "none".
     """
 
+    if _hostname(request.host) not in ALLOWED_HOSTS:
+        return _refuse("host %s is not this panel" % (request.host or "?"))
+    site = (request.headers.get("Sec-Fetch-Site") or "").lower()
+    if request.path.startswith("/api/") and site in ("cross-site", "same-site"):
+        return _refuse("sent from another site")
     if request.method != "POST":
         return None
     sender = request.headers.get("Origin") or request.headers.get("Referer")
     if not sender:
         return None                      # not a browser: curl, the tests
+    if sender.strip().lower() == "null":
+        return _refuse("opaque origin")
     from urllib.parse import urlparse
     host = (urlparse(sender).netloc or "").lower()
-    if host == (request.host or "").lower():
+    if host == (request.host or "").lower() and _hostname(host) in ALLOWED_HOSTS:
         return None
-    return jsonify({"error": "cross-site request refused"}), 403
+    return _refuse("sent from %s" % (host or "an unknown page"))
 
 CACHE_TTL = 300
 
@@ -812,7 +849,7 @@ def _session_probe():
         try:
             value = market_session.is_trading_now()
         except Exception as exc:                                # noqa: BLE001
-            value = {"trading": None, "traded": 0, "last_trade": None,
+            value = {"trading": None, "traded": None, "last_trade": None,
                      "reason": "%s: %s" % (type(exc).__name__, str(exc)[:120])}
         _SESSION_PROBE.update(at=now, value=value)
         return value

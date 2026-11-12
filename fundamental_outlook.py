@@ -860,10 +860,12 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                          monthly.get("ytd_growth") is not None else growth_rev)
         if actual_growth is not None:
             cushion = actual_growth - required_growth
+        # A forward yield above the bills' is shown in the hurdle row as a
+        # fact; it is not a positive -- the ranking that sorts on it lost to
+        # the index (E30), and 8 of 8 names it ticked were outside that
+        # ranking anyway (the full test, 2026-11-12).
         if required_growth <= 0:
-            positives.append("بازده سود برآوردی %.0f٪ از بازده اخزا (%.0f٪) بیشتر "
-                             "است؛ قیمت برای توجیه شدن به رشد نیاز ندارد"
-                             % (yield_fwd * 100, rate * 100))
+            pass
         elif cushion is not None and cushion * 100 < -GROWTH_CUSHION_PCT:
             flag("قیمت امروز، در برابر اخزای %.0f٪، رشد سالانه‌ی حدود %.0f٪ "
                  "سود را لازم دارد؛ رشد فعلی فروش %.0f٪ است"

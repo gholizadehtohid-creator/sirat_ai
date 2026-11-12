@@ -287,7 +287,7 @@ def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES, now=None):
     try:
         payload = provider._get(url, timeout=(10.0, 45.0)).json()
     except Exception as exc:                                    # noqa: BLE001
-        return {"trading": None, "traded": 0, "last_trade": None,
+        return {"trading": None, "traded": None, "last_trade": None,
                 "session_date": None, "market_state": None,
                 "reason": "feed unreadable: %s: %s"
                           % (type(exc).__name__, str(exc)[:120])}
@@ -295,14 +295,14 @@ def is_trading_now(provider=None, min_names=MIN_TRADED_NAMES, now=None):
     rows = (payload.get("marketwatch") or payload.get("marketWatch") or [])
 
     if not rows:
-        return {"trading": None, "traded": 0, "last_trade": None,
+        return {"trading": None, "traded": None, "last_trade": None,
                 "session_date": None, "market_state": None,
                 "reason": "market watch returned no rows"}
 
     try:
         session_date, market_state = exchange_session(provider)
     except Exception as exc:                                    # noqa: BLE001
-        return {"trading": None, "traded": 0, "last_trade": None,
+        return {"trading": None, "traded": None, "last_trade": None,
                 "session_date": None, "market_state": None,
                 "reason": "market overview unreadable: %s: %s"
                           % (type(exc).__name__, str(exc)[:120])}
@@ -427,7 +427,8 @@ def main(argv=None):
     if args.now:
         state = is_trading_now()
         print("trading   : %s" % state["trading"])
-        print("traded    : %d" % state["traded"])
+        print("traded    : %s" % ("unknown" if state["traded"] is None
+                                     else state["traded"]))
         print("last trade: %s" % state["last_trade"])
         print("session   : %s  (state %s)" % (state["session_date"],
                                               state["market_state"]))
