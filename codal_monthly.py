@@ -184,8 +184,12 @@ class Pacer:
     to 240: retrying inside codal.ir's throttle window renews the block.
     """
 
-    def __init__(self, label, verbose=True, deadline=None):
+    def __init__(self, label, verbose=True, deadline=None, stop_after=None):
         self.label, self.verbose = label, verbose
+        # Refusals in a row that end the pass outright, before any cool-off:
+        # the portfolio pass slept 15 minutes on its third refused download
+        # and then stopped anyway (the full test, 2026-11-12). None: cool off.
+        self.stop_after = stop_after
         self.in_batch = 0
         self.refused = 0
         # A wall-clock end (time.time()): a cool-off that would run past it
@@ -201,6 +205,12 @@ class Pacer:
             self.refused += 1
         else:
             self.refused = 0
+        if self.stop_after and self.refused >= self.stop_after:
+            if self.verbose:
+                print("%s: %d refused in a row -- stopping, not waiting"
+                      % (self.label, self.refused), flush=True)
+            self.stop = True
+            return
         if self.refused >= 3:
             wait = min(15 * 2 ** (self.refused - 3), 240) * 60
             if self.deadline is not None and time.time() + wait > self.deadline:

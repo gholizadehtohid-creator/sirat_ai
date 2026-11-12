@@ -200,6 +200,45 @@ def too_late(conn, session, now=None):
     return None
 
 
+# R-FORWARD-2027's first session; a calendar date from here on with no
+# entry at all is a gap the audit names.
+FORWARD_START = "2026-08-19"
+
+
+def calendar(conn, after=None, before=None):
+    """Trading sessions by the index's own calendar: price_history is no
+    calendar on a broken day (11-11 held 2 bars, both gold funds)."""
+
+    import config
+    sql = "SELECT DISTINCT date FROM index_history WHERE ins_code = ?"
+    args = [str(config.INDICES["TEDPIX"]["insCode"])]
+    if after:
+        sql += " AND date > ?"
+        args.append(str(after)[:10])
+    if before:
+        sql += " AND date < ?"
+        args.append(str(before)[:10])
+    try:
+        return [str(d)[:10] for (d,) in conn.execute(sql + " ORDER BY date", args)]
+    except sqlite3.Error:
+        return []
+
+
+def skipped_sessions(conn, rows, session):
+    """Sessions before `session` that the log passed over without a record.
+
+    From the newest session the log has a record for (logged or missed);
+    the older gaps, from before this rule, are the audit's. Each is already
+    too late: `session`, a later one, is stored.
+    """
+
+    seen = {str(r["session"])[:10] for r in rows if r.get("spec") == SPEC_VERSION}
+    if not seen:
+        return []
+    anchor = max(seen)
+    return [d for d in calendar(conn, after=anchor, before=session) if d not in seen]
+
+
 def coverage(conn, session):
     """(equities that traded the session, of them with a flow row)."""
 
@@ -394,6 +433,22 @@ def log_once(verbose=True):
                     return out("session %s already logged; the log is "
                                "append-once per session" % session)
 
+                # A session the log passed over -- deferred, then superseded
+                # by a later one before any run could log it -- was left with
+                # no trace, and the audit said "missed: 0" over 40 such
+                # sessions (the full test, 2026-11-12).
+                for skipped in skipped_sessions(conn, rows, session):
+                    append_entry({
+                        "spec": SPEC_VERSION, "session": skipped,
+                        "missed": "superseded: a later session (%s) became "
+                                  "loggable first -- data incomplete, or no "
+                                  "run in time" % session,
+                        "computed_at": datetime.now(timezone.utc).isoformat(
+                            timespec="seconds")})
+                    if verbose:
+                        say("session %s MISSED (superseded by %s); recorded"
+                            % (skipped, session))
+
                 late = too_late(conn, session)
                 if late:
                     head = append_entry({
@@ -464,6 +519,12 @@ def audit(write=True):
     conn = sqlite3.connect("file:%s?mode=ro" % DB.replace("\\", "/"), uri=True)
     report = []
     try:
+        # Calendar sessions with no record at all -- not ok, not inadmissible,
+        # not missed: absent. The evaluator's denominator needs them. The
+        # newest calendar session may still be logged, so it is not one.
+        logged = {str(r["session"])[:10] for r in rows}
+        sessions = calendar(conn, after=_day_before(FORWARD_START))
+        gaps = [d for d in sessions[:-1] if d not in logged]
         for r in rows:
             item = {"session": r["session"], "computed_at": r.get("computed_at")}
             if r.get("missed"):
@@ -501,6 +562,8 @@ def audit(write=True):
         "inadmissible": sum(1 for i in report if i["status"] == "inadmissible"),
         "missed": sum(1 for i in report if i["status"] == "missed"),
         "pending": sum(1 for i in report if i["status"] == "pending"),
+        "gaps": len(gaps),
+        "gap_sessions": gaps,
         "rule": "admissible: computed_at before the outcome session's pre-open "
                 "(%02d:%02d Tehran); width_ok: n_names at least %.0f%% of the "
                 "equities that traded" % (PRE_OPEN[0], PRE_OPEN[1],
@@ -514,6 +577,10 @@ def audit(write=True):
 
 
 AUDIT_WIDTH = 0.75
+
+
+def _day_before(day):
+    return (date.fromisoformat(day) - timedelta(days=1)).isoformat()
 
 
 def main(argv=None):

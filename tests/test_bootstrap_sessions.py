@@ -348,3 +348,56 @@ class DeferredSessionRetryTests(unittest.TestCase):
                                  ("bootstrap:flow", "deferred"),
                                  ("bootstrap:codal", "fetched")])
         self.assertLess(bootstrap.DEFERRED_RETRY, bootstrap.MAX_AGE["history"])
+
+
+class ScheduledRetryTests(unittest.TestCase):
+    """The full test, 2026-11-12: the 45-minute retry ran only when the panel
+    was open, so a deferred evening lost its session."""
+
+    def setUp(self):
+        self.clock = [datetime(2026, 11, 10, 19, 10)]
+        self.slept = []
+
+    def now(self):
+        return self.clock[0]
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+        self.clock[0] += timedelta(seconds=seconds)
+
+    def run_retry(self, still_deferred):
+        calls = []
+
+        def ensure(only=None):
+            calls.append(only)
+            bootstrap._DEFERRED["history"] = still_deferred.pop(0)
+            return {"history": {"action": "fetched", "detail": "x"}}
+
+        bootstrap._DEFERRED["history"] = True
+        with mock.patch.object(bootstrap, "ensure", side_effect=ensure), \
+                mock.patch("builtins.print"):
+            made = bootstrap.retry_deferred(now=self.now, sleep=self.sleep)
+        bootstrap._DEFERRED.clear()
+        return made, calls
+
+    def test_a_deferred_session_is_retried_until_it_lands(self):
+        made, calls = self.run_retry([False])
+        self.assertEqual(made, 1)
+        self.assertEqual(calls, [bootstrap.SESSION_COMPONENTS])
+        # The wait is taken in short slices against the wall clock.
+        self.assertTrue(all(s <= 30 for s in self.slept))
+        self.assertEqual(self.clock[0], datetime(2026, 11, 10, 19, 55))
+
+    def test_retries_are_capped(self):
+        made, calls = self.run_retry([True, True, True, True])
+        self.assertEqual(made, bootstrap.SCHEDULED_RETRIES)
+
+    def test_no_retry_past_the_cut_off(self):
+        self.clock[0] = datetime(2026, 11, 10, 21, 0)
+        made, calls = self.run_retry([True])
+        self.assertEqual((made, calls), (0, []))
+
+    def test_nothing_deferred_means_no_wait(self):
+        bootstrap._DEFERRED.clear()
+        self.assertEqual(bootstrap.retry_deferred(now=self.now, sleep=self.sleep), 0)
+        self.assertEqual(self.slept, [])

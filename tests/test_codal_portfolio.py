@@ -164,6 +164,23 @@ class RunTests(unittest.TestCase):
         self.assertEqual(totals["failed"], cp.DOWNLOAD_REFUSALS_STOP)
         status.assert_not_called()                  # due again next pass
 
+    def test_the_third_refused_download_stops_without_a_cool_off(self):
+        """The full test: it slept 15 minutes, then stopped anyway."""
+        pace = codal_monthly.Pacer("t", verbose=False, stop_after=cp.DOWNLOAD_REFUSALS_STOP)
+        with mock.patch.object(codal_monthly.time, "sleep") as sleep:
+            for _ in range(cp.DOWNLOAD_REFUSALS_STOP):
+                pace(True)
+        sleep.assert_not_called()
+        self.assertTrue(pace.stop)
+
+    def test_without_stop_after_the_pacer_still_cools_off(self):
+        pace = codal_monthly.Pacer("t", verbose=False)
+        with mock.patch.object(codal_monthly.time, "sleep") as sleep:
+            for _ in range(3):
+                pace(True)
+        sleep.assert_called_once_with(15 * 60)
+        self.assertFalse(pace.stop)
+
     def test_a_cool_off_that_would_pass_the_deadline_stops_instead(self):
         import time
         pace = codal_monthly.Pacer("t", verbose=False, deadline=time.time() + 60)

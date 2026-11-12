@@ -285,7 +285,8 @@ def run(hours=DEFAULT_HOURS, limit=DEFAULT_LIMIT, verbose=True, client=None):
     # and a good search reset the count a refused download had started.
     pace = codal_monthly.Pacer("portfolio", verbose, deadline=end)
     downloads = codal_monthly.Pacer("portfolio-download", verbose,
-                                    deadline=end)
+                                    deadline=end,
+                                    stop_after=DOWNLOAD_REFUSALS_STOP)
     refused_in_a_row = 0
 
     for inst in companies:

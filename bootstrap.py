@@ -586,6 +586,53 @@ STEPS = [
 DEFERRED_RETRY = timedelta(minutes=45)
 _DEFERRED = {}
 
+# The scheduled run is one bootstrap an evening, and status() is asked again
+# only when the panel happens to be open: the 45-minute retry never ran on
+# the scheduled path, and a deferred session was lost to the forward log
+# (the full test, 2026-11-12). The command line now waits and retries the
+# session components itself, at most this many times and never past the
+# local cut-off -- the evening's later steps wait for it, which is the point:
+# they read the session.
+SCHEDULED_RETRIES = 2
+SCHEDULED_RETRY_UNTIL = (21, 30)
+
+
+def retry_deferred(wait=None, retries=None, until=None, now=None, sleep=None):
+    """Retry the session components while the history step keeps deferring.
+
+    Returns the number of retries made. The wait is checked against the wall
+    clock in short slices, so a laptop that suspends mid-wait resumes on
+    time rather than sleeping the whole interval after it wakes (the
+    11-10 stall).
+    """
+
+    wait = DEFERRED_RETRY if wait is None else wait
+    retries = SCHEDULED_RETRIES if retries is None else retries
+    until = until or SCHEDULED_RETRY_UNTIL
+    now = now or datetime.now
+    sleep = sleep or time.sleep
+    made = 0
+    while made < retries and _DEFERRED.get("history"):
+        due = now() + wait
+        if (due.hour, due.minute) > until or due.date() != now().date():
+            print("deferred: the session is still unpublished; the next try "
+                  "would pass %02d:%02d, so it is left to tomorrow's run"
+                  % until, flush=True)
+            break
+        print("deferred: the history endpoint has not published the session; "
+              "trying again at %s" % due.strftime("%H:%M"), flush=True)
+        while now() < due:
+            sleep(min(30.0, max(0.0, (due - now()).total_seconds())))
+        made += 1
+        # Only a history step that defers again keeps the loop going; one
+        # that is not planned (nothing behind any more) ends it.
+        _DEFERRED["history"] = False
+        outcome = ensure(only=SESSION_COMPONENTS)
+        for name, result in (outcome or {}).items():
+            print("  retry %d: %-10s %s  %s" % (made, name, result.get("action"),
+                                                result.get("detail", "")), flush=True)
+    return made
+
 
 def _mark_fetched(name):
     """Record a successful fetch, so a retry is paced by attempts not by age.
@@ -1295,6 +1342,9 @@ if __name__ == "__main__":
             print("  " + message)
 
     failures = [n for n, o in (results or {}).items() if o["action"] == "failed"]
+
+    if "--no-retry" not in sys.argv:
+        retry_deferred()
 
     if failures:
         print(f"\nFailed: {', '.join(failures)}")

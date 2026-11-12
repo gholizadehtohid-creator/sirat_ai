@@ -1620,6 +1620,15 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
     # One productive round clears it.
     refused_rounds = 0
 
+    # The search host's own back-off. Discover shares search.codal.ir with
+    # the two-hourly watch, codal_monthly and codal_portfolio; a round that
+    # downloaded filings (another host) reset the streak above, so a
+    # throttled discover was retried every 15 minutes all day and the watch
+    # stalled for ten hours (11-11, the full test). Discover now waits out
+    # its own doubling cool-off while downloads go on.
+    search_refused = 0
+    search_resume = 0.0
+
     while time.time() < deadline:
 
         totals["rounds"] += 1
@@ -1629,12 +1638,21 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
         paused = False
         letters_this_round = 0
 
-        if left:
+        if left and time.time() >= search_resume:
             found = discover(since, limit=batch, verbose=verbose,
                              client=client)
             totals["letters"] += found["letters"]
             letters_this_round = found["letters"]
-            paused = paused or found["throttled"]
+            if found["throttled"]:
+                search_refused += 1
+                pause = min(cool_minutes * 2 ** (search_refused - 1), 240) * 60
+                search_resume = time.time() + pause
+                if verbose:
+                    print("campaign: the search host is throttled (streak %d); "
+                          "discovery resumes in %dm, downloads go on"
+                          % (search_refused, pause // 60), flush=True)
+            else:
+                search_refused = 0
 
         if time.time() >= deadline:
             break
@@ -1703,6 +1721,10 @@ def campaign(since, until, hours=None, batch=30, cool_minutes=15,
                        240) * 60
         else:
             wait = 60
+        # Nothing to download while discovery waits: sleep to its resume
+        # rather than spinning a round a minute.
+        if left and got["pending"] == 0 and time.time() + wait < search_resume:
+            wait = int(search_resume - time.time()) + 1
 
         totals["pauses"] += 1
 
