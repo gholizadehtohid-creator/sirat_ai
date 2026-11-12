@@ -35,6 +35,14 @@ rem Capped at 120 companies: the two-hourly feed watch (codal_watch.py) is
 rem what brings new reports in; this only fills gaps, and 781 searches in one
 rem evening got the search host to block the watch itself (2026-11-05).
 "%PY%" codal_monthly.py --hours 1.5 --limit 120 >> logs\task_evening.log 2>&1
+rem Investment companies' monthly portfolio reports (ن-۳۱), for P/NAV. Added
+rem 2026-11-12 at the user's request: every NAV had dated from the end of Tir.
+rem After codal_monthly, never beside it, and capped below it (45 min, 60
+rem companies) so the 20:52 watch is not blinded by a throttle. Only
+rem companies whose newest portfolio is behind are searched; three refused
+rem downloads in a row end the pass, and a cool-off past the time limit ends
+rem it rather than waiting. The watch brings new reports in; this fills gaps.
+"%PY%" codal_portfolio.py --hours 0.75 --limit 60 >> logs\task_evening.log 2>&1
 rem News for the intelligence report (gold, oil, dollar, TSE). Only the panel
 rem button collected it, and the report sat on 2026-09-17 for seven weeks
 rem (found 2026-11-06). ~23 RSS feeds, ~15 s; report-only, never a signal.
