@@ -3234,6 +3234,49 @@ def history_coverage():
         "SELECT COUNT(*), MIN(date), MAX(date) FROM price_history"
     ).fetchone()
 
+    # THE NEWEST DATE IS THE EQUITIES'. The table also holds the gold funds,
+    # which gold.py fetches on its own: on the evening of 2026-11-23 seven
+    # of them carried that day's bar and no equity did, and the strip read
+    # "bars ... to 2026-11-23" over a market that stopped at 11-22.
+    try:
+        session = _newest_equity_session(conn)
+    except sqlite3.Error:
+        session = None
+
     conn.close()
 
-    return {"bars": bars or 0, "first_date": first, "last_date": last}
+    return {"bars": bars or 0, "first_date": first,
+            "last_date": session or last}
+
+
+def _newest_equity_session(conn):
+    """The newest date most equities hold a bar for; None without equities.
+
+    Not the newest bar of ANY equity either: at 19:13 on 2026-11-22 four
+    names had that session's bar (off the market watch) and some 750 did
+    not, and "to 2026-11-22" would have been as wrong as the funds made it.
+    Each equity's newest bar comes off the (ins_code, date) key, as in
+    newest_equity_bar(); over the five newest of those dates, the answer is
+    the newest one that at least half of the names have reached.
+    """
+
+    rows = conn.execute("""
+        SELECT d, COUNT(*) FROM (
+            SELECT (SELECT MAX(p.date) FROM price_history p
+                    WHERE p.ins_code = i.ins_code) AS d
+            FROM instruments i WHERE i.is_equity = 1)
+        WHERE d IS NOT NULL GROUP BY d ORDER BY d DESC LIMIT 5
+    """).fetchall()
+
+    if not rows:
+        return None
+
+    need = sum(count for _day, count in rows) / 2.0
+    reached = 0
+
+    for day, count in rows:
+        reached += count
+        if reached >= need:
+            return day
+
+    return rows[-1][0]

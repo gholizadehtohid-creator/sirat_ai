@@ -216,6 +216,22 @@ DEFAULT_THRESHOLD = 70
 # Tehran Stock Exchange retail equity: ~0.464% buy + ~0.575% sell.
 TRANSACTION_COST_PCT = 1.04
 
+# What a trade costs TODAY, for the live cards only (the review of
+# 2026-11-23). TRANSACTION_COST_PCT above is the figure the registered
+# backtests were run with and stays as it is: changing it would change every
+# result that cites it. The live cards showed reward/risk and per-trade risk
+# with no cost at all -- on 2026-11-23 all ten basket names read 2.33-2.5
+# against a floor of 2.0, and 1.72-1.98 once the round trip was counted.
+#   equity   buy 0.3712%, sell 0.88% (0.5% of it the transfer tax)
+#   fund     buy 0.3712%, sell 0.38% (fund units pay no transfer tax)
+# Nothing in backtesting/ or the experiment paths may read these.
+LIVE_BUY_COST_PCT = 0.3712
+LIVE_SELL_TAX_PCT = 0.5
+LIVE_SELL_COST_PCT = 0.88
+LIVE_FUND_SELL_COST_PCT = round(LIVE_SELL_COST_PCT - LIVE_SELL_TAX_PCT, 4)
+LIVE_ROUND_TRIP_PCT = round(LIVE_BUY_COST_PCT + LIVE_SELL_COST_PCT, 4)
+LIVE_FUND_ROUND_TRIP_PCT = round(LIVE_BUY_COST_PCT + LIVE_FUND_SELL_COST_PCT, 4)
+
 # Sessions per year on the Tehran Stock Exchange: Saturday-Wednesday minus
 # public holidays, which lands near 240 rather than the 252 used for Western
 # markets. Every annualised figure -- Sharpe, CAGR, volatility -- scales by the

@@ -225,7 +225,7 @@ def retried_filings():
 SUBSIDIARY_REASON = "subsidiary's statement (not the issuer's own)"
 
 
-def purge_subsidiaries(verbose=True):
+def purge_subsidiaries(verbose=True, dry_run=False):
     """Take out every stored subsidiary statement, and put the parent back.
 
     codal_sync.parse_letter refuses them from now on; this removes the ones
@@ -235,10 +235,18 @@ def purge_subsidiaries(verbose=True):
     store's metrics, the parent's own newest filing for that period goes back
     in -- or the period is left empty, which is honest, rather than another
     company's. Idempotent.
+
+    `dry_run` (--dry-run, 2026-11-23): list what would be removed and
+    change nothing. The purge decides by one rule over a title
+    (financials.subsidiary_of) and deleted at once; a rule that had come
+    to match too much would have shown only in what was gone.
     """
 
     import financials
     import fundamental_db
+
+    if dry_run:
+        return _purge_subsidiaries_preview(verbose)
 
     database.create_database()
     _ensure_state_table()
@@ -346,6 +354,74 @@ def purge_subsidiaries(verbose=True):
               "%(periods)d company-periods; %(restored)d periods have the "
               "issuer's own filing back, %(metrics_dropped)d dropped from the "
               "fundamental store" % result, flush=True)
+
+    return result
+
+
+def _purge_subsidiaries_preview(verbose=True):
+    """What purge_subsidiaries would remove. Reads only; creates nothing."""
+
+    import sqlite3
+
+    import financials
+    import fundamental_db
+
+    result = {"dry_run": True, "removed": 0, "would_remove": 0, "periods": 0,
+              "financials_rows": 0, "metrics_periods": 0, "listed": []}
+
+    if os.path.exists(database.DATABASE_NAME):
+        conn = database._connect()
+        try:
+            rows = conn.execute(
+                "SELECT tracing_no, ins_code, period_end, period_months, "
+                "title FROM codal_filings").fetchall()
+            bad = [r for r in rows if financials.subsidiary_of(r[4])]
+            bad_ids = {str(r[0]) for r in bad}
+            result["would_remove"] = len(bad)
+            result["periods"] = len({(str(r[1]), r[2], r[3]) for r in bad})
+            result["listed"] = [
+                {"tracing_no": str(r[0]), "ins_code": str(r[1]),
+                 "period_end": r[2], "period_months": r[3], "title": r[4]}
+                for r in bad]
+            # Subsidiary rows in the period table whose filing never reached
+            # codal_filings: the purge deletes those as well.
+            result["financials_rows"] = sum(
+                1 for tracing_no, title in conn.execute(
+                    "SELECT tracing_no, title FROM codal_financials")
+                if financials.subsidiary_of(title)
+                and str(tracing_no) not in bad_ids)
+        except sqlite3.Error:
+            bad_ids = set()
+        finally:
+            conn.close()
+    else:
+        bad_ids = set()
+
+    store = fundamental_db.path()
+    if os.path.exists(store):
+        fconn = fundamental_db._connect()
+        try:
+            result["metrics_periods"] = len({
+                (str(i), p, m) for t, i, p, m, title in fconn.execute(
+                    "SELECT tracing_no, ins_code, period_end, period_months, "
+                    "title FROM metrics")
+                if str(t) in bad_ids or financials.subsidiary_of(title)})
+        except sqlite3.Error:
+            pass
+        finally:
+            fconn.close()
+
+    if verbose:
+        for row in result["listed"]:
+            print("  would remove %(tracing_no)s  %(ins_code)s  "
+                  "%(period_end)s (%(period_months)s m)  %(title)s" % row,
+                  flush=True)
+        print("purge (dry run): %(would_remove)d subsidiary statements in "
+              "%(periods)d company-periods would be removed, "
+              "%(financials_rows)d more rows from codal_financials, and "
+              "%(metrics_periods)d periods dropped from the fundamental "
+              "store. Nothing was changed; back up (python backup.py) and "
+              "run without --dry-run to apply." % result, flush=True)
 
     return result
 
@@ -1893,6 +1969,9 @@ def main(argv=None):
     parser.add_argument("--purge-subsidiaries", action="store_true",
                         help="remove stored subsidiary statements, restore "
                              "the issuer's own periods, and exit")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="with --purge-subsidiaries: list what would be "
+                             "removed and change nothing")
     parser.add_argument("--repair-superseded", action="store_true",
                         help="list codal_financials periods holding an older "
                              "release than codal_filings has, and exit "
@@ -1915,7 +1994,7 @@ def main(argv=None):
     verbose = not args.quiet
 
     if args.purge_subsidiaries:
-        purge_subsidiaries(verbose=verbose)
+        purge_subsidiaries(verbose=verbose, dry_run=args.dry_run)
         return 0
 
     if args.repair_superseded:

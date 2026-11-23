@@ -31,6 +31,7 @@ this project, so SIRAT-AI itself carries no GPL obligation.
 """
 
 import argparse
+import logging
 import sys
 import time
 from collections import namedtuple
@@ -40,6 +41,8 @@ import database
 import settings
 import universe
 from providers import LIVE, ProviderResult, get_provider
+
+log = logging.getLogger(__name__)
 
 
 def _live(result):
@@ -203,16 +206,19 @@ def reconcile_universe(snapshot=None, apply=False, verbose=True, retire=True):
     plan:
     {"added": [record], "retired": [(old row, live record)],
      "held": [(record, reason)], "awaiting": [(old row, live record)],
-     "copies": {table: rows}, "unreadable": n, "applied": bool} --
+     "copies": {table: rows}, "unreadable": n, "refused": n,
+     "applied": bool} --
     `copies` what the retirements copy, or would; `awaiting` the board moves
-    an add-only run holds (also in `held`).
+    an add-only run holds (also in `held`); `refused` the main-share lines
+    whose symbol or name carries markup or a control character
+    (universe.UnsafeText, 2026-11-23): never added, never a rival.
     """
 
     if snapshot is None:
         snapshot = database.load_snapshot()
 
     plan = {"added": [], "retired": [], "held": [], "awaiting": [],
-            "copies": {}, "unreadable": 0, "applied": False}
+            "copies": {}, "unreadable": 0, "refused": 0, "applied": False}
 
     if snapshot is None or snapshot.empty or "isin" not in snapshot.columns:
         return plan
@@ -227,11 +233,21 @@ def reconcile_universe(snapshot=None, apply=False, verbose=True, retire=True):
             record = universe.watch_record(
                 row.get("ins_code"), row.get("symbol_fa"), row.get("name_fa"),
                 row.get("isin"))
+        except universe.UnsafeText:
+            # Markup in a symbol or name: refused at the door, and counted
+            # apart from a line that could not be read (2026-11-23).
+            plan["refused"] += 1
+            continue
         except Exception:                                       # noqa: BLE001
             plan["unreadable"] += 1
             continue
         if record is not None:
             lines.setdefault(record["ins_code"], record)
+
+    if plan["refused"]:
+        log.warning("market watch: %d main-share lines refused for markup or "
+                    "control characters in the symbol or name",
+                    plan["refused"])
 
     instruments = database.load_instruments()
     known = {str(r["ins_code"]): r for r in instruments}
@@ -578,6 +594,10 @@ def _print_reconciliation(plan, apply, examples=8):
     if plan.get("unreadable"):
         print(f"  {plan['unreadable']} watch lines could not be read and "
               f"were skipped.")
+
+    if plan.get("refused"):
+        print(f"  {plan['refused']} watch lines were refused: markup or a "
+              f"control character in the symbol or name.")
 
     copies = plan.get("copies") or {}
     carried = {k: v for k, v in copies.items() if not k.endswith("(stays)")}

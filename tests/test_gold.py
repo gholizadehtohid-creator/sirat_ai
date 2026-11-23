@@ -62,6 +62,41 @@ class UniverseTests(unittest.TestCase):
         except Exception:                                          # noqa: BLE001
             return False
 
+    @staticmethod
+    def offline_navs(codes=None):
+        """gold.nav_snapshot()'s answer without asking TSETMC: a NAV for the
+        first fund and none for the rest -- the two states a row can be in."""
+
+        codes = list(codes or [])
+        if not codes:
+            return {}
+        return {codes[0]: {"nav_redeem": 100.0, "nav_issue": 101.0,
+                           "close": 103.0, "last": 103.0, "prev_close": 102.0,
+                           "date": "2026-11-23", "error": None,
+                           "price_to_nav": 1.03, "bubble": 0.03}}
+
+    def gold_list(self):
+        """technical.gold_list() with the NAV read replaced.
+
+        Until 2026-11-23 the two tests below called it as it is, and it asks
+        TSETMC for every fund's NAV (gold.nav_snapshot, two requests a fund):
+        each run of the suite sent some fifty requests to a host that blocks
+        bursts, and waited out their timeouts when it could not be reached.
+        What the tests check is the shape of the answer, and that does not
+        need the exchange.
+        """
+
+        from unittest import mock
+
+        import technical
+
+        with mock.patch.object(gold, "nav_snapshot",
+                               side_effect=self.offline_navs) as asked:
+            report = technical.gold_list()
+
+        asked.assert_called_once()
+        return report
+
     def test_gold_funds_are_all_funds_and_all_gold(self):
         if not self._has_db():
             self.skipTest("no database")
@@ -91,8 +126,7 @@ class UniverseTests(unittest.TestCase):
             self.skipTest("no database")
 
         import json
-        import technical
-        rep = technical.gold_list()
+        rep = self.gold_list()
 
         json.dumps(rep, ensure_ascii=False, allow_nan=False)
         self.assertIn("funds", rep)
@@ -108,14 +142,13 @@ class UniverseTests(unittest.TestCase):
         The panel reads `price_to_nav` off each row and prints an em dash when
         it is null. A missing KEY and a null VALUE render identically there, so
         a silent rename upstream would look exactly like a market with no NAV.
-        This asserts the shape, not the network: with TSETMC unreachable the
-        values are all None and the test still passes.
+        This asserts the shape, not the network: the NAV read is replaced
+        (gold_list above) by one fund with a NAV and the rest without.
         """
         if not self._has_db():
             self.skipTest("no database")
 
-        import technical
-        rep = technical.gold_list()
+        rep = self.gold_list()
 
         if not rep["funds"]:
             self.skipTest("no gold fund has history yet")

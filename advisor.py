@@ -181,6 +181,8 @@ def run(equity=None, size=None, max_per_sector=None, min_score=None,
         basket["candidates"],
     )
 
+    _live_view(basket, equity)
+
     return {
         "ok": True,
         "engine": V1,
@@ -191,6 +193,169 @@ def run(equity=None, size=None, max_per_sector=None, min_score=None,
         "warnings": warnings,
         "generated_at": scan_report.get("finished_at"),
     }
+
+
+# ==============================
+# WHAT THE PANEL ADDS TO EITHER ENGINE'S BOOK: COSTS AND DATES
+# ==============================
+
+def _live_view(basket, equity):
+    """Net-of-cost figures and the date of the prices, added for the reader.
+
+    Added HERE, to the report, and not inside the engines: advisor.v2_scan()
+    is the one call the panel and the paper trader share, and the registered
+    backtests size and gate through the same risk_engine and trade_manager.
+    A cost charged or a gate moved in there would change what they measure.
+    So the engine still selects on the gross ratio and this says, per
+    position, what is left after today's round trip -- on 2026-11-23 all ten
+    names read 2.33-2.5 gross and 1.72-1.98 net against a floor of 2.0, and a
+    stated risk of 0.39-0.70% of equity was 0.11 more once fees were paid
+    (the review of 2026-11-23).
+
+    The dates are for the same reader: `generated_at` is when the book was
+    computed, not the session its prices are from.
+    """
+
+    import risk_engine
+    import trade_manager
+
+    cost = config.LIVE_ROUND_TRIP_PCT
+    floor = config.MIN_RISK_REWARD
+    positions = basket.get("positions") or []
+
+    below = 0
+    total_net = 0.0
+
+    for position in positions:
+        rr_net = trade_manager.net_risk_reward(
+            position.get("target_distance_pct"),
+            position.get("stop_distance_pct"), cost)
+        risk_net = risk_engine.risk_with_costs(
+            position.get("risk_rials"), position.get("position_value"), cost)
+
+        position["risk_reward_net"] = rr_net
+        position["net_below_floor"] = bool(rr_net is not None and rr_net < floor)
+        position["risk_rials_net"] = risk_net
+        position["risk_pct_net"] = (round(risk_net / equity * 100.0, 3)
+                                    if (risk_net is not None and equity) else None)
+
+        below += 1 if position["net_below_floor"] else 0
+        total_net += risk_net or 0.0
+
+    totals = basket.setdefault("totals", {})
+    totals["total_risk_net"] = round(total_net, 0)
+    totals["total_risk_net_pct"] = (round(total_net / equity * 100.0, 2)
+                                    if equity else 0.0)
+    totals["net_below_floor"] = below
+
+    basket["costs"] = {
+        "buy_pct": config.LIVE_BUY_COST_PCT,
+        "sell_pct": config.LIVE_SELL_COST_PCT,
+        "sell_tax_pct": config.LIVE_SELL_TAX_PCT,
+        "round_trip_pct": cost,
+        "min_risk_reward": floor,
+    }
+
+    if positions:
+        basket.setdefault("notes", []).append(_fa_digits(
+            "سود به زیان و ریسک هر موقعیت «خالص» هم نوشته شده: پس از هزینه‌ی "
+            "رفت‌وبرگشت %.2f٪ (خرید %.2f٪، فروش %.2f٪ که %.1f٪ آن مالیات است). "
+            "%d از %d موقعیت خالص به حد %.1f نمی‌رسد. موتور سبد هنوز با نسبت "
+            "ناخالص انتخاب می‌کند، چون سبد کاغذی و آزمون‌های ثبت‌شده با همان "
+            "قاعده ساخته شده‌اند."
+            % (cost, config.LIVE_BUY_COST_PCT, config.LIVE_SELL_COST_PCT,
+               config.LIVE_SELL_TAX_PCT, below, len(positions), floor)))
+
+    basket.update(_price_dates(positions))
+
+    return basket
+
+
+def _price_dates(positions):
+    """The session the book's prices are from, and what a newer stored market
+    watch says of them.
+
+    The book is priced on the newest daily bar. In the evening, before the
+    history step has stored the day -- and all through a session -- the
+    market watch is a session ahead of the bars: on 2026-11-23 the bars ended
+    11-22, and of the nine basket names in the 11-23 watch eight had last
+    traded outside the ±1% entry range the card printed, four of them at the
+    upper limit and two at the lower. Nothing here re-prices the book; it
+    says which session the numbers are and counts the names that have moved.
+    Never fatal: a book without these fields is still the book.
+    """
+
+    out = {"data_as_of": None, "watch_as_of": None, "watch_newer": False,
+           "watch_outside_entry": 0, "watch_at_limit": 0, "watch_checked": 0}
+
+    try:
+        import database
+        import holdings
+
+        newest = database.newest_equity_bar()
+        out["data_as_of"] = str(newest)[:10] if newest is not None else None
+
+        codes = [str(p["ins_code"]) for p in positions if p.get("ins_code")]
+
+        if not codes:
+            return out
+
+        conn = database._connect()
+        try:
+            rows = conn.execute(
+                "SELECT ins_code, last, limit_up, limit_down, captured_at "
+                "FROM market_snapshot WHERE ins_code IN (%s)"
+                % ",".join("?" * len(codes)), codes).fetchall()
+        finally:
+            conn.close()
+
+        watch = {}
+        for code, last, up, down, captured_at in rows:
+            session = holdings.snapshot_session(captured_at)
+            if session and last and last > 0:
+                watch[str(code)] = (float(last), up, down, session)
+    except Exception:                                           # noqa: BLE001
+        log.exception("price dates for the basket could not be read")
+        return out
+
+    if not watch:
+        return out
+
+    out["watch_as_of"] = max(w[3] for w in watch.values())
+    out["watch_newer"] = bool(out["data_as_of"]
+                              and out["watch_as_of"] > out["data_as_of"])
+
+    if not out["watch_newer"]:
+        return out
+
+    for position in positions:
+        seen = watch.get(str(position.get("ins_code")))
+
+        if not seen or seen[3] <= out["data_as_of"]:
+            continue
+
+        last, up, down, _session = seen
+        low, high = position.get("entry_low"), position.get("entry_high")
+
+        if up and last >= up:
+            state = "limit_up"
+        elif down and last <= down:
+            state = "limit_down"
+        elif high and last > high:
+            state = "above_entry"
+        elif low and last < low:
+            state = "below_entry"
+        else:
+            state = "inside"
+
+        position["watch_last"] = last
+        position["watch_state"] = state
+
+        out["watch_checked"] += 1
+        out["watch_outside_entry"] += 0 if state == "inside" else 1
+        out["watch_at_limit"] += 1 if state in ("limit_up", "limit_down") else 0
+
+    return out
 
 
 # ==============================
@@ -365,6 +530,8 @@ def _run_v2(equity=None, size=None, max_per_sector=None, risk_pct=None,
         "notes": notes,
         "currency": config.CURRENCY,
     }
+
+    _live_view(basket, equity)
 
     actions = out.get("actions") or {}
 

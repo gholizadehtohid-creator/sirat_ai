@@ -70,6 +70,17 @@ function tip() {
   return tipNode;
 }
 
+// A label is text: a symbol, a sector name, a series name, a date. The
+// default tooltips below wrote it into innerHTML as it came, and a symbol is
+// third-party data -- the exchange's, or the reference list's (the security
+// review, 2026-11-23). The axis labels were never affected: they are set with
+// textContent. A caller's own tooltip() and format() return markup on purpose
+// and are left alone.
+function escText(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function showTip(html, evt) {
   const t = tip();
   t.innerHTML = html;
@@ -332,8 +343,8 @@ export function stackedHBar(container, opts) {
 
       bindTip(seg, tooltip
         ? tooltip(row, key, v)
-        : `<div class="t-title">${row[labelKey]}</div>
-           <div class="t-row"><span><span class="sw" style="background:${colors[k]}"></span>${key}</span><b>${format(v)}</b></div>`);
+        : `<div class="t-title">${escText(row[labelKey])}</div>
+           <div class="t-row"><span><span class="sw" style="background:${colors[k]}"></span>${escText(key)}</span><b>${format(v)}</b></div>`);
 
       cursor += rawW;
     });
@@ -577,14 +588,14 @@ export function lineChart(container, opts) {
     cross.setAttribute("x2", X(idx));
     cross.setAttribute("opacity", 1);
 
-    let html = `<div class="t-title">${p[xKey]}</div>`;
+    let html = `<div class="t-title">${escText(p[xKey])}</div>`;
 
     if (barKey && isNum(p[barKey])) {
       const sign = isNum(p[bars.signKey]) ? p[bars.signKey] : p[barKey];
       const swatch = sign >= 0
         ? (bars.posColor || tok("--diverge-pos"))
         : (bars.negColor || tok("--diverge-neg"));
-      html += `<div class="t-row"><span><span class="sw" style="background:${swatch}"></span>${bars.label || barKey}</span><b>${(bars.format || format)(p[barKey])}</b></div>`;
+      html += `<div class="t-row"><span><span class="sw" style="background:${swatch}"></span>${escText(bars.label || barKey)}</span><b>${(bars.format || format)(p[barKey])}</b></div>`;
     }
 
     lines.forEach((s, k) => {
@@ -597,7 +608,7 @@ export function lineChart(container, opts) {
       dots[k].setAttribute("cx", X(idx));
       dots[k].setAttribute("cy", Y(v));
       dots[k].setAttribute("opacity", 1);
-      html += `<div class="t-row"><span><span class="sw" style="background:${s.color}"></span>${s.label}</span><b>${format(v)}</b></div>`;
+      html += `<div class="t-row"><span><span class="sw" style="background:${s.color}"></span>${escText(s.label)}</span><b>${format(v)}</b></div>`;
     });
     showTip(html, evt);
   });
@@ -683,7 +694,7 @@ export function divergingBar(container, opts) {
     }
 
     const html = tooltip ? tooltip(d)
-      : `<div class="t-title">${d[labelKey]}</div>
+      : `<div class="t-title">${escText(d[labelKey])}</div>
          <div class="t-row"><span>Value</span><b>${format(v)}</b></div>`;
     bindTip(path, html);
     bindTip(hit, html);
@@ -791,7 +802,7 @@ export function areaLine(container, opts) {
     dot.setAttribute("cy", Y(d[yKey]));
     dot.setAttribute("opacity", 1);
     showTip(tooltip ? tooltip(d)
-      : `<div class="t-title">${d[xKey]}</div>
+      : `<div class="t-title">${escText(d[xKey])}</div>
          <div class="t-row"><span>Equity</span><b>${format(d[yKey])}</b></div>`, evt);
   });
 

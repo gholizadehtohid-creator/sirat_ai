@@ -16,6 +16,14 @@
   <header class="top">
     <div class="brand">SIRAT AI <span>مدیریت هوشمند سبد سهام بورس تهران</span></div>
     <div class="top-actions">
+      <!-- A symbol, from anywhere on the page: «بررسی» opens its fundamental
+           read in the analysis tab, «PDF» its report. Both lived only inside
+           the eighth fold of that tab (the UI/UX review, 2026-11-23). -->
+      <span class="quick-symbol" role="search">
+        <input id="quickSymbolInput" type="text" placeholder="نماد، مثلاً فولاد" aria-label="نماد برای بررسی یا گزارش PDF" autocomplete="off">
+        <button id="quickLookupBtn" title="تحلیل بنیادی همین نماد">بررسی</button>
+        <button id="quickPdfBtn" title="گزارش ۳ تا ۴ صفحه‌ای همین نماد، در برگه‌ی تازه">PDF</button>
+      </span>
       <button id="themeBtn" title="تغییر حالت روشن / تیره">◐ حالت نمایش</button>
       <button id="refreshBtn" class="primary">↻ به‌روزرسانی داده‌ها</button>
     </div>
@@ -83,6 +91,24 @@
 
   </section>
 
+  <!-- ================= SYSTEM HEALTH =================
+       What ran and what did not (health.py, /api/health): the scheduled
+       tasks, the session captures, the forward log, the backup, the power
+       source. Until 2026-11-23 a missed night showed nowhere on the page.
+       One quiet line when all is well; a row per item that needs the owner.
+       Hidden until the server answers (an older running panel has no such
+       route). -->
+
+  <section class="health-card is-quiet" id="healthCard" dir="rtl" lang="fa"
+           aria-live="polite" hidden>
+    <div class="health-head">
+      <span class="health-dot" aria-hidden="true"></span>
+      <strong class="health-title">سلامت سامانه</strong>
+      <span class="health-summary" id="healthSummary"></span>
+    </div>
+    <ul class="health-list" id="healthList"></ul>
+  </section>
+
   </div>
 
 
@@ -105,7 +131,7 @@
       <h2>امروز چه کنم؟</h2>
       <div class="top-actions">
         <select id="todayProfile" aria-label="ترکیب">
-          <option value="balanced">متعادل (پیشنهاد اصلی)</option>
+          <option value="balanced">متعادل — ۷۰٪ سهام، ۳۰٪ طلا</option>
           <option value="growth">رشد — تمام سهام</option>
           <option value="defensive">کم‌نوسان</option>
         </select>
@@ -157,7 +183,9 @@
       <div class="help-body">
         <p>«✎ ویرایش فهرست» را بزنید و در هر خط یک نماد بنویسید؛ اگر تعداد سهم
         را هم بنویسید (مثلاً <code>فولاد 1000</code>)، ارزش و وزن هر نماد و
-        هشدار تمرکز هم حساب می‌شود. صندوق‌ها (مثلاً زر، وبازار) هم پذیرفته‌اند.</p>
+        هشدار تمرکز هم حساب می‌شود. صندوق‌ها (مثلاً زر، وبازار) هم پذیرفته‌اند.
+        پول نقدِ منتظر خرید را هم بنویسید: <code>نقد 500,000,000</code>
+        (ریال؛ «نقد ۵۰ میلیون تومان» هم خوانده می‌شود).</p>
         <table class="help-table">
           <tr><th>ستون</th><th>چطور بخوانید</th></tr>
           <tr><td>تغییر روز</td><td>آخرین قیمت پایانی نسبت به جلسه‌ی قبل</td></tr>
@@ -815,11 +843,11 @@
   <!-- ========== SMART MONEY ACCUMULATION SCANNER ========== -->
 
   <details class="evidence-group" id="evidenceSmartMoney">
-  <summary>پویشگر پول هوشمند — جمع‌آوری پیش از حرکت</summary>
+  <summary>پویشگر ورود پول و خرید درشت حقیقی در کف قیمت</summary>
 
   <div class="card">
     <div class="card-head">
-      <h2>اسکنر جمع‌آوری پول هوشمند</h2>
+      <h2>اسکنر ورود پول و خرید درشت حقیقی در کف قیمت</h2>
       <div class="top-actions">
         <button id="runSmartMoneyBtn" class="primary">▶ اجرای اسکنر</button>
       </div>
@@ -1379,7 +1407,7 @@
     <div class="card-head">
       <h2>چشم‌انداز بنیادی — برآورد سال مالی جاری</h2>
       <div class="top-actions">
-        <input id="outlookSymbol" placeholder="نماد، مثلاً فولاد" style="width:140px">
+        <input id="outlookSymbol" type="text" placeholder="نماد، مثلاً فولاد" style="width:140px">
         <button id="outlookLookupBtn">بررسی نماد</button>
         <button id="outlookPdfBtn" title="گزارش ۳ تا ۴ صفحه‌ای همین نماد، در برگه‌ی تازه">گزارش PDF</button>
         <button id="runOutlookBtn" class="primary">▶ رتبه‌بندی</button>
@@ -1541,8 +1569,11 @@
       <div class="card" style="border:none;padding:0">
         <div class="card-head"><h2>بالاترین قدرت خریدار</h2></div>
         <p class="hint">
-          نسبت بالای ۱ یعنی خریدارِ متوسط بزرگ‌تر از فروشندهٔ متوسط است:
-          تجمیع متمرکز در برابر فروش پراکنده.
+          نسبت بالای ۱ یعنی هر خریدار حقیقی به‌طور میانگین بیشتر از هر فروشنده‌ی
+          حقیقی معامله کرده است. در آزمون این پلتفرم (E21) قدرت خریدار فقط یک چیز
+          را پیش‌بینی کرد: <strong>قفل شدن سهم در صف خرید در جلسه‌ی بعد</strong> (در
+          دهکِ بالا حدود ۴ برابرِ معمول)، نه بازده را. پس نام‌های بالای این فهرست
+          فردا سخت‌ترین سهم‌ها برای خریدن‌اند، نه بهترین‌ها.
         </p>
         <div class="chart" id="flowPowerChart"></div>
       </div>
@@ -1675,10 +1706,13 @@
     <div class="guide-grid">
       <article class="guide-card">
         <div class="guide-icon" aria-hidden="true">🧭</div>
-        <h4>تقسیم درست سرمایه <span class="guide-badge">آزموده و تأییدشده</span></h4>
-        <p>چند درصد در سهام، چند درصد طلا، چند درصد درآمد ثابت. نگه‌داشتن کل بازار
-        در ۱۴ سال سالانه حدود <b>۴۴٪</b> داده، در برابر ۲۰٪ صندوق درآمد ثابت؛ و افزودن
-        طلا ریسک را کم کرده است.</p>
+        <h4>تقسیم درست سرمایه <span class="guide-badge">آزموده با فرض سود ۲۰٪</span></h4>
+        <p>چند درصد در سهام، چند درصد طلا، چند درصد درآمد ثابت. در سال‌های آزمون،
+        نگه‌داشتن کل بازار (سالانه حدود <b>۴۴٪</b>) و ترکیب ۷۰٪ شاخص با ۳۰٪ طلا از صندوق
+        درآمد ثابتی جلو زدند که بازده‌اش <b>۲۰٪ فرض شده بود</b>؛ در برابر اوراق خزانه‌ی
+        امروز (حدود ۴۴٪، آبان ۱۴۰۵) این برتری ثابت نشده است. طلا مسیر را آرام‌تر نکرد:
+        در ترکیب ۷۰/۳۰ با طلا نوسان سالانه ۱۹٪ و بیشترین افت ۴۱٪ بود، با درآمد ثابت
+        ۱۵٪ و ۳۵٪.</p>
         <button type="button" class="link" data-goto="summary:allocationTable">کارت تخصیص دارایی ←</button>
       </article>
       <article class="guide-card">

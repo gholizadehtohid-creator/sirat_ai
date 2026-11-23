@@ -22,10 +22,16 @@ PACING: codal.ir's firewall throttles sustained access and renews the block
 when retried inside it (see codal_backfill's campaign). Batches of BATCH
 requests, a one-minute pause between them, and an escalating cool-off from
 15 to 240 minutes after a refused batch.
+
+EXIT CODE: 0 when the pass ran to its end, CUT_SHORT_EXIT (3) when the
+throttle or the time limit stopped it with work left -- the evening task's
+"step codal-monthly: exit N" line then says so.
 """
 
 import argparse
 import json
+import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -63,12 +69,67 @@ PAUSE_SECONDS = 60
 HISTORY_MONTHS = 15
 HISTORY_LIMIT = 300
 
+# ---- the history gets its turn (2026-11-23, the review) --------------------
+# It never ran. The due pass goes first, and it is always full -- 758
+# companies were due on 1405/09/02, two days after a month closed, against
+# --limit 120 -- and always throttled: in all eight evening runs from 11-09
+# to 11-23 search.codal.ir answered 429 and the pass sat out 15- and
+# 30-minute cool-offs until --hours was gone (60 lines of 429, not one
+# "monthly history" line). So while history is pending the due pass may use
+# at most this share of --hours. Sixty per cent of the evening's 1.5 h is
+# 54 minutes: unthrottled, 120 companies take about 20 (two requests each,
+# thirty a batch, a minute between batches), and the 36 minutes left hold
+# the history's 300 downloads at the same pace. The feed watch is what
+# brings new reports in; the due pass only fills its gaps.
+#
+# The history starts with its own pacer whatever stopped the due pass: it
+# asks only the download host, which codal.ir penalises apart from the
+# search host (codal-api-behaviour, measured 2026-08-23), and three
+# refusals in a row still end it.
+DUE_SHARE = 0.6
+
+# What main() returns when the throttle or the clock ended the pass with
+# work left. It returned 0 always: on 2026-11-23 the step stopped at 92 of
+# 120 companies with 20 failed and no history, and the evening log read
+# "step codal-monthly: exit 0".
+CUT_SHORT_EXIT = 3
+
+# ---- a letter that is not a report (2026-11-23) ----------------------------
+# codal.py reads a body too small to be a statement as a throttle page, and
+# rightly: a transient failure is asked for again. But some letters ARE
+# that small on every request -- 1,583 bytes for thirteen 1405/07 reports
+# the watch had tried two to eight times each, 16,922 for both of فاراک's
+# -- and nothing here counted the tries. In the history that was a loop: 15
+# of the first 38 companies were headed by such a letter, each refusal
+# ended that company's turn, and its older months would never have
+# downloaded. A small answer is now counted, and at SMALL_BODY_TRIES the
+# letter is settled as unreadable (monthly_failures; deleting its row there
+# and in monthly_attempts re-opens it).
+#
+# Counted only when it cannot be the firewall: the request before it and
+# the request after it both succeeded (a throttle refuses in runs), the
+# size is the same as last time, and at most once a day -- so three counts
+# are three different days.
+SMALL_BODY_TRIES = 3
+_SMALL_BODY = re.compile(r"returned only (\d+) bytes")
+
 
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+# Stores whose tables this process has already made sure of. load() calls
+# _ensure_tables for every company, and the outlook screen reads some 800:
+# a connection and a five-statement script each, a third of the 2,398
+# connections one screen opened (the review, 2026-11-23). Keyed by path --
+# the tests move the store -- and redone if the file has gone.
+_ENSURED = set()
+
+
 def _ensure_tables():
+    target = fundamental_db.path()
+    if target in _ENSURED and os.path.exists(target):
+        return
     fundamental_db.create_database()
     conn = fundamental_db._connect()
     conn.executescript("""
@@ -97,9 +158,17 @@ def _ensure_tables():
         reason       TEXT,
         tried_at     TEXT
     );
+    CREATE TABLE IF NOT EXISTS monthly_attempts (
+        tracing_no   TEXT PRIMARY KEY,
+        ins_code     TEXT,
+        attempts     INTEGER NOT NULL DEFAULT 0,
+        bytes        INTEGER,
+        last_tried   TEXT
+    );
     """)
     conn.commit()
     conn.close()
+    _ENSURED.add(target)
 
 
 def last_closed_month(today=None):
@@ -204,18 +273,107 @@ def history_due(months=HISTORY_MONTHS, today=None, have=None):
     return out
 
 
-def _fetch_one(client, pace, code, letter, have, totals):
-    """Download, parse and store one letter. False when the host refused."""
+def _small_body(error):
+    """The byte count in codal's "too small to be a statement", or None."""
+
+    match = _SMALL_BODY.search(error or "")
+    return int(match.group(1)) if match else None
+
+
+def _count_small(code, letter, size):
+    """One more small answer for a letter. True when that settles it."""
+
+    tracing = letter["tracing_no"]
+    today = _now()[:10]
+    conn = fundamental_db._connect()
+    row = conn.execute(
+        "SELECT attempts, bytes, last_tried FROM monthly_attempts "
+        "WHERE tracing_no = ?", (tracing,)).fetchone()
+    if row and row[1] == size:
+        # The same answer again; a second one the same day adds nothing.
+        attempts = row[0] + (0 if str(row[2] or "")[:10] == today else 1)
+    else:
+        attempts = 1                    # the first, or not a constant answer
+    conn.execute("INSERT OR REPLACE INTO monthly_attempts VALUES (?,?,?,?,?)",
+                 (tracing, str(code), attempts, size, _now()))
+    conn.commit()
+    conn.close()
+    if attempts < SMALL_BODY_TRIES:
+        return False
+    _fail(code, letter, "settled: the same %d-byte answer on %d days -- not a "
+                        "report document" % (size, attempts))
+    return True
+
+
+class _SmallAnswers:
+    """Counts "too small" answers that cannot be the firewall's.
+
+    A throttle refuses in runs, so only an answer between two successes is
+    counted: ok() confirms the one held, anything else drops it.
+    """
+
+    def __init__(self, have, totals, verbose=False):
+        self.have, self.totals, self.verbose = have, totals, verbose
+        self.held = None
+        self.clear = True               # the request before succeeded
+
+    def ok(self):
+        held, self.held, self.clear = self.held, None, True
+        if held and _count_small(*held):
+            _code, letter, size = held
+            self.have.add(letter["tracing_no"])
+            self.totals["unreadable"] += 1
+            self.totals["settled"] = self.totals.get("settled", 0) + 1
+            if self.verbose:
+                print("monthly: %s %s settled as unreadable -- %d bytes on "
+                      "%d days" % (letter.get("symbol") or "",
+                                   letter["tracing_no"], size, SMALL_BODY_TRIES),
+                      flush=True)
+
+    def small(self, code, letter, size):
+        self.held = (code, letter, size) if self.clear and not self.held else None
+        self.clear = False
+
+    def refused(self):
+        self.held, self.clear = None, False
+
+    def finish(self):
+        """The run ended on the answer held: nothing after it was refused,
+        so it stands. Without this the last letter of a run -- or the only
+        one left, once the rest of a history is filled -- was never counted
+        and would be asked for every night for good."""
+
+        self.ok()
+
+
+def _fetch_one(client, pace, code, letter, have, totals, small=None):
+    """Download, parse and store one letter. False when the host refused.
+
+    A "too small" answer is not the host refusing but, as far as can be
+    told, this letter: it is handed to `small` and the caller carries on
+    with the company's next letter (the pacer still counts it, so three in
+    a row cool off as before).
+    """
 
     got = client.fetch_sheets(letter["excel_url"], archive_key=letter["tracing_no"])
     pace(got.transient if not got.ok else False)
     if not got.ok:
         if got.transient:
             totals["failed"] += 1
+            size = _small_body(got.error)
+            if small is not None and size is not None:
+                small.small(code, letter, size)
+                return True
+            if small is not None:
+                small.refused()
             return False
+        if small is not None:
+            small.ok()
         _fail(code, letter, got.error or "unreadable")
         totals["unreadable"] += 1
         return True
+    if small is not None:
+        small.ok()
     record = monthly_reports.parse(got.data, letter["title"])
     if record:
         store(code, letter, record)
@@ -336,22 +494,39 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None,
 
     _ensure_tables()
     client = client or codal.CodalClient()
-    deadline = time.monotonic() + hours * 3600 if hours else None
+    # The wall clock throughout, as the pacer's deadline always was: a
+    # laptop's suspend counts as time gone.
+    started = time.time()
+    end = started + hours * 3600 if hours else None
 
     companies = due_companies()
     if limit:
         companies = companies[:int(limit)]
     have = _known()
 
+    history_on = bool(history_months and history_limit)
+    history_waiting = history_on and bool(history_due(history_months, have=have))
+    # The due pass's share of the time, while history waits (DUE_SHARE).
+    due_end = end
+    if end and history_waiting:
+        due_end = started + hours * 3600 * DUE_SHARE
+
     if verbose:
         print("monthly: %d companies due" % len(companies), flush=True)
 
-    totals = {"checked": 0, "stored": 0, "unreadable": 0, "failed": 0}
-    pace = Pacer("monthly", verbose,
-                 deadline=time.time() + hours * 3600 if hours else None)
+    totals = {"checked": 0, "stored": 0, "unreadable": 0, "failed": 0,
+              "cut_short": None, "left": 0}
+    small = _SmallAnswers(have, totals, verbose)
+    pace = Pacer("monthly", verbose, deadline=due_end)
+    cut = []
 
-    for inst in companies:
-        if (deadline and time.monotonic() > deadline) or pace.stop:
+    for index, inst in enumerate(companies):
+        if (due_end and time.time() > due_end) or pace.stop:
+            totals["left"] = len(companies) - index
+            cut.append("the due pass: %s, %d companies left" % (
+                "throttled" if pace.stop else
+                "its share of the time is up" if due_end != end else
+                "time is up", totals["left"]))
             break
 
         code = str(inst["ins_code"])
@@ -370,7 +545,7 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None,
         fresh = [l for l in letters if l["tracing_no"] not in have and l["excel_url"]]
 
         for letter in fresh[:per_company]:
-            if not _fetch_one(client, pace, code, letter, have, totals):
+            if not _fetch_one(client, pace, code, letter, have, totals, small):
                 break
 
         _status(code, letters=len(letters))
@@ -379,6 +554,11 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None,
             print("monthly: %(checked)d checked, %(stored)d stored, "
                   "%(unreadable)d unreadable, %(failed)d failed" % totals,
                   flush=True)
+    else:
+        # Every company was reached, but the last of them were refused: the
+        # pacer gave up, and those are still owed.
+        if pace.stop is True:
+            cut.append("the due pass: throttled at its last companies")
 
     if verbose:
         print("monthly: done -- %(checked)d checked, %(stored)d stored, "
@@ -386,32 +566,55 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None,
 
     # ---- the history: known letters of missing months, no searches --------
     totals["history_stored"] = 0
-    if history_months and history_limit and not pace.stop and \
-            not (deadline and time.monotonic() > deadline):
+    if history_on and not (end and time.time() > end):
         due = history_due(history_months, have=have)
+        known = sum(len(v) for _c, v in due)
         if verbose:
             print("monthly history: %d company-months known and missing in %d "
                   "companies; this run takes at most %d"
-                  % (sum(len(v) for _c, v in due), len(due), history_limit),
-                  flush=True)
+                  % (known, len(due), history_limit), flush=True)
+        # Its own pacer: what the search host refused the due pass says
+        # nothing about the download host (DUE_SHARE).
+        pace = Pacer("monthly history", verbose, deadline=end)
         before = totals["stored"]
         taken = 0
+        stopped = None
         for code, letters in due:
-            stop = False
             for letter in letters:
-                if taken >= history_limit or pace.stop or \
-                        (deadline and time.monotonic() > deadline):
-                    stop = True
+                if taken >= history_limit:
+                    stopped = "limit"
+                elif pace.stop is True:
+                    stopped = "throttled"
+                elif end and time.time() > end:
+                    stopped = "time is up"
+                if stopped:
                     break
                 taken += 1
-                if not _fetch_one(client, pace, code, letter, have, totals):
+                if not _fetch_one(client, pace, code, letter, have, totals,
+                                  small):
                     break                   # refused: the pacer decides
-            if stop:
+            if stopped:
                 break
+        if stopped is None and pace.stop is True:
+            stopped = "throttled"
         totals["history_stored"] = totals["stored"] - before
+        totals["history_downloaded"] = taken
         if verbose:
             print("monthly history: %d downloaded, %d stored"
                   % (taken, totals["history_stored"]), flush=True)
+        remaining = min(history_limit, known) - taken
+        if stopped in ("throttled", "time is up") and remaining > 0:
+            cut.append("the history: %s, %d of this run's letters left"
+                       % (stopped, remaining))
+    elif history_waiting:
+        cut.append("the history: time is up before it began")
+
+    small.finish()
+
+    if cut:
+        totals["cut_short"] = "; ".join(cut)
+        if verbose:
+            print("monthly: cut short -- %s" % totals["cut_short"], flush=True)
     return totals
 
 
@@ -506,10 +709,11 @@ def main(argv=None):
         print("monthly: another collector is running; nothing to do")
         return 0
 
-    run(hours=args.hours, per_company=args.per_company, limit=args.limit,
-        history_months=args.history_months, history_limit=args.history_limit)
+    totals = run(hours=args.hours, per_company=args.per_company,
+                 limit=args.limit, history_months=args.history_months,
+                 history_limit=args.history_limit)
     report()
-    return 0
+    return CUT_SHORT_EXIT if totals.get("cut_short") else 0
 
 
 if __name__ == "__main__":

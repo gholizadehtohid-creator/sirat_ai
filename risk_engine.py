@@ -445,6 +445,33 @@ def position_size(price, distance, equity, risk_pct=None, adv=None,
     }
 
 
+def risk_with_costs(risk_rials, position_value, cost_pct=None):
+    """What a stopped-out position costs once the round trip is paid, in rials.
+
+    position_size() above reports `risk_rials = shares x distance`: the loss
+    if the stop fills at its own price and trading were free. A stopped trade
+    still pays to get in and to get out -- at today's 1.2512% a 9% position
+    adds 0.11% of equity to a stated 0.39-0.70% (the basket of 2026-11-23).
+    `cost_pct` defaults to config.LIVE_ROUND_TRIP_PCT.
+
+    For the live cards only. position_size() is unchanged: the registered
+    backtests size through it, and charge their own costs at the fill.
+    Still a floor -- a stop inside a sell queue fills lower, or not that day.
+    """
+
+    risk_rials = _finite(risk_rials)
+    position_value = _finite(position_value)
+    cost = _finite(cost_pct)
+
+    if cost is None:
+        cost = _finite(getattr(config, "LIVE_ROUND_TRIP_PCT", None))
+
+    if risk_rials is None or position_value is None or cost is None:
+        return None
+
+    return round(risk_rials + position_value * cost / 100.0, 0)
+
+
 def _no_position(reason, notes, bound=None):
     return {
         "shares": 0,

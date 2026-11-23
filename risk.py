@@ -521,6 +521,18 @@ def analyse(positions, equity=None, bars=None, benchmark_key="TEDPIX",
         report["var"] = value_at_risk(portfolio_daily, equity=total_weight)
         report["drawdown"] = max_drawdown(portfolio_daily)
 
+        # The loss a reader cannot get out of in one day, beside the one-day
+        # figure the band caps (see WORST_RUN_SESSIONS), and the window every
+        # figure here is measured over: "max drawdown -12.6%" stood beside
+        # the allocation card's -41% for the same mix with nothing saying it
+        # was the last 289 sessions (the review of 2026-11-23).
+        report["worst_run"] = worst_run(portfolio_daily, equity=total_weight)
+        report["window"] = {
+            "from": _date(portfolio_daily.index.min()),
+            "to": _date(portfolio_daily.index.max()),
+            "sessions": int(len(portfolio_daily)),
+        }
+
         market = benchmark_returns(benchmark_key, bars=bars)
 
         if not market.empty:
@@ -529,10 +541,64 @@ def analyse(positions, equity=None, bars=None, benchmark_key="TEDPIX",
 
     report["price_band_warning"] = (
         f"دامنه‌ی نوسان روزانه‌ی ±{config.PRICE_BAND_PCT}٪ دنباله‌ی توزیع بازده را "
-        "می‌بُرد؛ نوسان و VaR محاسبه‌شده کفِ ریسک واقعی است، نه سقف آن."
+        "می‌بُرد؛ نوسان و VaR محاسبه‌شده کفِ ریسک واقعی است، نه سقف آن. زیانِ "
+        "«یک روز» هیچ‌گاه بزرگ‌تر از همین دامنه دیده نمی‌شود؛ زیان چند جلسه‌ی "
+        "پیاپی را کنارش بخوانید، چون در صف فروش همان‌قدر طول می‌کشد تا بتوان "
+        "فروخت."
     )
 
     return report
+
+
+# Sessions in the "worst run" shown beside the one-day VaR. Measured
+# 2026-11-23 on the 150 most-traded shares over 300 bars: 14.5% of sessions
+# closed within 0.3 point of the lower limit, so a single name's 95% one-day
+# VaR is the band itself (median worst day -3.00%), while the median worst
+# five-session run was -13.8% -- 4.6 times that. Five sessions is one trading
+# week, about what a sell queue takes to clear.
+WORST_RUN_SESSIONS = 5
+
+
+def worst_run(daily_returns, sessions=WORST_RUN_SESSIONS, equity=None):
+    """The deepest compounded fall over `sessions` consecutive sessions.
+
+    Consecutive rows of the series as given: for a book that is the sessions
+    every measured holding traded, the same window the VaR is struck on.
+    Returns None when the series is shorter than one run.
+    """
+
+    if daily_returns is None:
+        return None
+
+    series = pd.Series(daily_returns).dropna()
+
+    if sessions < 1 or len(series) < sessions:
+        return None
+
+    wealth = np.concatenate(([1.0], np.cumprod(1.0 + series.to_numpy(dtype=float))))
+
+    runs = wealth[sessions:] / wealth[:-sessions] - 1.0
+
+    start = int(np.argmin(runs))
+
+    worst = float(runs[start])
+
+    if worst != worst:
+        return None
+
+    dated = isinstance(series.index, pd.DatetimeIndex)
+
+    out = {
+        "sessions": int(sessions),
+        "worst_pct": round(worst * 100, 2),
+        "from_date": _date(series.index[start]) if dated else None,
+        "to_date": _date(series.index[start + sessions - 1]) if dated else None,
+    }
+
+    if equity:
+        out["worst_rials"] = round(abs(min(worst, 0.0)) * equity, 0)
+
+    return out
 
 
 def max_drawdown(daily_returns):

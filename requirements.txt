@@ -27,6 +27,33 @@ pandas>=2.0
 requests>=2.31
 ta>=0.11
 
+# Declared 2026-11-23 (the software review). Each of these is imported, or
+# needed, on a normal path and was missing from this file, so a machine
+# rebuilt from it could not read a Codal filing. Lower bounds only: the exact
+# versions this machine runs are in requirements-lock.txt.
+#
+#   lxml        codal.py reads a new filing with pandas.read_html, which
+#               brings no parser of its own. lxml is the one pandas tries
+#               first and the only complete one installed here (bs4 would
+#               also need html5lib). Nothing imports it by name, which is how
+#               it went unlisted. 5.3 is the floor pandas 3 sets for it.
+#   xlrd        an old filing is a real .xls (codal.split_sheets_xls reads it
+#               through pandas' xlrd engine); 2.0.1 is pandas' floor.
+#   urllib3     providers/transport.py imports it by name and reads response
+#               bodies with HTTPResponse.read1 (the whole-request deadline),
+#               which the 1.26 line -- still allowed by requests -- lacks.
+#   jinja2, markupsafe, werkzeug
+#               imported by name (stock_report.py, app.py). They arrive with
+#               flask, but by this file's own rule a dependency you import is
+#               a dependency you declare; the floors are flask 3's own.
+
+lxml>=5.3
+xlrd>=2.0.1
+urllib3>=2.2
+jinja2>=3.1.2
+markupsafe>=2.1.1
+werkzeug>=3.0
+
 # The backtesting engine (backtesting/) adds NOTHING to this list. It was
 # written that way on purpose:
 #

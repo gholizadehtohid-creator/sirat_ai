@@ -157,6 +157,35 @@ def targets(entry, stop_distance, overhead_pct=None, rr1=None, rr2=None,
     }
 
 
+def net_risk_reward(reward_pct, stop_pct, cost_pct=None):
+    """Reward/risk after the round trip is paid, or None.
+
+    The round trip comes off the winner and is added to the loser: a +14%
+    target against a -5.6% stop is 2.5 gross and (14 - 1.25) / (5.6 + 1.25)
+    = 1.86 net. `cost_pct` defaults to config.LIVE_ROUND_TRIP_PCT, today's
+    equity round trip.
+
+    FOR THE LIVE CARDS ONLY (the review of 2026-11-23). targets() and plan()
+    above are untouched and still gate on the gross ratio: the paper trader
+    and the registered backtests run through them (advisor.v2_scan), and a
+    gate on the net figure there would be a different strategy -- with a
+    2.5R target the net ratio clears 2.0 only when the stop is 7.5% or
+    wider, so it would drop the quiet names and keep the violent ones.
+    """
+
+    reward_pct = _finite(reward_pct)
+    stop_pct = _finite(stop_pct)
+    cost = _finite(cost_pct)
+
+    if cost is None:
+        cost = _finite(getattr(config, "LIVE_ROUND_TRIP_PCT", None))
+
+    if reward_pct is None or stop_pct is None or cost is None or stop_pct <= 0:
+        return None
+
+    return round((reward_pct - cost) / (stop_pct + cost), 2)
+
+
 # ==============================
 # DURATION
 # ==============================

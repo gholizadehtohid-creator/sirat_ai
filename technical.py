@@ -293,11 +293,22 @@ def support_resistance(frame, price, depth=None):
 # The standing caveat the panel must show. This programme's own research found
 # no tradable edge from technical signals net of costs; this is a textbook
 # reading, not a claim that acting on it makes money.
+def _fa_digits(text):
+    return str(text).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+
+
+# 1.04% is what E19-E23 charged and stays in the sentence as their figure;
+# what a round trip costs today (config.LIVE_ROUND_TRIP_PCT, 1.2512%) is said
+# beside it, because the reader pays today's (the review of 2026-11-23).
 SIGNAL_CAVEAT = (
     "این یک خوانش تکنیکال کتاب‌درسی است، نه یک لبه‌ی اعتبارسنجی‌شده. تحقیق همین "
     "پلتفرم (E19 تا E23) نشان داد سیگنال‌های تکنیکال از این نوع، خالص از هزینه‌ی "
-    "۱.۰۴٪ رفت‌وبرگشت، لبه‌ی قابل‌معامله‌ای نداشتند. رأی‌ها را ببینید، نه فقط "
-    "نتیجه را."
+    "۱.۰۴٪ رفت‌وبرگشتی که در آن آزمون‌ها فرض شد، لبه‌ی قابل‌معامله‌ای نداشتند؛ "
+    "هزینه‌ی واقعی امروز %s٪ است (خرید %s٪، فروش %s٪ با مالیات). رأی‌ها را "
+    "ببینید، نه فقط نتیجه را."
+    % (_fa_digits("%.2f" % config.LIVE_ROUND_TRIP_PCT),
+       _fa_digits("%.2f" % config.LIVE_BUY_COST_PCT),
+       _fa_digits("%.2f" % config.LIVE_SELL_COST_PCT))
 )
 
 BUY = "BUY"
@@ -660,7 +671,7 @@ def symbol_band_pct(ins_code):
     return round(width, 1) if 0 < width < 50 else None
 
 
-def price_targets(frame, latest, sr, band_pct=None):
+def price_targets(frame, latest, sr, band_pct=None, cost_pct=None):
     """Where a move from here would end, and what it costs to be wrong.
 
     Reuses the production trade path rather than inventing a panel-only rule:
@@ -703,6 +714,23 @@ def price_targets(frame, latest, sr, band_pct=None):
 
     sessions, duration_note = trade_manager.holding_period(
         measured.get("target_1_pct"), atr_pct=_finite(latest.get("atr_pct")))
+
+    # ---- the same ratios once the round trip is paid ---------------------
+    #
+    # The card printed the gross ratio in green against the 2.0 floor. On
+    # 2026-11-23, of 92 liquid names with targets 27 read "above 2.0" and one
+    # did after today's 1.2512% round trip: an uncapped target is 2.5 stop
+    # distances, and (2.5s - c) / (s + c) reaches 2.0 only for a stop of 7.5%
+    # or wider. The gross figures stay (they are the engine's, see
+    # trade_manager.net_risk_reward); the verdict is read on the net one.
+    cost = _finite(cost_pct)
+    if cost is None:
+        cost = _finite(config.LIVE_ROUND_TRIP_PCT)
+    stop_pct = distance / price * 100.0
+    rr_net = trade_manager.net_risk_reward(
+        measured.get("target_1_pct"), stop_pct, cost)
+    rr_2_net = trade_manager.net_risk_reward(
+        measured.get("target_2_pct"), stop_pct, cost)
 
     # ---- the floor of the ±3% band --------------------------------------
     #
@@ -791,6 +819,11 @@ def price_targets(frame, latest, sr, band_pct=None):
     if not structural:
         notes.append("سوئینگ کاملی برای اهداف ساختاری یافت نشد یا همه‌ی "
                      "بسط‌ها زیر قیمت‌اند")
+    if cost is not None and rr_net is not None:
+        notes.append(_fa_digits(
+            "سود به زیانِ خالص با هزینه‌ی رفت‌وبرگشت %.2f٪ حساب شده (از سود کم و "
+            "به زیان اضافه می‌شود): اگر حد ضرر در قیمت خودش اجرا شود زیان %.2f٪ "
+            "است، و در صف فروش بیشتر." % (cost, stop_pct + cost)))
 
     return {
         "price": round(price, 2),
@@ -798,6 +831,13 @@ def price_targets(frame, latest, sr, band_pct=None):
         "stop_loss": round(stop_price, 2),
         "stop_distance_pct": round(distance / price * 100.0, 2),
         "stop_source": stop_source,
+
+        # Net of the round trip (cost_pct): what the reader keeps and loses.
+        "cost_pct": cost,
+        "risk_reward_net": rr_net,
+        "risk_reward_target_2_net": rr_2_net,
+        "loss_at_stop_net_pct": (None if cost is None
+                                 else round(stop_pct + cost, 2)),
 
         "target_1": measured.get("target_1"),
         "target_2": measured.get("target_2"),
@@ -904,7 +944,15 @@ def analyse(symbol, params=None, bars=SERIES_BARS, halted=None):
     # Targets run on the full frame for the same reason the levels do: the
     # swing whose extension becomes an objective may start well left of the
     # display window.
-    targets = price_targets(frame, latest, sr, band_pct=symbol_band_pct(ins_code))
+    band_pct = symbol_band_pct(ins_code)
+
+    # A fund unit pays no transfer tax, so its round trip is the smaller one.
+    cost_pct = (config.LIVE_FUND_ROUND_TRIP_PCT
+                if (instrument.get("kind") or "") == "fund"
+                else config.LIVE_ROUND_TRIP_PCT)
+
+    targets = price_targets(frame, latest, sr, band_pct=band_pct,
+                            cost_pct=cost_pct)
 
     # Whether the reading can be acted on at all. A name locked at one price
     # (a queue), one that did not trade in the market's last session, or one
@@ -912,6 +960,20 @@ def analyse(symbol, params=None, bars=SERIES_BARS, halted=None):
     # entry, stop or target: رهیاب showed R/R 2.5 locked at limit-up after a
     # 39-day halt, شتبریز RSI 100 on 10 traded sessions (the review panel).
     tradability = _tradability(history, frame)
+
+    # And the basket's own entry check. The one-price test above misses a
+    # name that traded through a range and then closed at the top of its
+    # band: on 2026-11-22, 204 of 535 liquid names closed there, and this
+    # card printed an entry, a stop and targets for every one of 40 tried
+    # while the basket refused them (the review of 2026-11-23).
+    blocker = None
+    if not tradability["note"]:
+        blocker = _entry_blocker(frame, band_pct)
+        if blocker:
+            tradability["note"] = ("%s؛ به این قیمت نمی‌شود خرید، پس ورود، حد "
+                                   "ضرر و هدف داده نمی‌شود." % blocker)
+    tradability["entry_blocker"] = blocker
+
     if tradability["note"]:
         targets = None
         signal = dict(signal, caveat="⚠ " + tradability["note"] + " " +
@@ -963,6 +1025,21 @@ def analyse(symbol, params=None, bars=SERIES_BARS, halted=None):
 
 
 MIN_TRADED_FOR_CALL = 60
+
+
+def _entry_blocker(frame, band_pct):
+    """swing_advisor._entry_blocker's reason this name cannot be bought at
+    its last close, or None. The same function the basket uses, so the two
+    cards cannot disagree about a buy queue; imported here because
+    swing_advisor pulls in the whole v2 chain."""
+
+    try:
+        import swing_advisor
+        return swing_advisor._entry_blocker(frame, band_pct)
+    except Exception:                                           # noqa: BLE001
+        # A reading with no entry check is still a reading; the one-price and
+        # untraded tests in _tradability have already run.
+        return None
 
 
 def _tradability(history, frame):

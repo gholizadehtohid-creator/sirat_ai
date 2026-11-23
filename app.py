@@ -132,6 +132,43 @@ def _same_origin_only():
         return None
     return _refuse("sent from %s" % (host or "an unknown page"))
 
+
+# What the panel's own page may load, and who may frame it (the security
+# review, 2026-11-23). No answer carried a policy: a symbol with markup in
+# it, written into a table as it came, would have run with the reader's
+# holdings in reach, and any site could put the panel in a frame and have
+# its buttons clicked. The page needs nothing this forbids -- one module
+# script from /static/, no inline script, no on* handler, no eval, no other
+# host; its font and its API are its own, and data: is the favicon and the
+# CSS icons. 'unsafe-inline' is for STYLE only: the page and panel.js carry
+# some 150 style="" attributes.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; font-src 'self'; connect-src 'self'; "
+    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+)
+
+
+@app.after_request
+def _security_headers(response):
+    """The same headers on every answer, a refusal's and an error's included.
+
+    A PDF keeps two of the four. /api/report's answer is shown by the
+    browser's own viewer -- a page of the browser's that embeds the document
+    -- and a policy and a frame ban written for the panel's HTML are not
+    known to leave that viewer alone; it could not be tried here. Nothing is
+    given up: the route is under /api/, so another site's frame is refused
+    before it runs (_same_origin_only), and a PDF runs no script of ours.
+    """
+
+    headers = response.headers
+    headers.setdefault("X-Content-Type-Options", "nosniff")
+    headers.setdefault("Referrer-Policy", "same-origin")
+    if response.mimetype != "application/pdf":
+        headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        headers.setdefault("X-Frame-Options", "DENY")
+    return response
+
 CACHE_TTL = 300
 
 # Past CACHE_TTL an entry is still SERVED, up to this age, while a fresh
@@ -143,9 +180,49 @@ CACHE_TTL = 300
 # finished fetch is still never answered from before it.
 CACHE_STALE_GRACE = 2 * 3600
 
+# Nothing ever left this cache except through invalidate(), and only the
+# import buttons call that. A finished fetch moves data_version() and with it
+# every key, so each fetch left the previous generation of scans in memory
+# for the life of the process, beside every edit of the holdings list and
+# every symbol looked up (the software review, 2026-11-23: one outlook screen
+# is 847 KB as JSON). Two bounds, applied whenever an answer is stored:
+#   - an entry past CACHE_STALE_GRACE is never served again -- memoise()
+#     recomputes it while the caller waits -- so it is dropped;
+#   - past CACHE_MAX_ENTRIES the least recently served go first. A page load
+#     makes about twenty keys per data version, so this is several versions
+#     and a session of symbol lookups, and reaching it costs a recomputation,
+#     never a wrong answer.
+CACHE_MAX_ENTRIES = 256
+
 _cache = {}
 _cache_lock = threading.Lock()
-_inflight = {}                  # key -> Event set when its computation ends
+_inflight = {}                  # key -> the _Flight computing it now
+
+
+class _Flight:
+    """One computation in flight: who waits on it, and how it ended."""
+
+    __slots__ = ("done", "value", "error")
+
+    def __init__(self):
+        self.done = threading.Event()
+        self.value = None
+        self.error = None
+
+
+def _evict(now):
+    """Apply the two bounds above. Call with _cache_lock held."""
+
+    for key in [k for k, hit in _cache.items()
+                if now - hit["at"] >= CACHE_STALE_GRACE]:
+        del _cache[key]
+
+    excess = len(_cache) - CACHE_MAX_ENTRIES
+    if excess > 0:
+        idle = sorted(_cache,
+                      key=lambda k: _cache[k].get("used", _cache[k]["at"]))
+        for key in idle[:excess]:
+            del _cache[key]
 
 
 def _compute(key, producer):
@@ -154,31 +231,47 @@ def _compute(key, producer):
     The tabs load in parallel and the panel now prefetches them, so the same
     scan could be asked for twice at once -- two full-market scans fighting
     over one GIL. The second caller waits for the first's answer instead.
+
+    And for its failure. A waiter used to run the producer itself when the
+    first run failed, so four tabs waiting on one failed scan became four
+    scans at once (measured 2026-11-23: 4 callers, 4 runs) -- for
+    /api/opportunities, four times ~100 TSETMC requests at a host that
+    blocks bursts, at the moment it is already refusing. Every caller of
+    one flight now gets that flight's answer or that flight's error; the
+    retry is the next request, which finds nothing in flight.
     """
 
     with _cache_lock:
-        event = _inflight.get(key)
-        owner = event is None
+        flight = _inflight.get(key)
+        owner = flight is None
         if owner:
-            event = _inflight[key] = threading.Event()
+            flight = _inflight[key] = _Flight()
 
     if not owner:
-        event.wait()
-        with _cache_lock:
-            hit = _cache.get(key)
-        if hit is not None:
-            return hit["value"]
-        return producer()               # the first run failed; try ourselves
+        flight.done.wait()
+        if flight.error is not None:
+            raise flight.error
+        return flight.value
 
     try:
         value = producer()
+    except BaseException as exc:
+        # Recorded before the waiters wake: a flight that ended with neither
+        # a value nor an error would hand each of them None as the answer.
+        flight.error = exc if isinstance(exc, Exception) else RuntimeError(
+            "the computation was interrupted (%s)" % type(exc).__name__)
+        raise
+    else:
+        flight.value = value
         with _cache_lock:
-            _cache[key] = {"at": time.time(), "value": value}
+            now = time.time()
+            _cache[key] = {"at": now, "used": now, "value": value}
+            _evict(now)
         return value
     finally:
         with _cache_lock:
             _inflight.pop(key, None)
-        event.set()
+        flight.done.set()
 
 
 def _refresh_in_background(key, producer):
@@ -206,6 +299,8 @@ def memoise(key, producer, force=False):
 
     with _cache_lock:
         hit = _cache.get(key)
+        if hit is not None:
+            hit["used"] = time.time()   # what _evict() keeps is what was read last
 
     if hit is not None and not force:
         age = time.time() - hit["at"]
@@ -1109,6 +1204,15 @@ def api_outlook():
         return handle_error(exc)
 
 
+# One report at a time (the security review, 2026-11-23). A build starts a
+# headless browser and holds it for minutes when Edge stalls, and nothing
+# stopped a second request -- a double click, a reloaded tab, a link opened
+# from another program -- from starting another browser beside it. A request
+# that finds a build in progress waits this long, then is told to come back.
+_REPORT_LOCK = threading.Lock()
+REPORT_WAIT_SECONDS = 2.0
+
+
 @app.route("/api/report")
 def api_report():
     """One company's forward fundamental analysis as a PDF (stock_report.py).
@@ -1116,7 +1220,8 @@ def api_report():
     ?symbol=فولاد. Built when asked -- the user's choice (2026-11-23), not
     nightly -- in about three seconds, and opened in a new tab, so an error
     is a short page rather than JSON. Under /api/, so the same-origin guard
-    applies: another site cannot make this machine print PDFs.
+    applies: another site cannot make this machine print PDFs. One build at
+    a time (_REPORT_LOCK): a second request is answered 429, not a browser.
     """
 
     import stock_report
@@ -1134,6 +1239,12 @@ def api_report():
 
     if not symbol:
         return page("نماد را بنویسید.", 400)
+    if not _REPORT_LOCK.acquire(timeout=REPORT_WAIT_SECONDS):
+        body, status, headers = page(
+            "گزارش دیگری در حال ساخت است؛ چند ثانیه‌ی دیگر دوباره امتحان کنید.",
+            429)
+        headers["Retry-After"] = "5"
+        return body, status, headers
     try:
         path = stock_report.build(symbol)
     except stock_report.ReportError as exc:
@@ -1141,6 +1252,8 @@ def api_report():
     except Exception as exc:                                    # noqa: BLE001
         app.logger.exception("report for %s failed", symbol)
         return page("%s: %s" % (type(exc).__name__, str(exc)[:200]), 500)
+    finally:
+        _REPORT_LOCK.release()
     return send_file(path, mimetype="application/pdf", as_attachment=False,
                      download_name=os.path.basename(path), max_age=0)
 
@@ -1525,6 +1638,26 @@ def _with_autofetch(report, *components):
     return report
 
 
+@app.route("/api/health")
+def api_health():
+    """What ran and what did not: tasks, captures, forward log, backup, power.
+
+    Nothing told the owner when a night's run failed or the laptop was off
+    (the review, 2026-11-23). health.report() reads stored facts only -- log
+    tails, the stores, the backup's manifest -- starts nothing, is cached
+    for a minute and never raises. The import is local so that a defect in
+    it cannot keep the panel from starting.
+    """
+
+    try:
+        import health
+        return jsonify(health.report(fresh=request.args.get("refresh") == "1"))
+    except Exception as exc:                                    # noqa: BLE001
+        return jsonify({"level": "ok", "attention": 0, "items": [],
+                        "summary": "وضعیت سامانه خوانده نشد (%s)."
+                                   % type(exc).__name__})
+
+
 @app.route("/api/bootstrap")
 def api_bootstrap_status():
     """What data is present, missing or stale, and any fetch in flight."""
@@ -1541,7 +1674,11 @@ def api_bootstrap_run():
 
     started = bootstrap.start_background(force=force, only=only)
 
-    invalidate()
+    # No invalidate() here (2026-11-23). This is the page's own automatic
+    # fetch; dropping the cache as it STARTS made every scan recompute
+    # against a store being written, and again when the run ended. The key
+    # moves once, when the run delivers (data_version). The refresh button
+    # (/api/refresh) still drops it: that is a person asking.
 
     return jsonify({
         "started": started,

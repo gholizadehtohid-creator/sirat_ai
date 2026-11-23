@@ -54,10 +54,36 @@ class MeasureTests(unittest.TestCase):
         # six months at the trailing margin is exact, actual / estimate = 1.
         statements = company("1", range(1400, 1405))
         points = oc.measure(statements)
-        sixes = [r for m, _b, r in points if m == 6]
+        sixes = [r for m, _b, r in points if m == "6"]
         self.assertTrue(sixes)
         for ratio in sixes:
             self.assertAlmostEqual(ratio, 1.0, places=6)
+
+    def test_the_monthly_method_is_measured_by_emulation_in_its_own_buckets(self):
+        # The statement's year-to-date sales stand in for the monthly
+        # report's; on a steady company the emulated estimate is exact too.
+        points = oc.measure(company("1", range(1400, 1405)))
+        emulated = [r for m, _b, r in points if m == "M6"]
+        self.assertEqual(len(emulated), len([1 for m, _b, _r in points if m == "6"]))
+        for ratio in emulated:
+            self.assertAlmostEqual(ratio, 1.0, places=6)
+
+    def test_past_years_are_scored_with_the_inflation_they_faced(self):
+        import config
+        seen = []
+        real = oc.__dict__.get("load_statements")
+        self.assertIsNotNone(real)
+        import fundamental_outlook as fo
+        original = fo.analyse
+
+        def spy(*args, **kwargs):
+            seen.append(kwargs.get("inflation_pct"))
+            return original(*args, **kwargs)
+
+        with unittest.mock.patch.object(fo, "analyse", spy):
+            oc.measure(company("1", range(1400, 1403)))
+        self.assertTrue(seen)
+        self.assertEqual(set(seen), {config.BACKTEST_INFLATION_RATE})
 
     def test_bases_are_never_mixed(self):
         statements = company("1", range(1400, 1404))
@@ -65,7 +91,7 @@ class MeasureTests(unittest.TestCase):
         points = oc.measure(statements)
         # 1401's six months (consolidated) and 1402's (compared with it) are
         # skipped; 1403's, all four rows separate, is measured
-        self.assertEqual(len([p for p in points if p[0] == 6]), 1)
+        self.assertEqual(len([p for p in points if p[0] == "6"]), 1)
 
     def test_the_range_falls_back_to_the_months_bucket_when_thin(self):
         record = {"buckets": {"6": {"n": 500, "q10": .5, "q25": .8, "q50": 1, "q75": 1.2,
@@ -74,7 +100,22 @@ class MeasureTests(unittest.TestCase):
                                         "q90": 5, "median_abs_error": .9}}}
         b = oc.range_for(record, 7, 0.03)
         self.assertEqual(b["key"], "6")
+        self.assertEqual(b["basis"], "statement")
         self.assertIsNone(oc.range_for(None, 7, 0.03))
+
+    def test_each_method_reads_its_own_bucket(self):
+        # a year not begun is "12" whatever the months; the monthly method
+        # reads the emulated buckets, and twelve months of sales are still
+        # not a statement
+        self.assertEqual(oc.bucket_keys("next_year_trend", 12, "5_15"), ["12|5_15", "12"])
+        self.assertEqual(oc.bucket_keys("monthly_sales", 7, None), [None, "M6"])
+        self.assertEqual(oc.bucket_keys("monthly_sales", 12, "lt5"), ["M9|lt5", "M9"])
+        self.assertEqual(oc.bucket_keys("year_completed", 2, None), [None, "3"])
+        record = {"buckets": {"M6": {"n": 300, "q10": .5, "q25": .75, "q50": 1, "q75": 1.3,
+                                     "q90": 1.6, "median_abs_error": .27}}}
+        b = oc.range_for(record, 7, None, "monthly_sales")
+        self.assertEqual((b["key"], b["basis"], b["months_bucket"]), ("M6", "monthly", 6))
+        self.assertIsNone(oc.range_for(record, 7, None, "year_completed"))
 
 
 class SensitivityTests(unittest.TestCase):

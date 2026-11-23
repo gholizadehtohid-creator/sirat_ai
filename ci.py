@@ -93,8 +93,79 @@ def run_fixture(full=False):
     }
 
 
+# The seven preregistrations that predate the coverage check below. Their
+# retroactive registration is written and rehearsed
+# (examples/register_retroactive_e26_e33.py --dry-run: ledger 17 -> 24, chain
+# intact), but appending to the permanent ledger is the owner's step and was
+# not taken on 2026-11-23. Until it is, these seven WARN on every build, by
+# name; any OTHER preregistration outside the record fails it. Run the script
+# with --apply, then empty this tuple: a name left here after its row exists
+# is only noise, and a name added here to quiet a new experiment defeats the
+# check.
+PENDING_RETROACTIVE = (
+    "E26_preregistration.json", "E27_preregistration.json",
+    "E28_preregistration.json", "E30_preregistration.json",
+    "E31_preregistration.json", "E32_preregistration.json",
+    "E33_preregistration.json",
+)
+
+
+def preregistration_coverage(directory=None, registered=None):
+    """Preregistration files with no experiment behind them in the record.
+
+    WHY (2026-11-23): E26-E33 were preregistered as
+    backtest_output/E??_preregistration.json, run as standalone scripts and
+    never registered with the Experiment Manager. For three weeks the only two
+    "accepted" results in the repository sat outside the ledger while this
+    build stayed green, because it verified the chain it had and never asked
+    what was missing from it. A preregistration file is a claim that an
+    experiment exists; this checks that the record knows it does.
+
+    Matching is on the `experiment_id` the file itself states. A file that
+    cannot be read, or names no experiment, counts as outside: the check must
+    not be passable by writing a file it cannot parse.
+
+    `registered` is injectable so the test needs no research database.
+    """
+
+    import re
+
+    directory = directory or os.path.join(ROOT, "backtest_output")
+
+    if registered is None:
+        from sirat.experiments import manager
+
+        registered = {row["experiment_id"] for row in manager.registry()}
+
+    try:
+        names = sorted(n for n in os.listdir(directory)
+                       if re.match(r"E\d+.*_preregistration\.json$", n))
+    except OSError:
+        names = []
+
+    outside = []
+
+    for name in names:
+        try:
+            with open(os.path.join(directory, name), encoding="utf-8") as fh:
+                experiment_id = json.load(fh).get("experiment_id")
+        except (OSError, ValueError, AttributeError):
+            outside.append({"file": name, "experiment_id": None,
+                            "reason": "unreadable, or not a JSON object"})
+            continue
+
+        if not experiment_id:
+            outside.append({"file": name, "experiment_id": None,
+                            "reason": "states no experiment_id"})
+        elif experiment_id not in registered:
+            outside.append({"file": name, "experiment_id": experiment_id,
+                            "reason": "no such experiment in the record"})
+
+    return {"files": len(names), "outside": outside}
+
+
 def run_governance():
-    """The state of the record. Reported; only one condition is fatal."""
+    """The state of the record. Reported; two conditions are fatal."""
 
     from sirat.experiments import ledger, manager, universe
 
@@ -104,13 +175,40 @@ def run_governance():
 
     chain = ledger.verify()
 
+    coverage = preregistration_coverage()
+
     warnings = []
+
+    fatal = []
 
     if not chain["intact"]:
         warnings.append(
             "THE RESEARCH LEDGER IS BROKEN at entry %s (%s): %s"
             % (chain.get("broken_at"), chain.get("experiment_id"),
                chain.get("reason")))
+        fatal.append("ledger broken at entry %s" % chain.get("broken_at"))
+
+    if coverage["outside"]:
+        warnings.append(
+            "%d OF %d PREREGISTRATION FILES ARE OUTSIDE THE RECORD: %s. An "
+            "experiment the Experiment Manager has never heard of has no "
+            "frozen thresholds, no provenance and no ledger entry -- "
+            "register it before anything is concluded from it."
+            % (len(coverage["outside"]), coverage["files"],
+               "; ".join("%s (%s)" % (o["file"], o["reason"])
+                         for o in coverage["outside"])))
+        pending = [o["file"] for o in coverage["outside"]
+                   if o["file"] in PENDING_RETROACTIVE]
+        unknown = [o["file"] for o in coverage["outside"]
+                   if o["file"] not in PENDING_RETROACTIVE]
+        if pending:
+            warnings.append(
+                "%d of them await the owner's retroactive registration "
+                "(python examples/register_retroactive_e26_e33.py --apply) "
+                "and do not fail the build: %s"
+                % (len(pending), ", ".join(pending)))
+        if unknown:
+            fatal.append("outside the record: %s" % ", ".join(unknown))
 
     if snapshot["due"]:
         warnings.append(
@@ -136,7 +234,10 @@ def run_governance():
         "kpi": report,
         "snapshot": snapshot,
         "ledger": chain,
+        "preregistrations": coverage,
         "warnings": warnings,
+        # What the last line of the build prints beside a FAIL.
+        "detail": fatal,
         # The KPI and the snapshot age are management signals, and a management
         # signal wired to a red build becomes a deleted signal -- so they warn.
         #
@@ -144,7 +245,12 @@ def run_governance():
         # signal about how research is going; it means the record of what was
         # decided has been altered, and nothing built on top of it can be
         # trusted until that is explained.
-        "passed": bool(chain["intact"]),
+        #
+        # SO DOES AN EXPERIMENT OUTSIDE THE RECORD (2026-11-23). It is the same
+        # kind of fault seen from the other side: not a record that was
+        # altered, but a result that was never in it. As a warning it would
+        # have been printed on every build since E26 and read on none.
+        "passed": not fatal,
     }
 
 
@@ -169,6 +275,14 @@ def _print_governance(report):
     print("  research ledger        %d entries, chain %s"
           % (report["ledger"]["entries"],
              "intact" if report["ledger"]["intact"] else "BROKEN"))
+
+    coverage = report.get("preregistrations")
+
+    if coverage is not None:
+        print("  preregistrations       %d files, %s"
+              % (coverage["files"],
+                 "all in the record" if not coverage["outside"]
+                 else "%d OUTSIDE THE RECORD" % len(coverage["outside"])))
 
     for warning in report["warnings"]:
         print("\n  WARNING: %s" % warning)

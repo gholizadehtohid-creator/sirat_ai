@@ -1944,6 +1944,39 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 1
 
 .hint .hint, .today-item .hint { color: var(--text-muted); }
 
+/* ---- readability and small screens (the UI/UX review, 2026-11-23) --------
+   Explanations ran the card's full width: about 200 characters a line at
+   1400px, where 60-90 is what an eye tracks, so the warnings that matter
+   were skimmed. Running text is held to a readable measure; tables and
+   charts keep the full width. */
+.card p.hint, .card > p, .card details.help p, .banner > div,
+.guide-card p { max-width: 96ch; }
+
+/* The header's own symbol box: "check a symbol" and its PDF were inside the
+   eighth fold of the analysis tab, under a 900-row table. */
+.quick-symbol { display: inline-flex; align-items: center; gap: 6px; }
+.quick-symbol input { width: 150px; }
+
+@media (max-width: 760px) {
+  /* A wide table showed 4 of 10 columns with nothing to say there was
+     more: the first column (the symbol) stays put while the rest scroll,
+     and the far edge fades to show the table continues. */
+  .table-wrap th:first-child, .table-wrap td:first-child {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 1;
+    background: var(--surface-1);
+    box-shadow: -6px 0 6px -6px color-mix(in srgb, var(--text-primary) 22%, transparent);
+  }
+  .table-wrap th:first-child { background: var(--surface-2); }
+  .table-wrap {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 22px);
+    mask-image: linear-gradient(to right, transparent 0, #000 22px);
+  }
+  .quick-symbol { width: 100%; }
+  .quick-symbol input { flex: 1; width: auto; }
+}
+
 .section-title {
   display: flex;
   align-items: center;
@@ -2409,3 +2442,67 @@ td:first-child { font-weight: 600; color: var(--text-primary); }
 
 /* The note under a field the engine overrides (min score under v2). */
 .field-note { font-size: 11.5px; line-height: 1.4; }
+
+/* ---------- system health card (health.py, /api/health; 2026-11-23) --------
+   What ran and what did not. State, not data: status tokens only. In the
+   status row it is one muted line when all is well (like the idle load
+   panel beside it) and takes the full width when something is warn or bad. */
+
+.health-card {
+  flex: 1 1 100%;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--status-warning);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sm);
+  padding: 10px 14px 12px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+}
+
+.health-card[hidden] { display: none; }
+.health-card.is-bad { border-inline-start-color: var(--status-critical); }
+
+.health-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.health-title { color: var(--text-primary); font-weight: 650; }
+
+.health-dot {
+  flex: none;
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-warning);
+}
+
+.health-card.is-bad .health-dot { background: var(--status-critical); }
+
+.status-row .health-card.is-quiet {
+  flex: 0 1 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.health-card.is-quiet .health-dot { background: var(--status-good); }
+.health-card.is-quiet .health-title,
+.health-card.is-quiet .health-list { display: none; }
+
+.health-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+
+.health-list li {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border-inline-start: 2px solid var(--status-warning);
+}
+
+.health-list li.bad { border-inline-start-color: var(--status-critical); }
+.health-list li .what { color: var(--text-primary); }
+.health-list li.bad .what { color: var(--danger-text); }
+.health-list li .todo { display: block; font-size: 12px; color: var(--text-muted); max-width: 110ch; }

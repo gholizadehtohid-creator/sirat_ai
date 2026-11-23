@@ -49,6 +49,44 @@ BAND_EXCESS_PCT = None      # None: config.CORPORATE_ACTION_THRESHOLD
 _SPLIT = re.compile(r"[\r\n،;]+|,(?!\d{3}(?!\d))")
 _NUMBER = re.compile(r"^[\d.,٬]+$")
 
+# A line of cash: «نقد 500,000,000». Until 2026-11-23 it read as an unknown
+# symbol, and one unknown symbol blocks every instruction on the today card --
+# so money waiting to be invested could not be entered at all, and the card
+# could not size its purchase. Rials unless the line says تومان; the scale
+# words are accepted because nobody types nine zeros. No instrument is named
+# «نقد» (checked against the instrument list, 2026-11-23).
+CASH_SYMBOL = "نقد"
+CASH_WORDS = ("نقد", "نقدی", "cash")
+CASH_UNITS = {"ریال": 1.0, "تومان": 10.0, "تومن": 10.0, "هزار": 1e3,
+              "میلیون": 1e6, "میلیارد": 1e9}
+
+
+def is_cash(symbol):
+    return persian.normalize(symbol or "").strip().lower() in CASH_WORDS
+
+
+def _cash_amount(words, quantity, numbers):
+    """(rials, error) for a cash line's words after «نقد»."""
+
+    if numbers > 1:
+        return None, ("مبلغ نقد «%s» خوانا نیست (چند عدد جدا از هم)؛ ارقام را "
+                      "بدون فاصله بنویسید" % " ".join(words))
+    if quantity is None:
+        return None, "مبلغ نقد نوشته نشده است؛ مثلاً «نقد 500,000,000» (ریال)"
+    factor, unknown = 1.0, []
+    for word in words:
+        if _NUMBER.match(word):
+            continue
+        if word in CASH_UNITS:
+            factor *= CASH_UNITS[word]
+        else:
+            unknown.append(word)
+    if unknown:
+        return None, ("مبلغ نقد خوانا نیست («%s» را نمی‌شناسم)؛ عدد را به ریال "
+                      "یا با «تومان»، «میلیون»، «میلیارد» بنویسید"
+                      % " ".join(unknown))
+    return quantity * factor, None
+
 
 def parse_with_errors(text):
     """(entries, errors): parse()'s entries, and {symbol: why its quantity
@@ -72,6 +110,12 @@ def parse_with_errors(text):
         elif len(numbers) > 1:
             errors[symbol] = ("تعداد «%s» خوانا نیست (چند عدد جدا از هم)؛ "
                               "ارقام را بدون فاصله بنویسید" % " ".join(parts[1:]))
+        if is_cash(symbol):
+            errors.pop(symbol, None)
+            symbol = CASH_SYMBOL
+            quantity, problem = _cash_amount(parts[1:], quantity, len(numbers))
+            if problem:
+                errors[symbol] = problem
         if symbol not in quantities:
             order.append(symbol)
             quantities[symbol] = quantity
@@ -188,6 +232,137 @@ def bill_quotes():
         return {}
 
 
+def iso_day(value):
+    """'20261123' or '2026-11-23T…' -> '2026-11-23'; None if neither.
+
+    The bills' quotes carry TSETMC's compact date and everything else an ISO
+    day. Compared as text, '20261123' sorts above every '2026-…' day, so one
+    bill -- however old its quote -- dated the whole book (2026-11-23).
+    """
+
+    text = str(value or "").strip()
+    if re.match(r"^\d{8}$", text):
+        return "%s-%s-%s" % (text[:4], text[4:6], text[6:8])
+    if re.match(r"^\d{4}-\d{2}-\d{2}", text):
+        return text[:10]
+    return None
+
+
+# Funds that hold ONE industry. Their names end «-بخشی» or «-ب»; the two
+# government ETFs are filed as ordinary equity funds and are named here
+# (پالایش holds four refiners, دارایکم three banks and an insurer).
+SECTOR_FUND_SYMBOLS = ("پالایش", "دارایکم")
+SECTOR_FUND_WORDS = ("بخشی", "پالایشی", "واسطه گری مالی")
+
+
+def fund_kind(inst):
+    """'index', 'active', 'sector', 'leveraged', or None for anything that is
+    not an equity fund. What a fund may stand in on for risk, and how the
+    today card may speak of it, depend on which."""
+
+    if (inst.get("kind") or "") != "fund":
+        return None
+    name = persian.normalize(inst.get("name_fa") or inst.get("name") or "")
+    symbol = persian.normalize_symbol(inst.get("symbol_fa") or inst.get("symbol") or "")
+    if "اهرم" in name:
+        return "leveraged"
+    if symbol in SECTOR_FUND_SYMBOLS or name.strip().endswith("-ب") or \
+            any(word in name for word in SECTOR_FUND_WORDS):
+        return "sector"
+    import opportunities
+    sleeve = opportunities.fund_sleeve(inst.get("name_fa") or inst.get("name") or "")
+    if sleeve == "equity":
+        return "index"
+    if sleeve == "equity_active":
+        return "active"
+    return None
+
+
+def lock_states(codes, not_before=None):
+    """{ins_code: {'lock': 'sell' | 'buy', 'note': ..., 'as_of': session}}
+    for the instruments that cannot be dealt at the last stored market watch.
+
+    'sell': the last trade is at the lower limit -- a sell queue, or the
+    close of one; the holder cannot count on selling. 'buy' is the mirror at
+    the upper limit. Read from the market watch's own limits (each symbol's
+    band, not a flat 3%), and confirmed from the order book when the session
+    collector photographed one in the same session: an empty bid side there
+    is the queue itself. A name that did not trade at all is locked only on
+    the book's word, since its `last` is an older session's.
+
+    WHY (the review of 2026-11-23): the today card valued a holding locked at
+    its lower limit like any other and listed it under "sell" -- with a
+    halted name beside it, a 14.7bn-rial sale of which 5.1bn could be dealt,
+    and a purchase of the full 14.7bn to be paid for by it.
+
+    `not_before`: a watch older than this session is not today's and locks
+    nothing. Never raises; an unreadable watch locks nothing.
+    """
+
+    codes = [str(c) for c in codes if c]
+    if not codes:
+        return {}
+
+    marks = ",".join("?" * len(codes))
+    conn = database._connect()
+    try:
+        try:
+            watch = conn.execute(
+                "SELECT ins_code, last, limit_up, limit_down, volume, captured_at "
+                "FROM market_snapshot WHERE ins_code IN (%s)" % marks,
+                codes).fetchall()
+        except Exception:                                       # noqa: BLE001
+            return {}
+        try:
+            newest = conn.execute(
+                "SELECT MAX(captured_at) FROM depth_levels").fetchone()[0]
+            book = conn.execute(
+                "SELECT ins_code, bid_qty, ask_qty FROM depth_levels "
+                "WHERE captured_at = ? AND level = 1 AND ins_code IN (%s)" % marks,
+                [newest] + codes).fetchall() if newest else []
+        except Exception:                                       # noqa: BLE001
+            newest, book = None, []
+    finally:
+        conn.close()
+
+    book_session = snapshot_session(newest) if newest else None
+    queues = {}
+    for code, bid, ask in book:
+        bid, ask = bid or 0, ask or 0
+        queues[str(code)] = ("sell" if bid == 0 and ask > 0
+                             else "buy" if ask == 0 and bid > 0 else None)
+
+    out = {}
+    for code, last, up, down, volume, captured_at in watch:
+        code = str(code)
+        session = snapshot_session(captured_at)
+        if not session or (not_before and session < str(not_before)[:10]):
+            continue
+        queue = queues.get(code) if book_session == session else None
+        traded = bool(volume and volume > 0)
+        side = None
+        if traded and last and down and last <= down:
+            side = "sell"
+        elif traded and last and up and last >= up:
+            side = "buy"
+        elif not traded and queue:
+            side = queue
+        if not side:
+            continue
+        confirmed = queue == side
+        if side == "sell":
+            note = ("در صف فروش است و در این جلسه معامله نشده" if not traded
+                    else "در صف فروش است (آخرین معامله در کف دامنه‌ی نوسان)" if confirmed
+                    else "آخرین معامله در کف دامنه‌ی نوسان — صف فروش محتمل")
+        else:
+            note = ("در صف خرید است و در این جلسه معامله نشده" if not traded
+                    else "در صف خرید است (آخرین معامله در سقف دامنه‌ی نوسان)" if confirmed
+                    else "آخرین معامله در سقف دامنه‌ی نوسان — صف خرید محتمل")
+        out[code] = {"lock": side, "note": note, "as_of": session,
+                     "queue_confirmed": confirmed}
+    return out
+
+
 def sleeve_of(inst):
     """Which allocation sleeve a holding counts toward: equity, gold, fixed,
     or None for one the plan has no sleeve for (a leveraged or mixed fund).
@@ -235,11 +410,26 @@ def review(entries, parse_errors=None):
         newest = None
     parse_errors = parse_errors or {}
 
+    # Which of the held names cannot be dealt at the last market watch: one
+    # read for the whole book (see lock_states).
+    held = [instruments.get(persian.normalize_symbol(symbol)) for symbol, _q in entries]
+    locks = lock_states([inst["ins_code"] for inst in held if inst],
+                        not_before=newest)
+
     rows = []
     for symbol, quantity in entries:
         if symbol in parse_errors:
             rows.append({"symbol": symbol, "quantity": None,
                          "error": parse_errors[symbol], "parse_error": True})
+            continue
+        if is_cash(symbol):
+            # Money waiting in the brokerage account: in the fixed-income
+            # sleeve at its face value, so the today card can spend it.
+            rows.append({"symbol": CASH_SYMBOL, "quantity": quantity,
+                         "cash": True, "sleeve": "fixed", "price": 1.0,
+                         "as_of": None, "can_sell": True,
+                         "value": float(quantity) if quantity else None,
+                         "error": None})
             continue
         inst = instruments.get(persian.normalize_symbol(symbol))
         if not inst:
@@ -254,8 +444,10 @@ def review(entries, parse_errors=None):
             rows.append({"symbol": symbol, "quantity": quantity,
                          "sleeve": "fixed" if bill else None,
                          "bill": bill, "price": price,
-                         "as_of": (quote or {}).get("price_date"),
+                         "as_of": iso_day((quote or {}).get("price_date")),
                          "ytm_pct": (quote or {}).get("ytm_pct"),
+                         "maturity_jalali": (quote or {}).get("maturity_jalali"),
+                         "can_sell": True,
                          "value": price * quantity if price and quantity else None,
                          "error": None if bill else "نماد پیدا نشد"})
             continue
@@ -281,7 +473,19 @@ def review(entries, parse_errors=None):
             "missed_last_session": bool(newest and last_trade and last_trade < newest
                                         and code not in halted
                                         and bool(inst.get("is_equity"))),
+            "fund_kind": fund_kind(inst),
         }
+        # Whether the holder can actually sell it now, and why not: halted,
+        # or last traded at its lower limit. The today card sizes its sales
+        # on what can be sold and names the rest (the review of 2026-11-23).
+        lock = locks.get(code) or {}
+        row["lock"] = lock.get("lock")
+        row["lock_note"] = lock.get("note")
+        row["can_sell"] = not row["halted"] and row["lock"] != "sell"
+        row["why_not"] = (
+            ("متوقف از %s" % row["halted_since"] if row["halted_since"]
+             else "متوقف — هرگز معامله نشده") if row["halted"]
+            else row["lock_note"] if row["lock"] == "sell" else None)
         row["change_beyond_band"] = _beyond_band(row["change_pct"], bands.get(code))
         if row["equity"] and code not in halted:
             outlook = fo.analyse(code, price=close, dividend=dividends.get(code),
@@ -367,6 +571,12 @@ def _risk(rows, total):
     positions += [{"ins_code": "bill:" + r["symbol"], "symbol": r["symbol"],
                    "position_value": r["value"], "sector_name": "اوراق خزانه"}
                   for r in rows if r.get("bill") and r.get("value")]
+    # Cash is part of the book's value and carries no price risk: it stands
+    # in on a flat series (below), so a book half in cash is not measured as
+    # though the invested half were all of it.
+    positions += [{"ins_code": "cash", "symbol": r["symbol"],
+                   "position_value": r["value"], "sector_name": "نقد"}
+                  for r in rows if r.get("cash") and r.get("value")]
     if not positions or not total:
         return None
     # The rial VaR is struck on the holdings that could be measured (risk.py
@@ -395,6 +605,13 @@ def _risk(rows, total):
         "volatility": report.get("volatility"),
         "var": report.get("var"),
         "drawdown": report.get("drawdown"),
+        # What the basket's risk card already carried and this one dropped
+        # (the review of 2026-11-23): the one-day loss is capped by the price
+        # band, so the worst five-session run and the band warning go with
+        # it, and the window says which sessions "max drawdown" is the max of.
+        "worst_run": report.get("worst_run"),
+        "window": report.get("window"),
+        "price_band_warning": report.get("price_band_warning"),
         "beta": report.get("beta"),
         "benchmark": report.get("benchmark"),
         "average_correlation": corr.get("average"),
@@ -434,6 +651,12 @@ def _proxies(rows):
                     (1 + rate) ** (1 / 240.0) - 1, index=base.index)
                 named.append("%s ← بازده تا سررسید %.0f٪" % (r["symbol"], rate * 100))
             continue
+        if r.get("cash") and r.get("value"):
+            base = index_series("TEDPIX")
+            if base is not None:
+                out["cash"] = pd.Series(0.0, index=base.index)
+                named.append("%s ← بدون نوسان قیمت" % r["symbol"])
+            continue
         code = r.get("ins_code")
         if not code or not r.get("value") or r.get("equity"):
             continue
@@ -442,13 +665,28 @@ def _proxies(rows):
             continue                                # it has bars of its own
         name = r.get("name") or ""
         if r.get("sleeve") == "equity":
-            # normalize drops the ZWNJ: «هم‌وزن» reads «هموزن».
+            kind = r["fund_kind"] if "fund_kind" in r else fund_kind(
+                {"kind": "fund", "name": name, "symbol": r.get("symbol")})
+            # One industry is not the market: پالایش (four refiners) stood in
+            # on the whole index and read as diversified as it (2026-11-23).
+            # No stand-in, so risk.py names it among the holdings it could
+            # not measure and the card says which share of the book it did.
+            if kind == "sector":
+                continue
+            # normalize drops the ZWNJ: «هم‌وزن» reads «هموزن». The SYMBOL is
+            # asked as well as the name: the equal-weight fund trades as
+            # «هموزن» under the name «صندوق س. شاخصی کیان-س», and by its name
+            # alone it stood in on the cap-weighted index (2026-11-23).
             folded = persian.normalize(name).replace(" ", "")
-            key = "TEDPIX_EW" if "هموزن" in folded else "TEDPIX"
+            symbol = persian.normalize_symbol(r.get("symbol") or "")
+            key = "TEDPIX_EW" if "هموزن" in folded or "هموزن" in symbol else "TEDPIX"
             series = index_series(key)
             if series is not None:
                 out[str(code)] = series
-                named.append("%s ← %s" % (r["symbol"], config.INDICES[key]["name"]))
+                named.append("%s ← %s%s" % (
+                    r["symbol"], config.INDICES[key]["name"],
+                    " (تقریب: صندوق سهامیِ فعال است، نه شاخصی)"
+                    if kind == "active" else ""))
         elif r.get("sleeve") == "fixed":
             base = index_series("TEDPIX")
             if base is not None:
@@ -509,6 +747,28 @@ def _summarise(rows):
     # amount computed from the total is wrong by their value.
     unpriced = [r["symbol"] for r in rows
                 if r.get("quantity") and not r.get("value")]
-    as_of = max((r["as_of"] for r in rows if r.get("as_of")), default=None)
+
+    # The book's date is its newest price, compared as DAYS (iso_day): as
+    # text, a bill's compact '20261123' outranked every ISO day. And the
+    # newest price says nothing of the oldest -- a name halted since
+    # September stood at 54% of a book headed "prices to 11-23" (2026-11-23)
+    # -- so every line priced on an earlier day is listed with its day.
+    days = [iso_day(r.get("as_of")) for r in rows]
+    as_of = max((d for d in days if d), default=None)
+    stale = []
+    for r, day in zip(rows, days):
+        r["stale"] = bool(as_of and day and day < as_of and r.get("value"))
+        if r["stale"]:
+            stale.append({"symbol": r["symbol"], "as_of": day})
+            if not r.get("halted"):
+                warnings.append("قیمت %s از %s است، قدیمی‌تر از بقیه‌ی سبد (%s)"
+                                % (r["symbol"], day, as_of))
+    for r in rows:
+        if r.get("lock") == "sell" and not r.get("halted") and r.get("value"):
+            warnings.append("%s %s؛ روی فروش آن حساب نکنید"
+                            % (r["symbol"], r.get("lock_note") or "در صف فروش است"))
+    undealable = [{"symbol": r["symbol"], "why": r.get("why_not")}
+                  for r in rows if r.get("value") and r.get("can_sell") is False]
     return {"rows": rows, "total_value": total or None, "warnings": warnings,
-            "unpriced": unpriced, "as_of": as_of, "count": len(rows)}
+            "unpriced": unpriced, "as_of": as_of, "stale": stale,
+            "undealable": undealable, "count": len(rows)}

@@ -33,9 +33,21 @@ actual / estimate. A bucket with fewer than MIN_N points falls back to the
 months-only one.
 
 The monthly-sales estimate (most of the ranked names) cannot be measured
-this way: monthly reports are stored only from 1405. It is given the bucket
-of the statement point with as many or fewer months known -- the range of an
-estimate with less information, so if anything too wide.
+on real monthly reports: they are stored only from 1405. A first version
+lent it the statement bucket and called that "if anything too wide"; the
+review of 2026-11-23 emulated it and found the opposite (a median error of
+32% against 26.5% six months in). So it is now measured by EMULATION, in
+buckets of its own ("M3", "M6", "M9"): fundamental_outlook's own
+monthly_year_estimate() run on each past statement point, the statement's
+year-to-date sales standing in for the monthly report's. The real report
+is fresher than the statement it stands in for, so this is the band of an
+estimate with somewhat less information -- stated as an emulation wherever
+it is shown, not as a measurement of the live method.
+
+Past years are scored with the inflation they faced
+(config.BACKTEST_INFLATION_RATE), not today's: the "year not yet begun"
+estimate leans half on inflation, and at today's 76.8% its bucket read a
+median 0.82 of the actual where 40% gives 0.93 (the same review).
 
 DOLLAR SENSITIVITY
 ------------------
@@ -80,7 +92,8 @@ _CACHE = {"mtime": None, "data": None}
 
 
 def months_bucket(months_known):
-    """The statement point an estimate with `months_known` months is read as."""
+    """The statement point an estimate with `months_known` months is read as:
+    the one with as many months known, or fewer."""
 
     m = int(months_known or 12)
     if m >= 12:
@@ -90,6 +103,24 @@ def months_bucket(months_known):
     if m >= 6:
         return 6
     return 3
+
+
+def bucket_keys(method, months_known, band):
+    """The bucket keys to try for an estimate, most specific first.
+
+    A year not yet begun ("next_year_trend") is the "12" bucket whatever
+    else; a monthly-sales estimate reads the emulated "M" buckets (twelve
+    months of sales known is still not a statement: "M9"); a statement
+    estimate its own months.
+    """
+
+    if method == "next_year_trend":
+        head = "12"
+    elif method == "monthly_sales":
+        head = "M%d" % min(months_bucket(months_known), 9)
+    else:
+        head = "%d" % min(months_bucket(months_known), 9)
+    return [("%s|%s" % (head, band)) if band else None, head]
 
 
 def margin_band(margin):
@@ -173,9 +204,11 @@ def load_statements():
 def measure(statements):
     """[(months bucket, margin band, actual / estimate)] over the history."""
 
+    import config
     import fundamental_outlook as fo
 
     bills = {"rate_pct": 40.0, "as_of": None, "source": "calibration"}
+    past_inflation = getattr(config, "BACKTEST_INFLATION_RATE", 40.0)
     points = []
     for (code, fy, m), cur in statements.items():
         prev_fy = (fy[0] - 1, fy[1])
@@ -202,7 +235,8 @@ def measure(statements):
                            shares=None, sector=None, portfolio=None,
                            opportunity=bills, bars=None, band=None,
                            published=None, calibration=None, fx_record=None,
-                           capital_events=None, peers=None)
+                           capital_events=None, peers=None,
+                           inflation_pct=past_inflation)
         except Exception:                                       # noqa: BLE001
             continue
         if not r or r["method"] not in ("year_completed", "next_year_trend"):
@@ -216,7 +250,31 @@ def measure(statements):
         ratio = real / forward
         if not -5 < ratio < 10:             # a misread filing, not an error
             continue
-        points.append((months_bucket(m), margin_band(ttm_net / ttm_rev), ratio))
+        band = margin_band(ttm_net / ttm_rev)
+        points.append(("%d" % months_bucket(m), band, ratio))
+
+        # The monthly-sales method, emulated on the same point: the
+        # statement's own year-to-date sales and growth in the monthly
+        # report's place (see the module docstring).
+        if m != 12:
+            it, a_it, s_it = cur["items"], rows[1]["items"], rows[2]["items"]
+            rev, net = _f(it.get("revenue")), _f(it.get("net_profit"))
+            a_rev, s_rev = _f(a_it.get("revenue")), _f(s_it.get("revenue"))
+            a_net, s_net = _f(a_it.get("net_profit")), _f(s_it.get("net_profit"))
+            if None in (rev, net, a_rev, s_rev, a_net, s_net) or s_rev <= 0 or \
+                    rev + a_rev - s_rev <= 0:
+                continue
+            run_margin = (net + a_net - s_net) / (rev + a_rev - s_rev)
+            emulated = fo.monthly_year_estimate(a_rev, rev / s_rev - 1, m, rev,
+                                                net, run_margin)
+            owners = fo._profit(it)
+            share = owners / net if owners is not None and net and net > 0 and \
+                0 < owners / net <= 1.5 else 1.0
+            if not emulated or emulated[1] * share <= 0:
+                continue
+            e_ratio = real / (emulated[1] * share)
+            if -5 < e_ratio < 10:
+                points.append(("M%d" % months_bucket(m), band, e_ratio))
     return points
 
 
@@ -356,10 +414,10 @@ def build(statements=None, fx_record=None, sector_of=None):
 
     points = measure(statements)
     buckets = defaultdict(list)
-    for months, band, ratio in points:
-        buckets["%d" % months].append(ratio)
+    for head, band, ratio in points:
+        buckets[head].append(ratio)
         if band:
-            buckets["%d|%s" % (months, band)].append(ratio)
+            buckets["%s|%s" % (head, band)].append(ratio)
     record = {"built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
               "points": len(points),
               "buckets": {k: _summarise(v) for k, v in sorted(buckets.items())},
@@ -422,19 +480,28 @@ def ensure(max_age_days=MAX_AGE_DAYS):
         time.monotonic() - started)
 
 
-def range_for(calibration, months_known, margin):
+def range_for(calibration, months_known, margin, method=None):
     """The bucket an estimate falls in: its quantiles of actual / estimate,
-    the bucket's key and size, or None without a calibration."""
+    the bucket's key and size, or None without a calibration.
+
+    `basis` says what the bucket is: "statement" (the method measured on
+    its own past), "monthly" (the monthly-sales method, emulated) or
+    "next_year" (a year no statement of which exists yet).
+    """
 
     if not calibration:
         return None
     buckets = calibration.get("buckets") or {}
-    m = months_bucket(months_known)
     band = margin_band(margin)
-    for key in (("%d|%s" % (m, band)) if band else None, "%d" % m):
+    basis = {"next_year_trend": "next_year",
+             "monthly_sales": "monthly"}.get(method, "statement")
+    for key in bucket_keys(method, months_known, band):
         b = buckets.get(key) if key else None
         if b and b.get("n", 0) >= MIN_N:
-            return dict(b, key=key, months_bucket=m, band=band if "|" in key else None)
+            head = key.split("|")[0]
+            return dict(b, key=key, basis=basis,
+                        months_bucket=int(head.lstrip("M")),
+                        band=band if "|" in key else None)
     return None
 
 
@@ -482,7 +549,7 @@ def main(argv=None):
     record = load()
     if record:
         for key, b in record["buckets"].items():
-            print("  %-10s n=%5d  median |error| %5.1f%%  actual/estimate 25-75%%: %.2f-%.2f"
+            print("  %-11s n=%5d  median |error| %5.1f%%  actual/estimate 25-75%%: %.2f-%.2f"
                   % (key, b["n"], (b["median_abs_error"] or 0) * 100,
                      b["q25"], b["q75"]))
     return 0

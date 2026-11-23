@@ -2,6 +2,10 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
+{# The page carries third-party strings (Codal titles, product names) and is
+   opened by a browser allowed to read local files (the font): nothing in it
+   may run or fetch, whatever a string says (the review of 2026-11-23). #}
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src file:; img-src data:">
 <title>گزارش تحلیل بنیادی آینده‌نگر — {{ r.symbol }}</title>
 {# One company's report, printed to PDF by stock_report.py. The page is A4;
    the sections flow onto as many A4 pages as they need (three to four;
@@ -127,15 +131,16 @@ td.est { background: var(--accent-soft); font-weight: 700; }
          بازه {{ fv.low|num }} تا {{ fv.high|num }}.</p>
       {{ svg.fair }}
       <table>
-        <tr><th>ضریب مرجع</th><th class="n">P/E</th><th class="n">ارزش بر سود ۱۲ ماهه</th><th class="n">ارزش بر سود برآوردی</th></tr>
+        <tr><th>ضریب مرجع</th><th class="n">P/E</th><th class="n">ارزش بر سود ۱۲ ماهه (ریال)</th></tr>
         {% for a in fv.anchors %}<tr><td>{{ a.label }}</td><td class="n">{{ a.multiple|num(2) }}</td>
-          <td class="n">{{ a.value|num }}</td><td class="n">{{ a.value_forward|num }}</td></tr>{% endfor %}
+          <td class="n">{{ a.value|num }}</td></tr>{% endfor %}
       </table>
-      <p class="note">{% if fv.forward %}اگر برآورد سال جاری محقق شود و ضریب‌ها بمانند: مرکز {{ fv.forward.central|num }} ریال ({{ fv.forward.upside_pct|pct(0, true) }}). {% endif %}{% if fv.own_pe %}P/E خود سهم در یک سال: {{ fv.own_pe.low|num(1) }} تا {{ fv.own_pe.high|num(1) }}. {% endif %}با تورم بالا P/E گذشته با رشد اسمی سود پایین می‌آید؛ «ارزان‌تر از گذشته» بیشتر تورم است تا فرصت (E33).</p>
+      <p class="note">{% if fv.disagree %}<b>P/E صنعت و P/E خود سهم فاصله‌ی زیادی دارند:</b> دسته‌بندی «صنعت» در بورس شرکت‌های ناهمگن را کنار هم می‌گذارد، پس مرکز این بازه قطعی نیست. {% endif %}{% if fv.own_pe %}P/E خود سهم در یک سال: {{ fv.own_pe.low|num(1) }} تا {{ fv.own_pe.high|num(1) }}. {% endif %}این بازه می‌گوید ضریب‌های مرجع قیمت را کجا می‌گذارند، نه اینکه قیمت به آنجا می‌رسد؛ روی سود برآوردی حساب نشده، چون ضریب گذشته روی سود آینده رشد اسمی یک سال را دو بار می‌شمارد. با تورم بالا «ارزان‌تر از گذشته» بیشتر تورم است تا فرصت (E33).</p>
     {% else %}
-      <p>ارزش خالص دارایی هر سهم: <b>{{ fv.central|num }}</b> ریال —
-         <b class="{{ 'up' if (fv.upside_pct or 0) >= 0 else 'down' }}">{{ fv.upside_pct|pct(0, true) }}</b> نسبت به قیمت.
+      <p>ارزش خالص دارایی هر سهم{% if fv.floor %} (کف: سهام غیربورسی به بهای تمام‌شده حساب شده){% endif %}: <b>{{ fv.central|num }}</b> ریال؛
+         قیمت امروز <b>{{ (fv.price_to_value * 100 if fv.price_to_value is not none else none)|num(0) }}٪</b> آن است.
          {% for a in fv.anchors %}<span class="note">({{ a.label }})</span>{% endfor %}</p>
+      <p class="note">هلدینگ‌ها و شرکت‌های سرمایه‌گذاری معمولاً با تخفیف نسبت به NAV معامله می‌شوند؛ فاصله‌ی قیمت تا NAV به‌تنهایی «جای رشد» نیست.</p>
     {% endif %}
     {% if fv.doubtful %}<p class="note"><span class="pill warn">احتیاط</span> ضریب‌ها روی سودی تکیه دارند که این گزارش در آن تردید کرده است (پایین را ببینید).</p>{% endif %}
   </div>
@@ -145,12 +150,15 @@ td.est { background: var(--accent-soft); font-weight: 700; }
   <div class="box soft">
     <b>قیمت در برابر اوراق خزانه:</b>
     {% if h.required_growth_pct <= 0 %}
-      بازده سود برآوردی از بازده اخزا ({{ h.rate_pct|pct }}) بیشتر است؛ قیمت امروز رشدی از سود نمی‌خواهد.
+      آنچه به سهامدار می‌رسد از بازده اخزا ({{ h.rate_pct|pct }}) بیشتر است؛ قیمت امروز رشدی از سود نمی‌خواهد.
     {% else %}
-      با اخزای {{ h.rate_pct|pct }}، قیمت امروز رشد سالانه‌ی حدود <b>{{ h.required_growth_pct|pct(0) }}</b> در سود را لازم دارد؛
+      با اخزای {{ h.rate_pct|pct }}{% if h.payout_pct is not none %} و تقسیم سود {{ h.payout_pct|pct(0) }} (مجمع سال {{ (h.payout_year or "")[:7] }}){% endif %}،
+      قیمت امروز رشد سالانه‌ی حدود <b>{{ h.required_growth_pct|pct(0) }}</b> در سود را لازم دارد؛
       رشد فعلی فروش {{ h.actual_growth_pct|pct(0) }} است.
+      {% if h.payout_pct is none %}<span class="note">(مجمعی ثبت نشده: این خوش‌بینانه‌ترین حالت است، یعنی همه‌ی سود به سهامدار برسد.)</span>
+      {% elif h.required_growth_full_payout_pct is not none %}<span class="note">(اگر همه‌ی سود تقسیم می‌شد: {{ h.required_growth_full_payout_pct|pct(0) }}.)</span>{% endif %}
     {% endif %}
-    <span class="note">(تقریب: بازده سهامدار ≈ بازده سود + رشد آن؛ هر دو اسمی.)</span>
+    <span class="note">(تقریب: بازده سهامدار ≈ بازده نقدی + رشد سود؛ هر دو اسمی. سودی که تقسیم نمی‌شود خرج همان رشد می‌شود.)</span>
   </div>
   {% endif %}
 
@@ -198,8 +206,12 @@ td.est { background: var(--accent-soft); font-weight: 700; }
 
   <h3>این برآورد چقدر قابل اتکاست؟</h3>
   {% if rg %}
-  <p>همین روش روی <b>{{ rg.n|num }}</b> برآورد گذشته (سال‌های ۱۳۹۹ تا ۱۴۰۴، با {{ rg.months_bucket|num }} ماه از سال معلوم{% if rg.band_label %} و حاشیه‌ی سود {{ rg.band_label }}{% endif %})
-    اجرا و با سودی که شرکت‌ها بعداً گزارش کردند مقایسه شد: خطای میانه <b>{{ rg.median_abs_error_pct|pct(0) }}</b>.
+  <p>
+    {% if rg.basis == "next_year" %}این برآورد برای سالی است که هنوز صورتی از آن منتشر نشده. همین روش روی <b>{{ rg.n|num }}</b> برآورد مشابه گذشته (سال‌های ۱۳۹۹ تا ۱۴۰۴{% if rg.band_label %}، حاشیه‌ی سود {{ rg.band_label }}{% endif %}) اجرا
+    {% elif rg.basis == "monthly" %}برآورد بر پایه‌ی گزارش ماهانه را نمی‌شود مستقیم در گذشته سنجید (گزارش‌های ماهانه از ۱۴۰۵ ذخیره شده‌اند)؛ همین فرمول روی <b>{{ rg.n|num }}</b> صورت مالی گذشته <b>شبیه‌سازی</b> شد (فروشِ صورت مالی به جای گزارش ماهانه، با {{ rg.months_bucket|num }} ماه از سال معلوم{% if rg.band_label %} و حاشیه‌ی سود {{ rg.band_label }}{% endif %})
+    {% else %}همین روش روی <b>{{ rg.n|num }}</b> برآورد گذشته (سال‌های ۱۳۹۹ تا ۱۴۰۴، با {{ rg.months_bucket|num }} ماه از سال معلوم{% if rg.band_label %} و حاشیه‌ی سود {{ rg.band_label }}{% endif %}) اجرا
+    {% endif %}
+    و با سودی که شرکت‌ها بعداً گزارش کردند مقایسه شد: خطای میانه <b>{{ rg.median_abs_error_pct|pct(0) }}</b>.
     در نیمی از موارد سود واقعی بین {{ (rg.q25 * 100)|num(0) }}٪ و {{ (rg.q75 * 100)|num(0) }}٪ برآورد بود، و در ۸۰٪ موارد بین {{ (rg.q10 * 100)|num(0) }}٪ و {{ (rg.q90 * 100)|num(0) }}٪.</p>
   <table>
     <tr><th></th><th class="n">کم (۲۵٪)</th><th class="n">برآورد</th><th class="n">زیاد (۷۵٪)</th><th class="n">بازه‌ی ۸۰٪</th></tr>
@@ -207,25 +219,25 @@ td.est { background: var(--accent-soft); font-weight: 700; }
     <tr><td>سود هر سهم (ریال)</td><td class="n">{{ rg.eps_low|num }}</td><td class="n est">{{ f.eps|num }}</td><td class="n">{{ rg.eps_high|num }}</td><td class="n">{{ rg.eps_low80|num }} تا {{ rg.eps_high80|num }}</td></tr>
     <tr><td>P/E به قیمت امروز</td><td class="n">{{ rg.pe_high|num(1) }}</td><td class="n est">{{ v.pe_forward|num(1) }}</td><td class="n">{{ rg.pe_low|num(1) }}</td><td class="n"></td></tr>
   </table>
-  {% if r.method == "monthly_sales" %}<p class="note">برآوردهای بر پایه‌ی گزارش ماهانه را نمی‌شد در گذشته سنجید (گزارش‌های ماهانه از ۱۴۰۵ ذخیره شده‌اند)؛ بازه‌ی برآوردِ صورت‌مالیِ با ماه‌های معلومِ برابر یا کمتر به کار رفته — اگر خطایی هست، بازه کمی گشادتر از واقع است.</p>{% endif %}
+  <p class="note">این بازه خطای گذشته‌ی روش است، نه تضمین: سال‌های با جهش ارز بیرون از آن افتاده‌اند (در برآوردهای شش‌ماهه‌ی ۱۴۰۵ سود واقعی بیشتر بالای بازه بود).</p>
   {% else %}<p class="note">بازه‌ی خطا برای این نوع برآورد در دست نیست.</p>{% endif %}
 
   {% set d = r.fx %}
   {% if d and d.scenarios %}
   <h3>سناریوی دلار</h3>
   <p>دلار مرکز مبادله (نیما) {{ d.as_of }}: <b>{{ d.nima|num }}</b> ریال{% if d.free %}؛ بازار آزاد {{ d.free|num }} ریال{% endif %}.
-    {% if d.vs_year_average_pct is not none %}نیما اکنون {{ d.vs_year_average_pct|pct(0, true) }} نسبت به میانگین امسال است.{% endif %}
-    اگر نیما در ماه‌های باقی‌مانده‌ی سال (فروش آن ماه‌ها حدود {{ d.remaining_revenue|money }}) چنین باشد:</p>
+    {% if d.vs_year_average_pct is not none %}نیما اکنون {{ d.vs_year_average_pct|pct(0, true) }} نسبت به میانگین همین سال مالی است.{% endif %}
+    برآورد پایه فرضی درباره‌ی دلار ندارد؛ جدول می‌گوید اگر نیما در ماه‌های باقی‌مانده‌ی سال (فروش آن ماه‌ها حدود {{ d.remaining_revenue|money }}) این‌قدر با امروز فرق کند، سود سال چقدر جابه‌جا می‌شود:</p>
   <table>
-    <tr><th>دلار نیما</th><th class="n">نرخ</th><th class="n">سود هر سهم</th><th class="n">تغییر سود سال</th><th class="n">P/E</th></tr>
-    {% for s in d.scenarios %}{% if s.shock_pct == 20 %}
-    <tr class="est"><td>ثابت (برآورد پایه)</td><td class="n">{{ d.nima|num }}</td><td class="n">{{ f.eps|num }}</td><td class="n">—</td><td class="n">{{ v.pe_forward|num(1) }}</td></tr>{% endif %}
-    <tr><td>{{ s.shock_pct|signed }}٪</td><td class="n">{{ s.nima|num }}</td><td class="n">{{ s.eps|num }}</td><td class="n">{{ s.change_pct|pct(1, true) }}</td><td class="n">{{ s.pe|num(1) }}</td></tr>{% endfor %}
+    <tr><th>نیما نسبت به امروز</th><th class="n">نرخ</th><th class="n">تغییر سود سال — با رابطه‌ی گذشته</th><th class="n">تغییر سود سال — اگر کاملاً دلاری</th><th class="n">سود هر سهم (ریال)</th></tr>
+    <tr class="est"><td>برآورد پایه</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">{{ f.eps|num }}</td></tr>
+    {% for s in d.scenarios %}
+    <tr><td>{{ s.shock_pct|signed }}٪</td><td class="n">{{ s.nima|num }}</td><td class="n">{{ s.change_pct|pct(1, true) }}</td><td class="n">{{ s.full_change_pct|pct(1, true) }}</td>
+      <td class="n">{% if s.full_eps is not none %}{{ [s.eps, s.full_eps]|min|num }} تا {{ [s.eps, s.full_eps]|max|num }}{% else %}{{ s.eps|num }}{% endif %}</td></tr>{% endfor %}
   </table>
-  <p class="note">حساسیت فروش به نیما {{ d.sensitivity.revenue|num(2) }}{% if d.sensitivity.cost_basis == "measured" %} و بهای تمام‌شده {{ d.sensitivity.cost|num(2) }}{% else %}؛ بهای تمام‌شده هم‌پای فروش فرض شد (رابطه‌ی اندازه‌گیری‌شده‌ی آن معنادار نبود){% endif %}،
-    از مقایسه‌ی فروش هر فصل با همان فصل سال قبل در برابر تغییر میانگین نیما ({{ "خود شرکت، به سوی صنعت کشیده‌شده" if d.sensitivity.source == "company" else "صنعت" }}؛ R² = {{ d.sensitivity.r2|num(2) }}).
-    {% if d.weak %}<b>رابطه ضعیف است:</b> در گذشته دلار به‌تنهایی بخش کوچکی از تغییر فروش را توضیح داده (قیمت جهانی، مقدار فروش و قیمت‌گذاری دستوری هم اثر داشته‌اند)؛ این جدول «اگر چنین شود» است و برآورد پایه را تغییر نمی‌دهد.{% endif %}
-    {% if d.full_pass_per_10pct_pct %}برای مقایسه: اگر همه‌ی قیمت‌ها و هزینه‌ها دلاری بودند، هر ۱۰٪ دلار حدود {{ d.full_pass_per_10pct_pct|pct(1) }} سود سال را جابه‌جا می‌کرد.{% endif %}</p>
+  <p class="note"><b>دو ستون، دو خوانش.</b> «با رابطه‌ی گذشته»: حساسیت فروش به نیما {{ d.sensitivity.revenue|num(2) }}{% if d.sensitivity.cost_basis == "measured" %} و بهای تمام‌شده {{ d.sensitivity.cost|num(2) }}{% else %} (بهای تمام‌شده هم‌پای فروش فرض شد){% endif %}، از مقایسه‌ی فروش هر فصل با همان فصل سال قبل ({{ "خود شرکت، به سوی صنعت کشیده‌شده" if d.sensitivity.source == "company" else "صنعت" }}؛ R² = {{ d.sensitivity.r2|num(2) }}).
+    {% if d.weak %}این رابطه <b>ضعیف</b> است: در گذشته قیمت جهانی، مقدار فروش و قیمت‌گذاری دستوری هم‌زمان با دلار عوض شده‌اند. {% endif %}
+    «اگر کاملاً دلاری»: برای صنعتی که قیمت محصول و مواد اولیه‌اش هر دو دلاری است (فلزات، پتروشیمی، پالایش) سود ماه‌های باقی‌مانده یک‌به‌یک با دلار جابه‌جا می‌شود؛ برای چنین شرکتی این ستون را بخوانید. هیچ‌کدام پیش‌بینی نرخ نیست.</p>
   {% elif d %}
   <h3>دلار</h3><p>دلار نیما {{ d.as_of }}: {{ d.nima|num }} ریال. سناریو حساب نشد (فروش ماه‌های باقی‌مانده یا حاشیه در دست نیست).</p>
   {% endif %}

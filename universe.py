@@ -19,10 +19,14 @@ Iranian ISIN layout:  IR | O | 1 | FOLD | 0001
 """
 
 import json
+import logging
 import re
+import unicodedata
 
 import persian
 import settings
+
+log = logging.getLogger(__name__)
 
 # Instrument type = ISIN char[2].
 KIND_BY_TYPE_CHAR = {
@@ -142,12 +146,56 @@ def exchange_spelling(symbol):
     return text.translate(_ARABIC_LETTERS).replace(" ", "").strip()
 
 
+# What markup is made of. A symbol is the one string the panel prints on
+# every card, and three of its tables wrote it into the page as it came
+# (the security review, 2026-11-23): one entry spelled <svg/onload=...> in
+# the reference list -- a third party's file, re-read every week -- or on
+# the market watch would have run in the panel. The renderers escape now;
+# this is the door. It is not an alphabet: tickers and names carry Persian
+# and Arabic letters, digits, ZWNJ, spaces, dots, dashes and Latin letters,
+# and all of those pass. None of the 1,502 stored instruments carries one of
+# these five characters or a control character (checked 2026-11-23).
+_MARKUP = frozenset("<>\"'&")
+
+# The text an instruments row stores as it arrived. kind and board are this
+# module's own words, and ins_code is digits by the time it gets here.
+_STORED_TEXT = ("symbol_fa", "symbol_raw", "name_fa", "isin")
+
+
+class UnsafeText(ValueError):
+    """An instrument whose symbol, name or ISIN carries markup or a control
+    character. The message names the insCode and the character, never the
+    text itself: it goes into a log."""
+
+
+def unsafe_text(*values):
+    """Why one of `values` must not be stored, or None.
+
+    A markup character, or a control character (Unicode Cc). Meant for the
+    text AS STORED: persian.normalize has by then folded a tab or a line
+    break inside a name to a space, and real names have them -- one fund on
+    the 2026-11-23 watch carries a tab.
+    """
+
+    for value in values:
+        for ch in _text(value):
+            if ch in _MARKUP:
+                return "markup character %r" % ch
+            if unicodedata.category(ch) == "Cc":
+                return "control character U+%04X" % ord(ch)
+
+    return None
+
+
 def watch_record(ins_code, symbol, name, isin):
     """An instruments row for a market-watch line that is a main share.
 
     None for anything else: a fund, a bond, a derivative, a rights issue, a
     block-trade board of a listed company, or a line without a usable ISIN or
     symbol. A missing field may arrive as None or NaN (_text).
+
+    A main share whose symbol or name carries markup or a control character
+    raises UnsafeText: refused, and the caller's to count (2026-11-23).
     """
 
     isin = _text(isin).strip().upper()
@@ -169,7 +217,7 @@ def watch_record(ins_code, symbol, name, isin):
     if kind != "equity":
         return None
 
-    return {
+    record = {
         "ins_code": code,
         "symbol_fa": persian.normalize_symbol(symbol),
         "symbol_raw": exchange_spelling(symbol) or None,
@@ -180,14 +228,27 @@ def watch_record(ins_code, symbol, name, isin):
         "is_equity": 1,
     }
 
+    why = unsafe_text(*(record[field] for field in _STORED_TEXT))
 
-def parse_reference_list(payload):
+    if why:
+        raise UnsafeText("instrument %s refused: %s" % (code, why))
+
+    return record
+
+
+def parse_reference_list(payload, refused=None):
     """Parse the reference symbol map into instrument records.
 
     Shape: {"<نماد>": {"index": insCode, "code": ISIN, "name": company}}
+
+    An entry whose symbol, name or ISIN carries markup or a control character
+    (unsafe_text) is refused: left out, counted in one warning, and its
+    insCode appended to `refused` when a list is given. The list is a third
+    party's file on GitHub, and it is re-read every week (2026-11-23).
     """
 
     records = []
+    turned_away = []
 
     for raw_symbol, meta in (payload or {}).items():
 
@@ -204,7 +265,7 @@ def parse_reference_list(payload):
 
         kind, board = classify(isin, raw_symbol, name)
 
-        records.append({
+        record = {
             "ins_code": ins_code,
             "symbol_fa": persian.normalize_symbol(raw_symbol),
             "symbol_raw": raw_symbol,
@@ -213,7 +274,22 @@ def parse_reference_list(payload):
             "kind": kind,
             "board": board,
             "is_equity": 1 if kind == "equity" else 0,
-        })
+        }
+
+        if unsafe_text(*(record[field] for field in _STORED_TEXT)):
+            turned_away.append(ins_code)
+            continue
+
+        records.append(record)
+
+    if turned_away:
+        if refused is not None:
+            refused.extend(turned_away)
+        log.warning(
+            "reference list: %d entries refused for markup or control "
+            "characters in the symbol, name or ISIN (insCode %s%s)",
+            len(turned_away), ", ".join(turned_away[:3]),
+            ", ..." if len(turned_away) > 3 else "")
 
     # The reference list can carry duplicate insCodes across renamed symbols;
     # keep one row per insCode so the table's primary key holds.

@@ -426,11 +426,52 @@ def monthly_reads(ins_code, fy_end_month, rows=None):
 _UNSET = object()
 
 
+def monthly_year_estimate(base_revenue, ytd_growth, months_elapsed,
+                          statement_revenue, statement_profit, run_margin):
+    """(revenue, profit) of the fiscal year from a monthly report, or None.
+
+    `base_revenue` is the prior fiscal year's; `ytd_growth` the report's own
+    year-to-date growth; `statement_revenue` / `statement_profit` the newest
+    statement of THIS fiscal year when there is one.
+
+    Until the review of 2026-11-23 this was prior year x (1 + growth capped
+    at +100%), all of it at the trailing margin. Two things were wrong with
+    that for the 92 of 117 ranked names it priced:
+      * The cap was put on months already SOLD. In a year of 77% inflation
+        67 of the 92 had grown more than 100% to date, so their year was
+        held to exactly twice the last one -- for some, below the sales they
+        had already reported. Now the months elapsed keep the growth they
+        had, and only the months to come are capped (the elapsed share is
+        months / 12: the prior year's month-by-month split is not known
+        here).
+      * The profit the company had already REPORTED for the year was thrown
+        away and re-estimated from a margin (خودرو: a forward profit on a
+        first-half loss). Now the statement's own months stand as reported
+        and only the revenue beyond them is put at the trailing margin.
+    A year estimated below the revenue the statement already shows is no
+    estimate (the monthly total and the statement differ in what they
+    count): None, and the statement's own method stands.
+    """
+
+    if not base_revenue or base_revenue <= 0 or ytd_growth is None or \
+            run_margin is None:
+        return None
+    done = min(max(int(months_elapsed or 0), 1), 12) / 12.0
+    grown = max(ytd_growth, GROWTH_CAP[0])
+    rest = min(grown, GROWTH_CAP[1])
+    revenue = base_revenue * (done * (1 + grown) + (1 - done) * (1 + rest))
+    if statement_revenue is not None and statement_profit is not None:
+        if revenue <= statement_revenue:
+            return None
+        return revenue, statement_profit + (revenue - statement_revenue) * run_margin
+    return revenue, revenue * run_margin
+
+
 def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             monthly_rows=None, dividend=_UNSET, shares=_UNSET, sector=_UNSET,
             portfolio=_UNSET, opportunity=None, bars=_UNSET, band=_UNSET,
             published=_UNSET, calibration=_UNSET, fx_record=_UNSET,
-            capital_events=_UNSET, peers=_UNSET):
+            capital_events=_UNSET, peers=_UNSET, inflation_pct=None):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
@@ -456,6 +497,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
       `peers`           valuation_peers(): the industry's and the market's
                         P/E and the company's own P/E history, for the
                         fair-value range.
+    `inflation_pct` replaces config.INFLATION_RATE: outlook_calibration
+    scores past years with the rate they faced, not today's (the review of
+    2026-11-23: at today's 76.8% the "year not yet begun" bucket read 12%
+    too low).
     """
 
     rows_from_store = rows is None
@@ -504,6 +549,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                      if rows_from_store else None)
     opportunity = opportunity or opportunity_rate()
     today = today or jalali.today_jalali()
+    inflation_rate = (config.INFLATION_RATE if inflation_pct is None
+                      else float(inflation_pct))
 
     # A halted symbol's last close can be months or years old; a P/E on it
     # is not today's valuation (دتهران read 0.02 on a 2018 price). Report
@@ -592,7 +639,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             # (A year under way grows its remaining months at the rate it has
             # actually run at, below -- that is evidence, this is a forecast.)
             last = growth_rev if growth_rev is not None else 0.0
-            g = min(max(0.5 * last + 0.5 * config.INFLATION_RATE / 100.0,
+            g = min(max(0.5 * last + 0.5 * inflation_rate / 100.0,
                         GROWTH_CAP[0]), GROWTH_CAP[1])
             fwd_rev = rev * (1 + g)
             fwd_net = fwd_rev * margin
@@ -648,10 +695,12 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         base_rev = _f(base["items"].get("revenue")) if base else None
         run_margin = _div(ttm_net, ttm_rev) if ttm_rev and ttm_net is not None \
             else margin
-        if base_rev and run_margin is not None:
-            g = min(max(monthly["ytd_growth"], GROWTH_CAP[0]), GROWTH_CAP[1])
-            fwd_rev = base_rev * (1 + g)
-            fwd_net = fwd_rev * run_margin
+        estimate = monthly_year_estimate(
+            base_rev, monthly["ytd_growth"], monthly["months_elapsed"],
+            rev if latest["fy"] == fy_m and m != 12 else None,
+            net if latest["fy"] == fy_m and m != 12 else None, run_margin)
+        if estimate:
+            fwd_rev, fwd_net = estimate
             method = "monthly_sales"
 
     # ---- per share and valuation -----------------------------------------
@@ -822,10 +871,11 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # ---- age -------------------------------------------------------------
     age_months = _age_months(latest["end"], today)
 
-    inflation = config.INFLATION_RATE / 100.0
+    inflation = inflation_rate / 100.0
 
     # ---- what to watch ---------------------------------------------------
     flags, positives = [], []
+    stale_dividend_note = None
 
     def flag(text):
         flags.append(text)
@@ -974,9 +1024,30 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # assumes earnings reach shareholders and grow at about the sales rate --
     # and labelled as one.
     rate = opportunity["rate_pct"] / 100.0
-    required_growth = cushion = actual_growth = None
+    required_growth = required_full = cushion = actual_growth = None
+    # What reaches the holder is the dividend, not the earnings: a share's
+    # return is its dividend yield plus the growth of its price, and the
+    # earnings kept back are what pays for that growth -- counting them as
+    # yield AND expecting the growth counts them twice. The first version
+    # took the whole earnings yield (فولاد "needs 22% growth"; on the 1.1%
+    # it pays out it needs about 43%; the review of 2026-11-23). The payout
+    # is the last AGM's: DPS x the shares it was declared on / that year's
+    # owners' profit. Without a recorded AGM the whole-earnings figure is
+    # shown, named as the most favourable case.
+    payout_ratio = None
+    if dividend and _f(dividend.get("dps")) is not None and \
+            _f(dividend.get("capital")):
+        fy_end = str(dividend.get("fiscal_year_end") or "")[:7]
+        year = next((p for p in all_periods
+                     if p["months"] == 12 and str(p["end"])[:7] == fy_end), None)
+        owners_then = _profit(year["items"]) if year else None
+        if owners_then and owners_then > 0:
+            paid = _f(dividend["dps"]) * _f(dividend["capital"]) * 1_000_000 / PAR_VALUE
+            payout_ratio = min(max(paid / owners_then, 0.0), 1.0)
     if kind == OPERATING and yield_fwd is not None and yield_fwd > 0:
-        required_growth = rate - yield_fwd
+        required_full = rate - yield_fwd
+        required_growth = rate - yield_fwd * (payout_ratio
+                                             if payout_ratio is not None else 1.0)
         actual_growth = (monthly.get("ytd_growth") if monthly and
                          monthly.get("ytd_growth") is not None else growth_rev)
         if actual_growth is not None:
@@ -988,9 +1059,12 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         if required_growth <= 0:
             pass
         elif cushion is not None and cushion * 100 < -GROWTH_CUSHION_PCT:
-            flag("قیمت امروز، در برابر اخزای %.0f٪، رشد سالانه‌ی حدود %.0f٪ "
+            flag("قیمت امروز، در برابر اخزای %.0f٪%s، رشد سالانه‌ی حدود %.0f٪ "
                  "سود را لازم دارد؛ رشد فعلی فروش %.0f٪ است"
-                 % (rate * 100, required_growth * 100, actual_growth * 100))
+                 % (rate * 100,
+                    " و با تقسیم سود %.0f٪" % (payout_ratio * 100)
+                    if payout_ratio is not None else "",
+                    required_growth * 100, actual_growth * 100))
         elif cushion is not None and cushion * 100 > GROWTH_CUSHION_PCT:
             positives.append("رشد فعلی فروش %.0f٪، بیشتر از رشد %.0f٪ که قیمت "
                              "امروز در برابر اخزای %.0f٪ لازم دارد"
@@ -1026,8 +1100,12 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                          % (dividend["fiscal_year_end"], format(int(round(dps)), ","),
                             dividend_yield * 100))
     elif dividend_stale and dps:
-        flag("آخرین سود نقدی ثبت‌شده مال سال مالی %s است و مجمع سال بعد ثبت "
-             "نشده؛ بازده نقدی امروز حساب نشد" % dividend["fiscal_year_end"])
+        # Said as a notice (below, once `result` exists): a gap in what is
+        # stored, not a weakness of the company -- as a warning it counted
+        # against 34 names in the ranking (the review of 2026-11-23).
+        stale_dividend_note = (
+            "آخرین سود نقدی ثبت‌شده مال سال مالی %s است و مجمع سال بعد ثبت "
+            "نشده؛ بازده نقدی امروز حساب نشد" % dividend["fiscal_year_end"])
 
     result = {
         "ins_code": str(ins_code),
@@ -1074,6 +1152,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                    "as_of": opportunity["as_of"],
                    "source": opportunity["source"],
                    "required_growth_pct": _pct(required_growth),
+                   "required_growth_full_payout_pct": _pct(required_full),
+                   "payout_pct": _pct(payout_ratio),
+                   "payout_year": (dividend or {}).get("fiscal_year_end")
+                   if payout_ratio is not None else None,
                    "actual_growth_pct": _pct(actual_growth),
                    "cushion_pct": _pct(cushion)},
         "cash": {"cash_conversion": _round(cash_conversion),
@@ -1088,7 +1170,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         "flags": flags,
         "positives": positives,
         "doubts": doubts,
-        "notices": [],
+        "notices": [stale_dividend_note] if stale_dividend_note else [],
     }
 
     # ---- 2026-11-23: what a professional reads beside the estimate ---------
@@ -1119,15 +1201,19 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if method in ("year_completed", "next_year_trend", "monthly_sales") and \
             fwd_net and fwd_net > 0:
         estimate_range = calibrated_range(calibration, months_known, ttm_margin,
-                                          fwd_net, shares, price)
+                                          fwd_net, shares, price, method)
     result["forward"]["range"] = estimate_range
     if estimate_range and estimate_range["wide"] and kind == OPERATING:
-        flag("برآورد سود این‌گونه شرکت‌ها (حاشیه‌ی سود %s، %d ماه از سال معلوم) "
-             "در گذشته پراکنده بوده: در نیمی از موارد سود واقعی سال بین %.0f٪ "
-             "و %.0f٪ برآورد بود؛ عدد برآوردی را با احتیاط بخوانید"
-             % (estimate_range["band_label"] or "نامعلوم",
-                estimate_range["months_bucket"],
-                estimate_range["q25"] * 100, estimate_range["q75"] * 100))
+        # A notice, not a warning that counts against the company: it is
+        # about how far the estimator can be trusted, not about the business
+        # (30 names were dropped from the ranking for it; the review of
+        # 2026-11-23).
+        result["notices"].append(
+            "برآورد سود این‌گونه شرکت‌ها (حاشیه‌ی سود %s) در گذشته پراکنده "
+            "بوده: در نیمی از موارد سود واقعی سال بین %.0f٪ و %.0f٪ برآورد "
+            "بود؛ عدد برآوردی را با احتیاط بخوانید"
+            % (estimate_range["band_label"] or "نامعلوم",
+               estimate_range["q25"] * 100, estimate_range["q75"] * 100))
 
     if kind == OPERATING:
         if method == "monthly_sales" and monthly and fwd_rev:
@@ -1140,10 +1226,20 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             remaining_rev = None
         pretax = _f(li.get("pretax"))
         keep = _div(net, pretax) if net and pretax and pretax > 0 else None
+        # The year being estimated, for "the rate against this year's
+        # average": the latest statement's year, or the one after it when
+        # that statement closed its year (اکو read +44.8% against an
+        # average that included the whole closed year; the same review).
+        if method == "monthly_sales" and monthly:
+            forecast_fy = tuple(monthly["fiscal_year"])
+        elif method == "next_year_trend":
+            forecast_fy = (latest["fy"][0] + 1, latest["fy"][1])
+        else:
+            forecast_fy = latest["fy"]
         result["fx"] = dollar_scenarios(
             ins_code, sector, calibration, fx_record, remaining_rev,
             gross_margin, keep, owners_share, fwd_net, shares, price,
-            latest["fy"], net_margin=ttm_margin)
+            forecast_fy, net_margin=ttm_margin)
     else:
         result["fx"] = None
 
@@ -1172,6 +1268,9 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if suspect:
         flags.insert(0, "داده‌ی ناممکن (%s): به احتمال زیاد صورت مالی درست "
                         "خوانده نشده؛ دستی بررسی کنید" % suspect)
+        # Its "strengths" are the same misread (فارس: "sales +83179%, above
+        # inflation").
+        del positives[:]
     return result
 
 
@@ -1248,17 +1347,19 @@ def quarterly_series(periods, limit=QUARTERS_SHOWN):
     return out
 
 
-def calibrated_range(calibration, months_known, margin, profit, shares, price):
+def calibrated_range(calibration, months_known, margin, profit, shares, price,
+                     method=None):
     """Where the year's profit has landed against estimates like this one,
     or None without a calibration (outlook_calibration.py)."""
 
     import outlook_calibration
 
-    b = outlook_calibration.range_for(calibration, months_known, margin)
+    b = outlook_calibration.range_for(calibration, months_known, margin, method)
     if not b or not profit or profit <= 0:
         return None
     out = {"q10": b["q10"], "q25": b["q25"], "q50": b["q50"], "q75": b["q75"],
-           "q90": b["q90"], "n": b["n"], "key": b["key"],
+           "q90": b["q90"], "n": b["n"], "key": b["key"], "basis": b["basis"],
+           "months_known": int(months_known or 0),
            "months_bucket": b["months_bucket"], "band": b["band"],
            "band_label": outlook_calibration.MARGIN_LABELS.get(b["band"]),
            "median_abs_error_pct": _pct(b.get("median_abs_error")),
@@ -1327,22 +1428,34 @@ def dollar_scenarios(ins_code, sector, calibration, fx_record, remaining_rev,
         d_cost = remaining_rev * cost_ratio * ((1 + s) ** sens["cost"] - 1)
         return (d_sales - d_cost) * keep * owners_share
 
+    # Beside the measured slope, the reading for a business whose every
+    # price and cost is struck in dollars: the remaining months' profit moves
+    # one for one. The measured slopes rank refiners (0.25) below pharma
+    # (0.86) -- world prices moved against the rate in the sample -- so for a
+    # dollar-priced industry this second column is the one to read, and the
+    # table shows both rather than one EPS to a decimal. Not a ceiling: a
+    # company whose costs move less than its sales can exceed it.
+    remaining_profit = (remaining_rev * net_margin * owners_share
+                        if net_margin is not None else None)
     for s in FX_SCENARIOS:
         profit = forward_profit + change(s)
         eps = _div(profit, shares)
+        full = (forward_profit + remaining_profit * s
+                if remaining_profit is not None else None)
         out["scenarios"].append({
             "shock_pct": round(s * 100), "nima": rate * (1 + s),
             "profit": profit, "eps": eps,
             "change_pct": _pct(_div(profit - forward_profit, abs(forward_profit)))
             if forward_profit else None,
+            "full_eps": _div(full, shares),
+            "full_change_pct": _pct(_div(full - forward_profit, abs(forward_profit)))
+            if forward_profit and full is not None else None,
             "pe": _round(price / eps) if price and eps and eps > 0 else None})
     out["per_10pct_pct"] = (_pct(change(0.10) / abs(forward_profit))
                             if forward_profit else None)
-    # The ceiling for comparison: a business whose every price and cost is
-    # struck in dollars moves its remaining months' profit one for one.
     out["full_pass_per_10pct_pct"] = (
-        _pct(remaining_rev * net_margin * owners_share * 0.10 / abs(forward_profit))
-        if forward_profit and net_margin is not None and net_margin > 0 else None)
+        _pct(remaining_profit * 0.10 / abs(forward_profit))
+        if forward_profit and remaining_profit is not None else None)
     return out
 
 
@@ -1362,6 +1475,7 @@ CAPITAL_STAGES = (
      "جلسه‌ی هیئت مدیره اعلام شد"),
 )
 CAPITAL_MONTHS = 12
+CAPITAL_EGM_ONLY = ("egm_decided", "egm_called")
 
 
 def capital_events_for(ins_codes, months=CAPITAL_MONTHS):
@@ -1410,10 +1524,19 @@ def capital_reading(events):
             if any(n in f for n in needles):
                 stages.append((published, key, label, title))
                 break
-    if not stages:
+    # ن-56/ن-57 are ANY extraordinary meeting -- the title carries no agenda
+    # -- so a meeting with no capital-specific letter beside it is not read
+    # as a raise: 50 names had been given the notice for an EGM alone (the
+    # review of 2026-11-23).
+    if not any(key not in CAPITAL_EGM_ONLY for _p, key, _l, _t in stages):
         return None
     newest = max(stages, key=lambda s: s[0] or "")
-    cash = any(key in ("subscription", "rights_result") for _p, key, _l, _t in stages)
+    # Cash is read from the round still open: a subscription that ended in a
+    # registration belongs to the raise before, not to a new proposal.
+    registered = [p or "" for p, key, _l, _t in stages if key == "registered"]
+    opened = max(registered) if registered and newest[1] != "registered" else ""
+    cash = any(key in ("subscription", "rights_result") and (p or "") >= opened
+               for p, key, _l, _t in stages)
     done = newest[1] == "registered"
     text = ("افزایش سرمایه: %s (%s)." % (newest[2], (newest[0] or "")[:10]))
     if done:
@@ -1517,11 +1640,18 @@ def fair_value(kind, ins_code, sector, eps_ttm, eps, estimate_range, price,
         if not nav or not shares or nav <= 0:
             return None
         per_share = nav / shares
+        # An incomplete NAV (unlisted holdings at cost: every one of the 49
+        # stored on 2026-11-23) is a FLOOR, and holdings trade at a discount
+        # to NAV as a rule: shown as the price's share of it, never as an
+        # "upside" (شستا had read +36.6%, سلیم +131%; the same review).
+        floor = (nav_result or {}).get("complete") is False
         return {"basis": "nav", "central": per_share, "low": None, "high": None,
                 "anchors": [{"label": "ارزش خالص دارایی هر سهم" +
                              (" (تخمینی با حرکت شاخص)" if nav_stale else ""),
                              "multiple": None, "value": per_share}],
-                "upside_pct": _pct(per_share / price - 1) if price else None,
+                "floor": floor,
+                "price_to_value": _round(price / per_share) if price else None,
+                "upside_pct": None,
                 "doubtful": bool(doubts), "forward": None,
                 "central_multiple": None, "central_basis": "nav"}
     if not eps_ttm or eps_ttm <= 0 or not peers:
@@ -1544,27 +1674,26 @@ def fair_value(kind, ins_code, sector, eps_ttm, eps, estimate_range, price,
         return None
     for a in anchors:
         a["value"] = eps_ttm * a["multiple"]
-        a["value_forward"] = eps * a["multiple"] if eps and eps > 0 else None
     multiples = sorted(a["multiple"] for a in anchors)
     central_multiple = anchors[0]["multiple"]       # the industry's, if there is one
     central = eps_ttm * central_multiple
-    out = {"basis": "pe", "central_multiple": central_multiple,
-           "central_basis": anchors[0]["key"],
-           "central": central, "low": eps_ttm * multiples[0],
-           "high": eps_ttm * multiples[-1],
-           "anchors": anchors, "own_pe": own,
-           "upside_pct": _pct(central / price - 1) if price else None,
-           "doubtful": bool(doubts),
-           "forward": None}
-    if eps and eps > 0:
-        low_eps = (estimate_range or {}).get("eps_low") or eps
-        high_eps = (estimate_range or {}).get("eps_high") or eps
-        f_central = eps * central_multiple
-        out["forward"] = {"central": f_central,
-                          "low": max(low_eps, 0) * multiples[0],
-                          "high": high_eps * multiples[-1],
-                          "upside_pct": _pct(f_central / price - 1) if price else None}
-    return out
+    # An exchange industry code is not a peer group (فلزات اساسی is 49
+    # names, copper beside steel): where the industry's multiple and the
+    # share's own are far apart the central value is named as unsettled
+    # (فملی read -35% on the industry, +11% on itself; 37 of 98 ranked
+    # names were outside the band).
+    disagree = bool(s_pe and own and not
+                    PUBLISHED_PE_BAND[0] <= own["median"] / s_pe <= PUBLISHED_PE_BAND[1])
+    # No forward reading: trailing multiples on the year's estimated EPS
+    # count a year of nominal growth twice (it read a median +35%, three
+    # quarters of the ranked names "undervalued"; the same review).
+    return {"basis": "pe", "central_multiple": central_multiple,
+            "central_basis": anchors[0]["key"],
+            "central": central, "low": eps_ttm * multiples[0],
+            "high": eps_ttm * multiples[-1],
+            "anchors": anchors, "own_pe": own, "disagree": disagree,
+            "upside_pct": _pct(central / price - 1) if price else None,
+            "doubtful": bool(doubts), "forward": None}
 
 
 # The market's newest session, re-read after MARKET_DATE_TTL seconds. It was
@@ -1613,6 +1742,20 @@ def halted_since(ins_code):
     return last[:10] if gap > 7 else None
 
 
+_PRICES = {"at": None, "value": None}
+
+
+def _snapshot_failed(what, exc):
+    """A market-watch read that failed is said once in the log: returned as
+    an empty answer and nothing else, it moved EVERY company to its capital-
+    line share count without a line anywhere (the review of 2026-11-23)."""
+
+    import logging
+    logging.getLogger("sirat.outlook").warning(
+        "market snapshot read failed (%s): %s: %s", what,
+        type(exc).__name__, str(exc)[:160])
+
+
 def latest_prices():
     """{ins_code: the newest price a trade set}, one query per source.
 
@@ -1625,6 +1768,14 @@ def latest_prices():
     """
 
     import holdings
+    import time as _time
+
+    # The scan of price_history costs ~2 s, and the report and the
+    # single-symbol lookup paid it on every request (the review of
+    # 2026-11-23). Two minutes, like the market date beside it.
+    now = _time.monotonic()
+    if _PRICES["at"] is not None and now - _PRICES["at"] < MARKET_DATE_TTL:
+        return _PRICES["value"]
 
     conn = database._connect()
     try:
@@ -1652,7 +1803,9 @@ def latest_prices():
         held = out.get(str(code))
         if session and _f(close) and (held is None or session > held[1]):
             out[str(code)] = (_f(close), session)
-    return {code: close for code, (close, _day) in out.items()}
+    value = {code: close for code, (close, _day) in out.items()}
+    _PRICES.update(at=now, value=value)
+    return value
 
 
 def exchange_shares():
@@ -1666,7 +1819,8 @@ def exchange_shares():
                   GROUP BY ins_code) m
               ON m.ins_code = s.ins_code AND m.at = s.captured_at
         """).fetchall()
-    except Exception:                                           # noqa: BLE001
+    except Exception as exc:                                    # noqa: BLE001
+        _snapshot_failed("shares", exc)
         rows = []
     finally:
         conn.close()
@@ -1686,7 +1840,8 @@ def price_bands():
                   GROUP BY ins_code) m
               ON m.ins_code = s.ins_code AND m.at = s.captured_at
         """).fetchall()
-    except Exception:                                           # noqa: BLE001
+    except Exception as exc:                                    # noqa: BLE001
+        _snapshot_failed("bands", exc)
         rows = []
     finally:
         conn.close()
@@ -1790,7 +1945,8 @@ def published_pe():
                   GROUP BY ins_code) m
               ON m.ins_code = s.ins_code AND m.at = s.captured_at
         """).fetchall()
-    except Exception:                                           # noqa: BLE001
+    except Exception as exc:                                    # noqa: BLE001
+        _snapshot_failed("pe", exc)
         rows = []
     finally:
         conn.close()

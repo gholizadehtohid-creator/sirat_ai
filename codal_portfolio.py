@@ -62,6 +62,12 @@ DOWNLOAD_REFUSALS_STOP = 3
 DEFAULT_HOURS = 1.5
 DEFAULT_LIMIT = 120
 
+# What main() returns when the throttle or the clock ended the pass with
+# companies left (codal_monthly.CUT_SHORT_EXIT). It returned 0 always: on
+# 2026-11-19 the pass ended "0 checked, 0 stored, 4 failed" under a 429 and
+# the evening log could not tell that from a pass that found nothing new.
+CUT_SHORT_EXIT = 3
+
 
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -280,7 +286,7 @@ def run(hours=DEFAULT_HOURS, limit=DEFAULT_LIMIT, verbose=True, client=None):
               flush=True)
 
     totals = {"checked": 0, "stored": 0, "none": 0, "failed": 0,
-              "downloads": 0}
+              "downloads": 0, "cut_short": None}
     # Searches and downloads paced apart: the two hosts are penalised apart,
     # and a good search reset the count a refused download had started.
     pace = codal_monthly.Pacer("portfolio", verbose, deadline=end)
@@ -289,10 +295,15 @@ def run(hours=DEFAULT_HOURS, limit=DEFAULT_LIMIT, verbose=True, client=None):
                                     stop_after=DOWNLOAD_REFUSALS_STOP)
     refused_in_a_row = 0
 
-    for inst in companies:
+    for index, inst in enumerate(companies):
         if (end and time.time() > end) or pace.stop or downloads.stop:
+            # Which of the two it was: the log said "time is up" for both.
+            throttled = pace.stop is True or downloads.stop is True
+            totals["cut_short"] = "%s, %d companies left" % (
+                "throttled" if throttled else "time is up",
+                len(companies) - index)
             if verbose:
-                print("portfolio: time is up", flush=True)
+                print("portfolio: %s" % totals["cut_short"], flush=True)
             break
 
         code = str(inst["ins_code"])
@@ -323,6 +334,9 @@ def run(hours=DEFAULT_HOURS, limit=DEFAULT_LIMIT, verbose=True, client=None):
             totals["failed"] += 1
             refused_in_a_row += 1
             if refused_in_a_row >= DOWNLOAD_REFUSALS_STOP:
+                totals["cut_short"] = (
+                    "the download host refused %d in a row, %d companies "
+                    "left" % (refused_in_a_row, len(companies) - index))
                 if verbose:
                     print("portfolio: the download host refused %d in a row -- "
                           "stopping until the next pass" % refused_in_a_row,
@@ -451,11 +465,11 @@ def main(argv=None):
         print("portfolio: another pass is running; nothing to do")
         return 0
     try:
-        run(hours=args.hours, limit=args.limit)
+        totals = run(hours=args.hours, limit=args.limit)
     finally:
         lock.close()
     report()
-    return 0
+    return CUT_SHORT_EXIT if totals.get("cut_short") else 0
 
 
 if __name__ == "__main__":

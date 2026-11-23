@@ -45,7 +45,13 @@ import database
 SESSIONS_PER_YEAR = 240
 FUND_RATE = 0.20                 # E27/E28's fixed-income assumption
 INDEX_FUND_DRAG = 0.015          # an index fund's fees and tracking error
-ROUND_TRIP = 0.01039
+# What a rebalance costs TODAY: every sleeve here is held as fund units, and
+# a fund unit pays no transfer tax (config.LIVE_FUND_ROUND_TRIP_PCT, 0.75%).
+# It was 0.01039, the share round trip the old backtests assumed -- a tax
+# these trades do not pay, and a commission that is no longer the rate (the
+# review of 2026-11-23). Only the history this card recomputes reads it; E27
+# and E28 keep their own figure in examples/allocation_study.py.
+ROUND_TRIP = config.LIVE_FUND_ROUND_TRIP_PCT / 100.0
 REBALANCE_SESSIONS = 60          # about three months, as E28 tested
 DRIFT_BAND_PCT = 10.0            # or sooner, when a part drifts this far
 GOLD_MIN_HISTORY = 60
@@ -54,7 +60,12 @@ GOLD_BAD_RETURN = 0.20
 PROFILES = (
     {
         "key": "balanced",
-        "label": "متعادل — پیشنهاد اصلی",
+        # Was «متعادل — پیشنهاد اصلی». "The main recommendation" claims more
+        # than E28 measured: its edge was over a fixed-income fund ASSUMED to
+        # pay 20%, and treasury bills pay about 44% today -- the card's own
+        # banner says the edge over them is unproven (2026-11-23). The label
+        # now says what the mix is; the evidence column says what was tested.
+        "label": "متعادل — ۷۰٪ سهام، ۳۰٪ طلا",
         "weights": {"equity": 70, "gold": 30, "fixed": 0},
         "evidence": "tested",
         # Effect, not a p-value (the review panel, 2026-11-11): E28's
@@ -234,15 +245,26 @@ def candidates(limit=3):
             return "fixed"
         return None
 
+    import opportunities
+
     picked = {"equity": [], "gold": [], "fixed": []}
 
     for code, symbol, name, value in sorted(rows, key=lambda r: -(r[3] or 0)):
         sleeve = sleeve_of(code, name)
-        if sleeve and len(picked[sleeve]) < limit:
-            picked[sleeve].append({"symbol": symbol, "name": name,
-                                   "value": float(value or 0)})
+        if not sleeve:
+            continue
+        item = {"symbol": symbol, "name": name, "value": float(value or 0)}
+        if sleeve == "equity":
+            item["tracks"], item["broad"] = opportunities.index_tracked(symbol)
+        picked[sleeve].append(item)
 
-    return picked
+    # The funds that follow the broad index first (most traded first within
+    # each group): by turnover alone the list led with the equal-weight fund
+    # and the top-30 fund, neither of which is the index E27 tested
+    # (opportunities.BROAD_INDEX_FUNDS, 2026-11-23).
+    picked["equity"].sort(key=lambda f: not f["broad"])
+
+    return {sleeve: items[:limit] for sleeve, items in picked.items()}
 
 
 def plan(equity=None):
@@ -284,4 +306,13 @@ def plan(equity=None):
         ],
         "evidence": ["backtest_output/E27_results.json",
                      "backtest_output/E28_results.json"],
+        # What dealing costs today, for the today card to say beside its
+        # amounts (config.LIVE_*): a fund unit pays no transfer tax.
+        "costs": {
+            "share_round_trip_pct": config.LIVE_ROUND_TRIP_PCT,
+            "fund_round_trip_pct": config.LIVE_FUND_ROUND_TRIP_PCT,
+            "buy_pct": config.LIVE_BUY_COST_PCT,
+            "share_sell_pct": config.LIVE_SELL_COST_PCT,
+            "fund_sell_pct": config.LIVE_FUND_SELL_COST_PCT,
+        },
     }

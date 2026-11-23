@@ -1180,14 +1180,26 @@ function renderTechnicalTargets(tg, signal) {
 
   // The reward/risk verdict, against the platform's own minimum. A ratio below
   // it is not a small edge, it is a trade this system would refuse to open.
+  //
+  // Read on the ratio AFTER the round trip (tg.risk_reward_net, from
+  // technical.price_targets): gross, 27 of 92 names read "above 2.0" in
+  // green and one did net of today's 1.25% (2026-11-23). The gross ratio is
+  // kept beside it -- it is the engine's own number, and the basket still
+  // selects on it.
   const rr = tg.risk_reward;
+  const hasNet = tg.risk_reward_net !== null && tg.risk_reward_net !== undefined;
+  const judged = hasNet ? tg.risk_reward_net : rr;
   const floor = tg.min_risk_reward;
-  const rrCls = (rr === null || rr === undefined) ? "neutral"
-    : (floor !== null && floor !== undefined && rr < floor) ? "bad" : "good";
-  const rrNote = (rr === null || rr === undefined) ? "بدون نسبت"
-    : (floor !== null && floor !== undefined && rr < floor)
+  const hasFloor = floor !== null && floor !== undefined;
+  const rrCls = (judged === null || judged === undefined) ? "neutral"
+    : (hasFloor && judged < floor) ? "bad" : "good";
+  const rrNote = ((judged === null || judged === undefined) ? "بدون نسبت"
+    : (hasFloor && rr !== null && rr !== undefined && rr < floor)
       ? `زیر حد ${num(floor, 1)} — این پلتفرم چنین موقعیتی را باز نمی‌کند`
-      : `بالای حد ${num(floor, 1)}`;
+      : (hasFloor && judged < floor)
+        ? `خالص زیر حد ${num(floor, 1)} — پس از کارمزد به این نسبت نمی‌رسد`
+        : `${hasNet ? "خالص " : ""}بالای حد ${num(floor, 1)}`) +
+    (hasNet ? ` · ناخالص ${num(rr, 2)}، هزینه‌ی رفت‌وبرگشت ${num(tg.cost_pct, 2)}٪` : "");
 
   const horizon = tg.expected_sessions === null || tg.expected_sessions === undefined
     ? "—" : `${tg.expected_sessions} سشن`;
@@ -1206,9 +1218,10 @@ function renderTechnicalTargets(tg, signal) {
       sub: `${signed(tg.target_2_pct, 1)} از قیمت` +
            (tg.target_2_above_wall ? " · بالای مقاومت" : "") },
     { k: "حد ضرر", v: n(tg.stop_loss),
-      sub: `${signed(-Math.abs(tg.stop_distance_pct), 1)} · ${stopSourceFa(tg.stop_source)}` },
-    { k: "سود به زیان",
-      v: `<span class="badge ${rrCls}"><span class="dot"></span>${n(rr, 2)}</span>`,
+      sub: `${signed(-Math.abs(tg.stop_distance_pct), 1)} · ${stopSourceFa(tg.stop_source)}` +
+        (tg.loss_at_stop_net_pct != null ? ` · با کارمزد ${num(tg.loss_at_stop_net_pct, 1)}٪ زیان` : "") },
+    { k: hasNet ? "سود به زیان (خالص از کارمزد)" : "سود به زیان",
+      v: `<span class="badge ${rrCls}"><span class="dot"></span>${n(judged, 2)}</span>`,
       sub: rrNote },
     { k: "افق زمانی", v: horizon, sub: horizonSub },
     { k: "نزدیک‌ترین مقاومت",
@@ -1730,7 +1743,7 @@ function renderSmartMoney(rep) {
 
   $("smartMoneyTable").innerHTML = table(
     ["#", "نماد", "امتیاز", "MFI", "P/E گروه", "ارزش بازار",
-     "ورود پول هوشمند", "مازاد بر بازار", "حمایت", "وضعیت"], body);
+     "خرید حقیقی (خالص و درشت)", "مازاد بر بازار", "حمایت", "وضعیت"], body);
 
   // The per-name sentence. Written out in full rather than hidden behind a
   // tooltip: the score is the summary, and this is the reason.
@@ -2260,7 +2273,7 @@ function showSectorMembers(sector) {
     table(
       ["نماد", "شرکت", "امتیاز بنیادی", "حکم", "P/E", "بازده سود", "ارزش معاملات", "۶۰ روزه", "کندل"],
       sector.members.map(m => [
-        m.symbol, esc(m.name || "—"),
+        esc(m.symbol), esc(m.name || "—"),
         // An unjudgeable share carries a score the model could not stand
         // behind; showing the number would rank it as if it could.
         m.scored ? m.fundamental_score : "—",
@@ -2766,7 +2779,7 @@ function renderScreen(rep) {
     $("fundBreakdownTable").innerHTML = table(
       ["نماد", ...FUND_COMPONENTS, "جمع", "پوشش"],
       rows.map(r => [
-        r.symbol,
+        esc(r.symbol),
         ...FUND_COMPONENTS.map(k => r.fundamental_breakdown?.[k] ?? "—"),
         r.fundamental_score,
         `${Math.round((r.weight_covered || 0) * 100)}٪`
@@ -2836,7 +2849,7 @@ function renderScreen(rep) {
   const sample = rep.insufficient_sample || [];
   $("excludedTable").innerHTML = sample.length
     ? table(["نماد", "شرکت", "تابلو", "دلیل"],
-        sample.map(r => [r.symbol, esc((r.name || "").slice(0, 34)), r.board || "—",
+        sample.map(r => [esc(r.symbol), esc((r.name || "").slice(0, 34)), esc(r.board || "—"),
           esc((r.reasons || [])[0] || "—")]))
     : '<div class="empty">چیزی کنار گذاشته نشد</div>';
 
@@ -3012,11 +3025,30 @@ function renderPortfolio(rep) {
       `. انتخاب سهم در آزمون از انتخاب تصادفی بهتر نبود (بدتر از ${record.map(w => num(100 - w.selection_percentile, 0)).join(" و ")}٪ سبدهای تصادفی). ` +
       "این فهرست نامزدهای بررسی است، نه توصیه‌ی خرید؛ نگه‌داشتن خود بازار و طلا در آزمون‌ها نتیجه‌ی بهتری داشته است.<br>"
     : "";
+  // Which session the prices are from, what a round trip costs, and what a
+  // newer stored market watch says of the entry ranges (advisor._live_view,
+  // 2026-11-23). The card gave closes, entry ranges and R/R with no date and
+  // no cost: on the evening of 11-23 they were the 11-22 closes, and eight
+  // of nine names had already traded outside the range printed for them.
+  const costs = basket.costs || {};
+  const dateText = basket.data_as_of
+    ? `<strong>قیمت‌ها، محدوده‌های ورود و حد ضررها از بسته‌ی جلسه‌ی ${faDay(basket.data_as_of, true)} است.</strong> ` +
+      (basket.watch_newer
+        ? `<strong>تابلوی ذخیره‌شده‌ی ${faDay(basket.watch_as_of, true)} تازه‌تر است:</strong> ` +
+          `${num(basket.watch_outside_entry, 0)} نماد از ${num(basket.watch_checked, 0)} در آن بیرون از محدوده‌ی ورودِ این جدول معامله شد` +
+          (basket.watch_at_limit ? ` (${num(basket.watch_at_limit, 0)} در سقف یا کف دامنه)` : "") + ". "
+        : "")
+    : "";
+  const costText = costs.round_trip_pct != null
+    ? `پس از هزینه‌ی رفت‌وبرگشت ${num(costs.round_trip_pct, 2)}٪ (خرید ${num(costs.buy_pct, 2)}٪، فروش ${num(costs.sell_pct, 2)}٪ با مالیات)، ` +
+      `${num(totals.net_below_floor, 0)} از ${num(totals.positions, 0)} موقعیت به سود به زیانِ ${num(costs.min_risk_reward, 1)} نمی‌رسد. `
+    : "";
+  const riskAll = totals.total_risk_net_pct != null ? totals.total_risk_net_pct : totals.total_risk_pct;
   banner("portfolioStatus", "portfolioStatusText", record.length ? "" : "is-live",
-    recordText +
+    recordText + dateText +
     `<strong>${totals.positions} موقعیت در ${totals.sectors} صنعت (کاغذی).</strong> ` +
-    `${basket.candidates} نماد به حد نصاب امتیاز ${settings.min_score} رسیدند. ` +
-    `ریسک کل اگر همه‌ی حد ضررها در قیمت خودشان اجرا شوند: دست‌کم ${totals.total_risk_pct}٪ سرمایه ` +
+    `${basket.candidates} نماد به حد نصاب امتیاز ${settings.min_score} رسیدند. ` + costText +
+    `ریسک کل اگر همه‌ی حد ضررها در قیمت خودشان اجرا شوند، با کارمزد: دست‌کم ${riskAll}٪ سرمایه ` +
     "(در صف فروش و چند روز منفی پشت سر هم، زیان واقعی بیشتر است). " +
     `<span class="hint-inline">— ${engine}</span>`);
 
@@ -3036,8 +3068,10 @@ function renderPortfolio(rep) {
     },
     {
       k: "ریسک کل",
-      v: `<span class="down">${numAsSent(totals.total_risk_pct)}٪</span>`,
-      sub: "اگر همه‌ی حد ضررها بخورند"
+      v: `<span class="down">${numAsSent(riskAll)}٪</span>`,
+      sub: totals.total_risk_net_pct != null
+        ? `اگر همه‌ی حد ضررها بخورند، با کارمزد (بدون آن ${numAsSent(totals.total_risk_pct)}٪)`
+        : "اگر همه‌ی حد ضررها بخورند"
     },
     {
       k: "نوسان سبد",
@@ -3054,8 +3088,8 @@ function renderPortfolio(rep) {
 
   $("portfolioTable").innerHTML = table(
     ["#", "نماد", "شرکت", "صنعت", "بنیادی", "تکنیکال", "ترکیبی",
-     "قیمت", "محدوده‌ی ورود", "حد ضرر", "حد سود", "R/R",
-     "تعداد سهم", "ارزش", "وزن", "ریسک", "قید"],
+     "قیمت", "محدوده‌ی ورود", "حد ضرر", "حد سود", "R/R (خالص از کارمزد)",
+     "تعداد سهم", "ارزش", "وزن", "ریسک با کارمزد", "قید"],
     positions.map(p => [
       p.rank,
       `<strong>${esc(p.symbol)}</strong>`,
@@ -3069,14 +3103,23 @@ function renderPortfolio(rep) {
       p.technical_score ?? "—",
       `<strong>${p.combined_score}</strong>`,
       num(p.close, 0),
-      `${num(p.entry_low, 0)} – ${num(p.entry_high, 0)}`,
+      // The newer market watch against the range printed from the last bar.
+      `${num(p.entry_low, 0)} – ${num(p.entry_high, 0)}` +
+        (p.watch_state && p.watch_state !== "inside"
+          ? ` <span class="down" title="آخرین قیمت در تابلوی تازه‌تر">تابلو ${num(p.watch_last, 0)} — ${
+            { limit_up: "سقف دامنه", limit_down: "کف دامنه", above_entry: "بالای محدوده", below_entry: "زیر محدوده" }[p.watch_state] || ""}</span>`
+          : ""),
       `<span class="down">${num(p.stop_price, 0)}</span>`,
       `<span class="up">${num(p.target_price, 0)}</span>`,
-      p.risk_reward != null ? `1:${p.risk_reward}` : "—",
+      // Gross is the engine's ratio; net is what is left after the round trip.
+      (p.risk_reward != null ? `1:${p.risk_reward}` : "—") +
+        (p.risk_reward_net != null
+          ? ` <span class="${p.net_below_floor ? "down" : "hint"}" title="پس از کسر هزینه‌ی رفت‌وبرگشت">(خالص ${num(p.risk_reward_net, 2)})</span>`
+          : ""),
       (p.shares ?? 0).toLocaleString(),
       money(p.position_value),
       p.weight_pct != null ? `${p.weight_pct}٪` : "—",
-      p.risk_pct != null ? `${p.risk_pct}٪` : "—",
+      p.risk_pct_net != null ? `${p.risk_pct_net}٪` : p.risk_pct != null ? `${p.risk_pct}٪` : "—",
       esc(bindingLabel(p.scaled_by || p.bound_by))
     ])
   );
@@ -3138,10 +3181,20 @@ function renderRisk(riskRep, basket) {
         "میانگین زیان وقتی از VaR رد شود"],
       ["بدترین جلسه‌ی مشاهده‌شده",
         varRep.worst_day_pct != null ? `${numAsSent(varRep.worst_day_pct)}٪` : "—",
-        `در ${varRep.sessions || 0} جلسه`],
+        `در ${varRep.sessions || 0} جلسه — دامنه‌ی نوسان سقف این عدد است`],
+      // Beside the one-day figures the band caps: what five sessions in a
+      // row cost over the same window (risk.worst_run, 2026-11-23).
+      [`بدترین ${num((riskRep.worst_run || {}).sessions || 5, 0)} جلسه‌ی پیاپی`,
+        (riskRep.worst_run || {}).worst_pct != null
+          ? `${numAsSent(riskRep.worst_run.worst_pct)}٪ (${money(riskRep.worst_run.worst_rials)})` : "—",
+        (riskRep.worst_run || {}).to_date
+          ? `تا ${faDay(riskRep.worst_run.to_date, true)} — زیانی که در صف فروش نمی‌شود از آن بیرون رفت`
+          : "زیانی که در صف فروش نمی‌شود از آن بیرون رفت"],
       [`بتا نسبت به ${esc(riskRep.benchmark || "شاخص")}`, numAsSent(beta.beta),
         beta.r_squared != null ? `R² ${numAsSent(beta.r_squared)}` : "حساسیت به بازار"],
-      ["حداکثر افت تاریخی",
+      // Of the window measured, not of history: said in the label.
+      [(riskRep.window || {}).sessions
+        ? `حداکثر افت در ${num(riskRep.window.sessions, 0)} جلسه‌ی اخیر` : "حداکثر افت تاریخی",
         dd.max_drawdown_pct != null ? `${numAsSent(dd.max_drawdown_pct)}٪` : "—",
         dd.peak_date ? `${faDay(dd.peak_date, true)} → ${faDay(dd.trough_date, true)}` : "قله تا کف"],
       ["تعداد مؤثر موقعیت‌ها", numAsSent(conc.effective_positions),
@@ -3264,6 +3317,11 @@ function bootStep(p, name) {
   const step = (p.steps || {})[name] || {};
   const st = (p.status || {})[name] || {};
   const item = (p.overall || {}).item;
+  // Indices, bars and flow gain a row per session: "behind" for them is a
+  // session missing or incomplete, whatever the last attempt's outcome. A
+  // fetch that brought 469 of 751 names' flow drew a green pill, and an
+  // index held back by a recent attempt read as current (2026-11-23).
+  const lagging = !!(st.session && st.behind);
 
   if (p.running && p.current === name) {
     return {
@@ -3276,12 +3334,13 @@ function bootStep(p, name) {
   switch (step.action) {
     case "fetched":
       return {
-        cls: "done",
+        cls: lagging ? "warn" : "done",
         count: step.seconds != null ? `${step.seconds}s` : "",
         note: step.detail || st.detail || "دریافت شد"
       };
     case "kept":
-      return { cls: "done", count: "", note: step.detail || "به‌روز بود" };
+      return { cls: lagging ? "warn" : "done", count: "",
+               note: step.detail || "به‌روز بود" };
     case "failed":
       return { cls: "failed", count: "", note: step.detail || "ناموفق" };
     case "skipped":
@@ -3297,7 +3356,7 @@ function bootStep(p, name) {
 
   // Never run this session: report what is stored, not a fake outcome.
   return {
-    cls: st.needs_fetch ? "warn" : st.present ? "done" : "queued",
+    cls: (st.needs_fetch || lagging) ? "warn" : st.present ? "done" : "queued",
     count: "",
     note: st.detail || "هنوز بررسی نشده"
   };
@@ -3321,6 +3380,14 @@ function renderBootstrap(p) {
   const fill = $("loadBar");
   const failed = order.filter(n => ((p.steps || {})[n] || {}).action === "failed");
   const missing = order.filter(n => ((p.status || {})[n] || {}).needs_fetch);
+  // Behind, but not to be fetched yet: the exchange has not published the
+  // session in full and the last attempt is too recent to repeat. The strip
+  // keyed on needs_fetch alone and said «همه‌ی داده‌ها موجود و به‌روز است»
+  // on the evening of 2026-11-23 with that day's session missing.
+  const waiting = order.filter(n => {
+    const s = (p.status || {})[n] || {};
+    return s.session && s.behind && !s.needs_fetch;
+  });
 
   bar.classList.remove("is-done", "is-error", "is-behind", "is-indeterminate");
 
@@ -3371,6 +3438,20 @@ function renderBootstrap(p) {
       stale.length ? `کهنه: ${names(stale)}` : ""
     ].filter(Boolean).join("  ·  ") + " — دکمه‌ی «دریافت داده‌های ناقص یا کهنه» را بزنید.";
 
+  } else if (waiting.length && !failed.length) {
+    const ready = order.length - waiting.length;
+    const tries = waiting
+      .map(n => ((p.status || {})[n] || {}).next_try).filter(Boolean).sort();
+    fill.style.width = `${(ready / Math.max(order.length, 1)) * 100}%`;
+    bar.classList.add("is-behind");
+    bar.setAttribute("aria-valuenow", String(Math.round(ready / Math.max(order.length, 1) * 100)));
+    $("loadPct").textContent = `${ready}/${order.length}`;
+    $("loadStage").textContent =
+      `داده‌ی آخرین جلسه هنوز کامل نیست: ` +
+      waiting.map(n => shortLabel(labels[n] || n)).join("، ") +
+      ` — بورس آن را کامل منتشر نکرده (یا امروز بازار تعطیل بوده) و تلاش قبلی تازه است` +
+      (tries.length ? `؛ تلاش بعدی از ساعت ${tehranClock(tries[0])}.` : ".");
+
   } else {
     fill.style.width = "100%";
     bar.classList.add(failed.length ? "is-error" : "is-done");
@@ -3384,7 +3465,7 @@ function renderBootstrap(p) {
   // Recede only when there is genuinely nothing to look at. A panel reporting
   // missing data or a failed stage should not be the faintest thing on screen.
   $("loadPanel").classList.toggle(
-    "is-idle", !running && !missing.length && !failed.length);
+    "is-idle", !running && !missing.length && !failed.length && !waiting.length);
 
   const elapsed = clock(overall.elapsed_seconds);
   $("loadElapsed").textContent = elapsed
@@ -3394,6 +3475,53 @@ function renderBootstrap(p) {
     ? p.log.map(l => `${tehranClock(l.at)}  ${l.message}`).join("\n")
     : "در این نوبت چیزی دریافت نشده است.";
 }
+
+/* ---------- system health (/api/health, health.py) ----------
+   What ran and what did not: the scheduled tasks' done lines, sessions
+   without an intraday capture, missed forward-log entries, the backup's
+   age, the power source. Until 2026-11-23 none of it was on the page: five
+   evenings with no run and eight sessions without a capture showed nowhere.
+
+   The server decides the levels and writes the sentences; this only draws
+   them. All well is one quiet line; anything warn or bad gets a row with
+   what to do. A server without the route (a panel started before this
+   existed) leaves the card hidden rather than alarming. */
+
+const HEALTH_POLL = 5 * 60 * 1000;
+
+function renderHealth(rep) {
+  const card = $("healthCard");
+  if (!card || !rep) return;
+
+  const rows = (rep.items || [])
+    .filter(i => i.level === "warn" || i.level === "bad")
+    .sort((a, b) => (b.level === "bad") - (a.level === "bad"));
+
+  card.hidden = false;
+  card.classList.toggle("is-quiet", !rows.length);
+  card.classList.toggle("is-bad", rows.some(i => i.level === "bad"));
+  $("healthSummary").textContent = rep.summary || "";
+  $("healthList").innerHTML = rows.map(i =>
+    `<li class="${i.level === "bad" ? "bad" : "warn"}">` +
+    `<span class="what">${esc(i.text || "")}</span>` +
+    (i.action ? `<span class="todo">${esc(i.action)}</span>` : "") +
+    `</li>`).join("");
+}
+
+async function loadHealth() {
+  if (!$("healthCard") || document.hidden) return;
+  try {
+    renderHealth(await getJSON("/api/health"));
+  } catch (err) {
+    // Not a finding about the system: the card keeps what it last showed.
+  }
+}
+
+loadHealth();
+setInterval(loadHealth, HEALTH_POLL);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) loadHealth();
+});
 
 function renderTasks() {
   if (!$("taskSteps")) return;
@@ -3848,8 +3976,11 @@ function hurdleCell(h) {
   if (!h || h.required_growth_pct == null) return "—";
   if (h.required_growth_pct <= 0) return '<span class="hint">لازم نیست</span>';
   const ok = h.cushion_pct != null && h.cushion_pct >= 0;
+  // Set against what is paid out, when an AGM is on record (the earnings
+  // kept back are what pays for the growth).
   return `${num(h.required_growth_pct, 0)}٪` + (h.actual_growth_pct == null ? "" :
-    ` <span class="${ok ? "up" : "down"}">(فعلی ${num(h.actual_growth_pct, 0)}٪)</span>`);
+    ` <span class="${ok ? "up" : "down"}">(فعلی ${num(h.actual_growth_pct, 0)}٪)</span>`) +
+    (h.payout_pct == null ? "" : ` <span class="hint">با تقسیم سود ${num(h.payout_pct, 0)}٪</span>`);
 }
 
 // Whether the price the multiples rest on can be dealt at (trading_read in
@@ -3871,8 +4002,11 @@ function tradingCell(t) {
 // estimates of the same kind (months known, margin band).
 function rangeCell(rg) {
   if (!rg) return "—";
+  // What the band was measured on: the statement method on its own past, the
+  // monthly method by emulation, or a year no statement of which exists yet.
+  const on = {monthly: "شبیه‌سازی روش گزارش ماهانه روی", next_year: "سال هنوز شروع‌نشده؛"}[rg.basis] || "";
   return `${num(rg.eps_low, 0)} تا ${num(rg.eps_high, 0)} ریال` +
-    ` <span class="hint">(خطای میانه ${num(rg.median_abs_error_pct, 0)}٪ در ${num(rg.n, 0)} برآورد گذشته` +
+    ` <span class="hint">(خطای میانه ${num(rg.median_abs_error_pct, 0)}٪ در ${on} ${num(rg.n, 0)} برآورد گذشته` +
     `${rg.band_label ? "، حاشیه‌ی " + esc(rg.band_label) : ""})</span>` +
     (rg.wide ? ' <span class="down">پراکنده</span>' : "");
 }
@@ -3881,27 +4015,60 @@ function rangeCell(rg) {
 function fairCell(fv) {
   if (!fv || fv.central == null) return "—";
   if (fv.basis === "nav") {
-    return `${num(fv.central, 0)} ریال (ارزش خالص دارایی هر سهم) ${signed(fv.upside_pct, 0)}`;
+    // A NAV with unlisted holdings at cost is a floor, and holdings trade
+    // below NAV as a rule: the price's share of it, never an "upside".
+    return `${num(fv.central, 0)} ریال <span class="hint">(ارزش خالص دارایی هر سهم${fv.floor ? "؛ کف، غیربورسی‌ها به بهای تمام‌شده" : ""})</span>` +
+      (fv.price_to_value == null ? "" : ` — قیمت ${num(fv.price_to_value * 100, 0)}٪ آن است`);
   }
   const by = {sector: "P/E صنعت", own: "P/E خود سهم", market: "P/E بازار"}[fv.central_basis] || "";
   return `${num(fv.central, 0)} ریال <span class="hint">(${by} ${num(fv.central_multiple, 2)})</span> ` +
     `${signed(fv.upside_pct, 0)}` +
-    ` <span class="hint">— بازه ${num(fv.low, 0)} تا ${num(fv.high, 0)}؛ نشانه‌ی خرید نیست (E30 تا E33)</span>`;
+    ` <span class="hint">— بازه ${num(fv.low, 0)} تا ${num(fv.high, 0)}` +
+    `${fv.disagree ? "؛ P/E صنعت و خود سهم از هم دورند، مرکز قطعی نیست" : ""}؛ نشانه‌ی خرید نیست (E30 تا E33)</span>`;
 }
 
 // What-ifs on the exchange-centre rate; the fit is weak and says so.
 function dollarCell(d) {
   if (!d || !(d.scenarios || []).length) return "—";
-  const parts = d.scenarios.map(s => `${signed(s.shock_pct, 0)}: ${num(s.eps, 0)}`);
-  return `سود هر سهم — ${parts.join(" · ")}` +
-    ` <span class="hint">(نیما ${num(d.nima, 0)} ریال؛ R² ${num((d.sensitivity || {}).r2, 2)}` +
-    `${d.weak ? "، رابطه ضعیف: فقط «اگر چنین شود»" : ""})</span>`;
+  // Two readings per scenario: the measured (weak) slope, and a business
+  // priced wholly in dollars.
+  const parts = d.scenarios.map(s => `نیما ${signed(s.shock_pct, 0)}: سود سال ${signed(s.change_pct, 1)}` +
+    (s.full_change_pct == null ? "" : ` تا ${signed(s.full_change_pct, 1)}`));
+  return parts.join(" · ") +
+    ` <span class="hint">(عدد اول با رابطه‌ی گذشته، R² ${num((d.sensitivity || {}).r2, 2)}` +
+    `${d.weak ? " — ضعیف" : ""}؛ عدد دوم اگر شرکت کاملاً دلاری باشد. برآورد پایه فرضی درباره‌ی دلار ندارد)</span>`;
+}
+
+// The report takes 3 to 11 seconds to build, and a new tab that stays
+// blank that long reads as broken (the UI/UX review, 2026-11-23): the tab
+// opens at once saying what is happening, then goes to the PDF.
+function openReport(symbol) {
+  const sym = (symbol || "").trim();
+  if (!sym) return false;
+  const url = `/api/report?symbol=${encodeURIComponent(sym)}`;
+  const tab = window.open("", "_blank");
+  if (!tab) { location.href = url; return true; }      // popups blocked
+  try {
+    tab.document.title = `گزارش ${sym}`;
+    tab.document.body.innerHTML =
+      `<p dir="rtl" style="font-family:Tahoma,sans-serif;padding:32px;color:#475467">` +
+      `گزارش «${esc(sym)}» در حال ساخت است؛ چند ثانیه طول می‌کشد…</p>`;
+  } catch (e) { /* the tab still navigates */ }
+  tab.location.href = url;
+  return true;
 }
 
 function openOutlookPdf() {
-  const sym = ($("outlookSymbol").value || "").trim();
-  if (!sym) { $("outlookSymbol").focus(); return; }
-  window.open(`/api/report?symbol=${encodeURIComponent(sym)}`, "_blank", "noopener");
+  if (!openReport($("outlookSymbol").value)) $("outlookSymbol").focus();
+}
+
+// The header's symbol box: the same two actions from anywhere on the page.
+function quickLookup() {
+  const sym = ($("quickSymbolInput").value || "").trim();
+  if (!sym) { $("quickSymbolInput").focus(); return; }
+  $("outlookSymbol").value = sym;
+  gotoCard("analysis:outlookSymbol");
+  lookupOutlook();
 }
 
 function renderOutlookDetail(r) {
@@ -4116,7 +4283,11 @@ function renderHoldings(rep) {
   tiles("holdingsKpis", [
     { k: "ارزش کل فهرست", v: rep.total_value ? money(rep.total_value) : "—",
       sub: rep.total_value ? "ریال، به آخرین قیمت پایانی" : "تعداد سهم وارد نشده" },
-    { k: "نمادها", v: num(rows.length, 0), sub: rep.as_of ? `قیمت‌ها تا ${faDay(rep.as_of, true)}` : "" },
+    // The newest price dates the book; the lines priced earlier are counted
+    // beside it and named in the notes below (2026-11-23).
+    { k: "نمادها", v: num(rows.length, 0),
+      sub: rep.as_of ? `قیمت‌ها تا ${faDay(rep.as_of, true)}` +
+        ((rep.stale || []).length ? ` — ${num(rep.stale.length, 0)} نماد با قیمت قدیمی‌تر` : "") : "" },
     { k: "با هشدار بنیادی", v: num(flagged, 0), sub: "از کارت چشم‌انداز بنیادی" },
     { k: "نکته‌ها", v: num(warn.length, 0), sub: warn.length ? "فهرست زیر" : "موردی نیست" },
   ]);
@@ -4128,6 +4299,13 @@ function renderHoldings(rep) {
     if (r.error) {
       return [`<strong>${esc(r.symbol)}</strong>`, `<span class="down">${esc(r.error)}</span>`,
               "—", "—", "—", "—", "—", "—", "—", "—"];
+    }
+    if (r.cash) {
+      // «نقد <مبلغ>»: money waiting in the account, counted in the
+      // fixed-income sleeve at face value (holdings.py, 2026-11-23).
+      return [`<strong>${esc(r.symbol)}</strong> <span class="hint">وجه نقد — در بخش درآمد ثابت</span>`,
+              "—", "—", "—", r.value == null ? "—" : money(r.value),
+              r.weight_pct == null ? "—" : `${num(r.weight_pct, 1)}٪`, "—", "—", "—", "—"];
     }
     if (r.bill) {
       // Priced on the server from the bills card's last read; the bills read
@@ -4202,6 +4380,8 @@ function renderHoldingsRisk(risk) {
   const v = risk.var || {};
   const dd = risk.drawdown || {};
   const b = risk.beta || {};
+  const run = risk.worst_run || {};
+  const win = risk.window || {};
   tiles("holdingsRiskKpis", [
     { k: "نوسان سالانه", v: vol.annualised_pct == null ? "—" : `${num(vol.annualised_pct, 0)}٪`,
       sub: vol.undiversified_pct == null ? "" : `اگر همه هم‌جهت بودند ${num(vol.undiversified_pct, 0)}٪` },
@@ -4209,14 +4389,25 @@ function renderHoldingsRisk(risk) {
       sub: "۱ یعنی هم‌اندازه‌ی بازار" },
     { k: "زیان یک روز بد (۹۵٪)", v: v.historical_rials == null ? "—" : `${money(v.historical_rials)} ریال`,
       sub: v.historical_pct == null ? ""
-        : `${num(Math.abs(v.historical_pct), 1)}٪ سبد؛ بدترین روز ${num(Math.abs(v.worst_day_pct), 1)}٪` },
-    { k: "بیشترین افت", v: dd.max_drawdown_pct == null ? "—" : `${num(Math.abs(dd.max_drawdown_pct), 0)}٪`,
-      sub: dd.current_pct == null ? ""
-        : (dd.current_pct < -0.5 ? `اکنون ${num(Math.abs(dd.current_pct), 0)}٪ زیر قله` : "اکنون نزدیک قله") },
+        : `${num(Math.abs(v.historical_pct), 1)}٪ سبد؛ بدترین روز ${num(Math.abs(v.worst_day_pct), 1)}٪ — دامنه‌ی نوسان سقف این عدد است` },
+    // The loss that cannot be left in one day: a share's one-day figure is
+    // the band itself, its worst five sessions were 4.6 times that (the
+    // median of the 150 most-traded shares, 2026-11-23).
+    { k: `بدترین ${num(run.sessions || 5, 0)} جلسه‌ی پیاپی`,
+      v: run.worst_pct == null ? "—" : `${num(Math.abs(run.worst_pct), 1)}٪`,
+      sub: run.worst_rials == null ? "" : `${money(run.worst_rials)} ریال` +
+        (run.to_date ? ` — تا ${faDay(run.to_date, true)}` : "") },
+    // "Max drawdown" of WHAT window: it read -13% beside the allocation
+    // card's -41% for the same mix, with nothing saying it was 289 sessions.
+    { k: win.sessions ? `بیشترین افت در ${num(win.sessions, 0)} جلسه‌ی اخیر` : "بیشترین افت",
+      v: dd.max_drawdown_pct == null ? "—" : `${num(Math.abs(dd.max_drawdown_pct), 0)}٪`,
+      sub: (win.from ? `از ${faDay(win.from, true)}؛ ` : "") + (dd.current_pct == null ? ""
+        : (dd.current_pct < -0.5 ? `اکنون ${num(Math.abs(dd.current_pct), 0)}٪ زیر قله` : "اکنون نزدیک قله")) },
   ]);
   const notes = [`${num(risk.sessions, 0)} جلسه‌ی مشترک، ${num(risk.names_measured, 0)} نماد` +
     (risk.measured_pct != null && risk.measured_pct < 99.5
       ? ` — فقط ${num(risk.measured_pct, 0)}٪ ارزش سبد؛ این اعداد ریسک همان بخش است` : "")];
+  if (risk.price_band_warning) notes.push(esc(risk.price_band_warning));
   if ((risk.proxied || []).length) {
     notes.push(`صندوق بدون سابقه‌ی روزانه، به جای آن: ${esc(risk.proxied.join("، "))}`);
   }
@@ -4470,6 +4661,102 @@ function capRows(containerId, keep) {
    fills it today. Facts only: weights from the tested allocation (E27/E28),
    instruments from fund NAV discounts and treasury-bill yields. */
 
+// The fund to name for a purchase of `order` rials, by the rule of
+// opportunities.pick_fund (change both together): not a suspect NAV, not last
+// traded at its upper limit (a buy queue -- the band, not the market, made
+// that discount), and with a day's traded value that carries the order. For
+// the equity sleeve a fund that tracks the broad index comes first; another
+// is offered only when no tracker can be bought, and is said not to be one.
+// Until 2026-11-23 this was "the first fund that is not suspect": the
+// equal-weight fund, locked at +3.00%, could be named for the TEDPIX sleeve.
+//
+// An order too large for any right fund's day names the most traded of them
+// with `split` -- the same fund over several sessions is the same exposure,
+// a different index is not. `fallback` (not a tracker) is the last resort.
+function pickFund(items, order, needBroad, share) {
+  const skipped = [], able = [], thin = [];
+  const value = f => Number(f.traded_value) || 0;
+  (items || []).forEach(f => {
+    if (f.suspect) return;
+    if (f.locked === "buy") {
+      skipped.push({ symbol: f.symbol, broad: !!f.broad, why: "در سقف دامنه‌ی نوسان — صف خرید" });
+    } else if (order > 0 && value(f) * share < order) {
+      skipped.push({ symbol: f.symbol, broad: !!f.broad, why: "ارزش معاملات روزش برای این مبلغ کم است" });
+      thin.push(f);
+    } else {
+      able.push(f);
+    }
+  });
+  // Only what was passed over on the way to THIS fund is worth a line.
+  const answer = (fund, fallback, split, broadOnly) => ({
+    fund, fallback, split,
+    skipped: skipped.filter(s => s.symbol !== (fund || {}).symbol && (s.broad || !broadOnly)),
+  });
+  const byValue = (a, b) => value(b) - value(a);
+  const right = needBroad ? able.filter(f => f.broad) : able;
+  if (right.length) return answer(right[0], false, false, needBroad);
+  const rightThin = thin.filter(f => f.broad || !needBroad).sort(byValue);
+  if (rightThin.length) return answer(rightThin[0], false, true, needBroad);
+  if (needBroad && (able.length || thin.length)) {
+    return able.length ? answer(able[0], true, false, false)
+      : answer(thin.slice().sort(byValue)[0], true, true, false);
+  }
+  return answer(null, false, false, false);
+}
+
+// The whole book's instruction as numbers. `mine` is sleevesOf(); `weights`
+// is {sleeve: target %}. One sleeve past the band sends every sleeve back to
+// target (the allocation's rule) -- but a sale is capped at what can be sold
+// in that sleeve today, cash there is spent before anything is sold, and the
+// purchases are scaled down to the money those sales raise. Before
+// 2026-11-23 a book with a halted name and one in a sell queue was told to
+// sell 14.7bn rials (5.1bn of it dealable) and to buy the full 14.7bn.
+function todayOrders(mine, weights, band) {
+  const base = mine.total;
+  const keys = Object.keys(weights);
+  const small = base * 0.005;
+  const nowPct = k => base ? (mine.sleeves[k] || 0) / base * 100 : 0;
+  const rebalance = keys.some(k => Math.abs(nowPct(k) - weights[k]) > band);
+  const orders = {};
+  let raised = 0, wanted = 0;
+  keys.forEach(k => {
+    const gap = base * weights[k] / 100 - (mine.sleeves[k] || 0);
+    const o = orders[k] = { now: nowPct(k), gap, act: "hold", amount: 0, short: 0, cash: 0 };
+    if (!rebalance) return;
+    if (gap < 0) {
+      o.act = "sell";
+      o.amount = Math.min(-gap, mine.sellable[k] || 0);
+      o.short = -gap - o.amount;
+      o.cash = Math.min(o.amount, mine.cash[k] || 0);
+      raised += o.amount;
+    } else {
+      o.act = "buy";
+      o.amount = gap;
+      wanted += gap;
+    }
+  });
+  const scale = wanted > 0 ? Math.min(1, raised / wanted) : 1;
+  keys.forEach(k => {
+    const o = orders[k];
+    if (o.act === "buy") {
+      o.short = o.amount * (1 - scale);
+      o.amount = o.amount * scale;
+    }
+    // Too small to trade: "nothing to do", unless what is missing is not
+    // small -- then the instruction is withheld and the card says why.
+    if (o.act !== "hold" && o.amount < small) {
+      o.act = o.short >= small ? `${o.act}-blocked` : "none";
+    }
+  });
+  return { rebalance, orders, raised, wanted, scale };
+}
+
+// About how many units a rial amount is, where a price is known.
+function todayUnits(amount, price) {
+  const n = price > 0 ? Math.floor(amount / price) : 0;
+  return n > 0 ? ` <span class="hint">≈ ${num(n, 0)} واحد به قیمت ${num(price, 0)}</span>` : "";
+}
+
 function renderToday() {
   const rep = state.allocation;
   const opp = state.opportunities;
@@ -4510,7 +4797,10 @@ function renderToday() {
   const funds = (opp && opp.funds) || {};
   const bills = ((opp && opp.bills) || {}).bills || [];
 
-  const cheapest = (sleeve) => (funds[sleeve] || []).find(f => !f.suspect);
+  // The fund to name for a purchase of `order` rials: one that can be bought
+  // today and, for the equity sleeve, one that tracks the broad index.
+  const share = (opp && opp.limits && opp.limits.max_order_share_of_day) || 0.1;
+  const pickFor = (sleeve, order) => pickFund(funds[sleeve], order, sleeve === "equity", share);
 
   // What the empty cell means: the read failed, or finished with nothing for
   // this sleeve (TSETMC unreachable answers 200 with empty lists), or is still
@@ -4549,43 +4839,73 @@ function renderToday() {
   // "buy 5 billion" with no sale to fund it (the full test). The rule: when
   // any sleeve is past the band, every sleeve goes back to target -- the
   // sales then pay for the purchases, since the base is the sleeves' total.
+  //
+  // The sales are the ones that can HAPPEN (todayOrders, 2026-11-23): a
+  // halted holding or one locked at its lower limit is not sold, and the
+  // purchases shrink to what the possible sales raise.
   const nowPct = (k) => base ? (own[k] || 0) / base * 100 : 0;
-  const rebalance = own && !blocked && shown.some(([k, w]) => Math.abs(nowPct(k) - w) > band);
-  const heldIn = (sleeve) => ((book && book.rows) || [])
-    .filter(r => r.sleeve === sleeve && r.quantity && !r.error).map(r => r.symbol);
+  const plan = own && !blocked ? todayOrders(mine, weights, band) : null;
+  // What a sale in a sleeve can come from: the reader's holdings there that
+  // can be sold today (sleevesOf), with a price for a unit count.
+  const heldIn = (sleeve) => (mine && mine.saleable[sleeve]) || [];
 
   const items = shown.map(([sleeve, w]) => {
-    let pick = "", why = "";
+    const o = plan ? plan.orders[sleeve] : null;
+    // The rials this sleeve is to buy -- the order on the reader's own book,
+    // the example amount without one. The fund is chosen FOR that amount.
+    const order = o ? (o.act === "buy" ? o.amount : 0)
+      : Number((profile.amounts || {})[sleeve]) || 0;
+    let pick = "", why = "", price = 0;
     if (sleeve === "gold" || sleeve === "equity") {
-      const f = cheapest(sleeve);
+      const chosen = pickFor(sleeve, order);
+      const f = chosen.fund;
       if (f) {
         pick = `<strong>${esc(f.symbol)}</strong>`;
-        why = `${signed(f.discount_pct, 1)} نسبت به NAV — ارزان‌ترین صندوق پرمعامله‌ی این بخش`;
+        price = Number(f.close) || 0;
+        why = `${signed(f.discount_pct, 1)} نسبت به NAV` +
+          (f.price_date ? `، قیمت ${faDay(f.price_date)}` : "") +
+          (sleeve !== "equity" ? " — ارزان‌ترین صندوق پرمعامله‌ی این بخش که امروز می‌شود خرید"
+            : chosen.fallback
+              ? ` — <strong>ردیاب شاخص کل نیست</strong>${f.tracks ? ` (${esc(f.tracks)})` : ""}؛ صندوق ردیابی که امروز بشود خرید پیدا نشد`
+              : " — ارزان‌ترین صندوقِ ردیاب شاخص کل که امروز می‌شود خرید");
+        if (chosen.split) {
+          why += ` <strong>این مبلغ بیش از ${num(share * 100, 0)}٪ ارزش معاملات یک روزِ آن است (${money(f.traded_value)} ریال) — خرید را در چند روز پخش کنید.</strong>`;
+        }
+      } else if ((funds[sleeve] || []).length) {
+        why = "هیچ صندوقی از این بخش امروز قابل خرید نیست";
+      }
+      if (chosen.skipped.length) {
+        why += ` <span class="hint">کنار گذاشته شد: ${chosen.skipped.map(s => `${esc(s.symbol)} (${esc(s.why)})`).join("، ")}</span>`;
       }
     } else if (sleeve === "fixed") {
       // The server's pick (opportunities.parking_bill): a fresh price, 90+
       // days, the most traded -- not the top of a list sorted by yield,
       // whose head was often days from maturity or priced on a stale close.
       const b = (opp && opp.bills && opp.bills.parking) || null;
-      const f = cheapest("fixed");
+      const f = pickFor("fixed", order).fund;
       if (b) {
         pick = `<strong>${esc(b.symbol)}</strong> (اخزا)`;
+        price = Number(b.price) || 0;
         why = `${num(b.ytm_pct, 1)}٪ سالانه تا ${esc(b.maturity_jalali || b.maturity)}، اگر تا سررسید نگه دارید — ثابت به ریال، نه واقعی`;
       } else if (f) {
         pick = `<strong>${esc(f.symbol)}</strong>`;
+        price = Number(f.close) || 0;
         why = "صندوق درآمد ثابت پرمعامله";
       }
     }
-    let amount = `${num(Math.round((profile.amounts || {})[sleeve] || 0), 0)} <span class="pct">ریال</span>` +
+    let amount = `${num(Math.round(order), 0)} <span class="pct">ریال</span>` + todayUnits(order, price) +
       ` <span class="hint">(مثال برای سرمایه‌ی ${money(rep.equity)} ریال؛ دارایی خودتان را در «سبد من» وارد کنید)</span>`;
     // What the instrument line says: an order only where this sleeve buys.
     let line = pick ? `بخرید: ${pick}` : `<span class="hint">${pending}</span>`;
     let meter = "";
     if (own) {
-      const gap = base * w / 100 - (own[sleeve] || 0);
       const now = nowPct(sleeve);
-      const small = Math.abs(gap) < base * 0.005;
-      const act = blocked ? "blocked" : !rebalance ? "hold" : small ? "none" : gap > 0 ? "buy" : "sell";
+      const small = base * 0.005;
+      const act = blocked ? "blocked" : o.act;
+      // What actually has to be SOLD: the sleeve's cash is spent first.
+      const toSell = o ? o.amount - o.cash : 0;
+      const held = heldIn(sleeve);
+      const cant = (mine.locked[sleeve] || []).map(x => `${esc(x.symbol)} (${esc(x.why)})`).join("، ");
       // Functions, not strings: only the chosen one is built (`blocked` is
       // null on every other path).
       // Now against target, drawn (v3 design, 2026-11-23): the bar is
@@ -4601,16 +4921,39 @@ function renderToday() {
         blocked: () => `<span class="hint">ارزش ${blocked.map(esc).join("، ")} معلوم نیست؛ دستوری داده نمی‌شود</span>`,
         hold: () => `<strong>در محدوده‌ی هدف</strong> <span class="hint">(همه‌ی بخش‌ها درون ±${num(band, 0)} واحد) — کاری لازم نیست</span>`,
         none: () => `<strong>بدون تغییر</strong> <span class="hint">(کمتر از نیم درصد سبد)</span>`,
-        buy: () => `<strong>بخرید ${money(gap)}</strong> <span class="pct">ریال</span>`,
-        sell: () => `<strong>بفروشید ${money(-gap)}</strong> <span class="pct">ریال</span>`,
+        buy: () => `<strong>بخرید ${money(o.amount)}</strong> <span class="pct">ریال</span>`,
+        sell: () => toSell >= small
+          ? `<strong>بفروشید ${money(toSell)}</strong> <span class="pct">ریال</span>`
+          : `<strong>از نقد خرج کنید ${money(o.cash)}</strong> <span class="pct">ریال</span>`,
+        // The instruction is withheld, not shrunk to nothing: the reader is
+        // told what is missing and that today it cannot be done.
+        "buy-blocked": () => `<strong>خریدی داده نمی‌شود</strong> <span class="hint">(${money(o.short)} ریال کم دارد، ولی فروشی که پولش را بدهد امروز شدنی نیست)</span>`,
+        "sell-blocked": () => `<strong>فروشی داده نمی‌شود</strong> <span class="hint">(${money(o.short)} ریال بیش از هدف است، ولی هیچ‌کدام امروز قابل فروش نیست)</span>`,
       }[act]() + (pill ? "</span>" : "");
-      const held = heldIn(sleeve);
+      if (act === "buy") {
+        amount += todayUnits(o.amount, price) + (o.short >= small
+          ? ` <span class="hint">از ${money(o.amount + o.short)} ریالِ لازم — بقیه وقتی که فروش‌های قفل‌شده شدنی شود</span>` : "");
+      }
+      if (act === "sell") {
+        amount += (toSell >= small && o.cash >= small ? ` <span class="hint">و ${money(o.cash)} ریال از نقد</span>` : "") +
+          (o.short >= small ? ` <span class="hint">از ${money(o.amount + o.short)} ریالِ لازم — بقیه امروز قابل فروش نیست</span>` : "");
+      }
       line = act === "buy"
         ? (pick ? `بخرید: ${pick}` : `<span class="hint">${pending}</span>`)
         : act === "sell"
-          ? (held.length ? `از دارایی خودتان در این بخش: <strong>${held.map(esc).join("، ")}</strong>` : "")
+          ? (toSell >= small && held.length
+            ? `از دارایی قابل‌فروش خودتان در این بخش: <strong>${held.map(x => esc(x.symbol)).join("، ")}</strong>` +
+              (held.length === 1 ? todayUnits(toSell, held[0].price) : "")
+            : "")
           : (pick ? `<span class="hint">ابزار این بخش، اگر روزی خرید لازم شد: ${pick}</span>` : "");
-      if (act === "sell") why = "";
+      if (act === "sell" || act === "sell-blocked" || act === "buy-blocked") why = "";
+      // The holdings that cannot be dealt, by name and reason, on every path.
+      if (cant) why = `<span class="hint">⚠ امروز قابل فروش نیست: ${cant}</span> ${why}`;
+      // Cash is counted in this sleeve but earns nothing while it waits.
+      const idle = (mine.cash[sleeve] || 0) - (o ? o.cash : 0);
+      if (idle >= small && act !== "blocked") {
+        why = `<span class="hint">${money(idle)} ریال از این بخش نقد است و تا خرید نشده بازدهی ندارد.</span> ${why}`;
+      }
     }
     return `<div class="today-item">
       <div class="pct">${num(w, 0)}٪ ${esc(labels[sleeve] || sleeve)}</div>
@@ -4624,14 +4967,58 @@ function renderToday() {
   $("todayPlan").innerHTML = items.join("");
 
   const h = rep.history && rep.history.profiles ? rep.history.profiles[key] : null;
-  $("todayHint").innerHTML = (h
+
+  // The day the amounts above are priced on, and every line priced earlier:
+  // the card gave rial orders with no date, and a name halted for two months
+  // sat in them at its frozen close (2026-11-23).
+  const stale = (own && book.stale) || [];
+  const dated = own && book.as_of
+    ? `<strong>قیمت‌های سبد شما تا ${faDay(book.as_of, true)}</strong>` +
+      (stale.length
+        ? ` — قیمتِ قدیمی‌تر: ${stale.map(s => `${esc(s.symbol)} (${faDay(s.as_of, true)})`).join("، ")}`
+        : "") + ". "
+    : "";
+
+  // What dealing costs, said beside the amounts: none of them deducts it.
+  const costs = rep.costs;
+  const costText = costs
+    ? `کارمزد از این مبالغ کسر نشده است: خرید و فروش واحد صندوق روی‌هم حدود ${num(costs.fund_round_trip_pct, 2)}٪ ` +
+      `(سهم ${num(costs.share_round_trip_pct, 2)}٪ با مالیات فروش). `
+    : "";
+
+  // A bill sold before maturity gives up the yield it was bought for, and
+  // the profiles' edge was measured against a 20% fund, not today's bills
+  // (the allocation card's own banner). Said here whenever the card would
+  // sell fixed income or the reader holds bills: under the default profile
+  // it printed "sell" for a held bill with neither sentence (2026-11-23).
+  const fixed = plan ? plan.orders.fixed : null;
+  const sellsFixed = !!fixed && (fixed.act === "sell" || fixed.act === "sell-blocked") &&
+    (fixed.amount - fixed.cash >= base * 0.005 || fixed.short >= base * 0.005);
+  const holdsBills = !!own && (book.rows || []).some(r => r.bill && !r.error && r.quantity);
+  const billYield = (state.valuation && state.valuation.bill_yield_pct) ||
+    (opp && opp.bills && opp.bills.parking && opp.bills.parking.ytm_pct) || null;
+  const billText = sellsFixed || holdsBills
+    ? `<strong>${sellsFixed ? "پیش از فروش درآمد ثابت:" : "درباره‌ی اخزایی که دارید:"}</strong> ` +
+      (holdsBills ? "اخزایی که پیش از سررسید فروخته شود بازده ثابتش را از دست می‌دهد و به قیمت روز می‌رود. " : "") +
+      `برتری سهام و طلا در آزمون‌ها نسبت به صندوق درآمد ثابتِ ۲۰٪ سنجیده شده؛ اوراق خزانه امروز ` +
+      `${billYield ? `حدود ${num(billYield, 0)}٪` : "بسیار بیشتر از آن"} می‌دهد، پس برتری این ترکیب بر اوراقِ امروز ثابت نشده است. `
+    : "";
+
+  // Outside the three sleeves, and why that matters for a leveraged fund.
+  const kindOf = (symbol) => (((book && book.rows) || []).find(r => r.symbol === symbol) || {}).fund_kind;
+  const leveraged = mine ? mine.outside.filter(s => kindOf(s) === "leveraged") : [];
+
+  $("todayHint").innerHTML = dated + (h
     ? `این ترکیب از ${esc(rep.history.from)} سالانه ${num(h.cagr_pct, 0)}٪ داده (اسمی؛ با تورم ۴۰ تا ۹۰ درصدی لزوماً سود واقعی نیست) و ` +
       `بدترین افتش ${num(h.max_drawdown_pct, 0)}٪ بوده است. <strong>کسی که در افت می‌فروشد، این بازده را نمی‌گیرد.</strong> `
     : "") +
     `هر حدود سه ماه، یا وقتی سهم یک بخش بیش از ${num(band, 0)} واحد از هدف دور شد، به همین وزن‌ها برگردانید؛ ` +
-    `بین این دو، کاری لازم نیست. ` +
+    `بین این دو، کاری لازم نیست. ` + costText + billText +
     (mine && mine.outside.length
-      ? `<span class="hint">${mine.outside.map(esc).join("، ")} در هیچ‌کدام از سه بخش نیست و در درصدها و مبالغ بالا حساب نشد. </span>`
+      ? `<span class="hint">${mine.outside.map(esc).join("، ")} در هیچ‌کدام از سه بخش نیست و در درصدها و مبالغ بالا حساب نشد` +
+        (leveraged.length
+          ? `؛ ${leveraged.map(esc).join("، ")} صندوق اهرمی است و سهام را با اهرم نگه می‌دارد، پس سهم واقعی سهام شما از عدد بالا بیشتر است`
+          : "") + `. </span>`
       : "") +
     `<span class="hint">${esc(profile.evidence_text || "")}</span>`;
 }
@@ -4649,15 +5036,25 @@ function billQuote(symbol) {
 // opportunities card files funds by): the name match this replaced read 33 of
 // 40 fixed-income funds ending «-د» as equity and «زر» equity funds as gold
 // (the panel review, 2026-11-11). A bill is priced from the bills read here.
+//
+// And what of each sleeve can be turned into money today (2026-11-23): a
+// halted holding, or one whose last trade is at its lower limit (a sell
+// queue), is still the reader's exposure and stays in the weights, but it is
+// not `sellable` -- the server says which and why (holdings.lock_states,
+// `can_sell` / `why_not`). Cash is spendable without a sale, so it is counted
+// apart; `saleable` lists the holdings a sale can actually come from.
 function sleevesOf(rows) {
-  const out = {}, unpriced = [], outside = [], errors = [];
+  const out = {}, sellable = {}, cash = {}, locked = {}, saleable = {};
+  const unpriced = [], outside = [], errors = [];
   let total = 0;
   rows.forEach(r => {
     if (r.error) { errors.push(r.symbol); return; }
     let value = Number(r.value) || 0;
+    let price = Number(r.price) || 0;
     if (r.bill && !value) {
       const b = billQuote(r.symbol);
       value = b && r.quantity ? b.price * r.quantity : 0;
+      price = b ? Number(b.price) || 0 : 0;
     }
     if (!value) {
       if (r.quantity) unpriced.push(r.symbol);
@@ -4669,8 +5066,16 @@ function sleevesOf(rows) {
     if (!sleeve) { outside.push(r.symbol); return; }
     total += value;
     out[sleeve] = (out[sleeve] || 0) + value;
+    if (r.can_sell === false) {
+      (locked[sleeve] = locked[sleeve] || []).push(
+        { symbol: r.symbol, why: r.why_not || "قابل فروش نیست", value });
+      return;
+    }
+    sellable[sleeve] = (sellable[sleeve] || 0) + value;
+    if (r.cash) cash[sleeve] = (cash[sleeve] || 0) + value;
+    else (saleable[sleeve] = saleable[sleeve] || []).push({ symbol: r.symbol, value, price });
   });
-  return { sleeves: out, total, unpriced, outside, errors };
+  return { sleeves: out, sellable, cash, locked, saleable, total, unpriced, outside, errors };
 }
 
 // Repaints whatever each slot holds, on every tab switch, resize, theme toggle
@@ -4951,7 +5356,10 @@ async function loadLive() {
     { k: "نمادهای دارای گردش", v: s.traded === null || s.traded === undefined ? "—" : num(s.traded, 0),
       sub: "همین حالا، از روی تابلو" },
     { k: "آخرین عکس دفتر", v: q.age_minutes === null
-        || q.age_minutes === undefined ? "—" : `${num(q.age_minutes, 0)} دقیقه`,
+        || q.age_minutes === undefined ? "—"
+        : q.age_minutes < 90 ? `${num(q.age_minutes, 0)} دقیقه`
+        : q.age_minutes < 48 * 60 ? `${num(q.age_minutes / 60, 1)} ساعت`
+        : `${num(q.age_minutes / 1440, 0)} روز`,
       sub: q.captured_at ? faTime(q.captured_at) : "ثبت نشده" },
   ]);
 
@@ -5055,6 +5463,13 @@ on("announcementsDays", "change", () => loadAnnouncements());
 on("runOutlookBtn", "click", () => loadOutlook(true));
 on("outlookLookupBtn", "click", lookupOutlook);
 on("outlookPdfBtn", "click", openOutlookPdf);
+on("quickLookupBtn", "click", quickLookup);
+on("quickPdfBtn", "click", () => {
+  if (!openReport($("quickSymbolInput").value)) $("quickSymbolInput").focus();
+});
+$("quickSymbolInput")?.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") { ev.preventDefault(); quickLookup(); }
+});
 on("runTechnicalBtn", "click", () => loadTechnical(true));
 on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
 on("runInflowBtn", "click", () => loadInflow(true));

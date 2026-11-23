@@ -107,13 +107,33 @@ def resolve(name):
     return path
 
 
+def interpreter():
+    """cmd.exe by its full path: ComSpec's, else System32's.
+
+    A bare "cmd.exe" is searched for, and the launcher's current directory
+    comes before System32 in that search. The tasks' current directory is
+    the project folder, which every local account may write to, so a file
+    named cmd.exe dropped there is what all four tasks would have run in
+    its place -- reproduced with a stand-in program on 2026-11-23 (the
+    security review). ComSpec is taken only as an absolute path to a file
+    that exists; anything else falls back to System32.
+    """
+
+    given = (os.environ.get("ComSpec") or "").strip().strip('"')
+    if os.path.isabs(given) and os.path.isfile(given):
+        return given
+    windows = (os.environ.get("SystemRoot") or os.environ.get("windir")
+               or "C:\\Windows")
+    return os.path.join(windows, "System32", "cmd.exe")
+
+
 def run(bat):
     """Run `bat` in a windowless console; its exit code."""
 
     # pythonw has no standard handles to pass on; the bats redirect what
     # matters to their logs, and the rest went to a window nobody kept.
     return subprocess.call(
-        ["cmd.exe", "/c", bat], cwd=ROOT, creationflags=CREATE_NO_WINDOW,
+        [interpreter(), "/c", bat], cwd=ROOT, creationflags=CREATE_NO_WINDOW,
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL)
 

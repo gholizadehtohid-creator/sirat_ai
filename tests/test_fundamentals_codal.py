@@ -680,6 +680,11 @@ class TestUndersizedFiling(unittest.TestCase):
         def __init__(self, body):
             self.content = body
 
+    # An address on Codal: any other is refused before a request is made
+    # (codal.filing_url_refusal, 2026-11-23), which would settle every case
+    # below as "bad" for a reason that is not the one under test.
+    URL = "https://excel.codal.ir/f"
+
     def _client_returning(self, body):
         client = codal.CodalClient()
         client._get = lambda *a, **k: self._Response(body)
@@ -690,14 +695,14 @@ class TestUndersizedFiling(unittest.TestCase):
 
         self.assertLess(len(body), codal.MIN_FILING_BYTES)
 
-        result = self._client_returning(body).fetch_sheets("http://x/f")
+        result = self._client_returning(body).fetch_sheets(self.URL)
 
         self.assertFalse(result.ok)
         self.assertEqual(result.kind, codal.KIND_TRANSIENT)
         self.assertTrue(result.transient)
 
     def test_an_empty_body_stays_transient(self):
-        result = self._client_returning(b"").fetch_sheets("http://x/f")
+        result = self._client_returning(b"").fetch_sheets(self.URL)
 
         self.assertEqual(result.kind, codal.KIND_TRANSIENT)
 
@@ -718,7 +723,7 @@ class TestUndersizedFiling(unittest.TestCase):
 
         self.assertGreater(len(body), codal.MIN_FILING_BYTES)
 
-        result = self._client_returning(body).fetch_sheets("http://x/f")
+        result = self._client_returning(body).fetch_sheets(self.URL)
 
         self.assertFalse(result.ok)
         self.assertEqual(result.kind, codal.KIND_BAD)
@@ -734,7 +739,7 @@ class TestUndersizedFiling(unittest.TestCase):
 
         body = b"<html>" + (b"x" * (codal.MIN_FILING_BYTES + 5_000)) + b"</html>"
 
-        result = self._client_returning(body).fetch_sheets("http://x/f")
+        result = self._client_returning(body).fetch_sheets(self.URL)
 
         self.assertFalse(result.ok)
         self.assertEqual(result.kind, codal.KIND_TRANSIENT)
@@ -755,7 +760,7 @@ class TestUndersizedFiling(unittest.TestCase):
 
         self.assertLess(len(body), codal.MIN_FILING_BYTES)
 
-        result = self._client_returning(body).fetch_sheets("http://x/f")
+        result = self._client_returning(body).fetch_sheets(self.URL)
 
         self.assertEqual(result.kind, codal.KIND_BAD)
         self.assertIn("empty statement export", result.error)

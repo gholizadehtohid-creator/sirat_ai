@@ -298,6 +298,39 @@ def shared_session(rebuild=False):
 CODAL_HOST = "codal.ir"
 
 
+def filing_url_refusal(url):
+    """Why `url` is not an address to download a filing from, or None.
+
+    A filing's address is whatever the search reply's ExcelUrl says, and
+    fetch_sheets downloaded it as given -- over a session that may be bound
+    to the physical NIC, which reaches the home network and this machine's
+    own panel as well as Codal (the security review, 2026-11-23). Only
+    https, and only codal.ir or a name under it: every one of the 37,657
+    stored excel_url values is https://excel.codal.ir (checked that day).
+    A backslash, a space or a control character is refused outright -- they
+    are where two URL parsers stop agreeing on which host is meant.
+    """
+
+    text = str(url or "").strip()
+
+    if any(ch == "\\" or ch.isspace() or ord(ch) < 32 for ch in text):
+        return "not a plain URL"
+
+    try:
+        parts = urlparse(text)
+        host = (parts.hostname or "").lower().rstrip(".")
+    except ValueError:
+        return "not a URL"
+
+    if parts.scheme.lower() != "https":
+        return "scheme %s is not https" % (parts.scheme or "(none)")[:20]
+
+    if host != CODAL_HOST and not host.endswith("." + CODAL_HOST):
+        return "host %s is not %s" % ((host or "(none)")[:80], CODAL_HOST)
+
+    return None
+
+
 class CodalClient:
     """Search filings and parse them. Never raises."""
 
@@ -498,6 +531,14 @@ class CodalClient:
         body = archive_read(archive_key) if archive_key else None
 
         if body is None:
+            # Downloaded only from Codal itself (filing_url_refusal). Checked
+            # here and not above: a document already in the archive needs no
+            # address. Settled, not transient -- the address will not change.
+            refusal = filing_url_refusal(excel_url)
+            if refusal:
+                return CodalResult(error=f"filing URL refused: {refusal}",
+                                   kind=KIND_BAD)
+
             try:
                 response = self._get(excel_url, timeout=(
                     settings.TIMEOUT_CONNECT, max(settings.TIMEOUT_READ, 60)

@@ -93,6 +93,54 @@ class PageTests(unittest.TestCase):
         self.assertTrue(cols[-1]["estimate"])
 
 
+class HousekeepingTests(unittest.TestCase):
+
+    def test_a_share_with_no_trade_among_its_bars_has_no_chart_not_a_crash(self):
+        import pandas as pd
+        bars = pd.DataFrame({"date": pd.to_datetime(["2026-01-01"] * 30),
+                             "close": [1000.0] * 30, "volume": [0] * 30})
+        with mock.patch.object(sr.database, "load_history_by_inscode", return_value=bars):
+            self.assertIsNone(sr.price_series("x"))
+
+    def test_only_dated_folders_under_reports_are_aged_out(self):
+        root = tempfile.mkdtemp()
+        old_day = os.path.join(root, "1405-01-01")
+        new_day = os.path.join(root, "1405-09-02")
+        other = os.path.join(root, "my-notes")
+        for folder in (old_day, new_day, other):
+            os.makedirs(folder)
+        long_ago = 1_000_000_000
+        os.utime(old_day, (long_ago, long_ago))
+        os.utime(other, (long_ago, long_ago))
+        self.assertEqual(sr.prune(30, root), 1)
+        self.assertFalse(os.path.exists(old_day))
+        self.assertTrue(os.path.exists(new_day))
+        self.assertTrue(os.path.exists(other))          # not ours to remove
+
+    def test_a_custom_output_folder_is_never_pruned(self):
+        ctx = {"today": "1405/09/02", "r": {"symbol": "x"}}
+        out_dir = tempfile.mkdtemp()
+        with mock.patch.object(sr, "gather", return_value=ctx), \
+                mock.patch.object(sr, "render_html", return_value="<html></html>"), \
+                mock.patch.object(sr, "html_to_pdf", side_effect=lambda _h, out: out), \
+                mock.patch.object(sr, "prune") as prune:
+            sr.build("x", out_dir=out_dir)
+            prune.assert_not_called()
+            sr.build("x")
+            prune.assert_called_once_with(sr.REPORT_KEEP_DAYS)
+
+    def test_the_inputs_are_refreshed_at_most_once_per_gap(self):
+        calls = []
+        fake_fx = mock.Mock(refresh=lambda: calls.append("fx"))
+        fake_cal = mock.Mock(ensure=lambda: calls.append("cal"))
+        with mock.patch.dict(sys.modules, {"fx": fake_fx, "outlook_calibration": fake_cal}), \
+                mock.patch.dict(sr._REFRESH, {"at": None}):
+            self.assertTrue(sr.refresh_inputs_once(now=1000.0))
+            self.assertFalse(sr.refresh_inputs_once(now=1000.0 + 60))
+            self.assertTrue(sr.refresh_inputs_once(now=1000.0 + sr.REFRESH_GAP_SECONDS + 1))
+        self.assertEqual(calls, ["fx", "cal", "fx", "cal"])
+
+
 class PrinterTests(unittest.TestCase):
 
     def test_a_pdf_edge_never_writes_is_an_error_not_a_hang(self):

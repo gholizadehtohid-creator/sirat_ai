@@ -5,14 +5,21 @@ than trusting a label, this re-runs the authenticity check and wipes the price
 tables unless they pass -- so the only way data survives here is by being
 demonstrably genuine.
 
-    python purge_simulated.py            # check, and say what would go
-    python purge_simulated.py --yes      # check, and purge if convicted
-    python purge_simulated.py --force    # wipe price data unconditionally
+    python purge_simulated.py                # check, and say what would go
+    python purge_simulated.py --yes          # check, and purge if convicted
+    python purge_simulated.py --force        # skip the check; say what would go
+    python purge_simulated.py --force --yes  # wipe price data unconditionally
 
 Only a SIMULATED verdict -- a failed DISCRIMINATING test, the holiday
 calendar -- purges, and only with --yes after the counts are printed. An
 UNVERIFIED verdict (a structural test real data can also fail) never does
 (the full test, 2026-11-12).
+
+NOTHING IS DELETED WITHOUT --yes, --force included (2026-11-23). --force
+alone used to wipe price_history, market_data, market_snapshot and
+fetch_log at once -- 2,010,804 bars on that day, seventeen years of them,
+with no count printed and no question asked. It now skips the check and
+prints the counts, like the other path; the second flag is the decision.
 
 This is only as good as the verdict it acts on, and that verdict has been
 wrong before: a miscalibrated Nowruz window once had this delete bars fetched
@@ -53,13 +60,19 @@ def purge(force=False, confirmed=False):
         except sqlite3.OperationalError:
             counts[table] = 0
 
-    if not (force or confirmed):
+    if not confirmed:
         conn.close()
         print("\nWould delete:")
         for table, n in counts.items():
             print(f"  {table:<18} {n} rows")
-        print("\nNothing deleted. Back up the database, run "
-              "`python test_authenticity.py`, and rerun with --yes to purge.")
+        if force:
+            print("\nNothing deleted: --force skips the authenticity check, "
+                  "not the confirmation. Back up first (python backup.py), "
+                  "then rerun with --force --yes to wipe these tables.")
+        else:
+            print("\nNothing deleted. Back up the database, run "
+                  "`python test_authenticity.py`, and rerun with --yes to "
+                  "purge.")
         return 0
 
     for table in ("market_data", "price_history", "market_snapshot"):

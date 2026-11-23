@@ -105,7 +105,102 @@ class RangeAndDollarTests(unittest.TestCase):
         self.assertIsNone(plain["fx"])
 
 
+class MonthlyEstimateTests(unittest.TestCase):
+    """monthly_year_estimate: the cap is on the months to come only, and
+    what the statement has reported stands."""
+
+    def test_months_already_sold_keep_the_growth_they_had(self):
+        # +150% to month 6: the sold half keeps it, the rest is capped at +100%
+        revenue, profit = fo.monthly_year_estimate(100 * B, 1.5, 6, None, None, 0.2)
+        self.assertAlmostEqual(revenue, 100 * B * (0.5 * 2.5 + 0.5 * 2.0))
+        self.assertAlmostEqual(profit, revenue * 0.2)
+
+    def test_the_statements_reported_profit_is_kept(self):
+        # a first-half LOSS stays a loss; only the revenue beyond it is at
+        # the trailing margin
+        revenue, profit = fo.monthly_year_estimate(100 * B, 0.2, 8, 55 * B, -5 * B, 0.1)
+        self.assertAlmostEqual(revenue, 120 * B)
+        self.assertAlmostEqual(profit, -5 * B + (120 - 55) * B * 0.1)
+
+    def test_a_year_below_the_statements_own_revenue_is_no_estimate(self):
+        self.assertIsNone(fo.monthly_year_estimate(100 * B, -0.2, 7, 90 * B, 9 * B, 0.1))
+        self.assertIsNone(fo.monthly_year_estimate(None, 0.2, 7, None, None, 0.1))
+
+
+class HurdleTests(unittest.TestCase):
+
+    rows = [period("1405/06/31", 6, 120 * B, 24 * B),
+            period("1404/12/29", 12, 300 * B, 60 * B),
+            period("1404/06/31", 6, 100 * B, 20 * B)]
+
+    def test_the_growth_a_price_needs_is_set_against_what_is_paid_out(self):
+        # last AGM: 240 rials on 100m shares = 24bn of a 60bn profit: 40%
+        dividend = {"dps": 240.0, "capital": 100_000.0, "fiscal_year_end": "1404/12/29"}
+        r = analyse(self.rows, dividend=dividend)
+        h = r["hurdle"]
+        self.assertAlmostEqual(h["payout_pct"], 40.0)
+        yield_fwd = r["valuation"]["earnings_yield_forward_pct"]
+        self.assertAlmostEqual(h["required_growth_pct"], round(44.0 - 0.4 * yield_fwd, 1), places=0)
+        self.assertAlmostEqual(h["required_growth_full_payout_pct"], round(44.0 - yield_fwd, 1), places=0)
+        self.assertGreater(h["required_growth_pct"], h["required_growth_full_payout_pct"])
+
+    def test_without_an_agm_the_whole_earnings_case_is_shown_as_such(self):
+        h = analyse(self.rows)["hurdle"]
+        self.assertIsNone(h["payout_pct"])
+        self.assertEqual(h["required_growth_pct"], h["required_growth_full_payout_pct"])
+
+
+class NoticeTests(unittest.TestCase):
+
+    def test_a_stale_dividend_is_a_notice_not_a_warning(self):
+        rows = [period("1405/12/29", 12, 100 * B, 20 * B),
+                period("1404/12/29", 12, 80 * B, 16 * B)]
+        dividend = {"dps": 100.0, "capital": 100_000.0, "fiscal_year_end": "1404/12/29"}
+        r = analyse(rows, dividend=dividend, today=(1406, 2, 1))
+        self.assertTrue(any("مجمع سال بعد" in n for n in r["notices"]))
+        self.assertFalse(any("مجمع سال بعد" in f for f in r["flags"]))
+
+
+class DollarYearTests(unittest.TestCase):
+
+    def test_the_average_is_over_the_year_being_estimated(self):
+        # the newest statement closed 1404: the estimate is of 1405, and the
+        # average must not reach back into the closed year
+        fx = {"fetched_at": "x", "series": {"nima": [
+            ("2025-03-21", "1404/01/01", 1_000_000.0),
+            ("2026-03-21", "1405/01/01", 1_600_000.0),
+            ("2026-11-22", "1405/09/01", 2_000_000.0)]}}
+        rows = [period("1404/12/29", 12, 300 * B, 60 * B, gross_profit=90 * B),
+                period("1403/12/30", 12, 200 * B, 40 * B, gross_profit=60 * B)]
+        r = analyse(rows, calibration=CALIBRATION, fx_record=fx, sector="فلزات اساسي",
+                    today=(1405, 2, 1))
+        self.assertEqual(r["method"], "next_year_trend")
+        self.assertAlmostEqual(r["fx"]["year_average"], 1_800_000.0)
+
+    def test_each_scenario_carries_the_fully_dollar_reading(self):
+        rows = RangeAndDollarTests.rows
+        r = analyse(rows, calibration=CALIBRATION, fx_record=FX, sector="فلزات اساسي")
+        by = {s["shock_pct"]: s for s in r["fx"]["scenarios"]}
+        # 240 of the year's 360 are still to come at a 20% margin: +20% on
+        # that profit is 9.6 of 72
+        self.assertAlmostEqual(by[20]["full_change_pct"], 13.3, places=1)
+        self.assertAlmostEqual(by[-20]["full_change_pct"], -13.3, places=1)
+
+
 class CapitalTests(unittest.TestCase):
+
+    def test_a_meeting_alone_is_not_a_raise(self):
+        self.assertIsNone(fo.capital_reading([
+            ("1405/08/20 10:00:00", "تصمیمات مجمع عمومی فوق العاده دوره 12 ماهه منتهی به 1405/12/29"),
+            ("1405/08/01 10:00:00", "اگهی دعوت به مجمع عمومی فوق العاده دوره 12 ماهه منتهی به 1405/12/29")]))
+
+    def test_cash_is_read_from_the_round_still_open(self):
+        c = fo.capital_reading([
+            ("1405/08/10 10:00:00", "پیشنهاد هیئت مدیره به مجمع عمومی فوق العاده در خصوص افزایش سرمایه"),
+            ("1404/11/10 10:00:00", "اگهی ثبت افزایش سرمایه"),
+            ("1404/10/01 10:00:00", "اعلامیه پذیره نویسی عمومی")])
+        self.assertEqual(c["stage"], "proposed")
+        self.assertFalse(c["cash"])
 
     def test_a_rights_offering_is_named_cash(self):
         c = fo.capital_reading([
@@ -138,7 +233,18 @@ class FairValueTests(unittest.TestCase):
         self.assertAlmostEqual(fv["low"], 5_000)
         self.assertAlmostEqual(fv["high"], 7_000)
         self.assertAlmostEqual(fv["upside_pct"], 0.0)
-        self.assertAlmostEqual(fv["forward"]["central"], 7_000)
+        # no forward reading: trailing multiples on a forward EPS count the
+        # year's nominal growth twice
+        self.assertIsNone(fv["forward"])
+        self.assertNotIn("value_forward", fv["anchors"][0])
+        self.assertFalse(fv["disagree"])                 # 6.0 / 5.0 = 1.2
+
+    def test_an_industry_far_from_the_shares_own_multiple_is_named(self):
+        peers = dict(self.peers, own_pe={"x": {"median": 12.0, "low": 9, "high": 14,
+                                               "n": 12, "from": "a", "to": "b"}})
+        fv = fo.fair_value(fo.OPERATING, "x", "فلزات اساسي", 1_000, 1_400, None,
+                           5_000, peers)
+        self.assertTrue(fv["disagree"])
 
     def test_no_trailing_profit_no_value(self):
         self.assertIsNone(fo.fair_value(fo.OPERATING, "x", "s", -10, 100, None,
@@ -146,9 +252,12 @@ class FairValueTests(unittest.TestCase):
 
     def test_a_financial_is_valued_at_its_nav(self):
         fv = fo.fair_value(fo.FINANCIAL, "x", "s", None, None, None, 1_000, None,
-                           nav_result={"nav": 300 * B}, shares=100e6)
+                           nav_result={"nav": 300 * B, "complete": False}, shares=100e6)
         self.assertAlmostEqual(fv["central"], 3_000)
-        self.assertAlmostEqual(fv["upside_pct"], 200.0)
+        # a floor (unlisted holdings at cost) and never an "upside"
+        self.assertTrue(fv["floor"])
+        self.assertIsNone(fv["upside_pct"])
+        self.assertAlmostEqual(fv["price_to_value"], 0.33)
 
 
 class MonthlyHistoryTests(unittest.TestCase):

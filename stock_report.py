@@ -61,6 +61,7 @@ EDGE_CANDIDATES = (
 )
 EDGE_TIMEOUT = 90
 PRICE_SESSIONS = 260            # about a year of sessions on the chart
+REPORT_KEEP_DAYS = 30           # day folders under reports/ older than this go
 STATEMENT_YEARS = 3
 
 # The panel's validated data colours (static/css/panel.css, light theme) and
@@ -366,6 +367,11 @@ def price_series(code):
     if bars is None or len(bars) < 20:
         return None
     bars = bars[bars["volume"].fillna(0) > 0] if "volume" in bars.columns else bars
+    # A halted share can have bars and not one trade among them (63 names on
+    # 2026-11-23; the route answered HTTP 500 for دتهران and پرشیا): no
+    # price chart, and the rest of the report stands.
+    if len(bars) < 2:
+        return None
     adjusted, _events = back_adjust(bars)
     adjusted = adjusted.reset_index(drop=True)
     try:
@@ -426,16 +432,39 @@ BASIS_TEXT = {
 }
 
 
+_REFRESH = {"at": None}
+REFRESH_GAP_SECONDS = 1800
+
+
+def refresh_inputs_once(now=None):
+    """Bring the dollar series and the calibration up to date, at most once
+    per REFRESH_GAP_SECONDS for the process.
+
+    Both are bootstrap's job (its post-run hook); this is the fallback for a
+    day bootstrap had nothing to fetch. Each call answers at once when its
+    file is fresh, but a FAILED dollar fetch stamps nothing, and with the
+    source unreachable every report request would have retried it for up to
+    two minutes (the review of 2026-11-23). True when it ran.
+    """
+
+    now = time.monotonic() if now is None else now
+    if _REFRESH["at"] is not None and now - _REFRESH["at"] < REFRESH_GAP_SECONDS:
+        return False
+    _REFRESH["at"] = now
+    import fx
+    import outlook_calibration
+    fx.refresh()
+    outlook_calibration.ensure()
+    return True
+
+
 def gather(symbol, refresh_inputs=True):
     """Everything the report shows, from the analysis and the stores."""
 
     inst = find_instrument(symbol)
     code = str(inst["ins_code"])
     if refresh_inputs:
-        import fx
-        import outlook_calibration
-        fx.refresh()
-        outlook_calibration.ensure()
+        refresh_inputs_once()
     price = fo.latest_prices().get(code)
     result = fo.analyse(code, price=price)
     if not result:
@@ -495,12 +524,9 @@ def charts(ctx):
                                    ("شاخص کل", INK_3, p["index"], 1.6)])
     fv = r.get("fair_value") or {}
     price = (r.get("valuation") or {}).get("price")
-    if fv.get("central") and price:
+    if fv.get("central") and price and fv.get("basis") == "pe":
         out["fair"] = range_chart(price, fv.get("low"), fv["central"], fv.get("high"),
                                   [(a["label"], a.get("value")) for a in fv.get("anchors") or []])
-        f = fv.get("forward") or {}
-        if f.get("central"):
-            out["fair_forward"] = range_chart(price, f.get("low"), f["central"], f.get("high"))
     return out
 
 
@@ -593,24 +619,41 @@ def build(symbol, out_dir=None, keep_html=False, refresh_inputs=True):
     ctx = gather(symbol, refresh_inputs=refresh_inputs)
     html_text = render_html(ctx)
     day = ctx["today"].replace("/", "-")
+    own_folder = out_dir is None
     out_dir = out_dir or os.path.join(REPORTS_DIR, day)
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, "%s-%s.pdf" % (safe_name(ctx["r"]["symbol"]), day))
     if keep_html:
         with open(out[:-4] + ".html", "w", encoding="utf-8") as handle:
             handle.write(html_text)
-    return html_to_pdf(html_text, out)
+    path = html_to_pdf(html_text, out)
+    # Reports are rebuilt on demand, so old days' folders are only clutter:
+    # ~1 MB a report, and nothing called prune() (the same review).
+    # Only ever the project's own reports/ folder: with --out the report
+    # sits among the owner's other folders, and those are not ours to age.
+    if own_folder:
+        try:
+            prune(REPORT_KEEP_DAYS)
+        except OSError:
+            pass
+    return path
 
 
 def prune(days=30, root=None):
-    """Remove report folders older than `days`; the count removed."""
+    """Remove the day folders (YYYY-MM-DD) under reports/ older than `days`;
+    the count removed. Anything not named as a day folder is left alone,
+    whatever its age."""
+
+    import re
 
     root = root or REPORTS_DIR
     cutoff = time.time() - days * 86400
     removed = 0
     for folder in glob.glob(os.path.join(root, "*")):
         try:
-            if os.path.isdir(folder) and os.path.getmtime(folder) < cutoff:
+            if os.path.isdir(folder) and \
+                    re.fullmatch(r"\d{4}-\d{2}-\d{2}", os.path.basename(folder)) and \
+                    os.path.getmtime(folder) < cutoff:
                 shutil.rmtree(folder, ignore_errors=True)
                 removed += 1
         except OSError:

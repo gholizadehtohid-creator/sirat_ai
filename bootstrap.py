@@ -606,12 +606,48 @@ _DEFERRED = {}
 SCHEDULED_RETRIES = 3
 SCHEDULED_RETRY_UNTIL = (22, 30)
 
+# The index series is published hours after the close, like the bars: at
+# 15:30 on 10-31 and at 15:46 on 2026-11-23 it did not carry the day, at
+# 19:00 on 11-09 and 11-11 it did. An index fetch that brings no bar for
+# today used to be recorded "fetched" all the same, and that held the next
+# attempt off for MAX_AGE: on 2026-11-23 the panel was opened at 15:46, and
+# the 19:00 scheduled run read "indices ... (1 session(s) behind)", found
+# the attempt recent, printed "nothing to fetch" and exited 0 -- no bars, no
+# flow, no forward entry for the session (the review, 2026-11-23). An index
+# still behind after its own fetch is a deferral (_left_behind), retried
+# after DEFERRED_RETRY: two requests an attempt, never closer together than
+# that, and none once the series is current.
+#
+# The scheduled run also WAITS for it (retry_deferred), but only before this
+# hour: later than this an index without today's bar means the market did
+# not trade -- a holiday on a trading weekday -- and waiting three retries
+# for it would hold the evening's other steps back two hours for nothing.
+INDEX_WAIT_UNTIL = (18, 0)
+
 
 def _deferred():
     """Which session step is still waiting on the exchange, or None."""
 
-    return ("history" if _DEFERRED.get("history")
+    return ("indices" if _DEFERRED.get("indices")
+            else "history" if _DEFERRED.get("history")
             else "flow" if _DEFERRED.get("flow") else None)
+
+
+def _left_behind(name):
+    """True when the index series is still a session behind after its fetch.
+
+    Only the index: asking it again is two requests. Bars and flow decide
+    their own deferral in their fetchers (a canary, the session's coverage),
+    because "still behind" for them on a holiday would mean asking for every
+    name again -- some 1,800 requests -- each time the gate opened.
+    """
+
+    if name != "indices":
+        return False
+    try:
+        return bool(_indices_state().get("behind"))
+    except Exception:                                           # noqa: BLE001
+        return False
 
 
 def retry_deferred(wait=None, retries=None, until=None, now=None, sleep=None):
@@ -644,6 +680,7 @@ def retry_deferred(wait=None, retries=None, until=None, now=None, sleep=None):
         made += 1
         # Only a step that defers again keeps the loop going; one that is not
         # planned (nothing behind any more) ends it.
+        _DEFERRED["indices"] = False
         _DEFERRED["history"] = False
         _DEFERRED["flow"] = False
         outcome = ensure(only=SESSION_COMPONENTS)
@@ -657,10 +694,12 @@ def _mark_fetched(name):
     """Record a successful fetch, so a retry is paced by attempts not by age.
 
     A session component whose run deferred the session is recorded as
-    "deferred", which status() retries after DEFERRED_RETRY.
+    "deferred", which status() retries after DEFERRED_RETRY -- and so is an
+    index fetch that left the series a session behind (INDEX_WAIT_UNTIL).
     """
 
-    deferred = name in SESSION_COMPONENTS and bool(_deferred())
+    deferred = name in SESSION_COMPONENTS and (
+        bool(_deferred()) or _left_behind(name))
     database.set_provenance(
         f"bootstrap:{name}", "deferred" if deferred else "fetched",
         f"automatic fetch at {_now().isoformat(timespec='seconds')}"
@@ -767,6 +806,16 @@ def _probe_all():
             state.get("behind", False) and not attempted_recently
         )
 
+        # When a component that is behind may be asked for again. The panel
+        # showed "everything is current" for one held back by a recent
+        # attempt (2026-11-23); it now says the session is incomplete and
+        # when the next try is due.
+        next_try = None
+        if state.get("behind", False) and attempted_recently:
+            next_try = (fetched_at + (
+                DEFERRED_RETRY if _last_fetch_deferred(name) else MAX_AGE[name])
+            ).isoformat(timespec="seconds")
+
         cooling = _last_failure.get(name)
         cooldown_left = None
         if cooling:
@@ -781,8 +830,13 @@ def _probe_all():
                            if state["updated_at"] else None),
             "age_hours": round(age.total_seconds() / 3600, 1) if age else None,
             "behind": state.get("behind", False),
+            # One row per trading session: for these, behind means a session
+            # is missing or incomplete (sectors and codal are "behind" while
+            # coverage grows, which is no one's emergency).
+            "session": name in SESSION_COMPONENTS,
             "last_fetch": (fetched_at.isoformat(timespec="seconds")
                            if fetched_at else None),
+            "next_try": next_try,
             "needs_fetch": stale,
             "requires": list(requires),
             "retry_in_seconds": cooldown_left,
@@ -846,7 +900,20 @@ def _note_board_moves(plan=None):
 
 def _fetch_indices(on_item):
     import seed_import
-    return bool(seed_import.import_indices(verbose=False, progress=on_item))
+    ok = bool(seed_import.import_indices(verbose=False, progress=on_item))
+    # Today's figures should exist and the series does not carry them: the
+    # exchange has not published yet (INDEX_WAIT_UNTIL). The scheduled run
+    # waits for it; past the hour it is taken for a day without trading.
+    try:
+        now = datetime.now()
+        waiting = bool(ok and _ready_today() and not _index_has_today()
+                       and (now.hour, now.minute) < INDEX_WAIT_UNTIL)
+    except Exception:                                           # noqa: BLE001
+        waiting = False
+    _DEFERRED["indices"] = waiting
+    if waiting:
+        _note("indices: today's index is not published yet; retried")
+    return ok
 
 
 def _fetch_history(on_item):
@@ -1169,6 +1236,10 @@ def run(force=False, only=None):
             return None
         _state["running"] = True
         _state["started_at"] = _now().isoformat(timespec="seconds")
+        # None while a run is in flight -- progress() and the command line
+        # read it so -- but the run before it is remembered: finished_at().
+        if _state["finished_at"]:
+            _state["last_finished_at"] = _state["finished_at"]
         _state["finished_at"] = None
         _state["steps"] = {}
         _state["planned"] = []
@@ -1219,10 +1290,17 @@ def finished_at():
     which calls status() and re-probes the whole database (~5 s) whenever its
     5-second cache has gone cold -- on most requests, since the panel polls
     only every 20 s -- so the key cost ten times the reads it was memoising.
+
+    WHILE A RUN IS IN FLIGHT this is still the run before it. It used to be
+    None from the moment a fetch started, so the panel's key became "-" in
+    mid-fetch: every cached scan was orphaned and recomputed against a store
+    half-written, the opposite of what app.data_version promises ("the
+    cached answer is at least a consistent one"). The key now moves once,
+    when the new run ends (2026-11-23).
     """
 
     with _lock:
-        return _state["finished_at"]
+        return _state["finished_at"] or _state.get("last_finished_at")
 
 
 def progress():
@@ -1349,7 +1427,17 @@ if __name__ == "__main__":
         raise SystemExit(0)
 
     if not any(s["needs_fetch"] for s in report.values()) and not force:
-        print("\nEverything is present and current — nothing to fetch.")
+        # "Everything is present and current" was printed over a table that
+        # said "(1 session(s) behind)" (2026-11-23): behind but held back by
+        # a recent attempt is not current, and the log now says which.
+        held = [name for name, s in report.items()
+                if s.get("session") and s["behind"]]
+        if held:
+            print("\nNothing to fetch now -- %s behind, tried recently; "
+                  "next try %s." % (", ".join(held), min(
+                      report[n].get("next_try") or "soon" for n in held)))
+        else:
+            print("\nEverything is present and current — nothing to fetch.")
         raise SystemExit(0)
 
     print(f"\nprovider: {settings.PROVIDER}   chain: {settings.PROVIDER_CHAIN}")

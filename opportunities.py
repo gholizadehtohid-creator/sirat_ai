@@ -26,8 +26,21 @@ NAV for months. It is only a cheaper price for the same holding today. A bill
 yield is only realised held to maturity; sold early, the price can be lower.
 The bill price is the last close, which for thinly traded series may be days
 old -- `traded_value` is reported so the user can see that. Commission is not
-deducted: bills and funds carry far smaller fees than the 1.039% equity round
-trip, and the broker's actual fee is not known here.
+deducted from a yield or a discount: a fund unit pays no transfer tax, so its
+round trip is config.LIVE_FUND_ROUND_TRIP_PCT (0.75%) against 1.25% for a
+share, and a bill held to maturity is never sold. The card says so.
+
+WHAT CAN ACTUALLY BE BOUGHT (the review of 2026-11-23)
+-------------------------------------------------------
+"The cheapest fund against its NAV" named whichever fund's price was furthest
+below its NAV -- and on a day the market runs to its limit that is the fund
+whose price the ±3% band is holding down: هموزن, the most traded index fund,
+last traded AT its upper limit on 2026-11-23, in a buy queue. A discount made
+by the band cannot be bought. Each fund now carries whether its last trade
+sat at a band limit (`locked`), and whether it tracks the broad index the
+allocation was tested on (`broad`); pick_fund() names a fund only if it can
+be bought, is large enough for the order, and -- for the equity sleeve --
+tracks that index when such a fund is available.
 """
 
 import json
@@ -87,6 +100,158 @@ def fund_sleeve(name):
     if name.strip().endswith("-س") or "سهام" in name:
         return "equity_active"
     return None
+
+
+# The equity sleeve was tested on TEDPIX, the cap-weighted broad index (E27).
+# «شاخص» in a fund's name does not say WHICH index: of the five index funds
+# liquid enough to be offered on 2026-11-23, هموزن follows the equal-weight
+# index and فیروزه the thirty largest companies, and the card named whichever
+# of the five stood furthest below its NAV. These three state the broad index
+# as their benchmark in their prospectus; the list is short on purpose and
+# is the owner's to confirm and extend. A fund in neither list is offered
+# only when none of these can be bought, and is said not to be a tracker.
+BROAD_INDEX_FUNDS = ("ارام", "کاردان", "وبازار")
+OTHER_INDEX_FUNDS = {"هموزن": "شاخص کل هم‌وزن", "فیروزه": "شاخص ۳۰ شرکت بزرگ"}
+
+# An order above this share of a fund's traded value in the session is not
+# filled near the quoted price in one day: وبازار traded 15.6bn rials on
+# 2026-11-23, and a 5.2bn order -- a third of its day -- was sent to it with
+# no word about size. Looser than the basket's 5% of a 20-session average
+# (config.MAX_ADV_PARTICIPATION_PCT): this is one session's value, and an
+# allocation trade may take the whole session.
+MAX_ORDER_SHARE_OF_DAY = 0.10
+
+# How near its band limit a last trade counts as AT it: limits are rounded to
+# the tick, so the ratio can miss by a fraction of a tick.
+LIMIT_TOLERANCE = 0.0005
+
+
+def index_tracked(symbol):
+    """(label, broad) for an index fund: which index it follows, and whether
+    that is the broad cap-weighted one. (None, False) when not known."""
+
+    import persian
+
+    key = persian.normalize_symbol(symbol or "")
+
+    if key in BROAD_INDEX_FUNDS:
+        return config.INDICES["TEDPIX"]["name"], True
+    if key in OTHER_INDEX_FUNDS:
+        return OTHER_INDEX_FUNDS[key], False
+    return None, False
+
+
+def lock_side(last, previous, band):
+    """'buy' when the last trade is at the upper limit (a buy queue: it
+    cannot be bought there), 'sell' at the lower, else None.
+
+    `band` is (up, down) as fractions of the previous close -- the symbol's
+    own, from the stored market watch; `last` and `previous` come from the
+    same live pull as the NAV, so a watch a session old still gives the
+    right answer.
+    """
+
+    if not last or not previous or previous <= 0 or not band:
+        return None
+
+    up, down = band
+    move = last / previous - 1.0
+
+    if up and move >= up - LIMIT_TOLERANCE:
+        return "buy"
+    if down and move <= -(down - LIMIT_TOLERANCE):
+        return "sell"
+    return None
+
+
+def _bands(codes):
+    """{ins_code: (up, down)} each fund's own daily band, as fractions."""
+
+    codes = [str(c) for c in codes]
+    if not codes:
+        return {}
+    try:
+        conn = database._connect()
+        try:
+            rows = conn.execute(
+                "SELECT ins_code, prev_close, limit_up, limit_down "
+                "FROM market_snapshot WHERE ins_code IN (%s)"
+                % ",".join("?" * len(codes)), codes).fetchall()
+        finally:
+            conn.close()
+    except Exception:                                           # noqa: BLE001
+        return {}
+    out = {}
+    for code, previous, up, down in rows:
+        if previous and up and down and previous > 0:
+            width = (up / previous - 1.0, 1.0 - down / previous)
+            if 0 < width[0] < 0.5 and 0 < width[1] < 0.5:
+                out[str(code)] = width
+    return out
+
+
+def pick_fund(items, order_value=None, need_broad=False):
+    """The fund to name for a purchase, and the ones passed over.
+
+    `items` is one sleeve's list from fund_discounts(), cheapest against NAV
+    first. Returns {"fund", "skipped": [{"symbol", "why"}], "fallback",
+    "split"}: the first fund that is not a suspect NAV, did not last trade
+    at its upper limit, and whose day's traded value carries `order_value`.
+    With `need_broad` (the equity sleeve) only a fund that tracks the broad
+    index is taken.
+
+    When the order is too large for any such fund's day, the most traded of
+    them is named with `split` True -- the same fund over several sessions
+    is the same exposure; a different index is not. Only when every tracker
+    is locked or suspect is another index fund offered, with `fallback`
+    True so the card says it is not a tracker.
+
+    static/js/panel.js (pickFund) applies the same rule to the amount the
+    today card computes; change both together.
+    """
+
+    skipped, able, thin = [], [], []
+
+    for fund in items or ():
+        if fund.get("suspect"):
+            continue
+        if fund.get("locked") == "buy":
+            skipped.append({"symbol": fund["symbol"], "broad": bool(fund.get("broad")),
+                            "why": "در سقف دامنه‌ی نوسان — صف خرید"})
+            continue
+        if order_value and (fund.get("traded_value") or 0) \
+                * MAX_ORDER_SHARE_OF_DAY < order_value:
+            skipped.append({"symbol": fund["symbol"], "broad": bool(fund.get("broad")),
+                            "why": "ارزش معاملات روزش برای این مبلغ کم است"})
+            thin.append(fund)
+            continue
+        able.append(fund)
+
+    def answer(fund, fallback=False, split=False, broad_only=False):
+        # Only what was passed over on the way to THIS fund is worth a line.
+        notes = [s for s in skipped
+                 if s["symbol"] != (fund or {}).get("symbol")
+                 and (s["broad"] or not broad_only)]
+        return {"fund": fund, "fallback": fallback, "split": split,
+                "skipped": notes}
+
+    by_value = lambda f: -(f.get("traded_value") or 0)      # noqa: E731
+
+    right = [f for f in able if f.get("broad")] if need_broad else able
+    if right:
+        return answer(right[0], broad_only=need_broad)
+
+    right_thin = sorted((f for f in thin if f.get("broad") or not need_broad),
+                        key=by_value)
+    if right_thin:
+        return answer(right_thin[0], split=True, broad_only=need_broad)
+
+    if need_broad and (able or thin):
+        if able:
+            return answer(able[0], fallback=True)
+        return answer(sorted(thin, key=by_value)[0], fallback=True, split=True)
+
+    return answer(None)
 
 
 def maturity_of(name):
@@ -395,6 +560,7 @@ def fund_discounts(per_sleeve=12):
                           "traded_value": float(value or 0)})
 
     navs = gold.nav_snapshot([f["ins_code"] for f in funds])
+    bands = _bands([f["ins_code"] for f in funds])
 
     by_sleeve = {}
 
@@ -403,11 +569,21 @@ def fund_discounts(per_sleeve=12):
         bubble = nav.get("bubble")
         if bubble is None:
             continue
+        # Whether it can be dealt at all (see the module note), and for an
+        # index fund which index it follows. Gold and fixed-income funds
+        # all hold what their sleeve names, so each is "broad" for it.
+        locked = lock_side(nav.get("last"), nav.get("prev_close"),
+                           bands.get(fund["ins_code"]))
+        tracks, broad = (index_tracked(fund["symbol"])
+                         if fund["sleeve"] == "equity" else (None, True))
         fund.update(nav_redeem=nav.get("nav_redeem"), close=nav.get("close"),
+                    last=nav.get("last"),
                     price_date=nav.get("date"),
                     discount_pct=round(bubble * 100, 2),
                     suspect=abs(bubble) > SUSPECT_GAP,
-                    notable=-SUSPECT_GAP <= bubble <= -DISCOUNT_BAND)
+                    notable=-SUSPECT_GAP <= bubble <= -DISCOUNT_BAND
+                    and locked != "buy",
+                    locked=locked, tracks=tracks, broad=broad)
         by_sleeve.setdefault(fund["sleeve"], []).append(fund)
 
     for items in by_sleeve.values():
@@ -442,9 +618,10 @@ def report(today=None):
               "equity_active": "سهامی"}
 
     for sleeve in ("gold", "equity"):
-        items = [f for f in discounts.get(sleeve) or [] if not f["suspect"]]
-        if items:
-            cheapest = items[0]
+        # The fund that can be bought, not merely the lowest against NAV.
+        cheapest = pick_fund(discounts.get(sleeve),
+                             need_broad=sleeve == "equity")["fund"]
+        if cheapest:
             summary.append(
                 "ارزان‌ترین صندوق %s نسبت به NAV: %s با %+.1f٪."
                 % (labels[sleeve], cheapest["symbol"], cheapest["discount_pct"]))
@@ -454,6 +631,12 @@ def report(today=None):
         "funds": discounts,
         "sleeve_labels": labels,
         "summary": summary,
+        # What the today card needs to choose a fund for ITS amount by the
+        # rule of pick_fund(), and to say what a unit costs to deal.
+        "limits": {"max_order_share_of_day": MAX_ORDER_SHARE_OF_DAY},
+        "costs": {"fund_round_trip_pct": config.LIVE_FUND_ROUND_TRIP_PCT,
+                  "fund_buy_pct": config.LIVE_BUY_COST_PCT,
+                  "fund_sell_pct": config.LIVE_FUND_SELL_COST_PCT},
         "notes": [
             "هیچ‌کدام پیش‌بینی قیمت نیست. تخفیف به NAV یعنی همان دارایی را امروز "
             "ارزان‌تر می‌خرید؛ تضمین نمی‌کند تخفیف بسته شود.",
@@ -462,6 +645,11 @@ def report(today=None):
             "منفی است.",
             "قیمت اخزا آخرین قیمت پایانی است؛ برای سری‌های کم‌معامله ممکن است "
             "قدیمی باشد (ستون ارزش معامله).",
-            "کارمزد کارگزار کسر نشده است.",
+            "کارمزد از این اعداد کسر نشده است: خرید و فروش واحد صندوق روی‌هم حدود "
+            "%.2f٪ است (واحد صندوق مالیات نقل‌وانتقال ندارد؛ برای سهم %.2f٪)، و "
+            "اخزایی که تا سررسید بماند فروخته نمی‌شود."
+            % (config.LIVE_FUND_ROUND_TRIP_PCT, config.LIVE_ROUND_TRIP_PCT),
+            "صندوقی که آخرین معامله‌اش در سقف دامنه‌ی نوسان است (صف خرید) ارزان "
+            "خوانده نمی‌شود: آن فاصله از NAV را دامنه ساخته و نمی‌شود خریدش.",
         ],
     }
