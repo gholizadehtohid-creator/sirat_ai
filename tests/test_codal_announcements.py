@@ -677,5 +677,61 @@ class DryRunTests(unittest.TestCase):
         self.assertEqual(marks, [("1", "1404/12/29", 1)])
 
 
+class WeeklyPassTests(unittest.TestCase):
+    """--min-days: the evening task's weekly --backfill-dps (2026-11-23)."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="sirat-dps-stamp-")
+        self.stamp = os.path.join(self.dir, "data", "dps_backfill_last.json")
+        patcher = mock.patch.object(a, "DPS_PASS_STAMP", self.stamp)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def run_cli(self, *argv):
+        with mock.patch.object(a, "backfill_dividends", return_value={
+                "searched": 40, "stored": 3, "refused": 2,
+                "stopped": False}) as backfill, \
+                mock.patch.object(a, "report"), mock.patch("sys.stdout"):
+            self.assertEqual(a.main(list(argv)), 0)
+        return backfill
+
+    def test_never_run_is_due(self):
+        self.assertEqual(a.dps_pass_due(7), (True, None))
+
+    def test_a_pass_is_recorded_however_it_went(self):
+        from datetime import timedelta
+        now = a.datetime(2026, 11, 23, 16, 0, tzinfo=a.timezone.utc)
+        a.record_dps_pass({"searched": 40, "refused": 17}, now=now)
+        self.assertEqual(a.last_dps_pass(), now)
+        later = a.datetime(2026, 11, 29, 16, 0, tzinfo=a.timezone.utc)
+        due, age = a.dps_pass_due(7, now=later)
+        self.assertFalse(due)
+        self.assertAlmostEqual(age, 6.0)
+        self.assertTrue(a.dps_pass_due(7, now=later + timedelta(days=1))[0])
+
+    def test_the_weekly_pass_is_skipped_while_the_last_is_young(self):
+        self.assertEqual(self.run_cli("--backfill-dps", "--min-days", "7",
+                                      "--limit", "40").call_count, 1)
+        self.assertIsNotNone(a.last_dps_pass())
+        self.assertEqual(self.run_cli("--backfill-dps", "--min-days", "7",
+                                      "--limit", "40").call_count, 0)
+
+    def test_a_manual_pass_ignores_the_stamp_but_moves_it(self):
+        a.record_dps_pass({}, now=a.datetime(2026, 11, 23, tzinfo=a.timezone.utc))
+        self.assertEqual(self.run_cli("--backfill-dps").call_count, 1)
+        self.assertGreater(a.last_dps_pass(),
+                           a.datetime(2026, 11, 23, tzinfo=a.timezone.utc))
+
+    def test_a_torn_stamp_reads_as_never(self):
+        os.makedirs(os.path.dirname(self.stamp))
+        with open(self.stamp, "w", encoding="utf-8") as handle:
+            handle.write('{"finished_at": "2026-11-')
+        self.assertIsNone(a.last_dps_pass())
+
+
 if __name__ == "__main__":
     unittest.main()

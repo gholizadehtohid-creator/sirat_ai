@@ -15,3 +15,8 @@ rem Bounded: past 2 MB the log becomes .log.1 (log_rotate.py).
 "%PY%" log_rotate.py logs\task_watch.log
 echo ===== %date% %time% ===== >> logs\task_watch.log
 "%PY%" codal_watch.py >> logs\task_watch.log 2>&1
+set RC=%ERRORLEVEL%
+rem A run that finished ends with a "done" line and its exit code; one
+rem that stops without it was killed (added 2026-11-23).
+echo ===== done %date% %time%: codal-watch exit %RC% ===== >> logs\task_watch.log
+exit /b %RC%

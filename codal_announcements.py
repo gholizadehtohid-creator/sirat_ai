@@ -5,6 +5,10 @@
                                                  last annual AGM's DPS, one
                                                  search per equity lacking it
                                                  or holding an older year's
+    python codal_announcements.py --backfill-dps --min-days 7 --limit 40
+                                                 the evening task's weekly
+                                                 pass: skipped while the last
+                                                 finished one is younger
     python codal_announcements.py --repair-stale-dps [--apply]
                                                  companies holding an older
                                                  year's DPS (dry run; --apply
@@ -39,6 +43,8 @@ nothing: the meeting adjourned.
 """
 
 import argparse
+import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -552,6 +558,47 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
             "stopped": stopped}
 
 
+# When the last --backfill-dps pass finished. The evening task runs the pass
+# weekly (approved 2026-11-23); a weekday test would skip a whole week every
+# time the laptop was off that one evening, so it asks this instead.
+DPS_PASS_STAMP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "data", "dps_backfill_last.json")
+
+
+def last_dps_pass(path=None):
+    """When the last --backfill-dps pass finished (aware UTC), or None."""
+
+    try:
+        with open(path or DPS_PASS_STAMP, encoding="utf-8") as handle:
+            stamp = datetime.fromisoformat(json.load(handle)["finished_at"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def record_dps_pass(summary, path=None, now=None):
+    """Note that a pass finished, with its counts. Written whole or not at
+    all: a torn stamp would read as "never" and start a pass every night."""
+
+    path = path or DPS_PASS_STAMP
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    payload = dict(summary or {}, finished_at=(
+        now or datetime.now(timezone.utc)).isoformat(timespec="seconds"))
+    with open(path + ".tmp", "w", encoding="utf-8") as handle:
+        json.dump(payload, handle)
+    os.replace(path + ".tmp", path)
+
+
+def dps_pass_due(min_days, path=None, now=None):
+    """(due, age in days of the last pass or None)."""
+
+    last = last_dps_pass(path)
+    if last is None:
+        return True, None
+    age = ((now or datetime.now(timezone.utc)) - last).total_seconds() / 86400
+    return age >= min_days, age
+
+
 def _decision_titles(conn, table):
     """(ins_code, title, tracing_no) of every letter that decides a year's
     dividend: the annual AGMs' (recess notices included -- the callers look
@@ -771,6 +818,10 @@ def main(argv=None):
                         help="search each equity's last annual AGM for its DPS")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--hours", type=float, default=6.0)
+    parser.add_argument("--min-days", type=float,
+                        help="with --backfill-dps: skip the pass while the "
+                             "last finished one is younger than this many "
+                             "days (the evening task's weekly pass)")
     parser.add_argument("--repair-stale-dps", action="store_true",
                         help="list companies whose DPS is for an older fiscal "
                              "year than an AGM decision on file (dry run)")
@@ -783,7 +834,15 @@ def main(argv=None):
         reopen_stale_dividends(apply=args.apply)
         return 0
     if args.backfill_dps:
-        backfill_dividends(limit=args.limit, hours=args.hours)
+        if args.min_days is not None:
+            due, age = dps_pass_due(args.min_days)
+            if not due:
+                print("dps: last pass %.1f days ago; the next is due after "
+                      "%g days" % (age, args.min_days), flush=True)
+                return 0
+        # Recorded however the pass went, refusals included: retrying the
+        # next evening is how a throttle gets renewed (codal-api-behaviour).
+        record_dps_pass(backfill_dividends(limit=args.limit, hours=args.hours))
     report()
     return 0
 

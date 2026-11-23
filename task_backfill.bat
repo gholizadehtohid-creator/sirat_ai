@@ -20,3 +20,8 @@ rem 23.5 hours since 2026-11-05: a six-hour day left the queue (~21,000
 rem statements) idle eighteen hours out of twenty-four, and the campaign's
 rem own back-off already handles Codal's firewall. Ends before the next 09:00.
 "%PY%" codal_backfill.py --hours 23.5 --priority-date 1399/01/01 >> logs\task_backfill.log 2>&1
+set RC=%ERRORLEVEL%
+rem A run that finished ends with a "done" line and its exit code; one
+rem that stops without it was killed (added 2026-11-23).
+echo ===== done %date% %time%: codal-backfill exit %RC% ===== >> logs\task_backfill.log
+exit /b %RC%

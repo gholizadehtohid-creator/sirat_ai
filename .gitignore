@@ -107,3 +107,6 @@ data/backups/
 data/bill_yield.json
 data/market_valuation.json
 data/bill_quotes.json
+# When the last --backfill-dps pass finished (codal_announcements.py): the
+# evening task's weekly gate, one machine's state.
+data/dps_backfill_last.json

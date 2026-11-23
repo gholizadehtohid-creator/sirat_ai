@@ -25,8 +25,9 @@ rem 08:40 Tehran is before the 09:00 open. The machine runs on +03:30 with no
 rem DST, so local time is used directly.
 rem
 rem Scheduled Sat-Wed 08:40 by: schtasks /TN SIRAT-session
-rem Battery settings matter and do not travel with this file -- see
-rem task_evening.bat and the 0x800710E0 note there.
+rem Task settings live in Task Scheduler, not here: no battery stop,
+rem wake to run, and a 10 h limit -- PT10H since 2026-11-23, past the
+rem monitor's own 18:00 stop; PT5H killed long runs with 0x41306.
 cd /d C:\SIRAT-AI
 set PY=C:\Users\gholizadeh-t\AppData\Local\Programs\Python\Python314\python.exe
 rem Persian in the output: without this a print of a symbol crashes the run.
@@ -35,3 +36,8 @@ rem Bounded: past 2 MB the log becomes .log.1 (log_rotate.py).
 "%PY%" log_rotate.py logs\task_session.log
 echo ===== %date% %time% ===== >> logs\task_session.log
 "%PY%" monitor.py >> logs\task_session.log 2>&1
+set RC=%ERRORLEVEL%
+rem A run that finished ends with a "done" line and its exit code; one
+rem that stops without it was killed (added 2026-11-23).
+echo ===== done %date% %time%: monitor exit %RC% ===== >> logs\task_session.log
+exit /b %RC%
