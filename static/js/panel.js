@@ -162,6 +162,16 @@ function num(v, digits = 2) {
   return faNumber(digits).format(Number(v));
 }
 
+// A server number shown at the precision it was sent with, in the panel's
+// one format. The basket's risk card printed them raw -- "1.565" and
+// "21.41" beside "۲۱۸٫۷۸" (v3 design, 2026-11-23).
+function numAsSent(v) {
+  if (v === null || v === undefined || v === "" || Number.isNaN(Number(v))) return "—";
+  const text = String(v);
+  const digits = /\.(\d+)$/.test(text) ? Math.min(text.split(".")[1].length, 4) : 0;
+  return num(v, digits);
+}
+
 // The engines' status codes are English; the reader is not. Shown in
 // Persian, with the code kept in the tooltip for anyone checking the logs.
 const STATUS_FA = {
@@ -3016,28 +3026,28 @@ function renderPortfolio(rep) {
     { k: "موقعیت‌ها", v: totals.positions, sub: `در ${totals.sectors} صنعت` },
     {
       k: "سرمایه‌گذاری‌شده",
-      v: `${totals.invested_pct}٪`,
+      v: `${numAsSent(totals.invested_pct)}٪`,
       sub: `${money(totals.invested)} ${currencyName(basket.currency)}`
     },
     {
       k: "نقد",
-      v: `${(100 - totals.invested_pct).toFixed(1)}٪`,
+      v: `${num(100 - totals.invested_pct, 1)}٪`,
       sub: `${money(totals.cash)} ${currencyName(basket.currency)}`
     },
     {
       k: "ریسک کل",
-      v: `<span class="down">${totals.total_risk_pct}٪</span>`,
+      v: `<span class="down">${numAsSent(totals.total_risk_pct)}٪</span>`,
       sub: "اگر همه‌ی حد ضررها بخورند"
     },
     {
       k: "نوسان سبد",
-      v: vol.annualised_pct != null ? `${vol.annualised_pct}٪` : "—",
+      v: vol.annualised_pct != null ? `${numAsSent(vol.annualised_pct)}٪` : "—",
       sub: vol.undiversified_pct != null
-        ? `بدون تنوع: ${vol.undiversified_pct}٪` : "سالانه"
+        ? `بدون تنوع: ${numAsSent(vol.undiversified_pct)}٪` : "سالانه"
     },
     {
       k: "نسبت تنوع‌بخشی",
-      v: vol.diversification_ratio ?? "—",
+      v: numAsSent(vol.diversification_ratio),
       sub: "هرچه بالاتر، تنوع مؤثرتر"
     }
   ]);
@@ -3110,31 +3120,31 @@ function renderRisk(riskRep, basket) {
   $("riskTable").innerHTML = table(
     ["سنجه", "مقدار", "معنی"],
     [
-      ["نوسان سالانه", vol.annualised_pct != null ? `${vol.annualised_pct}٪` : "—",
+      ["نوسان سالانه", vol.annualised_pct != null ? `${numAsSent(vol.annualised_pct)}٪` : "—",
         "انحراف معیار بازده سبد"],
-      ["اگر کاملاً همبسته بود", vol.undiversified_pct != null ? `${vol.undiversified_pct}٪` : "—",
+      ["اگر کاملاً همبسته بود", vol.undiversified_pct != null ? `${numAsSent(vol.undiversified_pct)}٪` : "—",
         "میانگین وزنی نوسان تک‌تک نمادها"],
-      ["نسبت تنوع‌بخشی", vol.diversification_ratio ?? "—",
+      ["نسبت تنوع‌بخشی", numAsSent(vol.diversification_ratio),
         "فاصله‌ی این دو، همان تنوع است"],
-      ["میانگین همبستگی جفتی", corr.average ?? "—",
+      ["میانگین همبستگی جفتی", numAsSent(corr.average),
         "نزدیک ۱ یعنی تنوع اسمی است"],
       [`VaR ${varRep.confidence ? Math.round(varRep.confidence * 100) : 95}٪ روزانه`,
         varRep.historical_pct != null
-          ? `${varRep.historical_pct}٪ (${money(varRep.historical_rials)})` : "—",
+          ? `${numAsSent(varRep.historical_pct)}٪ (${money(varRep.historical_rials)})` : "—",
         "بدترین روز در ۹۵٪ موارد"],
       ["CVaR / زیان مورد انتظار",
         varRep.conditional_pct != null
-          ? `${varRep.conditional_pct}٪ (${money(varRep.conditional_rials)})` : "—",
+          ? `${numAsSent(varRep.conditional_pct)}٪ (${money(varRep.conditional_rials)})` : "—",
         "میانگین زیان وقتی از VaR رد شود"],
       ["بدترین جلسه‌ی مشاهده‌شده",
-        varRep.worst_day_pct != null ? `${varRep.worst_day_pct}٪` : "—",
+        varRep.worst_day_pct != null ? `${numAsSent(varRep.worst_day_pct)}٪` : "—",
         `در ${varRep.sessions || 0} جلسه`],
-      [`بتا نسبت به ${esc(riskRep.benchmark || "شاخص")}`, beta.beta ?? "—",
-        beta.r_squared != null ? `R² ${beta.r_squared}` : "حساسیت به بازار"],
+      [`بتا نسبت به ${esc(riskRep.benchmark || "شاخص")}`, numAsSent(beta.beta),
+        beta.r_squared != null ? `R² ${numAsSent(beta.r_squared)}` : "حساسیت به بازار"],
       ["حداکثر افت تاریخی",
-        dd.max_drawdown_pct != null ? `${dd.max_drawdown_pct}٪` : "—",
-        dd.peak_date ? `${dd.peak_date} → ${dd.trough_date}` : "قله تا کف"],
-      ["تعداد مؤثر موقعیت‌ها", conc.effective_positions ?? "—",
+        dd.max_drawdown_pct != null ? `${numAsSent(dd.max_drawdown_pct)}٪` : "—",
+        dd.peak_date ? `${faDay(dd.peak_date, true)} → ${faDay(dd.trough_date, true)}` : "قله تا کف"],
+      ["تعداد مؤثر موقعیت‌ها", numAsSent(conc.effective_positions),
         `از ${conc.positions || 0} موقعیت واقعی`]
     ]
   );
@@ -3698,11 +3708,21 @@ function faTime(iso) {
 }
 
 function faDay(iso, withYear = false) {
+  // The market snapshot's price_date is compact (20261111) while the rest of
+  // the panel sends ISO days; the holdings card fed it straight in and
+  // printed "Invalid Date" (2026-11-23). An unreadable value is shown as it
+  // came, never as that phrase.
+  const text = String(iso ?? "");
+  const day = /^\d{8}$/.test(text)
+    ? `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+    : text.slice(0, 10);
   try {
-    return new Date(`${iso}T12:00:00`).toLocaleDateString("fa-IR-u-ca-persian",
+    const d = new Date(`${day}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return esc(text);
+    return d.toLocaleDateString("fa-IR-u-ca-persian",
       withYear ? { year: "numeric", month: "2-digit", day: "2-digit" }
                : { month: "2-digit", day: "2-digit" });
-  } catch (e) { return iso; }
+  } catch (e) { return esc(text); }
 }
 
 async function loadMarketflow() {
@@ -4517,6 +4537,7 @@ function renderToday() {
       ` <span class="hint">(مثال برای سرمایه‌ی ${money(rep.equity)} ریال؛ دارایی خودتان را در «سبد من» وارد کنید)</span>`;
     // What the instrument line says: an order only where this sleeve buys.
     let line = pick ? `بخرید: ${pick}` : `<span class="hint">${pending}</span>`;
+    let meter = "";
     if (own) {
       const gap = base * w / 100 - (own[sleeve] || 0);
       const now = nowPct(sleeve);
@@ -4524,13 +4545,22 @@ function renderToday() {
       const act = blocked ? "blocked" : !rebalance ? "hold" : small ? "none" : gap > 0 ? "buy" : "sell";
       // Functions, not strings: only the chosen one is built (`blocked` is
       // null on every other path).
-      amount = `الان ${num(now, 0)}٪ · هدف ${num(w, 0)}٪ → ` + {
+      // Now against target, drawn (v3 design, 2026-11-23): the bar is
+      // today's weight, the tick the target; the order below it is a pill.
+      // It used to be one 24-px sentence that wrapped over three lines.
+      const clamp = (x) => Math.max(0, Math.min(100, Number(x) || 0));
+      meter = `<div class="today-meter" role="img" aria-label="الان ${num(now, 0)}٪، هدف ${num(w, 0)}٪">` +
+        `<span class="now" style="width:${clamp(now)}%"></span>` +
+        `<span class="goal" style="inset-inline-start:${clamp(w)}%"></span></div>` +
+        `<div class="today-nums"><span>الان <b>${num(now, 0)}٪</b></span><span>هدف <b>${num(w, 0)}٪</b></span></div>`;
+      const pill = act === "buy" || act === "sell";
+      amount = (pill ? `<span class="today-act ${act}">` : "") + {
         blocked: () => `<span class="hint">ارزش ${blocked.map(esc).join("، ")} معلوم نیست؛ دستوری داده نمی‌شود</span>`,
         hold: () => `<strong>در محدوده‌ی هدف</strong> <span class="hint">(همه‌ی بخش‌ها درون ±${num(band, 0)} واحد) — کاری لازم نیست</span>`,
         none: () => `<strong>بدون تغییر</strong> <span class="hint">(کمتر از نیم درصد سبد)</span>`,
         buy: () => `<strong>بخرید ${money(gap)}</strong> <span class="pct">ریال</span>`,
         sell: () => `<strong>بفروشید ${money(-gap)}</strong> <span class="pct">ریال</span>`,
-      }[act]();
+      }[act]() + (pill ? "</span>" : "");
       const held = heldIn(sleeve);
       line = act === "buy"
         ? (pick ? `بخرید: ${pick}` : `<span class="hint">${pending}</span>`)
@@ -4541,6 +4571,7 @@ function renderToday() {
     }
     return `<div class="today-item">
       <div class="pct">${num(w, 0)}٪ ${esc(labels[sleeve] || sleeve)}</div>
+      ${meter}
       <div class="amt">${amount}</div>
       <div class="buy">${line}</div>
       <div class="why">${why}</div>

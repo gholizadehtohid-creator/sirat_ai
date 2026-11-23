@@ -4,8 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SIRAT AI — مدیریت هوشمند سبد سهام</title>
+<meta name="theme-color" content="#f2f4f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0f1c" media="(prefers-color-scheme: dark)">
+<link rel="preload" href="{{ url_for('static', filename='fonts/VazirmatnFD-wght.woff') }}" as="font" type="font/woff" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>📈</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232563d6'/><path d='M7 21l6-6 4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 </head>
 <body>
 <div class="wrap">
@@ -17,6 +20,22 @@
       <button id="refreshBtn" class="primary">↻ به‌روزرسانی داده‌ها</button>
     </div>
   </header>
+
+  <!-- Directly under the header since the v3 design (2026-11-23), above the
+       status lines. Four tabs instead of one page eleven sections long (2026-11-05: "the
+       page has become very crowded"). Every analysis is kept; each tab loads
+       its data the first time it is opened. -->
+  <nav class="tabs" id="tabs" role="tablist">
+    <button class="tab tab-guide" role="tab" data-tab="guide">راهنما</button>
+    <button class="tab" role="tab" data-tab="summary">خلاصه و اقدام امروز</button>
+    <button class="tab" role="tab" data-tab="stocks">سهام و سبد</button>
+    <button class="tab" role="tab" data-tab="live">بازار زنده</button>
+    <button class="tab" role="tab" data-tab="analysis">تحلیل‌ها</button>
+  </nav>
+
+  <!-- The provenance line and the loading panel share one row: a quiet line
+       each when all is well, the full width when something needs reading. -->
+  <div class="status-row">
 
   <div id="banner" class="banner is-idle" aria-live="polite">
     <span class="icon">…</span>
@@ -64,16 +83,8 @@
 
   </section>
 
-  <!-- Four tabs instead of one page eleven sections long (2026-11-05: "the
-       page has become very crowded"). Every analysis is kept; each tab loads
-       its data the first time it is opened. -->
-  <nav class="tabs" id="tabs" role="tablist">
-    <button class="tab tab-guide" role="tab" data-tab="guide">✦ راهنما</button>
-    <button class="tab" role="tab" data-tab="summary">خلاصه و اقدام امروز</button>
-    <button class="tab" role="tab" data-tab="stocks">سهام و سبد</button>
-    <button class="tab" role="tab" data-tab="live">بازار زنده</button>
-    <button class="tab" role="tab" data-tab="analysis">تحلیل‌ها</button>
-  </nav>
+  </div>
+
 
 
 

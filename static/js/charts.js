@@ -166,6 +166,39 @@ export function axisDate(value) {
   return text.slice(2);
 }
 
+/* The category gutter of a horizontal bar chart, sized to its labels.
+ * A fixed 78 px clipped every sector name longer than about ten letters
+ * ("بیمه وصندوق بازنشستگ", 2026-11-23). Measured where the chart is on screen,
+ * estimated where it is not (a closed tab measures 0); capped at 42% of the
+ * width, and a label longer than that is cut with an ellipsis and keeps its
+ * full text as a tooltip. */
+function labelGutter(svg, labels, width) {
+  const cap = Math.max(90, Math.round(width * 0.42));
+  let widest = 0;
+  const probe = axisText(svg, 0, -100, "", { "font-size": 12, "font-weight": 550 });
+  for (const label of labels) {
+    probe.textContent = String(label ?? "");
+    const measured = probe.getComputedTextLength ? probe.getComputedTextLength() : 0;
+    widest = Math.max(widest, measured || String(label ?? "").length * 6.6);
+  }
+  probe.remove();
+  return Math.min(cap, Math.max(78, Math.ceil(widest) + 20));
+}
+
+function fitLabel(node, maxWidth) {
+  const full = node.textContent;
+  if (!node.getComputedTextLength || node.getComputedTextLength() === 0
+      || node.getComputedTextLength() <= maxWidth) return;
+  let text = full;
+  while (text.length > 3 && node.getComputedTextLength() > maxWidth) {
+    text = text.slice(0, -1);
+    node.textContent = text + "…";
+  }
+  const title = document.createElementNS(NS, "title");
+  title.textContent = full;
+  node.appendChild(title);
+}
+
 function axisText(parent, x, y, text, extra = {}) {
   const t = el("text", {
     x, y,
@@ -194,12 +227,13 @@ export function hBarChart(container, opts) {
   if (!data.length) { container.innerHTML = '<div class="empty">داده‌ای نیست</div>'; return; }
 
   const rowH = 30, gap = 8;
-  const padL = 78, padR = 56, padT = 6, padB = 24;
+  const padR = 56, padT = 6, padB = 24;
   const width = Math.max(container.clientWidth || 520, 320);
-  const plotW = width - padL - padR;
   const height = padT + data.length * rowH + padB;
 
   const svg = svgRoot(container, width, height);
+  const padL = labelGutter(svg, data.map(d => d[labelKey]), width);
+  const plotW = width - padL - padR;
   const top = Math.max(max ?? Math.max(...data.map(d => d[valueKey])), 1);
 
   // hairline grid
@@ -228,10 +262,10 @@ export function hBarChart(container, opts) {
       x: 0, y, width, height: rowH, fill: "transparent"
     }, svg);
 
-    axisText(svg, padL - 10, y + barH / 2 + 4, d[labelKey], {
+    fitLabel(axisText(svg, padL - 10, y + barH / 2 + 4, d[labelKey], {
       "text-anchor": "end", fill: tok("--text-secondary"),
       "font-size": 12, "font-weight": 550
-    });
+    }), padL - 14);
 
     // Direct label outside the bar end — never clipped inside a short bar.
     axisText(svg, padL + w + 8, y + barH / 2 + 4, format(v), {
@@ -259,12 +293,13 @@ export function stackedHBar(container, opts) {
   if (!rows.length) { container.innerHTML = '<div class="empty">داده‌ای نیست</div>'; return; }
 
   const rowH = 34, gap = 12, SEG_GAP = 2;
-  const padL = 78, padR = 44, padT = 6, padB = 24;
+  const padR = 44, padT = 6, padB = 24;
   const width = Math.max(container.clientWidth || 520, 320);
-  const plotW = width - padL - padR;
   const height = padT + rows.length * rowH + padB;
 
   const svg = svgRoot(container, width, height);
+  const padL = labelGutter(svg, rows.map(r => r[labelKey]), width);
+  const plotW = width - padL - padR;
 
   for (const t of niceTicks(0, total, 4)) {
     const x = padL + (t / total) * plotW;
@@ -303,10 +338,10 @@ export function stackedHBar(container, opts) {
       cursor += rawW;
     });
 
-    axisText(svg, padL - 10, y + barH / 2 + 4, row[labelKey], {
+    fitLabel(axisText(svg, padL - 10, y + barH / 2 + 4, row[labelKey], {
       "text-anchor": "end", fill: tok("--text-secondary"),
       "font-size": 12, "font-weight": 550
-    });
+    }), padL - 14);
 
     axisText(svg, padL + (sum / total) * plotW + 8, y + barH / 2 + 4, format(sum), {
       fill: tok("--text-primary"), "font-size": 12, "font-weight": 600
