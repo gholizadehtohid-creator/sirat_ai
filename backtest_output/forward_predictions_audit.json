@@ -1,11 +1,53 @@
 {
- "entries": 20,
- "ok": 7,
+ "entries": 28,
+ "ok": 10,
  "inadmissible": 13,
- "missed": 0,
+ "missed": 5,
  "pending": 0,
+ "gaps": 39,
+ "gap_sessions": [
+  "2026-08-22",
+  "2026-08-25",
+  "2026-09-02",
+  "2026-09-05",
+  "2026-09-06",
+  "2026-09-07",
+  "2026-09-08",
+  "2026-09-09",
+  "2026-09-12",
+  "2026-09-13",
+  "2026-09-14",
+  "2026-09-15",
+  "2026-09-19",
+  "2026-09-21",
+  "2026-09-22",
+  "2026-09-26",
+  "2026-09-27",
+  "2026-09-28",
+  "2026-09-29",
+  "2026-09-30",
+  "2026-10-03",
+  "2026-10-04",
+  "2026-10-05",
+  "2026-10-06",
+  "2026-10-07",
+  "2026-10-10",
+  "2026-10-11",
+  "2026-10-12",
+  "2026-10-13",
+  "2026-10-18",
+  "2026-10-20",
+  "2026-10-21",
+  "2026-10-24",
+  "2026-10-25",
+  "2026-10-26",
+  "2026-10-27",
+  "2026-11-01",
+  "2026-11-02",
+  "2026-11-03"
+ ],
  "rule": "admissible: computed_at before the outcome session's pre-open (08:45 Tehran); width_ok: n_names at least 75% of the equities that traded",
- "generated_at": "2026-11-11T18:07:34+00:00",
+ "generated_at": "2026-11-23T12:37:14+00:00",
  "entries_detail": [
   {
    "session": "2026-08-19",
@@ -13,7 +55,7 @@
    "outcome_session": "2026-08-22",
    "admissible": false,
    "n_names": 632,
-   "traded_equities_now": 705,
+   "traded_equities_now": 706,
    "width_ok": true,
    "status": "inadmissible"
   },
@@ -23,7 +65,7 @@
    "outcome_session": "2026-08-24",
    "admissible": true,
    "n_names": 636,
-   "traded_equities_now": 711,
+   "traded_equities_now": 712,
    "width_ok": true,
    "status": "ok"
   },
@@ -33,7 +75,7 @@
    "outcome_session": "2026-08-25",
    "admissible": false,
    "n_names": 650,
-   "traded_equities_now": 723,
+   "traded_equities_now": 724,
    "width_ok": true,
    "status": "inadmissible"
   },
@@ -43,7 +85,7 @@
    "outcome_session": "2026-08-29",
    "admissible": true,
    "n_names": 235,
-   "traded_equities_now": 735,
+   "traded_equities_now": 736,
    "width_ok": false,
    "status": "inadmissible"
   },
@@ -53,7 +95,7 @@
    "outcome_session": "2026-08-31",
    "admissible": true,
    "n_names": 656,
-   "traded_equities_now": 731,
+   "traded_equities_now": 733,
    "width_ok": true,
    "status": "ok"
   },
@@ -63,7 +105,7 @@
    "outcome_session": "2026-09-01",
    "admissible": false,
    "n_names": 656,
-   "traded_equities_now": 732,
+   "traded_equities_now": 735,
    "width_ok": true,
    "status": "inadmissible"
   },
@@ -73,7 +115,7 @@
    "outcome_session": "2026-09-02",
    "admissible": false,
    "n_names": 372,
-   "traded_equities_now": 736,
+   "traded_equities_now": 739,
    "width_ok": false,
    "status": "inadmissible"
   },
@@ -83,7 +125,7 @@
    "outcome_session": "2026-09-19",
    "admissible": true,
    "n_names": 662,
-   "traded_equities_now": 742,
+   "traded_equities_now": 745,
    "width_ok": true,
    "status": "ok"
   },
@@ -93,7 +135,7 @@
    "outcome_session": "2026-09-21",
    "admissible": true,
    "n_names": 622,
-   "traded_equities_now": 737,
+   "traded_equities_now": 739,
    "width_ok": true,
    "status": "ok"
   },
@@ -103,7 +145,7 @@
    "outcome_session": "2026-09-26",
    "admissible": true,
    "n_names": 575,
-   "traded_equities_now": 740,
+   "traded_equities_now": 743,
    "width_ok": true,
    "status": "ok"
   },
@@ -113,7 +155,7 @@
    "outcome_session": "2026-10-17",
    "admissible": true,
    "n_names": 668,
-   "traded_equities_now": 761,
+   "traded_equities_now": 763,
    "width_ok": true,
    "status": "ok"
   },
@@ -123,7 +165,7 @@
    "outcome_session": "2026-10-18",
    "admissible": false,
    "n_names": 663,
-   "traded_equities_now": 754,
+   "traded_equities_now": 756,
    "width_ok": true,
    "status": "inadmissible"
   },
@@ -133,7 +175,7 @@
    "outcome_session": "2026-10-20",
    "admissible": false,
    "n_names": 135,
-   "traded_equities_now": 746,
+   "traded_equities_now": 748,
    "width_ok": false,
    "status": "inadmissible"
   },
@@ -143,7 +185,7 @@
    "outcome_session": "2026-10-31",
    "admissible": true,
    "n_names": 278,
-   "traded_equities_now": 750,
+   "traded_equities_now": 752,
    "width_ok": false,
    "status": "inadmissible"
   },
@@ -153,7 +195,7 @@
    "outcome_session": "2026-11-01",
    "admissible": false,
    "n_names": 650,
-   "traded_equities_now": 747,
+   "traded_equities_now": 748,
    "width_ok": true,
    "status": "inadmissible"
   },
@@ -163,7 +205,7 @@
    "outcome_session": "2026-11-07",
    "admissible": true,
    "n_names": 648,
-   "traded_equities_now": 744,
+   "traded_equities_now": 745,
    "width_ok": true,
    "status": "ok"
   },
@@ -173,7 +215,7 @@
    "outcome_session": "2026-11-08",
    "admissible": false,
    "n_names": 614,
-   "traded_equities_now": 750,
+   "traded_equities_now": 751,
    "width_ok": true,
    "status": "inadmissible"
   },
@@ -183,7 +225,7 @@
    "outcome_session": "2026-11-09",
    "admissible": false,
    "n_names": 608,
-   "traded_equities_now": 749,
+   "traded_equities_now": 750,
    "width_ok": true,
    "status": "inadmissible"
   },
@@ -206,6 +248,66 @@
    "traded_equities_now": 753,
    "width_ok": false,
    "status": "inadmissible"
+  },
+  {
+   "session": "2026-11-11",
+   "computed_at": "2026-11-13T16:11:53+00:00",
+   "outcome_session": "2026-11-14",
+   "admissible": true,
+   "n_names": 766,
+   "traded_equities_now": 768,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-11-14",
+   "computed_at": "2026-11-16T18:04:08+00:00",
+   "status": "missed",
+   "reason": "superseded: a later session (2026-11-16) became loggable first -- data incomplete, or no run in time"
+  },
+  {
+   "session": "2026-11-15",
+   "computed_at": "2026-11-16T18:04:08+00:00",
+   "status": "missed",
+   "reason": "superseded: a later session (2026-11-16) became loggable first -- data incomplete, or no run in time"
+  },
+  {
+   "session": "2026-11-16",
+   "computed_at": "2026-11-16T18:04:11+00:00",
+   "outcome_session": "2026-11-17",
+   "admissible": true,
+   "n_names": 767,
+   "traded_equities_now": 771,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-11-17",
+   "computed_at": "2026-11-19T15:37:31+00:00",
+   "status": "missed",
+   "reason": "superseded: a later session (2026-11-18) became loggable first -- data incomplete, or no run in time"
+  },
+  {
+   "session": "2026-11-18",
+   "computed_at": "2026-11-19T15:37:34+00:00",
+   "outcome_session": "2026-11-21",
+   "admissible": true,
+   "n_names": 752,
+   "traded_equities_now": 755,
+   "width_ok": true,
+   "status": "ok"
+  },
+  {
+   "session": "2026-11-21",
+   "computed_at": "2026-11-22T15:53:11+00:00",
+   "status": "missed",
+   "reason": "the next session (2026-11-22) is already stored"
+  },
+  {
+   "session": "2026-11-22",
+   "computed_at": "2026-11-23T12:24:12+00:00",
+   "status": "missed",
+   "reason": "trading day 2026-11-23 had opened (pre-open 08:45 Tehran)"
   }
  ]
 }
