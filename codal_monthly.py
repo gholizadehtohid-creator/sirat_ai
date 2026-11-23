@@ -2,7 +2,8 @@
 
     python codal_monthly.py                 one paced pass over every company
     python codal_monthly.py --hours 2       stop after two hours
-    python codal_monthly.py --per-company 12   twelve months of history
+    python codal_monthly.py --per-company 12   twelve months, searched
+    python codal_monthly.py --history-months 0   skip the history phase
     python codal_monthly.py --report        what is stored
 
 INCREMENTAL, THREE WAYS
@@ -41,6 +42,26 @@ CHECK_HOURS = 20
 NEVER_FILED_HOURS = 24 * 7
 BATCH = 30
 PAUSE_SECONDS = 60
+
+# ---- the monthly history (2026-11-23) --------------------------------------
+# The user asked for the forward analysis to be made more accurate. Its
+# error is in the margin, the cost side (outlook_calibration), and a year of
+# monthly reports is what shows where sales and purchases are heading -- but
+# only the newest one or two months were stored (1,183 reports for 610
+# companies): the due pass downloads `per_company` of the letters it finds,
+# and once a company is current it is never searched again.
+#
+# The letters of the missing months are mostly already known: every search
+# the due pass made saved a company's twenty newest ن-۳۰ letters to
+# codal_letters (7,046 for 656 companies). So the history phase SEARCHES
+# NOTHING -- search.codal.ir is the host that throttles (codal-monthly
+# memory) -- and only downloads those letters' documents, at most
+# HISTORY_LIMIT per run, through the same pacer, after the due companies,
+# inside the same --hours. Fifteen months: the last three against the same
+# three a year before. On 2026-11-23 that was ~4,000 documents: about
+# fourteen nights of the evening task's existing step.
+HISTORY_MONTHS = 15
+HISTORY_LIMIT = 300
 
 
 def _now():
@@ -126,6 +147,84 @@ def _known():
     have |= {r[0] for r in conn.execute("SELECT tracing_no FROM monthly_failures")}
     conn.close()
     return have
+
+
+def history_due(months=HISTORY_MONTHS, today=None, have=None):
+    """[(ins_code, [letter, ...])] of known letters for months not yet stored.
+
+    The window is the `months` closed months up to the last one. One letter
+    per company-month, the newest published (a correction wins); companies
+    with the most missing months first, so a run that stops early has
+    filled the emptiest histories. Nothing here asks codal.ir anything.
+    """
+
+    if not months:
+        return []
+    _ensure_tables()
+    have = have if have is not None else _known()
+    last = last_closed_month(today)
+    first = jalali.add_months(last[0], last[1], -(int(months) - 1))
+    lo, hi = "%04d/%02d" % first, "%04d/%02d" % last
+
+    conn = fundamental_db._connect()
+    stored = {(r[0], r[1][:7]) for r in conn.execute(
+        "SELECT ins_code, period_end FROM monthly_reports")}
+    conn.close()
+
+    conn = database._connect()
+    try:
+        rows = conn.execute("""
+            SELECT tracing_no, ins_code, symbol, title, published_at, excel_url
+            FROM codal_letters WHERE letter_code = ? AND excel_url IS NOT NULL
+            ORDER BY published_at DESC
+        """, (LETTER_CODE,)).fetchall()
+    except Exception:                                           # noqa: BLE001
+        rows = []
+    finally:
+        conn.close()
+
+    equities = {str(r["ins_code"]) for r in database.load_instruments(equities_only=True)}
+    wanted = {}
+    for tracing, code, symbol, title, published, url in rows:
+        code = str(code)
+        if code not in equities or tracing in have or not url:
+            continue
+        period = monthly_reports.period_end_of(title)
+        if not period:
+            continue
+        month = "%04d/%02d" % period[:2]
+        if not lo <= month <= hi or (code, month) in stored:
+            continue
+        wanted.setdefault(code, {}).setdefault(month, {
+            "tracing_no": tracing, "symbol": symbol, "title": title,
+            "published_at": published, "excel_url": url})
+    out = [(code, [by_month[m] for m in sorted(by_month, reverse=True)])
+           for code, by_month in wanted.items()]
+    out.sort(key=lambda pair: (-len(pair[1]), pair[0]))
+    return out
+
+
+def _fetch_one(client, pace, code, letter, have, totals):
+    """Download, parse and store one letter. False when the host refused."""
+
+    got = client.fetch_sheets(letter["excel_url"], archive_key=letter["tracing_no"])
+    pace(got.transient if not got.ok else False)
+    if not got.ok:
+        if got.transient:
+            totals["failed"] += 1
+            return False
+        _fail(code, letter, got.error or "unreadable")
+        totals["unreadable"] += 1
+        return True
+    record = monthly_reports.parse(got.data, letter["title"])
+    if record:
+        store(code, letter, record)
+        have.add(letter["tracing_no"])
+        totals["stored"] += 1
+    else:
+        _fail(code, letter, "no sales, purchase or income table")
+        totals["unreadable"] += 1
+    return True
 
 
 def search(client, symbol):
@@ -229,8 +328,9 @@ class Pacer:
             self.in_batch = 0
 
 
-def run(hours=None, per_company=2, limit=None, verbose=True, client=None):
-    """One paced pass over the companies that are due."""
+def run(hours=None, per_company=2, limit=None, verbose=True, client=None,
+        history_months=HISTORY_MONTHS, history_limit=HISTORY_LIMIT):
+    """One paced pass over the companies that are due, then the history."""
 
     import codal_sync
 
@@ -270,24 +370,8 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None):
         fresh = [l for l in letters if l["tracing_no"] not in have and l["excel_url"]]
 
         for letter in fresh[:per_company]:
-            got = client.fetch_sheets(letter["excel_url"],
-                                      archive_key=letter["tracing_no"])
-            pace(got.transient if not got.ok else False)
-            if not got.ok:
-                if got.transient:
-                    totals["failed"] += 1
-                    break
-                _fail(code, letter, got.error or "unreadable")
-                totals["unreadable"] += 1
-                continue
-            record = monthly_reports.parse(got.data, letter["title"])
-            if record:
-                store(code, letter, record)
-                have.add(letter["tracing_no"])
-                totals["stored"] += 1
-            else:
-                _fail(code, letter, "no sales, purchase or income table")
-                totals["unreadable"] += 1
+            if not _fetch_one(client, pace, code, letter, have, totals):
+                break
 
         _status(code, letters=len(letters))
 
@@ -299,6 +383,35 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None):
     if verbose:
         print("monthly: done -- %(checked)d checked, %(stored)d stored, "
               "%(unreadable)d unreadable, %(failed)d failed" % totals, flush=True)
+
+    # ---- the history: known letters of missing months, no searches --------
+    totals["history_stored"] = 0
+    if history_months and history_limit and not pace.stop and \
+            not (deadline and time.monotonic() > deadline):
+        due = history_due(history_months, have=have)
+        if verbose:
+            print("monthly history: %d company-months known and missing in %d "
+                  "companies; this run takes at most %d"
+                  % (sum(len(v) for _c, v in due), len(due), history_limit),
+                  flush=True)
+        before = totals["stored"]
+        taken = 0
+        for code, letters in due:
+            stop = False
+            for letter in letters:
+                if taken >= history_limit or pace.stop or \
+                        (deadline and time.monotonic() > deadline):
+                    stop = True
+                    break
+                taken += 1
+                if not _fetch_one(client, pace, code, letter, have, totals):
+                    break                   # refused: the pacer decides
+            if stop:
+                break
+        totals["history_stored"] = totals["stored"] - before
+        if verbose:
+            print("monthly history: %d downloaded, %d stored"
+                  % (taken, totals["history_stored"]), flush=True)
     return totals
 
 
@@ -373,6 +486,11 @@ def main(argv=None):
     parser.add_argument("--hours", type=float, default=None)
     parser.add_argument("--per-company", type=int, default=2)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--history-months", type=int, default=HISTORY_MONTHS,
+                        help="closed months of history to fill from known "
+                             "letters (0: none)")
+    parser.add_argument("--history-limit", type=int, default=HISTORY_LIMIT,
+                        help="history documents downloaded per run at most")
     parser.add_argument("--report", action="store_true")
     args = parser.parse_args(argv)
 
@@ -388,7 +506,8 @@ def main(argv=None):
         print("monthly: another collector is running; nothing to do")
         return 0
 
-    run(hours=args.hours, per_company=args.per_company, limit=args.limit)
+    run(hours=args.hours, per_company=args.per_company, limit=args.limit,
+        history_months=args.history_months, history_limit=args.history_limit)
     report()
     return 0
 

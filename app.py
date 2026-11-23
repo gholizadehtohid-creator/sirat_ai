@@ -1109,6 +1109,42 @@ def api_outlook():
         return handle_error(exc)
 
 
+@app.route("/api/report")
+def api_report():
+    """One company's forward fundamental analysis as a PDF (stock_report.py).
+
+    ?symbol=فولاد. Built when asked -- the user's choice (2026-11-23), not
+    nightly -- in about three seconds, and opened in a new tab, so an error
+    is a short page rather than JSON. Under /api/, so the same-origin guard
+    applies: another site cannot make this machine print PDFs.
+    """
+
+    import stock_report
+    from flask import send_file
+    from markupsafe import escape
+
+    symbol = (request.args.get("symbol") or "").strip()
+
+    def page(message, status):
+        body = ('<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8">'
+                '<title>گزارش ساخته نشد</title><body style="font-family:Tahoma;'
+                'padding:24px;color:#0f1729"><h3>گزارش ساخته نشد</h3><p>%s</p></body></html>'
+                % escape(message))
+        return body, status, {"Content-Type": "text/html; charset=utf-8"}
+
+    if not symbol:
+        return page("نماد را بنویسید.", 400)
+    try:
+        path = stock_report.build(symbol)
+    except stock_report.ReportError as exc:
+        return page(str(exc), 404)
+    except Exception as exc:                                    # noqa: BLE001
+        app.logger.exception("report for %s failed", symbol)
+        return page("%s: %s" % (type(exc).__name__, str(exc)[:200]), 500)
+    return send_file(path, mimetype="application/pdf", as_attachment=False,
+                     download_name=os.path.basename(path), max_age=0)
+
+
 @app.route("/api/intelligence")
 def api_intelligence():
     """Market-intelligence REPORT (news analysis). Read-only, memoised.

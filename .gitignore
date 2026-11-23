@@ -110,3 +110,9 @@ data/bill_quotes.json
 # When the last --backfill-dps pass finished (codal_announcements.py): the
 # evening task's weekly gate, one machine's state.
 data/dps_backfill_last.json
+# The dollar series (fx.py) and the outlook's measured error and dollar
+# slopes (outlook_calibration.py): refetched and rebuilt, one machine's state.
+data/fx_rates.json
+data/outlook_calibration.json
+# Per-stock PDF reports (stock_report.py), built on demand.
+reports/

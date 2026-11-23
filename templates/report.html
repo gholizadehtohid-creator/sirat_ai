@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>گزارش تحلیل بنیادی آینده‌نگر — {{ r.symbol }}</title>
+{# One company's report, printed to PDF by stock_report.py. The page is A4;
+   the sections flow onto as many A4 pages as they need (three to four;
+   blocks are kept whole across a page break). Colours and type are
+   the panel's design system v3 (static/css/panel.css, light theme). #}
+<style>
+@font-face { font-family: "Vazirmatn FD"; src: url("{{ font_url }}") format("woff"); font-weight: 100 900; }
+@page { size: A4; margin: 13mm 12mm 14mm; }
+:root {
+  --ink: #0f1729; --ink-2: #475467; --ink-3: #667085; --line: #e4e7ec;
+  --surface: #f6f7f9; --accent: #2563d6; --accent-soft: #eaf1fd;
+  --up: #067647; --down: #c0292b; --warn: #b54708; --warn-soft: #fff6ed;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: "Vazirmatn FD", "B Yekan", Tahoma, sans-serif; color: var(--ink);
+       font-size: 9.2pt; line-height: 1.6; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.page { margin-top: 14px; }
+.page:first-of-type { margin-top: 0; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between;
+                border-bottom: 1.5px solid var(--accent); margin: 0 0 6px; padding-bottom: 2px;
+                break-after: avoid; }
+.section-head h2 { margin: 0; }
+.section-head .when { color: var(--ink-3); font-size: 8pt; }
+.box, .figure, table, .tiles, .caveat, .keep { break-inside: avoid; }
+h2, h3 { break-after: avoid; }
+.top { display: flex; align-items: center; justify-content: space-between;
+       border-bottom: 2px solid var(--accent); padding-bottom: 6px; margin-bottom: 10px; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-2); font-size: 9pt; }
+.mark { width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(135deg, #2563d6, #1d52b8);
+        color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 12pt; }
+.top .when { color: var(--ink-3); font-size: 8.5pt; }
+h1 { font-size: 22pt; font-weight: 800; margin: 0; line-height: 1.3; }
+h1 .name { font-size: 11pt; font-weight: 500; color: var(--ink-2); margin-inline-start: 8px; }
+h2 { font-size: 13pt; font-weight: 750; margin: 0 0 6px; color: var(--ink); }
+h3 { font-size: 10.5pt; font-weight: 700; margin: 12px 0 4px; color: var(--ink); }
+p { margin: 3px 0 6px; }
+.meta { color: var(--ink-2); font-size: 9pt; margin: 2px 0 8px; }
+.meta b { color: var(--ink); font-weight: 650; }
+.note { color: var(--ink-3); font-size: 8.3pt; }
+.caveat { background: var(--warn-soft); border: 1px solid #f9dbaf; border-radius: 8px; padding: 6px 10px;
+          color: #7a2e0e; font-size: 8.4pt; margin: 6px 0 10px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 10px; }
+.tile { border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; background: #fff; }
+.tile .k { color: var(--ink-3); font-size: 8.3pt; }
+.tile .v { font-size: 15pt; font-weight: 750; line-height: 1.35; }
+.tile .s { color: var(--ink-2); font-size: 8.2pt; }
+.box { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 8px 0; background: #fff; }
+.box.soft { background: var(--surface); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+ul.list { margin: 4px 0; padding-inline-start: 0; list-style: none; }
+ul.list li { margin: 2px 0; padding-inline-start: 16px; position: relative; font-size: 8.9pt; }
+ul.list li::before { position: absolute; inset-inline-start: 0; font-weight: 700; }
+ul.warn li::before { content: "!"; color: var(--warn); }
+ul.good li::before { content: "✓"; color: var(--up); }
+ul.info li::before { content: "i"; color: var(--accent); }
+table { width: 100%; border-collapse: collapse; font-family: "B Nazanin", "Vazirmatn FD", serif; font-size: 10pt; margin: 3px 0 6px; }
+th, td { padding: 2px 7px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: top; }
+th { font-family: "Vazirmatn FD", sans-serif; font-size: 8.3pt; font-weight: 650; color: var(--ink-2);
+     background: var(--surface); border-bottom: 1px solid #d0d5dd; }
+td.n, th.n { text-align: left; unicode-bidi: plaintext; white-space: nowrap; }
+tr.est td { background: var(--accent-soft); font-weight: 700; }
+td.est { background: var(--accent-soft); font-weight: 700; }
+.up { color: var(--up); } .down { color: var(--down); }
+.chart { display: block; margin: 2px auto 4px; width: 100%; height: auto; }
+.figure { margin: 6px 0; }
+.figure .cap { font-size: 8.4pt; color: var(--ink-2); font-weight: 600; margin-bottom: 2px; }
+.footer { margin-top: 10px; color: var(--ink-3); font-size: 7.8pt; border-top: 1px solid var(--line); padding-top: 4px; }
+.pill { display: inline-block; padding: 0 8px; border-radius: 999px; background: var(--surface);
+        border: 1px solid var(--line); font-size: 8.2pt; color: var(--ink-2); }
+.pill.warn { background: var(--warn-soft); border-color: #f9dbaf; color: var(--warn); }
+</style>
+</head>
+<body>
+{% set v = r.valuation or {} %}{% set g = r.growth or {} %}{% set mg = r.margins or {} %}
+{% set f = r.forward or {} %}{% set t = r.ttm or {} %}{% set rg = f.range %}{% set h = r.hurdle or {} %}
+{% set fv = r.fair_value %}{% set m = r.monthly %}{% set c = r.cash or {} %}{% set b = r.balance or {} %}
+{% set tr = r.trading %}
+
+{# ============================== PAGE 1 ============================== #}
+<section class="page">
+  <div class="top">
+    <div class="brand"><span class="mark">ص</span>SIRAT · گزارش تحلیل بنیادی آینده‌نگر</div>
+    <div class="when">{{ today }} · ساعت {{ built_at }}</div>
+  </div>
+  <h1>{{ r.symbol }}<span class="name">{{ r.name }}</span></h1>
+  <div class="meta">
+    {{ r.sector }} ·
+    قیمت <b>{{ v.price|num }}</b> ریال ·
+    ارزش بازار <b>{{ v.market_cap|money }}</b> ·
+    آخرین صورت مالی <b>{{ r.latest.period_end }}</b> ({{ r.latest.months|num }} ماهه{{ "، حسابرسی‌شده" if r.latest.audited else "، حسابرسی‌نشده" }})
+    {% if m %} · آخرین گزارش ماهانه <b>{{ m.period_end }}</b>{% endif %}
+  </div>
+
+  <div class="caveat">
+    این گزارش برای شناخت شرکت است، نه توصیه‌ی خرید یا فروش. رتبه‌بندی‌هایی که بر همین اعداد ساخته شدند
+    (ارزان‌ترین P/E آینده‌نگر، بهترین بنیاد، عقب‌مانده‌ها، بهترینِ صنایع ارزان) در آزمون‌های ۱۴۰۰ تا ۱۴۰۵
+    (E30 تا E33) از نگه‌داشتن شاخص کل بهتر نبودند. برآوردها از صورت‌های مالی و گزارش‌های ماهانه‌ی کدال است و خطا دارد؛
+    بازه‌ی خطای آن در همین گزارش آمده است.
+  </div>
+
+  <div class="tiles">
+    <div class="tile"><div class="k">P/E دوازده‌ماهه</div><div class="v">{{ v.pe_ttm|num(1) }}</div>
+      <div class="s">P/E اعلامی بورس: {{ v.pe_published|num(1) }}</div></div>
+    <div class="tile"><div class="k">P/E آینده‌نگر (برآورد سال جاری)</div><div class="v">{{ v.pe_forward|num(1) }}</div>
+      <div class="s">{% if rg and rg.pe_low %}بازه‌ی محتمل {{ rg.pe_low|num(1) }} تا {{ rg.pe_high|num(1) }}{% else %}بازه در دست نیست{% endif %}</div></div>
+    <div class="tile"><div class="k">بازده سود برآوردی</div><div class="v">{{ v.earnings_yield_forward_pct|pct }}</div>
+      <div class="s">اخزا: {{ h.rate_pct|pct }}</div></div>
+    <div class="tile"><div class="k">سود هر سهم ۱۲ ماه گذشته</div><div class="v">{{ t.eps|num }}</div><div class="s">ریال</div></div>
+    <div class="tile"><div class="k">سود هر سهم برآوردی سال جاری</div><div class="v">{{ f.eps|num }}</div>
+      <div class="s">{% if rg %}نیمی از موارد مشابه: {{ rg.eps_low|num }} تا {{ rg.eps_high|num }}{% else %}ریال{% endif %}</div></div>
+    <div class="tile"><div class="k">بازده نقدی · P/B</div><div class="v">{{ v.dividend_yield_pct|pct }}</div>
+      <div class="s">P/B {{ v.pb|num(2) }} · ROE {{ v.roe_ttm_pct|pct }}</div></div>
+  </div>
+
+  {% if fv %}
+  <div class="box">
+    <h3 style="margin-top:0">ارزش با ضریب‌های مرجع</h3>
+    {% if fv.basis == "pe" %}
+      <p>اگر سهم با P/E مرجع روی <b>سود ۱۲ ماه گذشته</b> ({{ t.eps|num }} ریال) قیمت می‌خورد:
+         مرکز <b>{{ fv.central|num }}</b> ریال ({{ "P/E صنعت" if fv.central_basis == "sector" else ("P/E خود سهم" if fv.central_basis == "own" else "P/E بازار") }} {{ fv.central_multiple|num(2) }}) —
+         <b class="{{ 'up' if (fv.upside_pct or 0) >= 0 else 'down' }}">{{ fv.upside_pct|pct(0, true) }}</b> نسبت به قیمت امروز؛
+         بازه {{ fv.low|num }} تا {{ fv.high|num }}.</p>
+      {{ svg.fair }}
+      <table>
+        <tr><th>ضریب مرجع</th><th class="n">P/E</th><th class="n">ارزش بر سود ۱۲ ماهه</th><th class="n">ارزش بر سود برآوردی</th></tr>
+        {% for a in fv.anchors %}<tr><td>{{ a.label }}</td><td class="n">{{ a.multiple|num(2) }}</td>
+          <td class="n">{{ a.value|num }}</td><td class="n">{{ a.value_forward|num }}</td></tr>{% endfor %}
+      </table>
+      <p class="note">{% if fv.forward %}اگر برآورد سال جاری محقق شود و ضریب‌ها بمانند: مرکز {{ fv.forward.central|num }} ریال ({{ fv.forward.upside_pct|pct(0, true) }}). {% endif %}{% if fv.own_pe %}P/E خود سهم در یک سال: {{ fv.own_pe.low|num(1) }} تا {{ fv.own_pe.high|num(1) }}. {% endif %}با تورم بالا P/E گذشته با رشد اسمی سود پایین می‌آید؛ «ارزان‌تر از گذشته» بیشتر تورم است تا فرصت (E33).</p>
+    {% else %}
+      <p>ارزش خالص دارایی هر سهم: <b>{{ fv.central|num }}</b> ریال —
+         <b class="{{ 'up' if (fv.upside_pct or 0) >= 0 else 'down' }}">{{ fv.upside_pct|pct(0, true) }}</b> نسبت به قیمت.
+         {% for a in fv.anchors %}<span class="note">({{ a.label }})</span>{% endfor %}</p>
+    {% endif %}
+    {% if fv.doubtful %}<p class="note"><span class="pill warn">احتیاط</span> ضریب‌ها روی سودی تکیه دارند که این گزارش در آن تردید کرده است (پایین را ببینید).</p>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if h.required_growth_pct is not none %}
+  <div class="box soft">
+    <b>قیمت در برابر اوراق خزانه:</b>
+    {% if h.required_growth_pct <= 0 %}
+      بازده سود برآوردی از بازده اخزا ({{ h.rate_pct|pct }}) بیشتر است؛ قیمت امروز رشدی از سود نمی‌خواهد.
+    {% else %}
+      با اخزای {{ h.rate_pct|pct }}، قیمت امروز رشد سالانه‌ی حدود <b>{{ h.required_growth_pct|pct(0) }}</b> در سود را لازم دارد؛
+      رشد فعلی فروش {{ h.actual_growth_pct|pct(0) }} است.
+    {% endif %}
+    <span class="note">(تقریب: بازده سهامدار ≈ بازده سود + رشد آن؛ هر دو اسمی.)</span>
+  </div>
+  {% endif %}
+
+  <div class="two">
+    <div>
+      <h3>هشدارها</h3>
+      {% if r.flags %}<ul class="list warn">{% for x in r.flags[:7] %}<li>{{ x }}</li>{% endfor %}
+        {% if r.flags|length > 7 %}<li>و {{ (r.flags|length - 7)|num }} هشدار دیگر (در پنل، «بررسی نماد»)</li>{% endif %}</ul>
+      {% else %}<p class="note">هشداری ثبت نشد.</p>{% endif %}
+      {% if r.notices %}<ul class="list info">{% for x in r.notices %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    <div>
+      <h3>نقاط قوت</h3>
+      {% if r.positives %}<ul class="list good">{% for x in r.positives[:6] %}<li>{{ x }}</li>{% endfor %}</ul>
+      {% else %}<p class="note">نکته‌ی مثبتی ثبت نشد.</p>{% endif %}
+      {% if tr %}<h3>معاملات ۲۰ جلسه‌ی اخیر</h3>
+      <p>میانگین ارزش {{ tr.avg_value|money }} در روز{% if tr.illiquid %} <span class="down">(زیر کف {{ tr.floor|money }})</span>{% endif %}
+        · {{ tr.traded_sessions|num }} از {{ tr.sessions|num }} جلسه معامله شد
+        {% if tr.band_pct %}· دامنه ±{{ tr.band_pct|num(1) }}٪{% endif %}
+        {% if tr.queue_up_sessions %}· {{ tr.queue_up_sessions|num }} جلسه صف خرید{% endif %}
+        {% if tr.queue_down_sessions %}· {{ tr.queue_down_sessions|num }} جلسه صف فروش{% endif %}</p>{% endif %}
+    </div>
+  </div>
+</section>
+
+{# ============================== PAGE 2 ============================== #}
+<section class="page">
+  <div class="section-head"><h2>برآورد سال مالی جاری چطور ساخته شد</h2><span class="when">{{ r.symbol }}</span></div>
+  <p>{{ method_text }}</p>
+  <p class="note">مبنای صورت‌ها: {{ basis_text }}.
+    {% if r.skipped_period %}دوره‌ی {{ r.skipped_period }} صورت سود و زیان نداشت و کنار گذاشته شد.{% endif %}
+    رشد فروش نسبت به همان دوره‌ی سال قبل {{ g.revenue_pct|pct(0, true) }}، رشد سود {{ g.profit_pct|pct(0, true) }}؛ تورم مبنا {{ g.inflation_pct|pct(0) }} ({{ g.inflation_as_of }}).</p>
+
+  {% if statements %}
+  <table>
+    <tr><th>{{ unit_label }}</th>{% for col in statements %}<th class="n">{{ col.title }}<br><span class="note">{{ col.sub }}</span></th>{% endfor %}</tr>
+    <tr><td>فروش / درآمد</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.revenue|amt }}</td>{% endfor %}</tr>
+    <tr><td>سود ناخالص</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.gross|amt }}</td>{% endfor %}</tr>
+    <tr><td>سود عملیاتی</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.operating|amt }}</td>{% endfor %}</tr>
+    <tr><td>سود خالص سهم صاحبان شرکت</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.owners|amt }}</td>{% endfor %}</tr>
+    <tr><td>حاشیه سود خالص</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.margin|pct }}</td>{% endfor %}</tr>
+    <tr><td>سود هر سهم (ریال، به تعداد سهم امروز)</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.eps|num }}</td>{% endfor %}</tr>
+  </table>
+  {% endif %}
+
+  <h3>این برآورد چقدر قابل اتکاست؟</h3>
+  {% if rg %}
+  <p>همین روش روی <b>{{ rg.n|num }}</b> برآورد گذشته (سال‌های ۱۳۹۹ تا ۱۴۰۴، با {{ rg.months_bucket|num }} ماه از سال معلوم{% if rg.band_label %} و حاشیه‌ی سود {{ rg.band_label }}{% endif %})
+    اجرا و با سودی که شرکت‌ها بعداً گزارش کردند مقایسه شد: خطای میانه <b>{{ rg.median_abs_error_pct|pct(0) }}</b>.
+    در نیمی از موارد سود واقعی بین {{ (rg.q25 * 100)|num(0) }}٪ و {{ (rg.q75 * 100)|num(0) }}٪ برآورد بود، و در ۸۰٪ موارد بین {{ (rg.q10 * 100)|num(0) }}٪ و {{ (rg.q90 * 100)|num(0) }}٪.</p>
+  <table>
+    <tr><th></th><th class="n">کم (۲۵٪)</th><th class="n">برآورد</th><th class="n">زیاد (۷۵٪)</th><th class="n">بازه‌ی ۸۰٪</th></tr>
+    <tr><td>سود سال جاری ({{ unit_label }})</td><td class="n">{{ rg.profit_low|amt }}</td><td class="n est">{{ f.profit|amt }}</td><td class="n">{{ rg.profit_high|amt }}</td><td class="n">{{ rg.profit_low80|amt }} تا {{ rg.profit_high80|amt }}</td></tr>
+    <tr><td>سود هر سهم (ریال)</td><td class="n">{{ rg.eps_low|num }}</td><td class="n est">{{ f.eps|num }}</td><td class="n">{{ rg.eps_high|num }}</td><td class="n">{{ rg.eps_low80|num }} تا {{ rg.eps_high80|num }}</td></tr>
+    <tr><td>P/E به قیمت امروز</td><td class="n">{{ rg.pe_high|num(1) }}</td><td class="n est">{{ v.pe_forward|num(1) }}</td><td class="n">{{ rg.pe_low|num(1) }}</td><td class="n"></td></tr>
+  </table>
+  {% if r.method == "monthly_sales" %}<p class="note">برآوردهای بر پایه‌ی گزارش ماهانه را نمی‌شد در گذشته سنجید (گزارش‌های ماهانه از ۱۴۰۵ ذخیره شده‌اند)؛ بازه‌ی برآوردِ صورت‌مالیِ با ماه‌های معلومِ برابر یا کمتر به کار رفته — اگر خطایی هست، بازه کمی گشادتر از واقع است.</p>{% endif %}
+  {% else %}<p class="note">بازه‌ی خطا برای این نوع برآورد در دست نیست.</p>{% endif %}
+
+  {% set d = r.fx %}
+  {% if d and d.scenarios %}
+  <h3>سناریوی دلار</h3>
+  <p>دلار مرکز مبادله (نیما) {{ d.as_of }}: <b>{{ d.nima|num }}</b> ریال{% if d.free %}؛ بازار آزاد {{ d.free|num }} ریال{% endif %}.
+    {% if d.vs_year_average_pct is not none %}نیما اکنون {{ d.vs_year_average_pct|pct(0, true) }} نسبت به میانگین امسال است.{% endif %}
+    اگر نیما در ماه‌های باقی‌مانده‌ی سال (فروش آن ماه‌ها حدود {{ d.remaining_revenue|money }}) چنین باشد:</p>
+  <table>
+    <tr><th>دلار نیما</th><th class="n">نرخ</th><th class="n">سود هر سهم</th><th class="n">تغییر سود سال</th><th class="n">P/E</th></tr>
+    {% for s in d.scenarios %}{% if s.shock_pct == 20 %}
+    <tr class="est"><td>ثابت (برآورد پایه)</td><td class="n">{{ d.nima|num }}</td><td class="n">{{ f.eps|num }}</td><td class="n">—</td><td class="n">{{ v.pe_forward|num(1) }}</td></tr>{% endif %}
+    <tr><td>{{ s.shock_pct|signed }}٪</td><td class="n">{{ s.nima|num }}</td><td class="n">{{ s.eps|num }}</td><td class="n">{{ s.change_pct|pct(1, true) }}</td><td class="n">{{ s.pe|num(1) }}</td></tr>{% endfor %}
+  </table>
+  <p class="note">حساسیت فروش به نیما {{ d.sensitivity.revenue|num(2) }}{% if d.sensitivity.cost_basis == "measured" %} و بهای تمام‌شده {{ d.sensitivity.cost|num(2) }}{% else %}؛ بهای تمام‌شده هم‌پای فروش فرض شد (رابطه‌ی اندازه‌گیری‌شده‌ی آن معنادار نبود){% endif %}،
+    از مقایسه‌ی فروش هر فصل با همان فصل سال قبل در برابر تغییر میانگین نیما ({{ "خود شرکت، به سوی صنعت کشیده‌شده" if d.sensitivity.source == "company" else "صنعت" }}؛ R² = {{ d.sensitivity.r2|num(2) }}).
+    {% if d.weak %}<b>رابطه ضعیف است:</b> در گذشته دلار به‌تنهایی بخش کوچکی از تغییر فروش را توضیح داده (قیمت جهانی، مقدار فروش و قیمت‌گذاری دستوری هم اثر داشته‌اند)؛ این جدول «اگر چنین شود» است و برآورد پایه را تغییر نمی‌دهد.{% endif %}
+    {% if d.full_pass_per_10pct_pct %}برای مقایسه: اگر همه‌ی قیمت‌ها و هزینه‌ها دلاری بودند، هر ۱۰٪ دلار حدود {{ d.full_pass_per_10pct_pct|pct(1) }} سود سال را جابه‌جا می‌کرد.{% endif %}</p>
+  {% elif d %}
+  <h3>دلار</h3><p>دلار نیما {{ d.as_of }}: {{ d.nima|num }} ریال. سناریو حساب نشد (فروش ماه‌های باقی‌مانده یا حاشیه در دست نیست).</p>
+  {% endif %}
+
+  {% if r.capital %}
+  <h3>افزایش سرمایه</h3>
+  <p>{{ r.capital.text }}</p>
+  <table><tr><th>تاریخ</th><th>اطلاعیه</th></tr>
+    {% for e in r.capital.events[:3] %}<tr><td class="n">{{ (e.date or "")[:10] }}</td><td>{{ e.title }}</td></tr>{% endfor %}</table>
+  {% endif %}
+</section>
+
+{# ============================== PAGE 3 ============================== #}
+<section class="page">
+  <div class="section-head"><h2>فصل به فصل</h2><span class="when">{{ r.symbol }}</span></div>
+  {% set q = r.quarters or [] %}
+  {% if q|length >= 3 %}
+  <div class="two">
+    <div class="figure"><div class="cap">فروش هر فصل ({{ unit_label }})</div>{{ svg.quarter_sales }}</div>
+    <div class="figure"><div class="cap">حاشیه سود خالص هر فصل (٪)</div>{{ svg.quarter_margin }}</div>
+  </div>
+  <table>
+    <tr><th>فصل</th><th class="n">فروش ({{ unit_label }})</th><th class="n">رشد نسبت به همان فصل سال قبل</th><th class="n">سود عملیاتی</th><th class="n">سود خالص</th><th class="n">حاشیه خالص</th><th>مبنا</th></tr>
+    {% for x in q[-8:] %}<tr><td>{{ x.label }}</td><td class="n">{{ x.revenue|amt }}</td><td class="n">{{ x.revenue_yoy_pct|pct(0, true) }}</td>
+      <td class="n">{{ x.operating_profit|amt }}</td><td class="n">{{ x.net_profit|amt }}</td><td class="n">{{ x.net_margin_pct|pct }}</td>
+      <td>{{ "تلفیقی" if x.consolidated else "جداگانه" }}</td></tr>{% endfor %}
+  </table>
+  <p class="note">فصل = صورت تجمعی منهای صورت سه ماه قبلش، فقط وقتی هر دو یک مبنا دارند (تلفیقی یا جداگانه)؛ فصل‌هایی که مبنایشان فرق داشت، کنار گذاشته شدند.</p>
+  {% else %}<p class="note">صورت‌های فصلی کافی (با مبنای یکسان) ثبت نشده است.</p>{% endif %}
+
+  <h2 style="margin-top:10px">ماه به ماه</h2>
+  {% if m %}
+  {% if svg.monthly_sales %}<div class="figure"><div class="cap">فروش هر ماه ({{ unit_label }})</div>{{ svg.monthly_sales }}</div>{% endif %}
+  <table>
+    <tr><th>شاخص</th><th class="n">مقدار</th></tr>
+    <tr><td>آخرین گزارش ماهانه</td><td class="n">{{ m.period_end }} — ماه {{ m.months_elapsed|num }} سال مالی</td></tr>
+    <tr><td>فروش این ماه / از ابتدای سال ({{ unit_label }})</td><td class="n">{{ m.sales_month|amt }} / {{ m.sales_ytd|amt }}</td></tr>
+    <tr><td>رشد فروش از ابتدای سال نسبت به سال قبل</td><td class="n">{{ (m.ytd_growth * 100 if m.ytd_growth is not none else none)|pct(0, true) }}</td></tr>
+    <tr><td>فروش سه ماه اخیر نسبت به همان سه ماه سال قبل</td><td class="n">{{ (m.recent_growth * 100 if m.recent_growth is not none else none)|pct(0, true) }}</td></tr>
+    <tr><td>فروش این ماه به میانگین ماهانه‌ی امسال</td><td class="n">{{ m.momentum|num(2) }}</td></tr>
+    <tr><td>خرید مواد به فروش: از ابتدای سال / سه ماه اخیر</td><td class="n">{{ (m.purchases_to_sales * 100 if m.purchases_to_sales is not none else none)|pct(0) }} / {{ (m.recent_purchases_to_sales * 100 if m.recent_purchases_to_sales is not none else none)|pct(0) }}</td></tr>
+    {% if m.fx_forecast_rest_of_year %}<tr><td>برآورد خود شرکت از منابع ارزی تا پایان سال</td><td class="n">{{ m.fx_forecast_rest_of_year|money }}</td></tr>{% endif %}
+    <tr><td>ماه‌های ذخیره‌شده</td><td class="n">{{ (m.months_stored or 1)|num }}</td></tr>
+  </table>
+  {% set prods = (m.products or [])|selectattr("amount_ytd")|list %}
+  {% if prods %}
+  <table>
+    <tr><th>محصول</th><th>واحد</th><th class="n">فروش از ابتدای سال ({{ unit_label }})</th><th class="n">تغییر نرخ</th><th class="n">تغییر مقدار</th><th class="n">تولید به فروش</th></tr>
+    {% for p in prods[:5] %}<tr><td>{{ p.name }}</td><td>{{ p.unit or "" }}</td><td class="n">{{ p.amount_ytd|amt }}</td>
+      <td class="n">{{ (p.price_change * 100 if p.price_change is not none else none)|pct(0, true) }}</td>
+      <td class="n">{{ (p.volume_change * 100 if p.volume_change is not none else none)|pct(0, true) }}</td>
+      <td class="n">{{ p.production_to_sales|num(2) }}</td></tr>{% endfor %}
+  </table>
+  <p class="note">تغییرها از ابتدای سال نسبت به همان دوره‌ی سال قبل است: رشد فروش هر محصول به «نرخ» و «مقدار» تفکیک شده است.</p>
+  {% endif %}
+  {% if (m.months_stored or 1) < 6 %}<p class="note">سابقه‌ی گزارش‌های ماهانه هنوز کامل نیست؛ جمع‌آوری ۱۵ ماه اخیر هر شرکت در اجرای شبانه در جریان است.</p>{% endif %}
+  {% else %}<p class="note">گزارش ماهانه‌ای (ن-۳۰) برای این شرکت ثبت نشده است.</p>{% endif %}
+</section>
+
+{# ============================== PAGE 4 ============================== #}
+<section class="page">
+  <div class="section-head"><h2>کیفیت سود، بدهی و سود نقدی</h2><span class="when">{{ r.symbol }}</span></div>
+  <table>
+    <tr><th>شاخص</th><th class="n">مقدار</th><th>یعنی</th></tr>
+    <tr><td>تبدیل سود به نقد عملیاتی</td><td class="n">{{ c.cash_conversion|num(2) }}</td><td class="note">{{ "۱۲ ماه گذشته" if c.cash_conversion_basis == "ttm" else "همین دوره" }}؛ میانه‌ی بازار حدود ۰٫۵ (تورم بخشی از سود را در موجودی و مطالبات نگه می‌دارد)</td></tr>
+    <tr><td>بازده جریان نقد آزاد</td><td class="n">{{ v.fcf_yield_pct|pct }}</td><td class="note">نقد عملیاتی منهای خرید دارایی ثابت، سالانه، به ارزش بازار</td></tr>
+    <tr><td>حاشیه سود ناخالص / عملیاتی / خالص</td><td class="n">{{ mg.gross_pct|pct }} / {{ mg.operating_pct|pct }} / {{ mg.net_pct|pct }}</td><td class="note">دوره‌ی اخیر؛ خالصِ سال قبل {{ mg.net_prev_pct|pct }}</td></tr>
+    <tr><td>بدهی به حقوق صاحبان سهام</td><td class="n">{{ b.debt_to_equity|num(2) }}</td><td class="note">بدهی خالص {{ b.net_debt|money }}</td></tr>
+    <tr><td>پوشش هزینه‌ی مالی</td><td class="n">{{ b.interest_cover|num(1) }}</td><td class="note">سود عملیاتی چند برابر هزینه‌ی مالی</td></tr>
+    <tr><td>دوره‌ی وصول مطالبات</td><td class="n">{{ b.receivable_days|num }} روز</td><td class="note">رشد مطالبات {{ b.receivable_growth_pct|pct(0, true) }}</td></tr>
+    <tr><td>سود نقدی آخرین مجمع</td><td class="n">{{ v.dps|num }} ریال</td><td class="note">سال مالی {{ v.dividend_fiscal_year or "—" }}{% if v.dividend_stale %} — مجمع سال بعد ثبت نشده{% endif %}؛ بازده {{ v.dividend_yield_pct|pct }}</td></tr>
+    <tr><td>ROE دوازده‌ماهه / P/B</td><td class="n">{{ v.roe_ttm_pct|pct }} / {{ v.pb|num(2) }}</td><td class="note">حقوق صاحبان سهام دوره‌ی اخیر</td></tr>
+    {% if v.price_to_nav is not none %}<tr><td>P/NAV</td><td class="n">{{ v.price_to_nav|num(2) }}{% if v.nav_stale and v.price_to_nav_est is not none %} (تخمینی {{ v.price_to_nav_est|num(2) }}){% endif %}</td>
+      <td class="note">پرتفوی {{ v.nav_period }}{% if v.nav_stale %}؛ کهنه، با حرکت شاخص ({{ v.nav_index_move_pct|pct(0, true) }}) به‌روز شد{% endif %}</td></tr>{% endif %}
+  </table>
+  {% for note in v.nav_notes or [] %}<p class="note">⚠ {{ note }}</p>{% endfor %}
+
+  <h2 style="margin-top:10px">قیمت در برابر شاخص کل</h2>
+  {% if prices %}
+  <div class="figure"><div class="cap">قیمت تعدیل‌شده‌ی {{ r.symbol }} و شاخص کل، هر دو از {{ prices.from }} برابر ۱۰۰ ({{ prices.sessions|num }} جلسه‌ی معاملاتی تا {{ prices.to }})</div>{{ svg.price }}</div>
+  <p>بازده سهم در این دوره <b class="{{ 'up' if prices.stock_return_pct >= 0 else 'down' }}">{{ prices.stock_return_pct|pct(0, true) }}</b>،
+     شاخص کل {{ prices.index_return_pct|pct(0, true) }}. <span class="note">قیمت برای افزایش سرمایه و سود نقدیِ دیده‌شده در سری تعدیل شده است.</span></p>
+  {% else %}<p class="note">سابقه‌ی قیمت کافی نیست.</p>{% endif %}
+
+  <h3>روش و منابع</h3>
+  <p class="note">
+    صورت‌های مالی و گزارش‌های ماهانه: کدال (ذخیره‌ی SIRAT). قیمت، تعداد سهم و P/E اعلامی: TSETMC.
+    بازده اخزا: میانه‌ی اوراق خزانه با بیش از ۹۰ روز تا سررسید ({{ h.source or "" }}، {{ h.as_of or "" }}).
+    دلار: tgju.org (بازار آزاد و مرکز مبادله).
+    سود سهم صاحبان شرکت در هر سهم با تعداد سهم امروز بورس حساب شده است. «برآورد» یعنی برآورد همین سامانه از صورت‌ها و گزارش‌های منتشرشده، نه پیش‌بینی خود شرکت.
+    بازه‌ی خطا از اجرای همین روش روی سال‌های گذشته است (outlook_calibration).
+  </p>
+  <div class="footer">SIRAT · {{ r.symbol }} · ساخته‌شده {{ today }} ساعت {{ built_at }} · این سند توصیه‌ی سرمایه‌گذاری نیست.</div>
+</section>
+</body>
+</html>

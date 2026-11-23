@@ -3867,6 +3867,43 @@ function tradingCell(t) {
   return parts.join(" · ");
 }
 
+// The estimate's range: where the year's profit landed against past
+// estimates of the same kind (months known, margin band).
+function rangeCell(rg) {
+  if (!rg) return "—";
+  return `${num(rg.eps_low, 0)} تا ${num(rg.eps_high, 0)} ریال` +
+    ` <span class="hint">(خطای میانه ${num(rg.median_abs_error_pct, 0)}٪ در ${num(rg.n, 0)} برآورد گذشته` +
+    `${rg.band_label ? "، حاشیه‌ی " + esc(rg.band_label) : ""})</span>` +
+    (rg.wide ? ' <span class="down">پراکنده</span>' : "");
+}
+
+// Reference multiples on the trailing EPS; the industry's is the centre.
+function fairCell(fv) {
+  if (!fv || fv.central == null) return "—";
+  if (fv.basis === "nav") {
+    return `${num(fv.central, 0)} ریال (ارزش خالص دارایی هر سهم) ${signed(fv.upside_pct, 0)}`;
+  }
+  const by = {sector: "P/E صنعت", own: "P/E خود سهم", market: "P/E بازار"}[fv.central_basis] || "";
+  return `${num(fv.central, 0)} ریال <span class="hint">(${by} ${num(fv.central_multiple, 2)})</span> ` +
+    `${signed(fv.upside_pct, 0)}` +
+    ` <span class="hint">— بازه ${num(fv.low, 0)} تا ${num(fv.high, 0)}؛ نشانه‌ی خرید نیست (E30 تا E33)</span>`;
+}
+
+// What-ifs on the exchange-centre rate; the fit is weak and says so.
+function dollarCell(d) {
+  if (!d || !(d.scenarios || []).length) return "—";
+  const parts = d.scenarios.map(s => `${signed(s.shock_pct, 0)}: ${num(s.eps, 0)}`);
+  return `سود هر سهم — ${parts.join(" · ")}` +
+    ` <span class="hint">(نیما ${num(d.nima, 0)} ریال؛ R² ${num((d.sensitivity || {}).r2, 2)}` +
+    `${d.weak ? "، رابطه ضعیف: فقط «اگر چنین شود»" : ""})</span>`;
+}
+
+function openOutlookPdf() {
+  const sym = ($("outlookSymbol").value || "").trim();
+  if (!sym) { $("outlookSymbol").focus(); return; }
+  window.open(`/api/report?symbol=${encodeURIComponent(sym)}`, "_blank", "noopener");
+}
+
 function renderOutlookDetail(r) {
   const v = r.valuation || {}, g = r.growth || {}, mg = r.margins || {};
   const c = r.cash || {}, b = r.balance || {}, l = r.latest || {};
@@ -3882,6 +3919,10 @@ function renderOutlookDetail(r) {
       (mg.net_prev_pct != null ? ` (سال قبل ${pctCell(mg.net_prev_pct)})` : "")],
     ["سود هر سهم: ۱۲ ماه گذشته / برآورد سال جاری",
       `${num((r.ttm || {}).eps, 0)} / ${num((r.forward || {}).eps, 0)} ریال`],
+    // Measured on the method's own past estimates (outlook_calibration.py).
+    ["بازه‌ی محتمل سود هر سهم (نیمی از برآوردهای مشابه گذشته)", rangeCell((r.forward || {}).range)],
+    ["ارزش با ضریب‌های مرجع (روی سود ۱۲ ماهه)", fairCell(r.fair_value)],
+    ["سناریوی دلار نیما (ماه‌های باقی‌مانده)", dollarCell(r.fx)],
     ["P/E گذشته / آینده‌نگر", `${num(v.pe_ttm, 1)} / ${num(v.pe_forward, 1)}`],
     ["P/E اعلامی بورس (TSETMC)", publishedPeCell({pe: v.pe_ttm, pe_published: v.pe_published})],
     ["بازده سود برآوردی", pctCell(v.earnings_yield_forward_pct)],
@@ -3910,7 +3951,8 @@ function renderOutlookDetail(r) {
       `${num(b.debt_to_equity, 2)} / ${b.interest_cover == null ? "—" : num(b.interest_cover, 1) + " برابر"}`],
     ["دوره وصول مطالبات", b.receivable_days == null ? "—" : `${num(b.receivable_days, 0)} روز`],
   ];
-  const flags = (r.flags || []).map(f => `<li>⚠ ${esc(f)}</li>`).join("");
+  const flags = (r.flags || []).map(f => `<li>⚠ ${esc(f)}</li>`).join("") +
+    (r.notices || []).map(f => `<li>ⓘ ${esc(f)}</li>`).join("");
   const pos = (r.positives || []).map(f => `<li>✓ ${esc(f)}</li>`).join("");
   // A lookup without the ranking showed its ticks with nothing of the
   // record: the ranking these numbers feed lost to the index (E30-E33).
@@ -3951,7 +3993,8 @@ function renderOutlookDetail(r) {
   }
 
   $("outlookDetail").innerHTML =
-    `${record}<h3>${esc(r.symbol || "")} <span class="hint">${esc(r.name || "")}</span></h3>` +
+    `${record}<h3>${esc(r.symbol || "")} <span class="hint">${esc(r.name || "")}</span>` +
+    ` <a class="link" href="/api/report?symbol=${encodeURIComponent(r.symbol || "")}" target="_blank" rel="noopener">گزارش PDF ←</a></h3>` +
     table(["شاخص", "مقدار"], rows) + monthlyHtml +
     `<ul class="evidence" style="margin-top:8px">${flags}${pos}</ul>`;
 }
@@ -5011,6 +5054,7 @@ on("marketflowSessions", "change", () => loadMarketflow());
 on("announcementsDays", "change", () => loadAnnouncements());
 on("runOutlookBtn", "click", () => loadOutlook(true));
 on("outlookLookupBtn", "click", lookupOutlook);
+on("outlookPdfBtn", "click", openOutlookPdf);
 on("runTechnicalBtn", "click", () => loadTechnical(true));
 on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
 on("runInflowBtn", "click", () => loadInflow(true));

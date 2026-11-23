@@ -1099,8 +1099,30 @@ def ensure(force=False, only=None):
         _note_board_moves()
 
     _forward_log()
+    _outlook_inputs()
 
     return results
+
+
+def _outlook_inputs():
+    """Refresh what the forward fundamental analysis reads besides filings.
+
+    The dollar series (fx.py, at most every 12 h: two requests to tgju.org)
+    and the outlook's measured error and dollar slopes (outlook_calibration,
+    rebuilt weekly from the stored filings, ~5 s). Added 2026-11-23 with the
+    dollar scenarios; here, on the trigger the rest of the data uses, rather
+    than as a new scheduled step. Each returns a message and never raises,
+    and this wrapper still guards the imports: bookkeeping must never take
+    down a fetch that succeeded.
+    """
+
+    for name in ("fx", "outlook_calibration"):
+        try:
+            module = __import__(name)
+            _note(module.refresh() if name == "fx" else module.ensure())
+        except Exception as exc:                                # noqa: BLE001
+            _note("%s failed to run: %s: %s" % (name, type(exc).__name__,
+                                                 str(exc)[:160]))
 
 
 def _forward_log():

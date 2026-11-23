@@ -154,6 +154,11 @@ EARLY_JUMP = 1.5
 # past this ratio either way one of them is misread (a raise between the two
 # is real but rarely 6x).
 SHARES_DISAGREE = 6.0
+# The last three months' sales growth against the year-to-date's, and the
+# last three months' purchases-to-sales against the year's, past which the
+# difference is named (needs the monthly history, codal_monthly --history).
+RECENT_GAP_PCT = 15.0
+COST_TREND_PTS = 5.0
 
 
 def _f(value):
@@ -310,7 +315,7 @@ def monthly_reads(ins_code, fy_end_month, rows=None):
     if rows is None:
         import codal_monthly
         try:
-            rows = codal_monthly.load(ins_code, limit=13)
+            rows = codal_monthly.load(ins_code, limit=codal_monthly.HISTORY_MONTHS)
         except Exception:                                       # noqa: BLE001
             rows = []
     if not rows:
@@ -368,8 +373,53 @@ def monthly_reads(ins_code, fy_end_month, rows=None):
 
     # The month-by-month series for a trend line, oldest first.
     out["series"] = [{"period_end": r["period_end"],
-                      "sales": _f((r.get("sales") or {}).get("month"))}
+                      "sales": _f((r.get("sales") or {}).get("month")),
+                      "purchases": _f((r.get("purchases") or {}).get("month"))}
                      for r in reversed(rows)]
+
+    # ---- the last three months, when the history is stored (2026-11-23) --
+    # Year-to-date growth averages a whole year of price steps; the last
+    # three months against the same three a year before say where the year
+    # is now, and purchases against sales over them where the margin is
+    # heading -- the cost side, which is where the estimate's error lies
+    # (outlook_calibration).
+    by_month = {}
+    for r in rows:
+        try:
+            y, mm = (int(p) for p in r["period_end"].split("/")[:2])
+        except (KeyError, ValueError):
+            continue
+        by_month[(y, mm)] = r
+    recent = [jalali.add_months(py, pm, -k) for k in range(3)]
+    year_before = [(y - 1, mm) for y, mm in recent]
+    s_now = [_f((by_month.get(k) or {}).get("sales", {}).get("month"))
+             if by_month.get(k) and by_month[k].get("sales") else None for k in recent]
+    s_then = [_f((by_month.get(k) or {}).get("sales", {}).get("month"))
+              if by_month.get(k) and by_month[k].get("sales") else None for k in year_before]
+    out["recent_growth"] = None
+    if all(v is not None for v in s_now + s_then) and sum(s_then) > 0:
+        out["recent_growth"] = sum(s_now) / sum(s_then) - 1
+    p_now = [_f(((by_month.get(k) or {}).get("purchases") or {}).get("month"))
+             for k in recent]
+    out["recent_purchases_to_sales"] = None
+    if all(v is not None for v in p_now + s_now) and sum(s_now) > 0:
+        out["recent_purchases_to_sales"] = sum(p_now) / sum(s_now)
+    out["months_stored"] = len(by_month)
+
+    # The newest three products' monthly selling rate, oldest first.
+    out["product_rates"] = []
+    for p in (newest.get("products") or [])[:3]:
+        points = []
+        for r in reversed(rows):
+            for q in r.get("products") or []:
+                if q.get("name") == p.get("name"):
+                    rate = _f((q.get("month") or {}).get("rate"))
+                    if rate:
+                        points.append({"period_end": r["period_end"], "rate": rate})
+                    break
+        if len(points) >= 2:
+            out["product_rates"].append({"name": p.get("name"), "unit": p.get("unit"),
+                                         "points": points})
     return out
 
 
@@ -379,7 +429,8 @@ _UNSET = object()
 def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             monthly_rows=None, dividend=_UNSET, shares=_UNSET, sector=_UNSET,
             portfolio=_UNSET, opportunity=None, bars=_UNSET, band=_UNSET,
-            published=_UNSET):
+            published=_UNSET, calibration=_UNSET, fx_record=_UNSET,
+            capital_events=_UNSET, peers=_UNSET):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
@@ -393,9 +444,36 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     inputs; with `rows` given and neither passed there is no trading read --
     a point-in-time valuation must not be judged on today's tape. `published`
     is TSETMC's own P/E, read from the snapshot likewise.
+
+    Added 2026-11-23 (the user: make the forward analysis more accurate and
+    useful, "as a professional analyst"), each read from the stores when
+    the rows are, and absent otherwise -- a test or a point-in-time read
+    passes them or goes without:
+      `calibration`     outlook_calibration's record: the range the estimate
+                        has historically fallen in, and the dollar slopes;
+      `fx_record`       fx.py's stored dollar series, for the scenarios;
+      `capital_events`  the company's capital-raise announcements;
+      `peers`           valuation_peers(): the industry's and the market's
+                        P/E and the company's own P/E history, for the
+                        fair-value range.
     """
 
     rows_from_store = rows is None
+    if calibration is _UNSET:
+        calibration = None
+        if rows_from_store:
+            import outlook_calibration
+            calibration = outlook_calibration.load()
+    if fx_record is _UNSET:
+        fx_record = None
+        if rows_from_store:
+            import fx
+            fx_record = fx.load()
+    if capital_events is _UNSET:
+        capital_events = (capital_events_for([ins_code]).get(str(ins_code))
+                          if rows_from_store else None)
+    if peers is _UNSET:
+        peers = valuation_peers() if rows_from_store else None
     if rows is None:
         rows = fundamental_db.load_metrics(ins_code, limit=periods)
     if dividend is _UNSET:
@@ -526,17 +604,27 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         # remaining months are the annual less them, one basis throughout.
         s_rev = _f(same_prev["items"].get("revenue"))
         s_net = _f(same_prev["items"].get("net_profit"))
+        if None not in (net, a_net, s_net):
+            ttm_net = net + a_net - s_net
         if None not in (rev, a_rev, s_rev):
             ttm_rev = rev + a_rev - s_rev
             if growth_rev is not None:
                 g = min(max(growth_rev, GROWTH_CAP[0]), GROWTH_CAP[1])
                 remaining = (a_rev - s_rev) * (1 + g)
                 fwd_rev = rev + remaining
-                if net is not None and margin is not None:
-                    fwd_net = net + remaining * margin
+                # The remaining months at the TRAILING TWELVE MONTHS' margin,
+                # not the year-to-date one: measured on 3,763 past estimates
+                # (outlook_calibration, 2026-11-23) the year-to-date margin
+                # missed the year's profit by a median 28.2% (40.3% three
+                # months in) and the trailing one by 26.7% (36.2%), with half
+                # the low bias. A few months' margin carries their one-offs
+                # and their season; twelve carry a whole year of both.
+                run_margin = (_div(ttm_net, ttm_rev)
+                              if ttm_net is not None and ttm_rev and ttm_rev > 0
+                              else margin)
+                if net is not None and run_margin is not None:
+                    fwd_net = net + remaining * run_margin
                     method = "year_completed"
-        if None not in (net, a_net, s_net):
-            ttm_net = net + a_net - s_net
 
     if fwd_net is None and net is not None and m != 12:
         # No prior year to complete it with: plain annualisation, flagged.
@@ -814,6 +902,21 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         if pg is not None and mg is not None and (pg - mg) * 100 > 15:
             flag("خرید مواد اولیه %+.0f٪ در برابر فروش %+.0f٪ — فشار بر حاشیه سود"
                  % (pg * 100, mg * 100))
+        # Where the year is now, from the stored monthly history.
+        rg = monthly.get("recent_growth")
+        if rg is not None and mg is not None:
+            if (rg - mg) * 100 < -RECENT_GAP_PCT:
+                flag("فروش سه ماه اخیر %+.0f٪ نسبت به همان سه ماه سال قبل، کندتر از "
+                     "%+.0f٪ ابتدای سال؛ برآوردِ بر پایه‌ی رشد ابتدای سال خوش‌بینانه است"
+                     % (rg * 100, mg * 100))
+            elif (rg - mg) * 100 > RECENT_GAP_PCT:
+                positives.append("فروش سه ماه اخیر %+.0f٪ نسبت به همان سه ماه سال قبل، "
+                                 "تندتر از %+.0f٪ ابتدای سال" % (rg * 100, mg * 100))
+        rp, ytd_p = monthly.get("recent_purchases_to_sales"), monthly.get("purchases_to_sales")
+        if rp is not None and ytd_p is not None and (rp - ytd_p) * 100 > COST_TREND_PTS:
+            flag("خرید مواد اولیه در سه ماه اخیر %.0f٪ فروش بوده در برابر %.0f٪ از "
+                 "ابتدای سال — حاشیه‌ی ماه‌های آینده زیر فشار است"
+                 % (rp * 100, ytd_p * 100))
         for p in monthly.get("products") or []:
             if (p.get("production_to_sales") or 0) > 1.3 and                     (p.get("amount_ytd") or 0) > 0:
                 flag("تولید «%s» %.0f٪ بیشتر از فروش آن — انباشت موجودی"
@@ -985,7 +1088,76 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         "flags": flags,
         "positives": positives,
         "doubts": doubts,
+        "notices": [],
     }
+
+    # ---- 2026-11-23: what a professional reads beside the estimate ---------
+    # The discrete quarters (the cumulative filings differenced), the range
+    # the estimate has historically fallen in, the dollar what-ifs, a
+    # capital raise under way, and a fair-value range. Each is analysis for
+    # the reader; none changes the ranking's order.
+    result["quarters"] = quarterly_series(all_periods)
+
+    ttm_gross = None
+    gp = _f(li.get("gross_profit"))
+    if m == 12:
+        ttm_gross = gp
+    elif annual_prev and same_prev and gp is not None:
+        a_gp = _f(annual_prev["items"].get("gross_profit"))
+        s_gp = _f(same_prev["items"].get("gross_profit"))
+        if a_gp is not None and s_gp is not None:
+            ttm_gross = gp + a_gp - s_gp
+    gross_margin = (_div(ttm_gross, ttm_rev) if ttm_gross is not None and ttm_rev
+                    else _div(gp, rev))
+    ttm_margin = (_div(ttm_net_total, ttm_rev)
+                  if ttm_net_total is not None and ttm_rev and ttm_rev > 0
+                  else margin)
+    months_known = (monthly["months_elapsed"] if method == "monthly_sales" and monthly
+                    else 12 if method == "next_year_trend" else m)
+
+    estimate_range = None
+    if method in ("year_completed", "next_year_trend", "monthly_sales") and \
+            fwd_net and fwd_net > 0:
+        estimate_range = calibrated_range(calibration, months_known, ttm_margin,
+                                          fwd_net, shares, price)
+    result["forward"]["range"] = estimate_range
+    if estimate_range and estimate_range["wide"] and kind == OPERATING:
+        flag("برآورد سود این‌گونه شرکت‌ها (حاشیه‌ی سود %s، %d ماه از سال معلوم) "
+             "در گذشته پراکنده بوده: در نیمی از موارد سود واقعی سال بین %.0f٪ "
+             "و %.0f٪ برآورد بود؛ عدد برآوردی را با احتیاط بخوانید"
+             % (estimate_range["band_label"] or "نامعلوم",
+                estimate_range["months_bucket"],
+                estimate_range["q25"] * 100, estimate_range["q75"] * 100))
+
+    if kind == OPERATING:
+        if method == "monthly_sales" and monthly and fwd_rev:
+            remaining_rev = fwd_rev * (12 - monthly["months_elapsed"]) / 12.0
+        elif method == "next_year_trend":
+            remaining_rev = fwd_rev
+        elif fwd_rev is not None and rev is not None:
+            remaining_rev = fwd_rev - rev
+        else:
+            remaining_rev = None
+        pretax = _f(li.get("pretax"))
+        keep = _div(net, pretax) if net and pretax and pretax > 0 else None
+        result["fx"] = dollar_scenarios(
+            ins_code, sector, calibration, fx_record, remaining_rev,
+            gross_margin, keep, owners_share, fwd_net, shares, price,
+            latest["fy"], net_margin=ttm_margin)
+    else:
+        result["fx"] = None
+
+    capital = capital_reading(capital_events)
+    result["capital"] = capital
+    if capital:
+        result["notices"].append(capital["text"])
+
+    result["fair_value"] = fair_value(
+        kind, ins_code, sector, eps_ttm, eps_fwd, estimate_range, price, peers,
+        nav_result=nav_result, nav_stale=nav_stale,
+        nav_estimate=(price_to_nav_est and market_cap
+                      and market_cap / price_to_nav_est),
+        shares=shares, doubts=doubts)
 
     # What the tape says about the price every multiple above rests on. First
     # among the warnings: a P/E on a price nobody can deal at is not a
@@ -1005,6 +1177,394 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
 
 def _round(x, digits=2):
     return None if x is None else round(x, digits)
+
+
+# ---- 2026-11-23: the professional's additions -----------------------------
+
+QUARTERS_SHOWN = 12
+FA_QUARTER = {3: "فصل ۱", 6: "فصل ۲", 9: "فصل ۳", 12: "فصل ۴"}
+
+
+def quarterly_series(periods, limit=QUARTERS_SHOWN):
+    """Discrete quarters, oldest first: each cumulative filing less the one
+    three months before it, ON THE SAME BASIS.
+
+    The standard Iranian read ("سود فصل به فصل"): a 9-month statement says
+    little about its third quarter until the 6-month one is taken away. A
+    quarter is left out when its two filings are of different bases (347
+    companies file separate at 3 and 9 months, consolidated at 6 and 12):
+    their difference would be two businesses, not three months.
+    """
+
+    by_key = {}
+    for p in periods:
+        if p["months"] in (3, 6, 9, 12):
+            by_key.setdefault((p["fy"], p["months"], p["consolidated"]), p)
+    out = []
+    seen = set()
+    keys = sorted({(fy, m) for fy, m, _c in by_key}, reverse=True)
+    for fy, m in keys:
+        if (fy, m) in seen:
+            continue
+        for cons in (True, False):
+            cur = by_key.get((fy, m, cons))
+            prev = by_key.get((fy, m - 3, cons)) if m > 3 else None
+            if not cur or (m > 3 and not prev):
+                continue
+
+            def part(key, cur=cur, prev=prev):
+                a = _f(cur["items"].get(key))
+                if prev is None:
+                    return a
+                b = _f(prev["items"].get(key))
+                return None if a is None or b is None else a - b
+
+            revenue = part("revenue")
+            if revenue is None:
+                continue
+            net = part("net_profit")
+            out.append({"fiscal_year": "%d/%02d" % fy, "quarter": m // 3,
+                        "label": "%s %d" % (FA_QUARTER[m], fy[0]),
+                        "period_end": cur["end"], "consolidated": cons,
+                        "revenue": revenue, "gross_profit": part("gross_profit"),
+                        "operating_profit": part("operating_profit"),
+                        "net_profit": net,
+                        "net_margin_pct": _pct(_div(net, revenue))
+                        if revenue and revenue > 0 else None})
+            seen.add((fy, m))
+            break
+        if len(out) >= limit:
+            break
+    out.reverse()
+    # The same quarter a year before, for the growth a reader looks for first.
+    index = {(q["fiscal_year"], q["quarter"]): q for q in out}
+    for q in out:
+        y, mm = (int(x) for x in q["fiscal_year"].split("/"))
+        before = index.get(("%d/%02d" % (y - 1, mm), q["quarter"]))
+        q["revenue_yoy_pct"] = (_pct(q["revenue"] / before["revenue"] - 1)
+                                if before and before["revenue"] and before["revenue"] > 0
+                                and before["consolidated"] == q["consolidated"]
+                                else None)
+    return out
+
+
+def calibrated_range(calibration, months_known, margin, profit, shares, price):
+    """Where the year's profit has landed against estimates like this one,
+    or None without a calibration (outlook_calibration.py)."""
+
+    import outlook_calibration
+
+    b = outlook_calibration.range_for(calibration, months_known, margin)
+    if not b or not profit or profit <= 0:
+        return None
+    out = {"q10": b["q10"], "q25": b["q25"], "q50": b["q50"], "q75": b["q75"],
+           "q90": b["q90"], "n": b["n"], "key": b["key"],
+           "months_bucket": b["months_bucket"], "band": b["band"],
+           "band_label": outlook_calibration.MARGIN_LABELS.get(b["band"]),
+           "median_abs_error_pct": _pct(b.get("median_abs_error")),
+           "wide": (b["q75"] - b["q25"]) > outlook_calibration.WIDE_BAND,
+           "profit_low": profit * b["q25"], "profit_high": profit * b["q75"],
+           "profit_low80": profit * b["q10"], "profit_high80": profit * b["q90"]}
+    for key in ("low", "high", "low80", "high80"):
+        out["eps_" + key] = _div(out["profit_" + key], shares)
+    out["pe_low"] = (_round(price / out["eps_high"])
+                     if price and out["eps_high"] and out["eps_high"] > 0 else None)
+    out["pe_high"] = (_round(price / out["eps_low"])
+                      if price and out["eps_low"] and out["eps_low"] > 0 else None)
+    return out
+
+
+FX_SCENARIOS = (-0.20, 0.20, 0.40)
+# Share of a pre-tax change that reaches net profit when the filing does not
+# say: the 25% corporate rate, less the exemptions most listed exporters use.
+FX_DEFAULT_KEEP = 0.8
+FX_WEAK_R2 = 0.10
+
+
+def dollar_scenarios(ins_code, sector, calibration, fx_record, remaining_rev,
+                     gross_margin, keep, owners_share, forward_profit, shares,
+                     price, fiscal_year_end, net_margin=None):
+    """The year's profit if the exchange-centre dollar moves, or None.
+
+    For the months still to come, sales move by the company's measured
+    slope against the NIMA rate and the cost of sales by its own:
+        sales    x ((1 + s) ** slope_sales - 1)
+        cost     x ((1 + s) ** slope_cost  - 1)
+    the difference taxed at the filing's own net/pre-tax ratio. The slopes
+    come from outlook_calibration (quarter on same quarter a year before,
+    shrunk toward the industry's) and the fit is weak in every industry, so
+    this is a what-if with its R² beside it -- the base estimate is not
+    moved by it.
+    """
+
+    import fx
+    import outlook_calibration
+
+    sens = outlook_calibration.sensitivity_for(calibration, ins_code, sector)
+    now = fx.latest(fx_record) if fx_record else {}
+    if not sens or "nima" not in now:
+        return None
+    day, rate = now["nima"]
+    out = {"as_of": day, "nima": rate,
+           "free": now.get("free", (None, None))[1],
+           "sensitivity": sens, "weak": (sens.get("r2") or 0) < FX_WEAK_R2,
+           "remaining_revenue": remaining_rev, "scenarios": []}
+    if fiscal_year_end:
+        start = jalali.add_months(fiscal_year_end[0], fiscal_year_end[1], -11)
+        avg = fx.average("%04d/%02d/01" % start, day, "nima", fx_record)
+        out["year_average"] = avg
+        out["vs_year_average_pct"] = _pct(rate / avg - 1) if avg else None
+    if not remaining_rev or remaining_rev <= 0 or forward_profit is None or \
+            gross_margin is None:
+        return out
+    cost_ratio = min(max(1 - gross_margin, 0.0), 1.2)
+    keep = keep if keep and 0.5 <= keep <= 1.0 else FX_DEFAULT_KEEP
+    out["cost_ratio"] = round(cost_ratio, 3)
+    out["keep"] = round(keep, 3)
+
+    def change(s):
+        d_sales = remaining_rev * ((1 + s) ** sens["revenue"] - 1)
+        d_cost = remaining_rev * cost_ratio * ((1 + s) ** sens["cost"] - 1)
+        return (d_sales - d_cost) * keep * owners_share
+
+    for s in FX_SCENARIOS:
+        profit = forward_profit + change(s)
+        eps = _div(profit, shares)
+        out["scenarios"].append({
+            "shock_pct": round(s * 100), "nima": rate * (1 + s),
+            "profit": profit, "eps": eps,
+            "change_pct": _pct(_div(profit - forward_profit, abs(forward_profit)))
+            if forward_profit else None,
+            "pe": _round(price / eps) if price and eps and eps > 0 else None})
+    out["per_10pct_pct"] = (_pct(change(0.10) / abs(forward_profit))
+                            if forward_profit else None)
+    # The ceiling for comparison: a business whose every price and cost is
+    # struck in dollars moves its remaining months' profit one for one.
+    out["full_pass_per_10pct_pct"] = (
+        _pct(remaining_rev * net_margin * owners_share * 0.10 / abs(forward_profit))
+        if forward_profit and net_margin is not None and net_margin > 0 else None)
+    return out
+
+
+# Capital-raise announcements (codal_announcements kind "capital"), latest
+# stage first. Titles never name the source; a rights offering (پذیره‌نویسی,
+# حق تقدم) is the one stage that says the money is the shareholders' cash.
+CAPITAL_STAGES = (
+    ("registered", ("ثبتافزایشسرمایه",), "ثبت شده (انجام شد)"),
+    ("rights_result", ("فروشحقتقدم",), "فروش حق تقدم‌های استفاده‌نشده"),
+    ("subscription", ("پذیرهنویسی",), "پذیره‌نویسی (افزایش سرمایه نقدی)"),
+    ("egm_decided", ("تصمیماتمجمععمومیفوقالعاده",), "مجمع فوق‌العاده تصمیم گرفت"),
+    ("egm_called", ("دعوتبهمجمععمومیفوقالعاده",), "مجمع فوق‌العاده دعوت شد"),
+    ("submitted", ("مدارکومستندات",), "مدارک به سازمان بورس رفت"),
+    ("audited", ("اظهارنظرحسابرس",), "حسابرس گزارش توجیهی را دید"),
+    ("proposed", ("پیشنهادهییتمدیره", "پیشنهادهیاتمدیره"), "پیشنهاد هیئت مدیره"),
+    ("board_meeting", ("زمانتشکیلجلسههییتمدیره", "زمانتشکیلجلسههیاتمدیره"),
+     "جلسه‌ی هیئت مدیره اعلام شد"),
+)
+CAPITAL_MONTHS = 12
+
+
+def capital_events_for(ins_codes, months=CAPITAL_MONTHS):
+    """{ins_code: [(published_at, title)]} newest first, of the last
+    `months` months' capital-raise announcements."""
+
+    import fundamental_db
+
+    today = jalali.today_jalali()
+    since = "%04d/%02d/%02d" % (jalali.add_months(today[0], today[1], -months)
+                                + (today[2],))
+    out = {}
+    conn = fundamental_db._connect()
+    try:
+        wanted = [str(c) for c in ins_codes] if ins_codes else None
+        sql = ("SELECT ins_code, published_at, title FROM announcements "
+               "WHERE kind = 'capital' AND published_at >= ?")
+        args = [since]
+        if wanted and len(wanted) < 500:
+            sql += " AND ins_code IN (%s)" % ",".join("?" * len(wanted))
+            args += wanted
+        rows = conn.execute(sql + " ORDER BY published_at DESC", args).fetchall()
+    except Exception:                                           # noqa: BLE001
+        rows = []
+    finally:
+        conn.close()
+    for code, published, title in rows:
+        out.setdefault(str(code), []).append((published, title))
+    return out
+
+
+def capital_reading(events):
+    """The newest stage of a capital raise, in words, or None."""
+
+    if not events:
+        return None
+    import persian
+
+    def flat(text):
+        return "".join(persian.normalize(str(text or "")).replace("‌", " ").split())
+
+    stages = []
+    for published, title in events:
+        f = flat(title).replace("ي", "ی").replace("ك", "ک").replace("ئ", "ی")
+        for key, needles, label in CAPITAL_STAGES:
+            if any(n in f for n in needles):
+                stages.append((published, key, label, title))
+                break
+    if not stages:
+        return None
+    newest = max(stages, key=lambda s: s[0] or "")
+    cash = any(key in ("subscription", "rights_result") for _p, key, _l, _t in stages)
+    done = newest[1] == "registered"
+    text = ("افزایش سرمایه: %s (%s)." % (newest[2], (newest[0] or "")[:10]))
+    if done:
+        text += " تعداد سهم بورس پس از ثبت به‌روز می‌شود؛ سود هر سهم با تعداد تازه حساب شده است."
+    elif cash:
+        text += (" نقدی است (پذیره‌نویسی): پول تازه وارد شرکت می‌شود و تا به سود برسد، "
+                 "سود هر سهم با تعداد بیشتر سهم رقیق می‌شود.")
+    else:
+        text += (" منبع در عنوان اطلاعیه نیست: اگر از سود انباشته یا تجدید ارزیابی باشد "
+                 "فقط تعداد سهم و قیمت تعدیل می‌شود؛ اگر نقدی باشد سود هر سهم رقیق می‌شود.")
+    return {"stage": newest[1], "stage_label": newest[2], "date": newest[0],
+            "cash": cash, "done": done, "text": text,
+            "events": [{"date": p, "title": t} for p, t in events[:8]]}
+
+
+# Fair value. The company's own P/E is read over this many of
+# market_valuation's points (every 21 sessions: about a year), not its whole
+# 2022-onward history: at 40-80% inflation trailing P/Es drift down as
+# nominal profit grows, and E33 found whole industries "cheap against their
+# own history" for that reason alone.
+OWN_PE_POINTS = 12
+OWN_PE_MIN_POINTS = 6
+PEER_PE_MAX = 60.0
+_PEERS = {"at": None, "value": None}
+PEERS_TTL = 600.0
+
+
+def valuation_peers():
+    """{sector_pe, sector_n, market_pe, market_as_of, own_pe} for fair_value(),
+    re-read after PEERS_TTL seconds."""
+
+    import time as _time
+
+    now = _time.monotonic()
+    if _PEERS["at"] is not None and now - _PEERS["at"] < PEERS_TTL:
+        return _PEERS["value"]
+    sectors = {}
+    for inst in database.load_instruments(equities_only=True):
+        sectors[str(inst["ins_code"])] = (inst.get("sector_name") or "").strip()
+    by_sector = {}
+    for code, pe in published_pe().items():
+        if 0 < pe <= PEER_PE_MAX and sectors.get(code):
+            by_sector.setdefault(sectors[code], []).append(pe)
+    value = {"sector_pe": {k: _round(_median(v)) for k, v in by_sector.items()
+                           if len(v) >= SECTOR_PEERS_MIN},
+             "sector_n": {k: len(v) for k, v in by_sector.items()},
+             "market_pe": None, "market_as_of": None, "own_pe": {}}
+    try:
+        import market_valuation
+        points = (market_valuation.load() or {}).get("points") or []
+    except Exception:                                           # noqa: BLE001
+        points = []
+    if points:
+        value["market_pe"] = points[-1].get("pe")
+        value["market_as_of"] = points[-1].get("date")
+        history = {}
+        for p in points[-OWN_PE_POINTS:]:
+            for code, pair in (p.get("by_company") or {}).items():
+                try:
+                    cap, profit = float(pair[0]), float(pair[1])
+                except (TypeError, ValueError, IndexError):
+                    continue
+                if cap > 0 and profit > 0 and cap / profit <= PEER_PE_MAX:
+                    history.setdefault(code, []).append((p.get("date"), cap / profit))
+        for code, pts in history.items():
+            if len(pts) >= OWN_PE_MIN_POINTS:
+                pes = sorted(x[1] for x in pts)
+                value["own_pe"][code] = {"median": _round(_median(pes)),
+                                         "low": _round(pes[0]), "high": _round(pes[-1]),
+                                         "n": len(pts), "from": pts[0][0],
+                                         "to": pts[-1][0]}
+    _PEERS.update(at=now, value=value)
+    return value
+
+
+def fair_value(kind, ins_code, sector, eps_ttm, eps, estimate_range, price,
+               peers, nav_result=None, nav_stale=False, nav_estimate=None,
+               shares=None, doubts=()):
+    """A value range from reference multiples, or None.
+
+    Operating companies. The reference multiples -- the industry's median
+    P/E on the exchange, the share's own median over the past year, the
+    whole market's -- are all TRAILING twelve-month P/Es, so they are put on
+    the trailing EPS: what the share would be priced at on today's profit
+    if it traded like them. The industry's is the central one (a refiner is
+    not priced like the market); the range runs from the lowest multiple to
+    the highest. A second reading puts the same multiples on the year's
+    estimated EPS (its calibrated range at the ends): the value IF the
+    estimate comes true and the multiples hold. A first version put the
+    trailing multiples on the forward EPS alone and read شتران +172%: in a
+    year of 77% inflation that counts the year's growth twice.
+
+    Financials: the NAV per share. Either way a reading of where reference
+    multiples put the price, not a target: the rankings built on these
+    numbers did not beat the index (E30-E33).
+    """
+
+    if kind == FINANCIAL:
+        nav = (nav_estimate if nav_stale and nav_estimate else
+               (nav_result or {}).get("nav"))
+        if not nav or not shares or nav <= 0:
+            return None
+        per_share = nav / shares
+        return {"basis": "nav", "central": per_share, "low": None, "high": None,
+                "anchors": [{"label": "ارزش خالص دارایی هر سهم" +
+                             (" (تخمینی با حرکت شاخص)" if nav_stale else ""),
+                             "multiple": None, "value": per_share}],
+                "upside_pct": _pct(per_share / price - 1) if price else None,
+                "doubtful": bool(doubts), "forward": None,
+                "central_multiple": None, "central_basis": "nav"}
+    if not eps_ttm or eps_ttm <= 0 or not peers:
+        return None
+    anchors = []
+    s_pe = (peers.get("sector_pe") or {}).get((sector or "").strip())
+    if s_pe:
+        anchors.append({"key": "sector",
+                        "label": "میانه‌ی P/E صنعت (%d نماد، بورس)"
+                        % (peers.get("sector_n") or {}).get((sector or "").strip(), 0),
+                        "multiple": s_pe})
+    own = (peers.get("own_pe") or {}).get(str(ins_code))
+    if own:
+        anchors.append({"key": "own", "label": "P/E خود سهم در یک سال گذشته (میانه)",
+                        "multiple": own["median"]})
+    if peers.get("market_pe") and 0 < peers["market_pe"] <= PEER_PE_MAX:
+        anchors.append({"key": "market", "label": "P/E کل بازار",
+                        "multiple": peers["market_pe"]})
+    if not anchors:
+        return None
+    for a in anchors:
+        a["value"] = eps_ttm * a["multiple"]
+        a["value_forward"] = eps * a["multiple"] if eps and eps > 0 else None
+    multiples = sorted(a["multiple"] for a in anchors)
+    central_multiple = anchors[0]["multiple"]       # the industry's, if there is one
+    central = eps_ttm * central_multiple
+    out = {"basis": "pe", "central_multiple": central_multiple,
+           "central_basis": anchors[0]["key"],
+           "central": central, "low": eps_ttm * multiples[0],
+           "high": eps_ttm * multiples[-1],
+           "anchors": anchors, "own_pe": own,
+           "upside_pct": _pct(central / price - 1) if price else None,
+           "doubtful": bool(doubts),
+           "forward": None}
+    if eps and eps > 0:
+        low_eps = (estimate_range or {}).get("eps_low") or eps
+        high_eps = (estimate_range or {}).get("eps_high") or eps
+        f_central = eps * central_multiple
+        out["forward"] = {"central": f_central,
+                          "low": max(low_eps, 0) * multiples[0],
+                          "high": high_eps * multiples[-1],
+                          "upside_pct": _pct(f_central / price - 1) if price else None}
+    return out
 
 
 # The market's newest session, re-read after MARKET_DATE_TTL seconds. It was
@@ -1491,6 +2051,12 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     tails = database.load_history_tail(list(instruments), TRADING_SESSIONS)
     portfolios = database.load_codal_portfolio_latest()
     opportunity = opportunity_rate()
+    import fx
+    import outlook_calibration
+    calibration = outlook_calibration.load()
+    fx_record = fx.load()
+    capital = capital_events_for(None)
+    peers = valuation_peers()
 
     ranked, financials, suspect, thin, doubtful = [], [], [], [], []
     excluded = {"no_filing": 0, "stale": 0, "no_estimate": 0, "flags": 0,
@@ -1509,7 +2075,9 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
                          sector=inst.get("sector_name"),
                          portfolio=portfolios.get(code), opportunity=opportunity,
                          bars=tails.get(code), band=bands.get(code),
-                         published=published.get(code))
+                         published=published.get(code),
+                         calibration=calibration, fx_record=fx_record,
+                         capital_events=capital.get(code), peers=peers)
         if not result:
             excluded["no_filing"] += 1
             continue
@@ -1618,4 +2186,8 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
             "liquidity_floor": config.MIN_DAILY_VALUE,
             "excluded": excluded,
             "bar_pct": opportunity["rate_pct"],
-            "opportunity": opportunity}
+            "opportunity": opportunity,
+            "calibration": ({"built_at": calibration.get("built_at"),
+                             "points": calibration.get("points")}
+                            if calibration else None),
+            "dollar": fx.summary(fx_record) if fx_record else None}

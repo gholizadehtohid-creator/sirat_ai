@@ -283,7 +283,8 @@ class EnsureTests(unittest.TestCase):
                 mock.patch.object(bootstrap, "_last_fetch", return_value=None), \
                 mock.patch.object(bootstrap, "_mark_fetched"), \
                 mock.patch.object(bootstrap, "_step_detail", return_value=""), \
-                mock.patch.object(bootstrap, "_forward_log"):
+                mock.patch.object(bootstrap, "_forward_log"), \
+                mock.patch.object(bootstrap, "_outlook_inputs"):
             bootstrap.ensure()
 
         self.assertEqual(fetched, ["indices", "history"])
@@ -321,7 +322,8 @@ class EnsureTests(unittest.TestCase):
                                   side_effect=lambda name: None if name == "history" else recent), \
                 mock.patch.object(bootstrap, "_mark_fetched"), \
                 mock.patch.object(bootstrap, "_step_detail", return_value=""), \
-                mock.patch.object(bootstrap, "_forward_log"):
+                mock.patch.object(bootstrap, "_forward_log"), \
+                mock.patch.object(bootstrap, "_outlook_inputs"):
             bootstrap.ensure()
 
         self.assertEqual(fetched, ["history", "flow"])
