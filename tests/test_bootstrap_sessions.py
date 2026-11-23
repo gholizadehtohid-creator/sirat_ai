@@ -393,7 +393,7 @@ class ScheduledRetryTests(unittest.TestCase):
         self.assertEqual(made, bootstrap.SCHEDULED_RETRIES)
 
     def test_no_retry_past_the_cut_off(self):
-        self.clock[0] = datetime(2026, 11, 10, 21, 0)
+        self.clock[0] = datetime(2026, 11, 10, 22, 0)
         made, calls = self.run_retry([True])
         self.assertEqual((made, calls), (0, []))
 
@@ -401,6 +401,39 @@ class ScheduledRetryTests(unittest.TestCase):
         bootstrap._DEFERRED.clear()
         self.assertEqual(bootstrap.retry_deferred(now=self.now, sleep=self.sleep), 0)
         self.assertEqual(self.slept, [])
+
+    def test_a_thin_flow_is_retried_too(self):
+        """11-22: the bars arrived at 20:09, flow for 36 of 748 names; the
+        loop stopped because only history counted (the session was lost)."""
+        left = [True, False]
+
+        def ensure(only=None):
+            bootstrap._DEFERRED["flow"] = left.pop(0)
+            return {"flow": {"action": "fetched", "detail": "x"}}
+
+        bootstrap._DEFERRED.clear()
+        bootstrap._DEFERRED["flow"] = True
+        with mock.patch.object(bootstrap, "ensure", side_effect=ensure), \
+                mock.patch("builtins.print"):
+            made = bootstrap.retry_deferred(now=self.now, sleep=self.sleep)
+        bootstrap._DEFERRED.clear()
+        self.assertEqual(made, 2)
+
+    def test_the_flow_step_marks_a_thin_session_deferred(self):
+        import seed_import
+        bootstrap._DEFERRED.clear()
+        with mock.patch.object(seed_import, "import_client_type", return_value=5), \
+                mock.patch.object(bootstrap, "_flow_session_coverage",
+                                  return_value=("2026-11-22", 748, 36)), \
+                mock.patch.object(bootstrap, "_note"):
+            self.assertTrue(bootstrap._fetch_flow(lambda *a: None))
+        self.assertTrue(bootstrap._DEFERRED["flow"])
+        with mock.patch.object(seed_import, "import_client_type", return_value=5), \
+                mock.patch.object(bootstrap, "_flow_session_coverage",
+                                  return_value=("2026-11-22", 748, 740)):
+            bootstrap._fetch_flow(lambda *a: None)
+        self.assertFalse(bootstrap._DEFERRED["flow"])
+        bootstrap._DEFERRED.clear()
 
 
 class StatusSingleFlightTests(unittest.TestCase):
@@ -431,6 +464,17 @@ class StatusSingleFlightTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(len(out), 5)
         self.assertTrue(all(o == {"x": {"needs_fetch": False}} for o in out))
+
+    def test_an_older_reading_serves_a_caller_that_allows_it(self):
+        import time as _time
+        with bootstrap._status_lock:
+            bootstrap._status_cache.update(value={"old": True},
+                                           at=_time.monotonic() - 10)
+        with mock.patch.object(bootstrap, "_probe_all", return_value={"new": True}):
+            self.assertEqual(bootstrap.status(max_age=60), {"old": True})
+            self.assertEqual(bootstrap.status(), {"new": True})
+        with bootstrap._status_lock:
+            bootstrap._status_cache.update(value=None, at=None)
 
     def test_fresh_always_probes(self):
         with mock.patch.object(bootstrap, "_probe_all", return_value={}) as probe:

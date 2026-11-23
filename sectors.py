@@ -272,6 +272,10 @@ def analyse_sector(name, group, snapshot_by_code, info_by_code,
             f"{len(contributors)} constituents, base 100 — computed here, "
             f"NOT the exchange's published sector index"
         ),
+        "index_method_fa": (
+            f"هم‌وزن، زنجیره‌ای از بازده روزانه‌ی {len(contributors)} عضو، "
+            f"پایه ۱۰۰ — محاسبه‌ی همین‌جا، نه شاخص صنعت منتشرشده‌ی بورس"
+        ),
         "index_contributors": len(contributors),
         "members": sorted(
             rows,
@@ -518,8 +522,8 @@ def analyse_all(params=None, approve_score=None, bars=None, min_members=None,
 
     if skipped:
         warnings.append(
-            f"{skipped} sectors had fewer than {min_members} constituents and "
-            f"were not aggregated — one company is not a sector."
+            f"{skipped} صنعت کمتر از {min_members} عضو داشت و جمع‌بندی نشد "
+            f"— یک شرکت یک صنعت نیست."
         )
 
     # Rank by the technical read, sectors without one last.

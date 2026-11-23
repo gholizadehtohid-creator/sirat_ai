@@ -172,6 +172,70 @@ class StoreTests(unittest.TestCase):
                          "stored (no DPS: no DividendPerShare row)")
 
 
+LATE = "تصمیمات مجمع عمومی عادی به طور فوق العاده دوره ۱۲ ماهه منتهی به ۱۴۰۴/۱۲/۲۹"
+LATE_MIDYEAR = ("تصمیمات مجمع عمومی عادی به طور فوق العاده دوره ۱۲ ماهه منتهی به "
+                "۱۴۰۵/۱۲/۲۹")
+
+
+class LateAgmTests(unittest.TestCase):
+    """ن-55: an ordinary meeting held out of schedule. For a 12-month year
+    that had ended, it is that year's late annual AGM and its page carries
+    the DPS (سخواف 1639336, read by hand 2026-11-23); 76 equities had one
+    newer than their stored DPS (the full test, 2026-11-12)."""
+
+    def setUp(self):
+        handle, self.path = tempfile.mkstemp(suffix=".db")
+        os.close(handle)
+        os.unlink(self.path)
+        self.previous = fundamental_db.set_path(self.path)
+        a.ensure_tables()
+
+    def tearDown(self):
+        fundamental_db.set_path(self.previous)
+        if os.path.exists(self.path):
+            os.unlink(self.path)
+
+    def handle(self, item, page=PAGE):
+        with mock.patch.object(a.codal, "archive_read", return_value=None), \
+                mock.patch.object(a.codal, "archive_write"):
+            client = mock.Mock()
+            client._get.return_value.content = page.encode("utf-8")
+            return a.handle(client, item, {"ins_code": "123"}), client
+
+    def test_which_letters_decide_a_years_dividend(self):
+        self.assertTrue(a.is_annual_decision("ن-52", letter("1", "x")["title"]))
+        self.assertFalse(a.is_annual_decision("ن-52", RECESS))
+        self.assertTrue(a.is_annual_decision("ن-55", LATE, "1405/08/28 14:22:40"))
+        self.assertFalse(a.is_annual_decision("ن-55", LATE_MIDYEAR, "1405/08/26"))
+        self.assertFalse(a.is_annual_decision("ن-55", LATE, None))
+        self.assertFalse(a.is_annual_decision("ن-20", LATE, "1405/08/28"))
+
+    def test_a_late_agm_for_an_ended_year_is_read(self):
+        outcome, client = self.handle(letter("10", "1405/08/28 14:22:40",
+                                             code="ن-55", title=LATE))
+        self.assertEqual(outcome, "stored (DPS 55)")
+        self.assertEqual(a.latest_dividends()["123"]["fiscal_year_end"], "1404/12/29")
+
+    def test_a_mid_year_meeting_asks_for_no_page(self):
+        outcome, client = self.handle(letter("11", "1405/08/26 10:00:00",
+                                             code="ن-55", title=LATE_MIDYEAR))
+        self.assertTrue(outcome.startswith("stored (no year-end decision"))
+        client._get.assert_not_called()
+        self.assertNotIn("123", a.latest_dividends())
+
+    def test_the_annual_decision_keeps_its_year_against_a_later_late_one(self):
+        self.handle(letter("1", "1405/04/29 12:00:00"))                  # ن-52: 55
+        self.handle(letter("12", "1405/08/28 14:22:40", code="ن-55", title=LATE),
+                    page=PAGE.replace('value="55"', 'value="0"'))
+        self.assertEqual(a.latest_dividends()["123"]["dps"], 55.0)
+
+    def test_the_annual_decision_displaces_a_late_one_read_first(self):
+        self.handle(letter("12", "1405/08/28 14:22:40", code="ن-55", title=LATE),
+                    page=PAGE.replace('value="55"', 'value="0"'))
+        self.handle(letter("1", "1405/04/29 12:00:00"))
+        self.assertEqual(a.latest_dividends()["123"]["dps"], 55.0)
+
+
 class BackfillTests(unittest.TestCase):
 
     def setUp(self):
@@ -268,6 +332,22 @@ class BackfillTests(unittest.TestCase):
         self.assertEqual(result["stored"], 1)
         self.assertEqual(a.latest_dividends()["1"]["fiscal_year_end"],
                          "1404/12/29")
+
+    def test_an_indexed_late_agm_supplies_the_newer_year(self):
+        """The search (ن-52 only) finds FY1403; a ن-55 for the ended FY1404
+        is already in the index. No second search is made for it."""
+        a.store_announcement(letter("55", "1405/08/28 14:22:40", code="ن-55",
+                                    title=LATE), "1", "agm")
+        searches = []
+
+        def letters(_client, symbol):
+            searches.append(symbol)
+            return [letter("3", "1404/05/01 10:00:00", title=OLDER_YEAR)]                 if symbol == "x" else []
+
+        result = self.run_backfill({"55": PAGE, "3": PAGE}, letters)
+        self.assertEqual(result["stored"], 1)
+        self.assertEqual(a.latest_dividends()["1"]["fiscal_year_end"], "1404/12/29")
+        self.assertEqual(searches, ["x", "y"])
 
     def test_a_reply_that_is_not_the_form_leaves_the_company_due(self):
         result = self.run_backfill(

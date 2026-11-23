@@ -404,8 +404,13 @@ def _overhead(frame, close):
 
 def scan(equity=None, size=None, max_per_sector=None, limit=None,
          positions=None, verbose=True, params=None, min_action=None,
-         risk_pct=None):
-    """Score the market and build the proposed book. Returns everything computed."""
+         risk_pct=None, regime=None):
+    """Score the market and build the proposed book. Returns everything computed.
+
+    `regime` is a regime_engine.assess() already read for the same data -- the
+    panel's regime card and its book were two 20 s reads of one thing (the
+    full test, 2026-11-12). None reads it here, as every other caller does.
+    """
 
     params = params or DEFAULT_PARAMS
 
@@ -414,7 +419,7 @@ def scan(equity=None, size=None, max_per_sector=None, limit=None,
     started = time.time()
 
     # ---- 1. the market ----------------------------------------------------
-    regime = regime_engine.assess()
+    regime = regime if regime is not None else regime_engine.assess()
 
     if verbose:
         print("=" * 78)

@@ -179,6 +179,12 @@ const STATUS_FA = {
   "BUY": "مثبت", "SELL": "منفی", "HOLD": "خنثی", "AVOID": "پرهیز",
 };
 
+// The session collector's tick outcomes (monitor.py), as the live tab says them.
+const TICK_FA = {
+  trading: "در جریان", frozen: "بی‌تغییر", closed: "بسته",
+  unreadable: "خوانده نشد", error: "خطا",
+};
+
 const VOL_FA = {
   LOW_VOLATILITY: "نوسان کم", NORMAL_VOLATILITY: "نوسان عادی",
   HIGH_VOLATILITY: "نوسان بالا", EXTREME_VOLATILITY: "نوسان بسیار بالا",
@@ -469,7 +475,7 @@ async function loadRegime(force = false) {
     renderRegime(rep);
     setTask("regime", rep.available ? "done" : "failed",
       rep.available ? rep.label : (rep.reason || "نامشخص"),
-      rep.available ? rep.regime : "");
+      rep.available ? (STATUS_FA[rep.regime] || rep.regime) : "");
   } catch (err) {
     state.regime = null;
     banner("regimeStatus", "regimeStatusText", "is-error",
@@ -1049,7 +1055,7 @@ function renderIndices(rep) {
         .map(([k, v]) => ({ label: k, value: v })),
       format: (v) => `${v > 0 ? "+" : ""}${fmt(v, 1)}pp`
     });
-    $("breadthVerdict").innerHTML = `<strong>${esc(breadth.verdict)}</strong>`;
+    $("breadthVerdict").innerHTML = `<strong>${esc(breadth.verdict_fa || breadth.verdict)}</strong>`;
   } else {
     $("breadthChart").innerHTML = '<div class="empty">داده‌ای نیست</div>';
     $("breadthVerdict").textContent = "";
@@ -2229,7 +2235,7 @@ function renderSectors(rep) {
           esc(TREND_FA[t.trend] || t.trend || "—"),
           b ? `${b.pct_above_slow_ma}٪` : "—",
           signed(t.returns ? t.returns["60d"] : null),
-          esc(s.index_method || "—")
+          esc(s.index_method_fa || s.index_method || "—")
         ];
       })
   );
@@ -2240,7 +2246,7 @@ function showSectorMembers(sector) {
   wrap.classList.remove("hidden");
 
   wrap.innerHTML =
-    `<p class="hint"><strong>${esc(sector.sector_name)}</strong> — ${esc(sector.index_method)}</p>` +
+    `<p class="hint"><strong>${esc(sector.sector_name)}</strong> — ${esc(sector.index_method_fa || sector.index_method)}</p>` +
     table(
       ["نماد", "شرکت", "امتیاز بنیادی", "حکم", "P/E", "بازده سود", "ارزش معاملات", "۶۰ روزه", "کندل"],
       sector.members.map(m => [
@@ -4852,7 +4858,7 @@ async function loadLive() {
     : `${num(s.traded, 0)} نماد گردش معامله دارند`;
 
   if (tick) {
-    detail += ` · آخرین تیک جمع‌آورنده: ${esc(tick.outcome)} ${
+    detail += ` · آخرین تیک جمع‌آورنده: ${esc(TICK_FA[tick.outcome] || tick.outcome)} ${
       ageTag(tick.age_minutes)}`;
   } else {
     detail += " · جمع‌آورنده هنوز هیچ تیکی ثبت نکرده است";

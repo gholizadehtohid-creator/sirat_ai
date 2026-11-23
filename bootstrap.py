@@ -596,12 +596,26 @@ _DEFERRED = {}
 # session components itself, at most this many times and never past the
 # local cut-off -- the evening's later steps wait for it, which is the point:
 # they read the session.
-SCHEDULED_RETRIES = 2
-SCHEDULED_RETRY_UNTIL = (21, 30)
+#
+# The flow (حقیقی/حقوقی) of a session is published later in the evening than
+# its bars: on 11-22 the 20:09 retry found the bars but flow for 36 of 748
+# traded names, the loop stopped because only history counted, and the
+# session was lost to the forward log (which needs 90% of them); 11-16's
+# flow was complete by 21:34. A thin flow for the newest session is a
+# deferral too, and the cut-off sits late enough to catch it.
+SCHEDULED_RETRIES = 3
+SCHEDULED_RETRY_UNTIL = (22, 30)
+
+
+def _deferred():
+    """Which session step is still waiting on the exchange, or None."""
+
+    return ("history" if _DEFERRED.get("history")
+            else "flow" if _DEFERRED.get("flow") else None)
 
 
 def retry_deferred(wait=None, retries=None, until=None, now=None, sleep=None):
-    """Retry the session components while the history step keeps deferring.
+    """Retry the session components while the history or flow step defers.
 
     Returns the number of retries made. The wait is checked against the wall
     clock in short slices, so a laptop that suspends mid-wait resumes on
@@ -615,21 +629,23 @@ def retry_deferred(wait=None, retries=None, until=None, now=None, sleep=None):
     now = now or datetime.now
     sleep = sleep or time.sleep
     made = 0
-    while made < retries and _DEFERRED.get("history"):
+    while made < retries and _deferred():
+        waiting = _deferred()
         due = now() + wait
         if (due.hour, due.minute) > until or due.date() != now().date():
-            print("deferred: the session is still unpublished; the next try "
-                  "would pass %02d:%02d, so it is left to tomorrow's run"
-                  % until, flush=True)
+            print("deferred: the session's %s is still unpublished; the next "
+                  "try would pass %02d:%02d, so it is left to tomorrow's run"
+                  % (waiting, until[0], until[1]), flush=True)
             break
-        print("deferred: the history endpoint has not published the session; "
-              "trying again at %s" % due.strftime("%H:%M"), flush=True)
+        print("deferred: the exchange has not published the session's %s; "
+              "trying again at %s" % (waiting, due.strftime("%H:%M")), flush=True)
         while now() < due:
             sleep(min(30.0, max(0.0, (due - now()).total_seconds())))
         made += 1
-        # Only a history step that defers again keeps the loop going; one
-        # that is not planned (nothing behind any more) ends it.
+        # Only a step that defers again keeps the loop going; one that is not
+        # planned (nothing behind any more) ends it.
         _DEFERRED["history"] = False
+        _DEFERRED["flow"] = False
         outcome = ensure(only=SESSION_COMPONENTS)
         for name, result in (outcome or {}).items():
             print("  retry %d: %-10s %s  %s" % (made, name, result.get("action"),
@@ -644,7 +660,7 @@ def _mark_fetched(name):
     "deferred", which status() retries after DEFERRED_RETRY.
     """
 
-    deferred = name in SESSION_COMPONENTS and _DEFERRED.get("history")
+    deferred = name in SESSION_COMPONENTS and bool(_deferred())
     database.set_provenance(
         f"bootstrap:{name}", "deferred" if deferred else "fetched",
         f"automatic fetch at {_now().isoformat(timespec='seconds')}"
@@ -662,17 +678,21 @@ def _last_fetch_deferred(name):
     return bool(record) and record.get("status") == "deferred"
 
 
-def status(fresh=False):
+def status(fresh=False, max_age=None):
     """What is stored, what is missing, and what is stale — fetching nothing.
 
-    Cached for STATUS_TTL seconds. Pass fresh=True where the answer decides
-    what to download, so a fetch is never planned from a stale reading.
+    Cached for STATUS_TTL seconds, or `max_age` where the caller can use an
+    older reading. Pass fresh=True where the answer decides what to
+    download, so a fetch is never planned from a stale reading. A run of
+    this module clears the cache when it ends, so its own fetches are never
+    hidden by it.
     """
 
+    ttl = STATUS_TTL if max_age is None else max_age
     if not fresh:
         with _status_lock:
             cached, at = _status_cache["value"], _status_cache["at"]
-            if cached is not None and (time.monotonic() - at) < STATUS_TTL:
+            if cached is not None and (time.monotonic() - at) < ttl:
                 return cached
             running = _status_inflight["event"]
             if running is None:
@@ -857,8 +877,20 @@ def _fetch_sectors(on_item):
 
 def _fetch_flow(on_item):
     import seed_import
-    return bool(seed_import.import_client_type(verbose=False, progress=on_item,
-                                               incremental=True))
+    ok = bool(seed_import.import_client_type(verbose=False, progress=on_item,
+                                             incremental=True))
+    # The newest session's flow arrives in the evening after its bars; until
+    # most traded names have it, the step has deferred that session.
+    try:
+        session, traded, flowed = _flow_session_coverage()
+    except Exception:                                           # noqa: BLE001
+        session, traded, flowed = None, 0, 0
+    _DEFERRED["flow"] = bool(ok and traded and
+                             flowed < traded * FLOW_SESSION_COVERAGE)
+    if _DEFERRED["flow"]:
+        _note("flow: session %s has %d of %d traded names so far -- the rest "
+              "is published later; retried" % (session, flowed, traded))
+    return ok
 
 
 def _fetch_codal(on_item):

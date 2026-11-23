@@ -78,8 +78,12 @@ def engine_name(engine=None):
 
 def run(equity=None, size=None, max_per_sector=None, min_score=None,
         risk_pct=None, use_regime=True, scan_report=None, progress=None,
-        engine=None, positions=None):
-    """Run the whole chain and return one report."""
+        engine=None, positions=None, regime=None):
+    """Run the whole chain and return one report.
+
+    `regime` (v2 only): a regime_engine.assess() the caller already holds for
+    the same data, so the chain does not read the market a second time.
+    """
 
     import pipeline
 
@@ -87,7 +91,7 @@ def run(equity=None, size=None, max_per_sector=None, min_score=None,
         return _run_v2(
             equity=equity, size=size, max_per_sector=max_per_sector,
             risk_pct=risk_pct, use_regime=use_regime, progress=progress,
-            positions=positions,
+            positions=positions, regime=regime,
         )
 
     equity = equity or config.ACCOUNT_EQUITY
@@ -194,7 +198,7 @@ def run(equity=None, size=None, max_per_sector=None, min_score=None,
 # ==============================
 
 def v2_scan(equity=None, size=None, max_per_sector=None, positions=None,
-            verbose=False, risk_pct=None):
+            verbose=False, risk_pct=None, regime=None):
     """THE one call that runs the v2 chain. Every caller comes through here.
 
     regime_engine -> factor_engine -> risk_engine -> trade_manager ->
@@ -213,11 +217,12 @@ def v2_scan(equity=None, size=None, max_per_sector=None, positions=None,
     return swing_advisor.scan(
         equity=equity, size=size, max_per_sector=max_per_sector,
         positions=positions, verbose=verbose, risk_pct=risk_pct,
+        regime=regime,
     )
 
 
 def _run_v2(equity=None, size=None, max_per_sector=None, risk_pct=None,
-            use_regime=True, progress=None, positions=None):
+            use_regime=True, progress=None, positions=None, regime=None):
     """The swing chain, adapted to the report shape every caller already reads.
 
     An ADAPTER and nothing more: no scoring, no ranking and no selection happens
@@ -251,7 +256,7 @@ def _run_v2(equity=None, size=None, max_per_sector=None, risk_pct=None,
     try:
         out = v2_scan(equity=equity, size=size,
                       max_per_sector=max_per_sector, positions=positions,
-                      risk_pct=risk_pct)
+                      risk_pct=risk_pct, regime=regime)
     except Exception as exc:
         log.exception("v2 scan failed")
         return {

@@ -131,8 +131,13 @@ class RegimeCardTests(unittest.TestCase):
 
         import swing_advisor
 
-        self.assertIn("regime = regime_engine.assess()\n",
+        self.assertIn("regime = regime if regime is not None else "
+                      "regime_engine.assess()\n",
                       inspect.getsource(swing_advisor.scan))
+        # And the panel hands the book the very read the card shows: one
+        # assess() per data version, not two (the full test, 2026-11-12).
+        self.assertIn("regime=_v2_regime(force=force)",
+                      inspect.getsource(app.api_portfolio))
 
 
 class AssessCarriesTheCardTests(unittest.TestCase):

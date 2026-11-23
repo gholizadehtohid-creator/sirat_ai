@@ -802,22 +802,31 @@ def compare(reports):
 
     spread_20 = spreads.get("20d")
 
+    # The panel prints verdict_fa; verdict stays English for the CLI and logs
+    # (the full test, 2026-11-12: the panel printed the English sentence).
     if spread_20 is None:
         verdict = "not enough overlapping history to judge breadth"
+        verdict_fa = "سابقه‌ی مشترک کافی برای سنجش گستردگی بازار نیست"
     elif spread_20 > BREADTH_SPREAD_PP:
         verdict = ("broad advance — the equal-weighted index is beating the "
                    "capitalisation-weighted one, so smaller names are leading")
+        verdict_fa = ("رشد فراگیر — شاخص هم‌وزن از شاخص کل جلو است؛ "
+                      "نمادهای کوچک‌تر پیش‌اند")
     elif spread_20 < -BREADTH_SPREAD_PP:
         verdict = ("narrow market — the capitalisation-weighted index is being "
                    "carried by large caps while the average share lags")
+        verdict_fa = ("بازار کم‌عمق — شاخص کل را بزرگ‌ها می‌کشند و "
+                      "سهم میانگین عقب است")
     else:
         verdict = "large caps and the broad market are moving together"
+        verdict_fa = "بزرگ‌ها و کل بازار هم‌جهت حرکت می‌کنند"
 
     return {
         "cap_weighted": cap["name"],
         "equal_weighted": equal["name"],
         "spreads": spreads,
         "verdict": verdict,
+        "verdict_fa": verdict_fa,
     }
 
 

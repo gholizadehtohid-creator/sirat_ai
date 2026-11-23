@@ -873,7 +873,8 @@ for _code in codal_announcements.CODES:
 # An announcement is a row from the feed itself, except an annual AGM's
 # decisions, whose page is fetched for the dividend.
 NETWORK_CODES = ("ن-10", "ن-30", "ن-31", persian.normalize(
-    codal_announcements.ANNUAL_AGM_DECISIONS))
+    codal_announcements.ANNUAL_AGM_DECISIONS), persian.normalize(
+    codal_announcements.LATE_AGM_DECISIONS))
 
 
 def _process(client, letter, universe, pace, totals, verbose, attempts=0,

@@ -466,10 +466,19 @@ def api_regime():
 
     def build():
         if engine == advisor.V2:
-            return regime_engine.assess()
+            return _v2_regime(force=force)
         return regime_module.detect(params=params)
 
     return jsonify(memoise(key, build, force=force))
+
+
+def _v2_regime(force=False):
+    """regime_engine.assess() once per data version, for the regime card and
+    the v2 book alike: they were two ~20 s reads of the same market on one
+    page load (the full test, 2026-11-12)."""
+
+    return memoise(cache_key("regime-v2-read", data_version()),
+                   regime_engine.assess, force=force)
 
 
 @app.route("/api/portfolio")
@@ -527,6 +536,7 @@ def api_portfolio():
                 risk_pct=args["risk_pct"],
                 use_regime=use_regime,
                 engine=engine,
+                regime=_v2_regime(force=force),
             )
 
         scan_report = memoise(
@@ -1442,6 +1452,9 @@ def api_marketflow():
         return handle_error(exc)
 
 
+AUTOFETCH_STATUS_AGE = 60.0
+
+
 def _with_autofetch(report, *components):
     """Attach bootstrap state, and start a fetch if a component is missing.
 
@@ -1453,7 +1466,11 @@ def _with_autofetch(report, *components):
     network from turning polling into a request flood.
     """
 
-    state = bootstrap.status()
+    # A minute-old reading is enough here: the answer only says whether to
+    # start a fetch, and ensure() re-probes before it downloads anything.
+    # At STATUS_TTL (5 s) every cached answer past it paid a ~1 s probe of
+    # the whole price table (the full test, 2026-11-12).
+    state = bootstrap.status(max_age=AUTOFETCH_STATUS_AGE)
 
     missing = [c for c in components if state.get(c, {}).get("needs_fetch")]
 

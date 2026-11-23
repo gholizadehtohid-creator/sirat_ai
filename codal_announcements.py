@@ -68,6 +68,14 @@ KIND_LABELS = {
 ANNUAL_AGM_DECISIONS = "ن-52"
 RECESS = "تنفس"               # "(اعلام تنفس)" in an annual-AGM title
 
+# An ordinary meeting held out of schedule ("عادی به طور فوق العاده"). When it
+# decides a 12-month year that had already ended, it is that year's late
+# annual AGM and its page is the same form, DPS row and all (سخواف FY1404,
+# 1639336, read by hand on 2026-11-23). 76 equities had one for a year newer
+# than their stored DPS, and none was read (the full test, 2026-11-12). Most
+# ن-55 letters name the current, unfinished year and decide no dividend.
+LATE_AGM_DECISIONS = "ن-55"
+
 KIND_OF = {persian.normalize(code): kind
            for kind, codes in KINDS.items() for code in codes}
 CODES = tuple(KIND_OF)
@@ -154,6 +162,26 @@ def is_recess(title):
     return RECESS in persian.normalize(title or "")
 
 
+def is_annual_decision(letter_code, title, published_at=None):
+    """Whether a letter decides a fiscal year's dividend: an annual AGM's
+    decisions (ن-52, not a recess notice), or a late one (ن-55) for a
+    12-month year that had ended before it was published."""
+
+    import financials
+
+    code = persian.normalize(letter_code or "")
+    if is_recess(title):
+        return False
+    if code == persian.normalize(ANNUAL_AGM_DECISIONS):
+        return True
+    if code != persian.normalize(LATE_AGM_DECISIONS):
+        return False
+    end = fiscal_year_end(title)
+    months = financials.period_months(title)
+    published = persian.normalize(str(published_at or ""))[:10]
+    return bool(end and (months or 12) == 12 and published and published > end)
+
+
 def decision_years(titles):
     """{fiscal year end: months covered} of a company's annual-AGM decisions.
 
@@ -217,18 +245,43 @@ def store_announcement(letter, ins_code, kind):
 
 
 def store_dividend(ins_code, fiscal_end, parsed, letter):
-    """Keep the latest-published decision per fiscal year (amendments win)."""
+    """Keep the latest-published decision per fiscal year (amendments win).
+
+    An annual AGM's decision (ن-52) is not replaced by a later ن-55 for the
+    same year: in 10 of 12 such pairs the ن-55 was a separate meeting
+    (the full test, 2026-11-12). A ن-55 fills a year only ن-55 decided.
+    """
 
     conn = fundamental_db._connect()
-    row = conn.execute("SELECT published_at FROM dividends WHERE ins_code=? "
-                       "AND fiscal_year_end=?", (ins_code, fiscal_end)).fetchone()
+    row = conn.execute("SELECT published_at, tracing_no FROM dividends WHERE "
+                       "ins_code=? AND fiscal_year_end=?",
+                       (ins_code, fiscal_end)).fetchone()
     published = letter.get("published_at") or ""
-    if row is None or (row[0] or "") <= published:
+    late = persian.normalize(letter.get("letter_code") or "") == \
+        persian.normalize(LATE_AGM_DECISIONS)
+    if row is not None and late and not _decided_late(conn, row[1]):
+        conn.close()
+        return
+    # And the annual decision replaces a late one held for its year, even
+    # when the late meeting was published after it.
+    displaces = row is not None and not late and _decided_late(conn, row[1])
+    if row is None or displaces or (row[0] or "") <= published:
         conn.execute("INSERT OR REPLACE INTO dividends VALUES (?,?,?,?,?,?,?)",
                      (ins_code, fiscal_end, parsed["dps"], parsed.get("capital"),
                       letter["tracing_no"], published, _now()))
         conn.commit()
     conn.close()
+
+
+def _decided_late(conn, tracing_no):
+    """Whether a stored dividend came from a late AGM (ن-55)."""
+
+    if "announcements" not in _tables(conn):
+        return False
+    held = conn.execute("SELECT letter_code FROM announcements WHERE "
+                        "tracing_no = ?", (str(tracing_no),)).fetchone()
+    return bool(held) and persian.normalize(held[0] or "") == \
+        persian.normalize(LATE_AGM_DECISIONS)
 
 
 def _fetch_dividend(client, letter):
@@ -285,8 +338,9 @@ def handle(client, letter, inst):
     kind = kind_of(letter.get("letter_code"))
     store_announcement(letter, code, kind)
 
-    if persian.normalize(letter.get("letter_code") or "") != \
-            persian.normalize(ANNUAL_AGM_DECISIONS):
+    letter_code = persian.normalize(letter.get("letter_code") or "")
+    if letter_code not in (persian.normalize(ANNUAL_AGM_DECISIONS),
+                           persian.normalize(LATE_AGM_DECISIONS)):
         return "stored"
 
     # A recess notice (اعلام تنفس) carries the AGM code but decides nothing;
@@ -295,6 +349,9 @@ def handle(client, letter, inst):
     # (found 2026-11-11). No request for it either.
     if is_recess(letter.get("title")):
         return "stored (recess notice: no decision, no DPS)"
+    if not is_annual_decision(letter_code, letter.get("title"),
+                              letter.get("published_at")):
+        return "stored (no year-end decision: no DPS read)"
 
     fiscal_end = fiscal_year_end(letter.get("title"))
     parsed, error, kind = _fetch_dividend(client, letter)
@@ -457,6 +514,14 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
         # years the company stays as it was.
         letters = [letter for letter in letters if letter.get("tracing_no")
                    and not is_recess(letter.get("title"))]
+        # A late AGM (ن-55) for an ended year decides that year's dividend
+        # as well; those on file join the search's annual decisions, newest
+        # published first like them. An annual AGM's own decision still
+        # wins its year (store_dividend).
+        letters += _indexed_late_decisions(inst["ins_code"])
+        letters.sort(key=lambda l: str(l.get("published_at") or ""), reverse=True)
+        letters.sort(key=lambda l: persian.normalize(l.get("letter_code") or "")
+                     == persian.normalize(LATE_AGM_DECISIONS))   # stable
         years = years_to_read(decision_years(
             letter.get("title") for letter in letters))
         found = turned_away = False
@@ -485,6 +550,57 @@ def backfill_dividends(limit=None, verbose=True, client=None, hours=6.0):
               % (searched, stored, refused), flush=True)
     return {"searched": searched, "stored": stored, "refused": refused,
             "stopped": stopped}
+
+
+def _decision_titles(conn, table):
+    """(ins_code, title, tracing_no) of every letter that decides a year's
+    dividend: the annual AGMs' (recess notices included -- the callers look
+    for them), and the late AGMs' (ن-55) that decide an ended 12-month year."""
+
+    annual = persian.normalize(ANNUAL_AGM_DECISIONS)
+    late = persian.normalize(LATE_AGM_DECISIONS)
+    rows = conn.execute("SELECT ins_code, title, tracing_no, letter_code, "
+                        "published_at FROM %s WHERE letter_code IN (?, ?)"
+                        % table, (annual, late)).fetchall()
+    return [(r[0], r[1], r[2]) for r in rows
+            if persian.normalize(r[3] or "") == annual
+            or is_annual_decision(r[3], r[1], r[4])]
+
+
+def _indexed_late_decisions(ins_code):
+    """The late-AGM (ن-55) year-end decisions already on file for a company,
+    as letters handle() can read: the backfill takes them from the index
+    rather than doubling its searches with a second LetterCode query."""
+
+    import os
+
+    import database
+
+    late = persian.normalize(LATE_AGM_DECISIONS)
+    rows = []
+    sources = [(fundamental_db._connect, "announcements")]
+    if os.path.isfile(database.DATABASE_NAME):
+        sources.append((database._connect, "codal_letters"))
+    for connect, table in sources:
+        conn = connect()
+        try:
+            if table in _tables(conn):
+                rows += conn.execute(
+                    "SELECT tracing_no, title, published_at, url FROM %s "
+                    "WHERE ins_code = ? AND letter_code = ?" % table,
+                    (str(ins_code), late)).fetchall()
+        finally:
+            conn.close()
+    seen, out = set(), []
+    for tracing, title, published, url in rows:
+        if not tracing or str(tracing) in seen or not url:
+            continue
+        seen.add(str(tracing))
+        if is_annual_decision(late, title, published):
+            out.append({"tracing_no": str(tracing), "title": title,
+                        "published_at": published, "url": url,
+                        "letter_code": late})
+    return out
 
 
 def _read_through(ins_code, year):
@@ -527,14 +643,11 @@ def stale_dividends(include_read=False):
 
     if not fundamental_db.exists():
         return {}
-    code = persian.normalize(ANNUAL_AGM_DECISIONS)
     titles, stored, reread = [], [], {}
     conn = fundamental_db._connect()
     tables = _tables(conn)
     if "announcements" in tables:
-        titles = conn.execute("SELECT ins_code, title, tracing_no FROM "
-                              "announcements WHERE letter_code = ?",
-                              (code,)).fetchall()
+        titles = _decision_titles(conn, "announcements")
     if "dividends" in tables:
         stored = conn.execute("SELECT ins_code, fiscal_year_end, dps, "
                               "tracing_no FROM dividends").fetchall()
@@ -546,9 +659,7 @@ def stale_dividends(include_read=False):
     if stored and os.path.isfile(database.DATABASE_NAME):
         mconn = database._connect()
         if "codal_letters" in _tables(mconn):
-            titles += mconn.execute("SELECT ins_code, title, tracing_no FROM "
-                                    "codal_letters WHERE letter_code = ?",
-                                    (code,)).fetchall()
+            titles += _decision_titles(mconn, "codal_letters")
         mconn.close()
 
     by_company = {}

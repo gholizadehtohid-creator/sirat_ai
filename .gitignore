@@ -106,3 +106,4 @@ logs/codal_watch.lock
 data/backups/
 data/bill_yield.json
 data/market_valuation.json
+data/bill_quotes.json
