@@ -93,21 +93,43 @@ def run_fixture(full=False):
     }
 
 
-# The seven preregistrations that predate the coverage check below. Their
-# retroactive registration is written and rehearsed
-# (examples/register_retroactive_e26_e33.py --dry-run: ledger 17 -> 24, chain
-# intact), but appending to the permanent ledger is the owner's step and was
-# not taken on 2026-11-23. Until it is, these seven WARN on every build, by
-# name; any OTHER preregistration outside the record fails it. Run the script
-# with --apply, then empty this tuple: a name left here after its row exists
-# is only noise, and a name added here to quiet a new experiment defeats the
-# check.
-PENDING_RETROACTIVE = (
-    "E26_preregistration.json", "E27_preregistration.json",
-    "E28_preregistration.json", "E30_preregistration.json",
-    "E31_preregistration.json", "E32_preregistration.json",
-    "E33_preregistration.json",
-)
+# Preregistrations that predated the coverage check below and awaited their
+# retroactive registration. E26-E33 were registered on 2026-11-24
+# (examples/register_retroactive_e26_e33.py --apply, at the owner's request),
+# so the tuple is empty. A name added here to quiet a new experiment defeats
+# the check.
+PENDING_RETROACTIVE = ()
+
+# From E36 on, a preregistration must name its family and correction, the
+# exact benchmark series, the window, the cost model and the acceptance rule
+# (sirat/experiments/multiplicity.prereg_completeness). Earlier files are
+# reported, not failed: they were written before the rule existed.
+COMPLETENESS_FROM = 36
+
+
+def preregistration_completeness(directory=None):
+    """{file: [missing items]} for every numbered preregistration file."""
+
+    import re
+    from sirat.experiments import multiplicity
+
+    directory = directory or os.path.join(ROOT, "backtest_output")
+    out = {}
+    for name in sorted(os.listdir(directory)):
+        match = re.match(r"E(\d+)_preregistration\.json$", name)
+        if not match:
+            continue
+        try:
+            with open(os.path.join(directory, name), encoding="utf-8") as fh:
+                doc = json.load(fh)
+        except (OSError, ValueError):
+            out[name] = {"number": int(match.group(1)),
+                         "missing": ["unreadable"]}
+            continue
+        missing = multiplicity.prereg_completeness(doc)
+        if missing:
+            out[name] = {"number": int(match.group(1)), "missing": missing}
+    return out
 
 
 def preregistration_coverage(directory=None, registered=None):
@@ -210,6 +232,30 @@ def run_governance():
         if unknown:
             fatal.append("outside the record: %s" % ", ".join(unknown))
 
+    try:
+        from sirat.experiments import multiplicity
+        multiple = multiplicity.summary()
+        exhausted = [k for k, b in multiple["budgets"].items() if b["exhausted"]]
+        if exhausted:
+            warnings.append("windows past the stop rule (only new data can "
+                            "confirm there): %s" % ", ".join(exhausted))
+    except Exception as exc:                                    # noqa: BLE001
+        multiple = {"error": "%s: %s" % (type(exc).__name__, exc)}
+        warnings.append("multiple-testing summary unavailable: %s"
+                        % multiple["error"])
+
+    try:
+        incomplete = preregistration_completeness()
+    except Exception as exc:                                    # noqa: BLE001
+        incomplete = {}
+        warnings.append("preregistration completeness unavailable: %s" % exc)
+    new_rule = {k: v for k, v in incomplete.items()
+                if v["number"] >= COMPLETENESS_FROM}
+    if new_rule:
+        fatal.append("preregistration incomplete: %s" % "; ".join(
+            "%s lacks %s" % (k, ", ".join(v["missing"]))
+            for k, v in new_rule.items()))
+
     if snapshot["due"]:
         warnings.append(
             "universe snapshot overdue (%s). Survivorship is the one defect "
@@ -235,6 +281,8 @@ def run_governance():
         "snapshot": snapshot,
         "ledger": chain,
         "preregistrations": coverage,
+        "multiple_testing": multiple,
+        "preregistration_completeness": incomplete,
         "warnings": warnings,
         # What the last line of the build prints beside a FAIL.
         "detail": fatal,
@@ -283,6 +331,16 @@ def _print_governance(report):
               % (coverage["files"],
                  "all in the record" if not coverage["outside"]
                  else "%d OUTSIDE THE RECORD" % len(coverage["outside"])))
+
+    multiple = report.get("multiple_testing") or {}
+
+    if multiple.get("n_trials"):
+        print("  multiple testing       %d trials; luck alone: best annual "
+              "Sharpe %.2f on 5.3 y, %.2f on 15 y; new positives need t > 3 "
+              "or DSR > 0.95"
+              % (multiple["n_trials"],
+                 multiple["luck_hurdle_annual_sharpe"]["5.3y"],
+                 multiple["luck_hurdle_annual_sharpe"]["15y"]))
 
     for warning in report["warnings"]:
         print("\n  WARNING: %s" % warning)

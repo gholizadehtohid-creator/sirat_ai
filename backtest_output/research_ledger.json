@@ -1849,13 +1849,1289 @@
           }
         ]
       }
+    },
+    {
+      "seq": 14,
+      "experiment_id": "E21-flow-lock-feasibility",
+      "appended_at": "2026-08-22T09:06:07.303211",
+      "prev_hash": "fcc4684bb2c5d394fe2e9d64024b8462eba24ceb47c702ef07a99141dc73b551",
+      "entry_hash": "f5d3af47da67b8acd5edaf854803a670dcb856b92f6e3c32eb7bff5f2a369bbf",
+      "entry": {
+        "acceptance_criteria": "All four Stage 2 checks pass on the DISCOVERY window against the thresholds frozen here, and the holdout -- evaluated exactly once -- carries the same sign. Passing earns an ARCHIVE with the evidence recorded and a successor experiment for the execution question. It does not earn a promotion: Stage 3 requires a slippage model that does not exist yet, and reporting that check as passing would be reading absence as approval.",
+        "author": "SIRAT-AI Research",
+        "code_version": {
+          "code_hash": "d725813862b0bb77fdfd7e5ae34b22815ee6b687d981596e7b3f5eb4f3fb4196",
+          "strategy_version": "flow-lock-composite-v1"
+        },
+        "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "dataset_fingerprint": "6ccda7cdf68e41c5",
+        "date": "2026-08-22T09:06:07.290802",
+        "expected_failure": "The equal-weight composite shows no per-date rank correlation with next-session unbuyability beyond a label-permutation null -- i.e. client_type flow carries no cross-sectional information about queue formation on this market. The second, more likely failure is the E20 mechanism repeating: the composite predicts locks only among illiquid names that no position could enter anyway, making the filter true and useless. Stage 2's decile-lift check is where that would show, and it is written to catch it rather than to be passed.",
+        "experiment_id": "E21-flow-lock-feasibility",
+        "final_verdict": {
+          "decided_by": "SIRAT-AI Research",
+          "decision": "ARCHIVE",
+          "rationale": "ARCHIVE. Stage 1 and Stage 2 -- the experiment's entire declared scope -- both PASS, and the holdout held.\n\nMEASURED, discovery window 2014-01-01..2023-02-28, 2,128 dates, median 425 names/date: mean per-date Spearman(score, next_unbuyable) = 0.13650 against a frozen floor of 0.05; t = 80.52 against a floor of 3.0; the observed mean sits at the 100th percentile of a 200-fold within-date label permutation null whose p95 is 0.00204; top-decile unbuyable rate 10.650% against a universe rate of 4.057%, a lift of 2.625x against a floor of 2.0x, retaining 0.506 of its excess lift at h=3 against a floor of 0.30.\n\nHOLDOUT 2024-09-02..2026-08-18, spent once and never previously evaluated by any experiment in the ledger: mean IC 0.15280, t = 29.24, lift 2.049x. The sign held and the magnitude grew. E19's holdout IC flipped sign to -0.02449; this one did not.\n\nTHREE DIAGNOSTICS, discovery window only, holdout not reopened:\n\n(1) NOT MERELY LOCK PERSISTENCE. A name locked at session t has high == low and therefore close == high, so the closed_at_high component risked making the whole result a restatement of 'locked today, locked tomorrow'. Excluding every name already locked at t -- 96.0% of the panel survives, base rate falls from 4.057% to 2.300% -- the composite still measures IC 0.08823 (t = 62.61) at a lift of 2.233x, and the two flow components alone still measure 0.05031 at a lift of 1.729x. The signal is not the tautology.\n\n(2) E20'S FAILURE MODE DOES NOT REPEAT. E20 killed Alpha Core because its information sat only where trading was impossible: IC +0.212 in the most illiquid quintile and -0.030 in the most liquid. Here the decile lift is almost flat across the liquidity spectrum -- 2.375x / 2.335x / 2.414x / 2.417x / 2.237x from most illiquid to most liquid -- and IC stays positive and significant in the most liquid quintile at 0.110 (t = 23.46). Predicting tradability is not predicting returns, and it does not inherit that failure.\n\n(3) ONE DECLARED SIGN WAS WRONG, AND IT IS NOT BEING CORRECTED HERE. inst_net_ratio was preregistered at +1 on the magnet-effect argument that institutional trading drives price toward the band. Measured alone it carries IC -0.08707 (t = -60.22) at a lift of 0.416x -- the opposite direction, strongly. Mechanically this is coherent: in a صف خرید the حقوقی side is typically supplying the queue rather than forming it. The composite passed DESPITE this component, not because of it. Flipping the sign now would be choosing a parameter after seeing the result, so the directional claim in the hypothesis is recorded as FALSIFIED and the corrected sign belongs in a successor preregistration, not in this record. The predictive content that survives is indiv_power (قدرت خریدار حقیقی), IC 0.16855 at a lift of 4.349x -- also a client_type flow variable, so the broad hypothesis holds while its specific direction did not.\n\nWHY NOT PROMOTE. Stage 3 is EXECUTION REALISM and one of its five required checks is slippage, which has been 0.0% in every result this programme has produced because no impact model exists. That check cannot be reported as passing without reading absence as approval, so E21 was registered with a scope ending at Stage 2 and it ends there. The provenance also records git_dirty=True and reproducible=False at registration time, which independently bars promotion.\n\nSUCCESSOR WORK, in order: (a) an impact model, RESEARCH_OPTIONS.md Option 2, without which no execution claim is measurable; (b) a successor experiment preregistering inst_net_ratio at -1 with the mechanism stated in advance; (c) only then, whether using this as a Stage 1 feasibility filter improves realised versus requested returns.\n\nThis experiment does not touch, re-score or reference Alpha Core (90024d86d7a5c268). E19 and E20 remain adjudicated.",
+          "rejected_at_stage": null
+        },
+        "git_commit": "8aa75f5c6c7d82b5297efe76d852de2f722a4f48",
+        "git_dirty": true,
+        "hypothesis": "Institutional (حقوقی) net flow and per-capita individual buying power at session t predict, cross-sectionally, whether a Tehran-listed name is UNBUYABLE at session t+1 -- locked in a صف خرید, reopening, or gapped away. This is a tradability prediction, not a return prediction: the output is a feasibility filter for the Stage 1 gate, and it is measured against a microstructure state, never against a forward return.",
+        "preregistration_hash": "2ce1d49dd90ebd4602094f91d0577d8143a076173fc097878c2b3be1c9bd0828",
+        "registered_at": "2026-08-22T06:33:44.346225",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "discovery_width": {
+                "dates": 2187,
+                "max_names_per_date": 638,
+                "median_names_per_date": 425.0,
+                "min_names_per_date": 1
+              },
+              "flow_coverage_pct": 75.72659750108731,
+              "forward_alignment": {
+                "agree": 1997,
+                "agreement_pct": 100.0,
+                "checked": 2000,
+                "missing_left_unknown": 3,
+                "resolved": 1997,
+                "sampled": 2000
+              },
+              "universe_snapshot": {
+                "instruments": 1394,
+                "restored": true,
+                "snapshot_id": "u20260819-668658bb"
+              }
+            },
+            "recorded_at": "2026-08-22T07:46:16.279341",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": true,
+              "ic": true,
+              "random_baseline": true,
+              "rank_correlation": true
+            },
+            "detail": {
+              "decay": {
+                "excess_h1": 1.6251893419120096,
+                "excess_h3": 0.8229915887991814,
+                "lift_h1": 2.6251893419120096,
+                "lift_h3": 1.8229915887991814,
+                "retention_h3": 0.5063973578801254
+              },
+              "lift": {
+                "h1": {
+                  "lift": 2.6251893419120096,
+                  "rows": 95151,
+                  "top_rate_pct": 10.650439827221994,
+                  "universe_rate_pct": 4.057017776654898
+                },
+                "h2": {
+                  "lift": 2.0922954152262974,
+                  "rows": 95150,
+                  "top_rate_pct": 11.854965843405148,
+                  "universe_rate_pct": 5.666009568788806
+                },
+                "h3": {
+                  "lift": 1.8229915887991814,
+                  "rows": 95151,
+                  "top_rate_pct": 10.651490788325923,
+                  "universe_rate_pct": 5.84286337565723
+                },
+                "h5": {
+                  "lift": 1.6740246345427874,
+                  "rows": 95151,
+                  "top_rate_pct": 10.29626593519774,
+                  "universe_rate_pct": 6.150605984367652
+                }
+              },
+              "primary": {
+                "base_rate_pct": 4.057017776654898,
+                "dates": 2128,
+                "mean_ic": 0.13650264323267333,
+                "null_p95": 0.002044806571743609,
+                "null_percentile": 100.0,
+                "rows": 942022,
+                "t_stat": 80.51900383485369
+              }
+            },
+            "recorded_at": "2026-08-22T07:47:14.358971",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "PASS"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 15,
+      "experiment_id": "E22-flow-filter-execution",
+      "appended_at": "2026-08-22T09:39:13.223125",
+      "prev_hash": "f5d3af47da67b8acd5edaf854803a670dcb856b92f6e3c32eb7bff5f2a369bbf",
+      "entry_hash": "6d83b7b2b54bd9505a3886c7ed68de024b9f12fd4220d18947e4847bce16e33f",
+      "entry": {
+        "acceptance_criteria": "All five Stage 3 checks pass against the thresholds frozen here. Because no out-of-sample window exists, passing earns an ARCHIVE and a recommendation to collect forward data before any promotion -- it does not earn a promotion, and no result from E22 may be cited as evidence that the filter generalises.",
+        "author": "SIRAT-AI Research",
+        "code_version": {
+          "code_hash": "bd71e2694c920ae08600efca6f340a2845dc9da987e8848482feee710f6c095b",
+          "strategy_version": "e21-composite-frozen + impact-v1"
+        },
+        "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "dataset_fingerprint": "6ccda7cdf68e41c5",
+        "date": "2026-08-22T09:39:13.211447",
+        "expected_failure": "Three distinct ways this fails, and the second is the one I expect.\n(a) The filter removes locks that were never reachable anyway -- the baseline failed-fill rate is already low among names that clear a 5% participation cap, so there is nothing to improve and the ratio sits near 1.0.\n(b) The filter works and costs too much: fills improve, but the admitted set is systematically thinner than the excluded set, which is E20's failure mode in a new costume -- buying tradability by moving into stock that cannot absorb the position.\n(c) Impact cannot be computed for enough positions, because trailing volatility or traded value is missing on the names that matter. That is a FAIL, not a zero, and it is written that way on purpose.",
+        "experiment_id": "E22-flow-filter-execution",
+        "final_verdict": {
+          "decided_by": "SIRAT-AI Research",
+          "decision": "REJECT",
+          "rationale": "REJECT at Stage 3 (EXECUTION REALISM), the first Stage 3 ever run in this programme. Three of five checks failed: queue_effects, slippage, transaction_costs.\n\nTHE REJECTION IS SOUND ON queue_effects ALONE, and that check depends on no cost model, no volatility estimate and no imported constant -- only on whether an order filled. Over 112,400 random baskets across 2,810 sessions, 562,000 positions per variant: the baseline failed to fill 3.6155% of positions and the filtered basket 3.0907%, a ratio of 0.8549 against a preregistered ceiling of 0.70. The filter reduces failed fills by 14.5% where 30% was declared necessary. It works, and it works less than half as well as required.\n\nTHE ECONOMICS FAIL INDEPENDENTLY OF EVERY COST MODEL. Converting a failed fill into a fill happens for 0.5248pp of positions while the filter adds 0.1504pp to every filled position, so break-even requires each converted slot to be worth 28.66pp. The reference basket is drawn uniformly at random and therefore has an expected excess over cash of zero by construction. A cost with no offsetting benefit is not a close call.\n\nTHE TWO COST CHECKS FAILED FOR A REASON THAT IS NOT THE FILTER, AND THIS IS RECORDED SO THE FILTER IS NOT BLAMED FOR IT. Measured per session, the filter is CHEAPER on the typical date: median per-date impact on filled positions is 0.0824% baseline against 0.0697% filtered, p95 0.1803% against 0.1422%, and only 26.1% of the 2,809 sessions are worse under the filter (median delta -0.0011pp, mean -0.0064pp). The aggregate reversed because of five consecutive sessions in June 2022 reporting mean impact between 56% and 76% of price across the whole 550-name cross-section. The worst 1% of dates account for -254.6% of the total delta -- they do not merely dominate the mean, they invert its sign.\n\nROOT CAUSE, IDENTIFIED: eleven rows in a two-month sample carry impossible returns, the largest being +19,976,600% on 2022-05-22, which means a prior close of 1 rial. These are new listings, post-suspension reopenings and unadjusted capital increases. One such row sits inside a 20-session trailing volatility window for twenty sessions, and a single contaminated name dominates the mean impact of every basket drawn on those dates. It also explains the panel-wide signature: sigma mean 8.79% against a median of 2.26%.\n\nDEFECT CLASSIFICATION: **data and tooling, not strategy.**\n  data     - price_history carries unadjusted and placeholder prices that produce returns no market ever printed.\n  tooling  - backtesting/impact.py accepted a daily volatility of several hundred percent because it validates only 'positive and finite'. It was written two days ago and this is its first real use.\n  gate     - Stage 1 passed this panel. Its four checks cover forward alignment, universe restoration, cross-section width and coverage; not one of them looks at whether a return is physically possible. E14's `annotate` has flagged exactly these bars as `extreme_gap` (|ret| > 12%) since it was written, so the platform already held the knowledge the volatility estimator failed to use.\n\nWHAT IS NOT BEING DONE. The panel is not being cleaned and Stage 3 is not being re-run under this experiment id. The thresholds were frozen before any number existed and the measurement was exactly what was declared; repairing the data after seeing the verdict and re-measuring is the textbook forbidden move, and it would be forbidden even though the repair is obviously correct. E22 rejects. A successor experiment may ask the cost question again with a volatility sanity bound preregistered.\n\nWHAT E22 SETTLES: the filter does not pay for itself in front of a basket with no expected edge. WHAT IT DOES NOT SETTLE: whether it pays in front of a basket that has one. That needs a validated return signal, and this programme does not have one -- E19 and E20 established that Alpha Core is not it.\n\nNo out-of-sample claim was available and none is made; that limitation was declared at registration, not discovered here. Alpha Core is untouched at 90024d86d7a5c268.",
+          "rejected_at_stage": 3
+        },
+        "git_commit": "279b15158fe6635e76d553bb70a9213d83f3b59a",
+        "git_dirty": true,
+        "hypothesis": "Refusing to buy the names E21's composite ranks in its top decile raises the fill rate of an otherwise randomly chosen basket by at least 30%, without moving the basket into thinner stock, without raising the round-trip cost of a filled position once square-root impact is charged, and without shrinking the eligible universe below 50 names on the median session.",
+        "preregistration_hash": "b4faab1bb9b2abf19f6bd118ebb2584b8571da3dae8bbed2640c7df29122f0e1",
+        "registered_at": "2026-08-22T09:28:48.339689",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "alignment": {
+                "agree": 1997,
+                "agreement_pct": 100.0,
+                "checked": 2000,
+                "missing_left_unknown": 3,
+                "resolved": 1997,
+                "sampled": 2000
+              },
+              "coverage_pct": 75.72659750108731,
+              "median_eligible": 415.0
+            },
+            "recorded_at": "2026-08-22T09:30:41.895631",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": true,
+              "ic": true,
+              "random_baseline": true,
+              "rank_correlation": true
+            },
+            "detail": {
+              "lift_h1": {
+                "lift": 2.4493203331152267,
+                "rows": 144549,
+                "top_rate_pct": 11.012874526977011,
+                "universe_rate_pct": 4.49629816814121
+              },
+              "lift_h3": {
+                "lift": 1.7569900968244048,
+                "rows": 144416,
+                "top_rate_pct": 10.4379016175493,
+                "universe_rate_pct": 5.940785685938033
+              },
+              "primary": {
+                "base_rate_pct": 4.49629816814121,
+                "dates": 2859,
+                "mean_ic": 0.13557868033686557,
+                "null_p95": 0.0015066961244045748,
+                "null_percentile": 100.0,
+                "rows": 1432534,
+                "t_stat": 89.22711381526652
+              },
+              "retention_h3": 0.5223069597024835,
+              "status_note": "RE-MEASUREMENT of E21's archived result on E21's window. Carries no independent information and must not be counted as a second confirmation."
+            },
+            "recorded_at": "2026-08-22T09:31:44.225988",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "liquidity": true,
+              "participation_limits": true,
+              "queue_effects": false,
+              "slippage": false,
+              "transaction_costs": false
+            },
+            "detail": {
+              "admitted_excluded_adv_ratio": 1.1151251711577035,
+              "commission_pct": 1.04,
+              "failed_fill_ratio": 0.8548649047689355,
+              "impact_computed_pct": 99.98246200254393,
+              "impact_delta_pp": 0.07521252268081427,
+              "median_eligible_after_filter": 404.5,
+              "prefactor": 0.34,
+              "prefactor_sweep": {
+                "0.17": {
+                  "baseline_round_trip_pct": 1.2159436608214456,
+                  "delta_pp": 0.07521252268081424,
+                  "filtered_round_trip_pct": 1.2911561835022598
+                },
+                "0.34": {
+                  "baseline_round_trip_pct": 1.391887321642891,
+                  "delta_pp": 0.15042504536162848,
+                  "filtered_round_trip_pct": 1.5423123670045196
+                },
+                "0.51": {
+                  "baseline_round_trip_pct": 1.5678309824643364,
+                  "delta_pp": 0.22563756804244273,
+                  "filtered_round_trip_pct": 1.7934685505067793
+                },
+                "0.69": {
+                  "baseline_round_trip_pct": 1.7541242703929258,
+                  "delta_pp": 0.30527435676330483,
+                  "filtered_round_trip_pct": 2.059398627156231
+                }
+              },
+              "round_trip_delta_pp": 0.15042504536162848,
+              "sessions": 2810,
+              "summary": {
+                "baseline": {
+                  "baskets": 56200,
+                  "failed_fill_pct": 3.6154804270462635,
+                  "filled": 541681,
+                  "impact_computed_pct": 99.98246200254393,
+                  "mean_impact_pct": 0.1759436608214455,
+                  "positions": 562000,
+                  "round_trip_pct": 1.391887321642891
+                },
+                "filtered": {
+                  "baskets": 56200,
+                  "failed_fill_pct": 3.090747330960854,
+                  "filled": 544630,
+                  "impact_computed_pct": 99.98604557222335,
+                  "mean_impact_pct": 0.25115618350225977,
+                  "positions": 562000,
+                  "round_trip_pct": 1.5423123670045196
+                }
+              }
+            },
+            "recorded_at": "2026-08-22T09:31:49.214281",
+            "stage": 3,
+            "stage_name": "EXECUTION REALISM",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 16,
+      "experiment_id": "E24-inst-net-supply-direction",
+      "appended_at": "2026-08-23T19:05:26.188052",
+      "prev_hash": "6d83b7b2b54bd9505a3886c7ed68de024b9f12fd4220d18947e4847bce16e33f",
+      "entry_hash": "1178c5434df8b0fe6322f1d686fe70d19bd8deb7e9bbdf708a0f78e2ad5ed585",
+      "entry": {
+        "acceptance_criteria": "All four Stage 2 checks pass on the discovery window against the floors frozen here. Passing earns an ARCHIVE recording the corrected sign as a legitimate, preregistered claim available to any successor composite -- explicitly NOT an out-of-sample confirmation, which no spent-window experiment can provide, and NOT a promotion: scope ends at Stage 2, no execution claim is made, and the out-of-sample test belongs to R-FORWARD-2027 when it accrues.",
+        "author": "SIRAT-AI Research",
+        "code_version": {
+          "code_hash": "70abd33e672402c9d20a3b1081127a88fcdaac18ca5018581eba6d0867f09284",
+          "strategy_version": "inst-net-supply-v1"
+        },
+        "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "dataset_fingerprint": "089c7421c5a5fab3",
+        "date": "2026-08-23T19:05:26.178653",
+        "expected_failure": "The corrected-sign top decile does not reach a 2.0x event-rate lift -- the component orders names (the IC is nearly assured given E21's diagnostic on this same window) but its extreme decile is not concentrated enough to gate a feasibility filter. In that case the record shows REJECT at Stage 2 on factor_decay, and the composite successor proceeds on indiv_power alone. The subtler failure is the E20 mechanism: lift that exists only among names already locked at t, which the preregistered exclusion diagnostic is written to expose.",
+        "experiment_id": "E24-inst-net-supply-direction",
+        "final_verdict": {
+          "decided_by": "SIRAT-AI Research",
+          "decision": "REJECT",
+          "rationale": "REJECT at Stage 2 (ECONOMIC SIGNAL VALIDATION), failing factor_decay. Preregistration 87b995fae3e862c72210361c6205bcdef44d9c567ed36dd613f5d5767802b512, frozen before any number below existed.\n\nWHAT PASSED, measured on the discovery window 2014-01-01..2023-02-28 (2,137 scored dates, 930,054 rows, floor 100 names/date): at the corrected sign of -1, mean per-date Spearman IC 0.08193 against a floor of 0.05; t = 56.28 against a floor of 3.0; the observed mean sits at the 100th percentile of a 200-fold within-date label permutation null whose p95 is 0.00161. The direction E21 recorded as FALSIFIED for its +1 declaration is therefore confirmed at -1 under a preregistration that declared it in advance -- but this confirmation was near-assured from E21's own diagnostic on the same window and is deliberately the least-weighted part of this record. It is an in-sample formalisation, declared as such at registration, with no out-of-sample claim available: every historical holdout is spent and the forward test belongs to R-FORWARD-2027 when it accrues.\n\nWHAT FAILED, and it is the part that was genuinely unmeasured before this run: decay. The top decile of the signed score carries a 2.407x unbuyable-rate lift at h=1 (9.525% vs 3.957%), clearing the 2.0x floor -- but by h=3 the lift is 1.290x and by h=5 it is 1.100x, a retention of 0.206 against a preregistered floor of 0.30. Institutional net selling is a ONE-SESSION warning: the excess concentration is nearly gone two sessions later. A feasibility filter must survive the lag between computing a signal after the close and acting on it, and this component does not.\n\nTHE PREREGISTERED DIAGNOSTIC (reported, not gating): excluding names already locked_up at t retains 96.2% of rows and still measures IC 0.05374 (t 43.47) with a top-decile lift of 1.994x. About seven-tenths of the h=1 excess lift survives the exclusion, so the signal is not merely lock persistence -- but its usable concentration sits at the 2x line even before decay is charged.\n\nDECONTAMINATION, applied exactly as preregistered and worth recording for successors: the both-legs rule on |return| > 100% transitions dropped 104,188 rows (5.50%) across 323 names and 3,040 dates over 1,448 iterations. Around an irreconcilable price-level break (an unadjusted rebasing), the iteration walks outward and consumes real rows on both sides of the break equally -- blunter than identifying the fake side would be. The rule is not being refined mid-experiment and the stages are not being re-run; a successor should preregister a placeholder-level test instead. Stage 1 passed on the cleaned panel: forward alignment 100% of 1,996 resolved samples, universe snapshot u20260819-668658bb restored, median 419 names/date, coverage 78.53%, zero impossible sessions remaining with 6,735 legitimate >12% reopenings retained.\n\nWHAT THIS SETTLES: inst_net_ratio at -1 is real, correctly-signed, highly significant ORDERING information with a one-session horizon, and it is now on the record the legitimate way. Any future composite preregistration may cite this entry for the -1 sign. WHAT IT DOES NOT SETTLE OR TOUCH: E21's composite result stands (it passed DESPITE this component at the wrong sign); indiv_power remains the strongest carrier (E21: IC 0.16855, lift 4.349x); E19, E20 and E22 remain adjudicated; Alpha Core is untouched at 90024d86d7a5c268. No window was spent: the discovery window was reused as declared and R-FORWARD-2027 remains unclaimed.",
+          "rejected_at_stage": 2
+        },
+        "git_commit": "9bd62b67bc3883d355b194e100f4ab0a14a2c2eb",
+        "git_dirty": true,
+        "hypothesis": "Institutional net flow at session t predicts, cross-sectionally, that a Tehran-listed name is UNBUYABLE at session t+1 -- at the NEGATIVE sign: relative institutional net selling, not buying, accompanies queue formation, because the institutional side supplies a buy queue rather than forming it. This is a tradability prediction, not a return prediction, and it is the preregistered correction of the one directional claim E21 recorded as falsified.",
+        "preregistration_hash": "87b995fae3e862c72210361c6205bcdef44d9c567ed36dd613f5d5767802b512",
+        "registered_at": "2026-08-23T18:53:19.368508",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "price_sanity": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "component_coverage_pct": 78.53407849436661,
+              "decontamination": {
+                "dates_touched": 3040,
+                "names_touched": 323,
+                "rounds": 1448,
+                "rows_dropped": 104188,
+                "targets_set_unknown": {
+                  "h1": 119,
+                  "h2": 237,
+                  "h3": 333,
+                  "h5": 498
+                }
+              },
+              "discovery_width": {
+                "dates": 2207,
+                "max_names_per_date": 604,
+                "median_names_per_date": 419.0,
+                "min_names_per_date": 3
+              },
+              "forward_alignment": {
+                "agree": 1996,
+                "agreement_pct": 100.0,
+                "checked": 2000,
+                "missing_left_unknown": 4,
+                "resolved": 1996,
+                "sampled": 2000
+              },
+              "price_evidence": {
+                "close_session_returns": 1789599,
+                "extreme_sessions_over_12pct": 6735,
+                "impossible_sessions": 0,
+                "largest_session_move_pct": 100.0
+              },
+              "universe_snapshot": {
+                "instruments": 1394,
+                "restored": true,
+                "snapshot_id": "u20260819-668658bb"
+              }
+            },
+            "recorded_at": "2026-08-23T19:00:01.616424",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          },
+          {
+            "checks": {
+              "factor_decay": false,
+              "ic": true,
+              "random_baseline": true,
+              "rank_correlation": true
+            },
+            "detail": {
+              "decay": {
+                "excess_h1": 1.4068587169869997,
+                "excess_h3": 0.2901741861374749,
+                "lift_h1": 2.4068587169869997,
+                "lift_h3": 1.290174186137475,
+                "retention_h3": 0.2062568064822648
+              },
+              "excluding_already_locked": {
+                "ic": {
+                  "base_rate_pct": 2.284989673152769,
+                  "dates": 2100,
+                  "mean_ic": 0.05373931127088275,
+                  "null_p95": 0.0017316544486297976,
+                  "null_percentile": 100.0,
+                  "rows": 894271,
+                  "t_stat": 43.47068606582226
+                },
+                "lift_h1": {
+                  "lift": 1.994070270987922,
+                  "rows": 89456,
+                  "top_rate_pct": 4.556429976748346,
+                  "universe_rate_pct": 2.284989673152769
+                },
+                "rows_retained_pct": 96.15334163392663
+              },
+              "lift": {
+                "h1": {
+                  "lift": 2.4068587169869997,
+                  "rows": 93134,
+                  "top_rate_pct": 9.524985504756588,
+                  "universe_rate_pct": 3.9574344092287808
+                },
+                "h2": {
+                  "lift": 1.4934360475607027,
+                  "rows": 93134,
+                  "top_rate_pct": 8.417978396718706,
+                  "universe_rate_pct": 5.63665140564149
+                },
+                "h3": {
+                  "lift": 1.290174186137475,
+                  "rows": 93133,
+                  "top_rate_pct": 7.520427775332052,
+                  "universe_rate_pct": 5.8290018945788376
+                },
+                "h5": {
+                  "lift": 1.1003842868485603,
+                  "rows": 93128,
+                  "top_rate_pct": 6.759513787475304,
+                  "universe_rate_pct": 6.142866513328881
+                }
+              },
+              "primary": {
+                "base_rate_pct": 3.9574344092287808,
+                "dates": 2137,
+                "mean_ic": 0.08193216662014123,
+                "null_p95": 0.0016054276801297158,
+                "null_percentile": 100.0,
+                "rows": 930047,
+                "t_stat": 56.28134281700998
+              }
+            },
+            "recorded_at": "2026-08-23T19:01:31.173644",
+            "stage": 2,
+            "stage_name": "ECONOMIC SIGNAL VALIDATION",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 17,
+      "experiment_id": "E25-smart-money-accumulation-stage1",
+      "appended_at": "2026-08-24T00:44:28.557822",
+      "prev_hash": "1178c5434df8b0fe6322f1d686fe70d19bd8deb7e9bbdf708a0f78e2ad5ed585",
+      "entry_hash": "084aa09af59f2a82b3e992c5133bd7011b80a3ed3372acf2645d1dbd723e4863",
+      "entry": {
+        "acceptance_criteria": "Stage 1 PASSES only if all five checks pass: a versioned snapshot series exists (point_in_time), the historical universe is restorable with bars for delisted names (survivorship), median measurable names per session >= 100 (universe_valid), every scored input covers >= 60% of the equity universe (missing_data), and zero impossible session transitions remain (price_sanity). Anything less is a REJECT at Stage 1 and Stage 2 is not attempted.",
+        "author": "SIRAT-AI Research",
+        "code_version": {
+          "code_hash": "fe5861347b3cce25720a6d9470015e7ad229424ebf2a40e261610c5685064aef",
+          "strategy_version": "smart-money-accumulation-v1"
+        },
+        "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "dataset_fingerprint": "8d32f90cae3e7265",
+        "date": "2026-08-24T00:44:28.550142",
+        "expected_failure": "Stage 1 fails on point_in_time and survivorship. The valuation and size components read market_snapshot, which holds ONE timestamp and is replaced on every pull, so 25 of the model's 100 points cannot be computed for any past decision date; and the universe is today's list, with the delisted census discovered but unfetched. Secondarily, P/E coverage (59.8%) sits below the 60% floor and 47 impossible session transitions remain in the panel. If Stage 1 unexpectedly passes, the expectation recorded here was wrong and that is the finding.",
+        "experiment_id": "E25-smart-money-accumulation-stage1",
+        "final_verdict": {
+          "decided_by": "SIRAT-AI Research",
+          "decision": "REJECT",
+          "rationale": "REJECTED AT STAGE 1 -- DATA INTEGRITY. Four of five checks failed, all of them about the data rather than the idea. The hypothesis is UNTESTED, not disproved: nothing here measured a return.\n\npoint_in_time: market_snapshot carries one captured_at and is replaced on every pull, so the valuation (15 pts) and size (10 pts) components have no value on any past date. Scoring a 2024 signal with 2026 P/E is look-ahead.\nsurvivorship: the universe is today's list. delisted_sweep.py has discovered 13,245 instruments outside it and fetched 0 bars, so no historical universe can be restored per decision date.\nmissing_data: P/E covers 59.8% and market cap 63.2% of the equity universe, against a 60% floor.\nprice_sanity: 47 impossible session transitions remain in the 2023+ panel and no decontamination rule was preregistered for this scanner.\n\nuniverse_valid passed (median 776 names per session over 867 sessions).\n\nRecorded as a diagnostic, gating nothing: an UPPER BOUND on breadth over the two already-spent windows gives a median of 11 candidates per session, 10 or more on 55.9% of sessions, and a 2026 mean of 2.9. The requested portfolio rule takes the top 10 at Score >= 75; on the live session that threshold yielded 1 name. Breadth is therefore a second, independent obstacle to the requested design, and it is a property of the filter rather than of any market regime.\n\nSUCCESSOR PATH, in the order that unblocks the most for the least work:\n(a) version market_snapshot into a per-session series -- this alone makes a full-model historical test possible from that day forward;\n(b) finish delisted_sweep.py's fetch phase to populate census_price_history;\n(c) OR register a DIFFERENT, point-in-time-only model: MFI 15 + transfer 20 + کد به کد 15 + support 15 + volume 10, rescaled from 75 to 100, which is testable on stored data today and must not be described as this scanner;\n(d) the full return claim may be tested out of sample only against R-FORWARD-2027, by a successor registered once it accrues.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "9bd62b67bc3883d355b194e100f4ab0a14a2c2eb",
+        "git_dirty": true,
+        "hypothesis": "سهام کوچک و متوسطی که در کف حمایتی، با ورود پول هوشمند، MFI بالای ۷۰، P/E پایین‌تر از میانه‌ی صنعت و کد به کد حقوقی به حقیقی قرار دارند، در آینده بازدهی بالاتری از بازار ایجاد می‌کنند. -- The scanner's own hypothesis, registered so that Stage 1 can decide whether it is testable on the data this database holds. Stage 1 alone is attempted here.",
+        "preregistration_hash": "0bedef72d4d96ddd89d3702de7c4437f600ef114d38499246c25be81defb41c3",
+        "registered_at": "2026-08-24T00:43:37.365649",
+        "reproducible": false,
+        "universe_snapshot": "u20260819-668658bb",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": false,
+              "price_sanity": false,
+              "survivorship": false,
+              "universe_valid": true
+            },
+            "detail": {
+              "breadth_2026_mean_per_session": 2.9,
+              "breadth_share_sessions_with_10_plus": 55.9,
+              "breadth_upper_bound_median_per_session": 11,
+              "census_bars_fetched": 0,
+              "census_discovered": 14633,
+              "census_inactive": 9851,
+              "census_outside_todays_universe": 13245,
+              "flow_coverage_pct": 95.4,
+              "impossible_names": 47,
+              "impossible_rows_2023_onward": 47,
+              "market_cap_coverage_pct": 63.2,
+              "measured_by": "examples/smart_money_validation.py",
+              "median_names_per_date": 776.0,
+              "panel_rows": 666954,
+              "pe_coverage_pct": 59.8,
+              "price_coverage_pct": 96.9,
+              "sessions_2023_onward": 867,
+              "snapshot_timestamps": 1,
+              "thresholds": {
+                "max_impossible_rows": 0,
+                "min_census_bars_fetched": 1,
+                "min_coverage_pct": 60.0,
+                "min_names_per_date": 100,
+                "min_snapshot_timestamps": 2
+              }
+            },
+            "recorded_at": "2026-08-24T00:44:28.541188",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 18,
+      "experiment_id": "E34-real-bills",
+      "appended_at": "2026-11-24T09:11:09.226401",
+      "prev_hash": "084aa09af59f2a82b3e992c5133bd7011b80a3ed3372acf2645d1dbd723e4863",
+      "entry_hash": "efb41d1150f966561461a8dc58d31a875105abd9a75de26e68c20ca1979aa767",
+      "entry": {
+        "acceptance_criteria": "allocation (E27, E28, E34). Within E34: Holm at family alpha 0.05 over H1, H2, H3 -- the smallest p must be below 0.05/3, the next below 0.05/2, the last below 0.05. a hypothesis is ACCEPTED when Holm rejects its null; otherwise NOT ACCEPTED. H3 ACCEPTED states only that the two books differ, in the direction of the observed difference.",
+        "author": "Claude, at the owner's request of 2026-11-24 (research report item 1: «بازآزمایی ترکیب ۷۰/۳۰ با سری واقعی بازده اخزا»)",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "allocation-real-bills-v1"
+        },
+        "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "dataset_fingerprint": "c09822da85d64b68",
+        "date": "2026-11-24T09:11:09.204166",
+        "expected_failure": "H1 fails: E28's gold advantage was measured against a 20% fund that never moved; against bills that paid 25-45% the defensive sleeve's mean is much higher, and gold's extra mean may not cover its volatility. | H2 fails: at real bill yields the equity premium is a fraction of its 20%-fund size while monthly volatility is unchanged, so about 106 months cannot separate the mean from zero at 0.05/3. | H3 fails: 15 points of weight moved between two defensive legs changes the book's monthly Sharpe by less than the bootstrap can resolve.",
+        "experiment_id": "E34-real-bills",
+        "final_verdict": {
+          "decided_by": "SIRAT-AI Research (E34 script)",
+          "decision": "REJECT",
+          "rationale": "Stage 1 failed: missing_data, price_sanity. The preregistration says the experiment then says nothing.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "de93c396639401b941933ea27960cd0776ff6635",
+        "git_dirty": true,
+        "hypothesis": "H1_gold_vs_real_bills: Sharpe(eq70_gold30) > Sharpe(eq70_bills30). One-sided. Re-tests E28 H1. | H2_equity_vs_real_bills: mean monthly excess of equity_100 over bills > 0. One-sided. Re-tests E27 H1 on the window bills exist. | H3_three_part_vs_gold: Sharpe(eq70_gold15_bills15) differs from Sharpe(eq70_gold30). Two-sided.",
+        "preregistration_hash": "0ae4199a84c8926c4dfd94096587fe32593316b6ddd0dc389920a038123dad46",
+        "registered_at": "2026-11-24T09:11:01.974857",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": true,
+              "price_sanity": false,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "bills": {},
+              "closed_months": null,
+              "gold_returns_dropped": null,
+              "months": null
+            },
+            "recorded_at": "2026-11-24T09:11:09.187667",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 19,
+      "experiment_id": "E35-real-bills",
+      "appended_at": "2026-11-24T09:13:17.838130",
+      "prev_hash": "efb41d1150f966561461a8dc58d31a875105abd9a75de26e68c20ca1979aa767",
+      "entry_hash": "9cf7182b40c08156e4c0dbb4d03c9b2999a76e6e0098139a94a42334391f117c",
+      "entry": {
+        "acceptance_criteria": "allocation (E27, E28, E34). Within E34: Holm at family alpha 0.05 over H1, H2, H3 -- the smallest p must be below 0.05/3, the next below 0.05/2, the last below 0.05. a hypothesis is ACCEPTED when Holm rejects its null; otherwise NOT ACCEPTED. H3 ACCEPTED states only that the two books differ, in the direction of the observed difference.",
+        "author": "Claude, at the owner's request of 2026-11-24 (research report item 1: «بازآزمایی ترکیب ۷۰/۳۰ با سری واقعی بازده اخزا»); successor of E34 after its Stage-1 failure",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "allocation-real-bills-v1"
+        },
+        "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "dataset_fingerprint": "30f2b07eed618977",
+        "date": "2026-11-24T09:13:17.814679",
+        "expected_failure": "H1 fails: E28's gold advantage was measured against a 20% fund that never moved; against bills that paid 25-45% the defensive sleeve's mean is much higher, and gold's extra mean may not cover its volatility. | H2 fails: at real bill yields the equity premium is a fraction of its 20%-fund size while monthly volatility is unchanged, so about 106 months cannot separate the mean from zero at 0.05/3. | H3 fails: 15 points of weight moved between two defensive legs changes the book's monthly Sharpe by less than the bootstrap can resolve.",
+        "experiment_id": "E35-real-bills",
+        "final_verdict": {
+          "decided_by": "SIRAT-AI Research (E35-real-bills script)",
+          "decision": "ARCHIVE",
+          "rationale": "Allocation re-test, closed as the preregistration's decision rule says (ARCHIVE: not a signal for the stage pipeline). Verdicts: H1 gold vs real bills NOT ACCEPTED (p 0.0405); H2 equity vs real bills NOT ACCEPTED (p 0.0612); H3 three-part vs gold NOT ACCEPTED (p 0.0660); Holm at 0.05 within the experiment, family 'allocation'. Results: backtest_output\\E35_results.json.",
+          "rejected_at_stage": null
+        },
+        "git_commit": "0e6b5087280c21b0c3ecc3607a9281b60ac287a0",
+        "git_dirty": true,
+        "hypothesis": "H1_gold_vs_real_bills: Sharpe(eq70_gold30) > Sharpe(eq70_bills30). One-sided. Re-tests E28 H1. | H2_equity_vs_real_bills: mean monthly excess of equity_100 over bills > 0. One-sided. Re-tests E27 H1 on the window bills exist. | H3_three_part_vs_gold: Sharpe(eq70_gold15_bills15) differs from Sharpe(eq70_gold30). Two-sided.",
+        "preregistration_hash": "7baddda39598818dd9aea5b9caa563369d064a3df7c324c916f61bacd5aae0c1",
+        "registered_at": "2026-11-24T09:13:10.956878",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "price_sanity": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "bills": {
+                "cagr_pct": 25.54,
+                "carried_months": 0,
+                "matured_series_in_pool": 77,
+                "mean_yield_by_year_pct": {
+                  "2017": 17.05,
+                  "2018": 23.48,
+                  "2019": 21.43,
+                  "2020": 18.18,
+                  "2021": 21.64,
+                  "2022": 23.09,
+                  "2023": 26.37,
+                  "2024": 31.02,
+                  "2025": 34.72,
+                  "2026": 38.68
+                },
+                "quotes_in_window": 12495,
+                "rejected_quotes_in_window": 0,
+                "series_in_pool": 82
+              },
+              "closed_months": [],
+              "gold_returns_dropped": 3,
+              "months": 106
+            },
+            "recorded_at": "2026-11-24T09:13:17.798992",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 20,
+      "experiment_id": "E26-v2-basket-stop-cadence-cash",
+      "appended_at": "2026-11-24T09:14:11.304343",
+      "prev_hash": "9cf7182b40c08156e4c0dbb4d03c9b2999a76e6e0098139a94a42334391f117c",
+      "entry_hash": "ef8d73df6c1c4677d0d58e59b2eb000a754e518a755420fbc4bfbb8c5b836661",
+      "entry": {
+        "acceptance_criteria": {
+          "decision_rule": "KEEP the stop and cadence changes as the shipped defaults only if E26 total return exceeds the baseline in BOTH windows. Otherwise set V2_STOP_ATR_MULTIPLE, V2_MIN_STOP_PCT and V2_REBALANCE_SESSIONS back to 2.0, 3% and 20. The idle-cash credit and the panel's fixed-income note are kept either way: they correct a measurement and an omission in the advice, not the strategy.",
+          "evaluation": {
+            "also_reported": "TEDPIX, equal-weight index, bank deposit, cash share, exit reasons",
+            "baseline": "v2 at the parent commit, already measured 2026-11-05 with idle cash uncredited: -0.86% and -9.37% total return. Because E26 also credits cash, the baseline is re-run with the cash credit on and the old stop/cadence, so the stop+cadence effect is read against that, not against the uncredited figure.",
+            "engine": "backtesting/engine.run(engine='v2'), same costs (1.039% round trip), same T+1 and queue model",
+            "selection_test": "examples/basket_random_null.py, 500 draws, seed 20261105, both with the engine's exits and with a fixed 20-session hold",
+            "windows": [
+              "2024-09-01..2025-12-31",
+              "2026-01-01..2026-11-04"
+            ]
+          }
+        },
+        "author": "retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-05)",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "examples/basket_random_null.py as first committed bfd8fb0 (2026-11-05T08:02:31+03:30); result commit a0888ef"
+        },
+        "config_hash": "845b640741b62766005814f711ad2b5faf766aeb2daf21aa688a3bc85ac900a3",
+        "dataset_fingerprint": "fbdd13696870f334",
+        "date": "2026-11-24T09:14:11.284961",
+        "expected_failure": [
+          "wider stops make losses per stopped trade larger and positions smaller (risk-based sizing), so the book stays mostly in cash and the gain is mostly the cash credit",
+          "weekly refills raise turnover and the 1.039% round trip eats the extra exposure",
+          "found from a unit test before any run, not from results: a 6% stop puts target 1 (2.5R) 15% away, so overhead resistance that used to trim it to an acceptable reward:risk now drops it below MIN_RISK_REWARD and the BUY becomes AVOID -- fewer buys, more cash",
+          "the selection is at or below random (2nd and 20th percentile at baseline); no exit rule can fix that, so the package still trails the index by a wide margin"
+        ],
+        "experiment_id": "E26-v2-basket-stop-cadence-cash",
+        "final_verdict": {
+          "decided_by": "retroactive registration 2026-11-23 (verdict as recorded in backtest_output/E26_results.json)",
+          "decision": "REJECT",
+          "rationale": "RETROACTIVE RECORD, registered after the fact on 2026-11-23. Verdict as the experiment's own result file states it (backtest_output/E26_results.json, commit a0888ef, 2026-11-05T11:31:08+03:30): {\"verdict\": \"REVERT. E26 beat the baseline in 2024-09..2025-12 but not in 2026, and the rule required both. V2_STOP_ATR_MULTIPLE, V2_MIN_STOP_PCT and V2_REBALANCE_SESSIONS are back at 2.0, 3% and 20. The idle-cash credit and the panel's fixed-income note stay, as preregistered.\"}. Preregistration: backtest_output/E26_preregistration.json, commit bfd8fb0, 2026-11-05T08:02:31+03:30. The Experiment Manager did not adjudicate this experiment when it ran: none of its six stages was run, so Stage 1 is recorded as not run, which the platform reads as a fail. REJECT follows the experiment's own verdict. The stage number says where the platform's record stops; it is NOT the reason the experiment gave.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "0e6b5087280c21b0c3ecc3607a9281b60ac287a0",
+        "git_dirty": true,
+        "hypothesis": "[Registered retroactively 2026-11-23] The v2 basket's losses on 2024-09-01..2026-11-04 are driven by its book mechanics more than by its selection: stops inside normal daily noise exit 67-75% of trades at the stop (9 of 44 on the entry day in 2026), and a 20-session rebalance then leaves the freed capital idle, so the book averages 80-85% cash earning nothing. Widening the stop beyond two daily price bands, refilling the book every 5 sessions and crediting idle cash at the policy rate should raise total return in BOTH windows relative to the unchanged v2 book.",
+        "preregistration_hash": "e38623c7fab0abb147031084d3d4cbc0602cd9e2d51e03c692b0018398338c4a",
+        "registered_at": "2026-11-24T09:14:11.194570",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": false,
+              "price_sanity": false,
+              "survivorship": false,
+              "universe_valid": false
+            },
+            "detail": {
+              "declared_limits_as_preregistered": "Both windows were spent on 2026-11-05 by the baseline measurement that motivated this experiment, so E26 CAN show the package is worse and CANNOT establish an edge: an improvement here is an in-sample finding. Beating the baseline is not beating the index, and the decision rule does not claim it is. Any claim of profitability needs sessions after 2026-11-05. The universe is today's listings (survivorship), which flatters every arm equally.",
+              "missing_data": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E26_preregistration.json",
+                "value": null
+              },
+              "point_in_time": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E26_preregistration.json",
+                "value": null
+              },
+              "price_sanity": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E26_preregistration.json",
+                "value": null
+              },
+              "survivorship": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E26_preregistration.json",
+                "value": null
+              },
+              "universe_valid": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E26_preregistration.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-11-24T09:14:11.270394",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 21,
+      "experiment_id": "E27-market-exposure-allocation",
+      "appended_at": "2026-11-24T09:14:11.991431",
+      "prev_hash": "ef8d73df6c1c4677d0d58e59b2eb000a754e518a755420fbc4bfbb8c5b836661",
+      "entry_hash": "5987b62f3ea539b9bd23deab0823711cf0da9461883ab822ceb4fdff1802f33c",
+      "entry": {
+        "acceptance_criteria": {
+          "decision_rule": "An accepted hypothesis becomes a recommendation the panel can make (an allocation, executed by the user by hand a few times a year -- it needs no order API). A rejected one is recorded and not retried with other parameters. Nothing here changes the v2 stock-picking engine.",
+          "test": {
+            "accept": "the primary-window test passes at 0.025 AND the secondary window points the same way (no significance required there)",
+            "alpha": "0.05 / 2 = 0.025 per hypothesis (Bonferroni over the two)",
+            "statistic": "monthly (20-session) returns. H1: one-sided t-test of mean(monthly H1 - monthly fund) > 0. H2: one-sided test of mean(monthly H2 - monthly H1) on the Sharpe claim via the Jobson-Korkie/Memmel statistic, plus the drawdown comparison as stated."
+          }
+        },
+        "author": "retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-05 ('investigate every way to make the bot profitable'))",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "examples/allocation_study.py as first committed d4db109 (2026-11-05T08:53:28+03:30); result commit b772e21"
+        },
+        "config_hash": "8a826ec85f15849f1bc880fdb84f112251765c4be04c7cac890ca8b52761f04d",
+        "dataset_fingerprint": "fbdd13696870f334",
+        "date": "2026-11-24T09:14:11.968046",
+        "expected_failure": [
+          "H1 fails: Tehran equity returns 2009-2023 include long flat-to-falling stretches (2014-2016, after the 2020 bubble) during which a 20% fund wins, and monthly volatility is high enough that 14 years may not separate the means at 0.025",
+          "H2 fails: E1/E4 found timing pro-cyclical here (exposure preceded lower returns, rho -0.126); a 200-session rule may whipsaw in a market with 3% daily limits and long trading halts, and switch costs eat the drawdown saving"
+        ],
+        "experiment_id": "E27-market-exposure-allocation",
+        "final_verdict": {
+          "decided_by": "retroactive registration 2026-11-23 (verdict as recorded in backtest_output/E27_results.json)",
+          "decision": "ARCHIVE",
+          "rationale": "RETROACTIVE RECORD, registered after the fact on 2026-11-23. Verdict as the experiment's own result file states it (backtest_output/E27_results.json, commit b772e21, 2026-11-05T08:53:42+03:30): {\"verdict\": {\"H1_passive\": \"ACCEPT\", \"H2_trend\": \"REJECT\", \"alpha_per_hypothesis\": 0.025}}. Preregistration: backtest_output/E27_preregistration.json, commit ecc494b, 2026-11-05T08:52:40+03:30. The Experiment Manager did not adjudicate this experiment when it ran: none of its six stages was run, so Stage 1 is recorded as not run, which the platform reads as a fail. ARCHIVE, not PROMOTE and not a platform acceptance: 'ACCEPT' is the study's own preregistered test, on the assumptions its preregistration declares.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "0e6b5087280c21b0c3ecc3607a9281b60ac287a0",
+        "git_dirty": true,
+        "hypothesis": "[Registered retroactively 2026-11-23] The v2 basket lost money in 2024-09..2026-11 while the index rose ~93% a year; its selection is at or below random and it held 80-85% cash. The one family the research catalog lists as NEVER tested is plain allocation between the equity market and a fixed-income fund (E1/E4 tested a four-signal TIMING engine, which lost to its own static exposure-matched control). Does holding the market, with or without a simple trend rule, beat a fixed-income fund after costs? | H1_passive: Always 100% in the equity index (after the holding drag). Claim: annualised return exceeds the 20% fixed-income fund in the primary window. | H2_trend: 100% equity while TEDPIX's close is above its 200-session simple moving average, else 100% fixed income. Signal read at a session's close, switch executed at the NEXT session's close, switch cost charged. Claim: higher Sharpe (excess over the 20% fund) than H1 AND a smaller maximum drawdown than H1, in the primary window.",
+        "preregistration_hash": "8beebda395acfa8e13f84c2f2144433a2b26195570a853f48131f561b7b7e21a",
+        "registered_at": "2026-11-24T09:14:11.874016",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": false,
+              "price_sanity": false,
+              "survivorship": false,
+              "universe_valid": false
+            },
+            "detail": {
+              "declared_limits_as_preregistered": "Beating a fixed-income fund in nominal rials is not beating inflation (87.9% y/y in 2026; no CPI series is in the database), and the report says so. A trend rule's 200-session length is the conventional value, chosen before looking; no other length will be tried under this ID. The 20% fund rate and 1.5% drag are assumptions, not measurements.",
+              "missing_data": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E27_preregistration.json",
+                "value": null
+              },
+              "point_in_time": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E27_preregistration.json",
+                "value": null
+              },
+              "price_sanity": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E27_preregistration.json",
+                "value": null
+              },
+              "survivorship": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E27_preregistration.json",
+                "value": null
+              },
+              "universe_valid": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E27_preregistration.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-11-24T09:14:11.953391",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 22,
+      "experiment_id": "E28-gold-sleeve",
+      "appended_at": "2026-11-24T09:14:12.691264",
+      "prev_hash": "5987b62f3ea539b9bd23deab0823711cf0da9461883ab822ceb4fdff1802f33c",
+      "entry_hash": "471f571e27acb4bb6befdec5644915b94e6ddb45a15bfe772b1d9932c31c78b7",
+      "entry": {
+        "acceptance_criteria": {
+          "decision_rule": "An accepted H1 adds gold as the panel's defensive sleeve in place of (part of) fixed income; a rejected H1 leaves fixed income as the default. H2 decides only whether the panel may describe gold as beating fixed income. The 70/30 and 60-session values are conventional and fixed here; no other weights or cadences are tried under this ID.",
+          "test": {
+            "accept": "p < 0.025",
+            "alpha": "0.05 / 2 = 0.025 per hypothesis"
+          }
+        },
+        "author": "retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-05)",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "examples/gold_sleeve_study.py as first committed 395efa0 (2026-11-05T08:58:32+03:30); result commit 173e089"
+        },
+        "config_hash": "5418595038bcd6e5d8014cffea5667d8ed91baf155d0dcbd85dc9881a65201e5",
+        "dataset_fingerprint": "fbdd13696870f334",
+        "date": "2026-11-24T09:14:12.662257",
+        "expected_failure": [
+          "H1 fails: gold and Tehran equities both move with the dollar rate, so gold diversifies less than fixed income does and the 70/30 gold mix has a lower Sharpe",
+          "H2 fails: the devaluation steps are a handful of events; between them gold drifts below 20%/yr and 115 blocks cannot separate the means at 0.025"
+        ],
+        "experiment_id": "E28-gold-sleeve",
+        "final_verdict": {
+          "decided_by": "retroactive registration 2026-11-23 (verdict as recorded in backtest_output/E28_results.json)",
+          "decision": "ARCHIVE",
+          "rationale": "RETROACTIVE RECORD, registered after the fact on 2026-11-23. Verdict as the experiment's own result file states it (backtest_output/E28_results.json, commit 173e089, 2026-11-05T08:58:59+03:30): {\"verdict\": {\"H1_gold_as_defence\": \"ACCEPT\", \"H2_gold_alone\": \"ACCEPT\", \"alpha_per_hypothesis\": 0.025}}. Preregistration: backtest_output/E28_preregistration.json, commit f1c4724, 2026-11-05T08:58:08+03:30. The Experiment Manager did not adjudicate this experiment when it ran: none of its six stages was run, so Stage 1 is recorded as not run, which the platform reads as a fail. ARCHIVE, not PROMOTE and not a platform acceptance: 'ACCEPT' is the study's own preregistered test, on the assumptions its preregistration declares.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "0e6b5087280c21b0c3ecc3607a9281b60ac287a0",
+        "git_dirty": true,
+        "hypothesis": "[Registered retroactively 2026-11-23] E27 accepted holding the equity market over a 20% fixed-income fund. Does a gold sleeve (Tehran-listed gold funds) improve on that, either as the defensive sleeve of a static mix or on its own? | H1_gold_as_defence: 70% equity / 30% gold has a higher Sharpe (excess over the 20% fund, 20-session blocks) than 70% equity / 30% fixed income. Memmel one-sided test. | H2_gold_alone: 100% gold sleeve has a higher mean 20-session return than the 20% fund. One-sided t-test.",
+        "preregistration_hash": "1785911ced036527c0c30ec0d12e7ac798e1e3f398a0a0bf55c315be4d9e2909",
+        "registered_at": "2026-11-24T09:14:12.567023",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": false,
+              "price_sanity": false,
+              "survivorship": false,
+              "universe_valid": false
+            },
+            "detail": {
+              "declared_limits_as_preregistered": "About nine years and ~115 blocks: power is limited, and a gold sleeve's rial return is mostly the rial's devaluation, which came in steps (2018, 2020, 2022-2025), so blocks are not independent in the way the tests assume. Nominal, not real. 2023-2026 overlaps windows spent by other experiments.",
+              "missing_data": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E28_preregistration.json",
+                "value": null
+              },
+              "point_in_time": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E28_preregistration.json",
+                "value": null
+              },
+              "price_sanity": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E28_preregistration.json",
+                "value": null
+              },
+              "survivorship": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E28_preregistration.json",
+                "value": null
+              },
+              "universe_valid": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E28_preregistration.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-11-24T09:14:12.642999",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 23,
+      "experiment_id": "E30-outlook-forward-yield",
+      "appended_at": "2026-11-24T09:14:13.424359",
+      "prev_hash": "471f571e27acb4bb6befdec5644915b94e6ddb45a15bfe772b1d9932c31c78b7",
+      "entry_hash": "bd93440151daa1a3a9d79f07b3b2d3267f5838a204409d132ca814234ecf24b4",
+      "entry": {
+        "acceptance_criteria": {
+          "decision_rule": {
+            "ACCEPT": "all three: (1) p < 0.05, (2) random-null percentile >= 90, (3) positive mean excess in BOTH halves",
+            "REJECT": "otherwise. A REJECT is reported as the answer to the user's question: the ranking did not show a selection edge.",
+            "no_retuning": "N, the cadence, the liquidity floor and the flag limit are fixed here. Results for N=5 and N=20 and for a 63-session cadence are reported as sensitivity and cannot change the decision. If H1 is rejected it is not re-run with other parameters under this ID."
+          },
+          "test": {
+            "primary_statistic": "mean of per-period log excess returns, top-10 minus B1, net of each one's costs",
+            "random_null": "percentile of the top-10's cumulative GROSS return among the 1,000 random portfolios' cumulative gross returns",
+            "significance": "one-sided t-test on the per-period excess returns, Newey-West standard error with 2 lags; alpha 0.05",
+            "stability": "the excess return computed separately for the first and the second half of the decision dates"
+          }
+        },
+        "author": "retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-10 ('check whether trading the stocks the forward-looking section recommends would be profitable'))",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "examples/outlook_backtest.py as first committed ee17634 (2026-11-10T22:23:02+03:30); result commit 8bd8ab8"
+        },
+        "config_hash": "4b3ebb5a594c9ecdb6317b8305a9ba569d8b8edc5e4db8eec94680e31d256899",
+        "dataset_fingerprint": "fbdd13696870f334",
+        "date": "2026-11-24T09:14:13.402681",
+        "expected_failure": [
+          "Every stock-selection rule tested in this repository so far (E19-E26) failed to beat random selection. A forward-earnings-yield ranking is a value tilt; in Iran 2021-2026 value tilts have been reported both ways, and the cheapest names are often cheap for reasons the filings show only later. The most likely outcome is a REJECT."
+        ],
+        "experiment_id": "E30-outlook-forward-yield",
+        "final_verdict": {
+          "decided_by": "retroactive registration 2026-11-23 (verdict as recorded in backtest_output/E30_results.json)",
+          "decision": "REJECT",
+          "rationale": "RETROACTIVE RECORD, registered after the fact on 2026-11-23. Verdict as the experiment's own result file states it (backtest_output/E30_results.json, commit 8bd8ab8, 2026-11-10T22:25:19+03:30): {\"decision\": \"REJECT\", \"primary\": {\"beat_control_share_of_periods\": 0.541, \"control_eligible_ew\": {\"annualised_net_pct\": 29.8, \"cumulative_net_pct\": 305.5, \"mean_names\": 85.3}, \"excess_log_per_period_pct\": 0.345, \"first_half_mean_excess_pct\": 0.028, \"newey_west_t\": 0.7, \"p_one_sided\": 0.2414, \"periods\": 61, \"second_half_mean_excess_pct\": 0.652, \"strategy\": {\"annualised_net_pct\": 35.0, \"cumulative_gross_pct\": 565.2, \"cumulative_net_pct\": 400.5, \"mean_names\": 9.8}, \"top\": 10}, \"random_null\": {\"draws\": 1000, \"null_median_pct\": 365.7, \"null_p90_pct\": 542.3, \"percentile\": 91.4, \"strategy_gross_pct\": 565.2}}. Preregistration: backtest_output/E30_preregistration.json, commit ee17634, 2026-11-10T22:23:02+03:30. The Experiment Manager did not adjudicate this experiment when it ran: none of its six stages was run, so Stage 1 is recorded as not run, which the platform reads as a fail. REJECT follows the experiment's own verdict. The stage number says where the platform's record stops; it is NOT the reason the experiment gave.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "0e6b5087280c21b0c3ecc3607a9281b60ac287a0",
+        "git_dirty": true,
+        "hypothesis": "[Registered retroactively 2026-11-23] If the bot had bought, each month, the companies the fundamental outlook (fundamental_outlook.py, as rebuilt on 2026-11-10) ranks highest by forward earnings yield, would it have made money -- and more than simply holding the same eligible companies, the index, or bills? | H1: The top-10 portfolio beats the eligible equal-weight portfolio (B1).",
+        "preregistration_hash": "34bd39a85f39263ec468b82502e65ff2e562b3212664378f98cf5ceb2705f7eb",
+        "registered_at": "2026-11-24T09:14:13.318894",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": false,
+              "price_sanity": false,
+              "survivorship": false,
+              "universe_valid": false
+            },
+            "detail": {
+              "declared_limits_as_preregistered": [
+                "Survivorship: the filings were collected for companies listed today, so companies that delisted in 2021-2026 are absent from both the strategy and B1. The comparison with B1 is the robust one; the absolute returns are flattered.",
+                "Monthly reports are not used (see data.monthly_reports).",
+                "Shares from capital lines adjusted by price gaps, not the exchange's history (see data.shares).",
+                "Fills at the close of D+1 with no market impact beyond the queue rule; a 10-name book of retail size is assumed.",
+                "Nominal returns: inflation ran 40-90% over the window, so beating bills or the index is the meaningful comparison, not a positive number.",
+                "Dividends: back-adjustment adds back only price gaps above the 12% threshold, so most cash dividends are counted as price falls. This understates the strategy and B1 alike (the comparison between them is unaffected) and favours B2, since TEDPIX includes dividends -- by roughly the market's dividend yield, a few percent a year."
+              ],
+              "missing_data": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E30_preregistration.json",
+                "value": null
+              },
+              "point_in_time": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E30_results.json / pit_blocked_future_reads",
+                "value": 29145
+              },
+              "price_sanity": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E30_preregistration.json",
+                "value": null
+              },
+              "survivorship": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E30_preregistration.json",
+                "value": null
+              },
+              "universe_valid": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E30_preregistration.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-11-24T09:14:13.383394",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 24,
+      "experiment_id": "E31-laggard-quality-flow-turn",
+      "appended_at": "2026-11-24T09:14:14.141182",
+      "prev_hash": "bd93440151daa1a3a9d79f07b3b2d3267f5838a204409d132ca814234ecf24b4",
+      "entry_hash": "4857c1a0acb0878cc124de6eb97cb71288808980dc28128a225dc36c0f5006ec",
+      "entry": {
+        "acceptance_criteria": {
+          "decision_rule": {
+            "ACCEPT": "all of: (1) at least 24 periods with a real basket, (2) p < 0.05, (3) random-null percentile >= 90, (4) positive mean excess in both halves",
+            "REJECT": "otherwise",
+            "no_retuning": "the thirds, the median, the 60/5 session spans, the 3-name minimum and the 10-name cap are fixed here. Diagnostics -- L alone, L+F, L+S, F alone -- are reported and cannot change the decision. A rejected H1 is not re-run with other spans under this ID."
+          },
+          "test": "as E30: one-sided Newey-West t-test (2 lags) on per-period log excess returns net of each book's costs; random-null percentile of the cumulative gross return over the real-basket periods; mean excess in the first and the second half of the decision dates"
+        },
+        "author": "retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-10 ('yes, do it'))",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "examples/laggard_backtest.py as first committed 629e392 (2026-11-10T22:38:29+03:30); result commit 1ae0e20"
+        },
+        "config_hash": "b1c3181b91714841c309d6adebdd9e8fe5bc0c6026a2f645bfeb331eea0624b2",
+        "dataset_fingerprint": "fbdd13696870f334",
+        "date": "2026-11-24T09:14:14.121658",
+        "expected_failure": [
+          "Laggards have lagged here (prior evidence). The likeliest outcome is that the extra conditions leave too few names or do not reverse the effect: REJECT."
+        ],
+        "experiment_id": "E31-laggard-quality-flow-turn",
+        "final_verdict": {
+          "decided_by": "retroactive registration 2026-11-23 (verdict as recorded in backtest_output/E31_results.json)",
+          "decision": "REJECT",
+          "rationale": "RETROACTIVE RECORD, registered after the fact on 2026-11-23. Verdict as the experiment's own result file states it (backtest_output/E31_results.json, commit 1ae0e20, 2026-11-10T22:43:25+03:30): {\"decision\": \"REJECT\", \"primary\": {\"annualised_net_pct\": 33.5, \"control_annualised_net_pct\": 29.8, \"control_cumulative_net_pct\": 305.5, \"cumulative_net_pct\": 370.6, \"excess_log_per_period_pct\": 0.244, \"first_half_mean_excess_pct\": 0.745, \"label\": \"F+L+S\", \"newey_west_t\": 0.65, \"p_one_sided\": 0.2588, \"real_basket_periods\": 29, \"second_half_mean_excess_pct\": -0.241}, \"random_null\": {\"null_median_pct\": 175.6, \"percentile\": 89.7, \"strategy_gross_real_periods_pct\": 302.1}}. Preregistration: backtest_output/E31_preregistration.json, commit 629e392, 2026-11-10T22:38:29+03:30. The Experiment Manager did not adjudicate this experiment when it ran: none of its six stages was run, so Stage 1 is recorded as not run, which the platform reads as a fail. REJECT follows the experiment's own verdict. The stage number says where the platform's record stops; it is NOT the reason the experiment gave.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "0e6b5087280c21b0c3ecc3607a9281b60ac287a0",
+        "git_dirty": true,
+        "hypothesis": "[Registered retroactively 2026-11-23] Does a stock that has lagged the market, whose fundamentals are sound and cheap, and whose retail selling has just stopped, go on to beat the market? The user's request of 2026-11-10: 'the bot should say which stock has fallen behind the market and has a better future, and say buy it'. | H1: The F+L+S basket beats B1.",
+        "preregistration_hash": "7c2e4c2cecc3d15afbf2607ae8ecbaab69ae9f4a2b7a0a1122da9cf04faaddc0",
+        "registered_at": "2026-11-24T09:14:14.051219",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": false,
+              "price_sanity": false,
+              "survivorship": false,
+              "universe_valid": false
+            },
+            "detail": {
+              "declared_limits_as_preregistered": [
+                "All of E30's: survivorship, no monthly reports, shares from capital lines, dividends under 12% not added back, nominal returns.",
+                "The window is the one E30 used. E30 tested a different hypothesis, but its finding about the lowest-yield fifth shaped condition F (declared above)."
+              ],
+              "missing_data": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E31_preregistration.json",
+                "value": null
+              },
+              "point_in_time": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E31_results.json / pit_blocked_future_reads",
+                "value": 29145
+              },
+              "price_sanity": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E31_preregistration.json",
+                "value": null
+              },
+              "survivorship": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E31_preregistration.json",
+                "value": null
+              },
+              "universe_valid": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E31_preregistration.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-11-24T09:14:14.108440",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 25,
+      "experiment_id": "E32-forward-fundamental-quality",
+      "appended_at": "2026-11-24T09:14:14.897421",
+      "prev_hash": "4857c1a0acb0878cc124de6eb97cb71288808980dc28128a225dc36c0f5006ec",
+      "entry_hash": "bd05656327c8cbd3ca0b2bb76f1e4cfdb1ad181f57cc79de6891e0eee84f2eea",
+      "entry": {
+        "acceptance_criteria": {
+          "decision_rule": {
+            "ACCEPT": "all of: (1) one-sided Newey-West p < 0.0167, (2) random-null percentile >= 90, (3) positive mean excess in both halves of the decision dates",
+            "REJECT": "otherwise",
+            "no_retuning": "the four components, the equal-rank combination, N=10 and the cadence are fixed. Each component alone, and N=20, are reported as diagnostics and cannot change the decision."
+          }
+        },
+        "author": "retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-10)",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "examples/quality_backtest.py as first committed 7b31fba (2026-11-10T22:47:07+03:30); result commit 73b767c"
+        },
+        "config_hash": "43fda9d0dc5266e57202b43653303fcd93a5f29a8eab7c477260151a82f731bd",
+        "dataset_fingerprint": "fbdd13696870f334",
+        "date": "2026-11-24T09:14:14.876876",
+        "expected_failure": [
+          "Quality and growth are the factors most widely known and most fully priced; and E30 found the eligible companies' returns close to flat across the top four-fifths of the outlook. A REJECT is the likelier outcome."
+        ],
+        "experiment_id": "E32-forward-fundamental-quality",
+        "final_verdict": {
+          "decided_by": "retroactive registration 2026-11-23 (verdict as recorded in backtest_output/E32_results.json)",
+          "decision": "REJECT",
+          "rationale": "RETROACTIVE RECORD, registered after the fact on 2026-11-23. Verdict as the experiment's own result file states it (backtest_output/E32_results.json, commit 73b767c, 2026-11-10T22:50:05+03:30): {\"alpha\": 0.0167, \"decision\": \"REJECT\", \"primary\": {\"beat_control_share_of_periods\": 0.541, \"control_eligible_ew\": {\"annualised_net_pct\": 29.8, \"cumulative_net_pct\": 305.5, \"mean_names\": 85.3}, \"excess_log_per_period_pct\": 0.279, \"first_half_mean_excess_pct\": 0.473, \"newey_west_t\": 0.69, \"p_one_sided\": 0.2444, \"periods\": 61, \"second_half_mean_excess_pct\": 0.09, \"strategy\": {\"annualised_net_pct\": 34.0, \"cumulative_gross_pct\": 541.5, \"cumulative_net_pct\": 380.6, \"mean_names\": 9.8}, \"top\": 10}, \"random_null\": {\"null_median_pct\": 371.5, \"percentile\": 89.3, \"strategy_gross_pct\": 541.5}}. Preregistration: backtest_output/E32_preregistration.json, commit 7b31fba, 2026-11-10T22:47:07+03:30. The Experiment Manager did not adjudicate this experiment when it ran: none of its six stages was run, so Stage 1 is recorded as not run, which the platform reads as a fail. REJECT follows the experiment's own verdict. The stage number says where the platform's record stops; it is NOT the reason the experiment gave.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "0e6b5087280c21b0c3ecc3607a9281b60ac287a0",
+        "git_dirty": true,
+        "hypothesis": "[Registered retroactively 2026-11-23] Would buying the companies whose forward-looking fundamentals are BEST -- profit rising, sales outgrowing others, margins widening, profit turning into cash -- regardless of their price, have made money, and more than holding every eligible company? The user's request of 2026-11-10: 'check buying the stocks that had better forward-looking fundamentals too'. | H1: The top-10 quality portfolio beats B1.",
+        "preregistration_hash": "a3255eb0bdee7f3c06ad4d76f42c51e3767ce35ff92592e1d5bc5ec64f32951b",
+        "registered_at": "2026-11-24T09:14:14.793674",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": false,
+              "price_sanity": false,
+              "survivorship": false,
+              "universe_valid": false
+            },
+            "detail": {
+              "declared_limits_as_preregistered": [
+                "All of E30's: survivorship, no monthly reports, shares from capital lines, dividends under 12% not added back, nominal returns.",
+                "Third test on the same window (see multiple_testing)."
+              ],
+              "missing_data": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E32_preregistration.json",
+                "value": null
+              },
+              "point_in_time": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E32_results.json / pit_blocked_future_reads",
+                "value": 29145
+              },
+              "price_sanity": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E32_preregistration.json",
+                "value": null
+              },
+              "survivorship": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E32_preregistration.json",
+                "value": null
+              },
+              "universe_valid": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E32_preregistration.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-11-24T09:14:14.856483",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "seq": 26,
+      "experiment_id": "E33-best-of-cheap-industries",
+      "appended_at": "2026-11-24T09:14:15.660694",
+      "prev_hash": "bd05656327c8cbd3ca0b2bb76f1e4cfdb1ad181f57cc79de6891e0eee84f2eea",
+      "entry_hash": "35f2c7a7caf3c77c7b94d38908676c97b3300560093830b7b84f6fd3f7b90922",
+      "entry": {
+        "acceptance_criteria": {
+          "decision_rule": {
+            "ACCEPT": "all of: (1) one-sided Newey-West p < 0.0125 on the per-period log excess over B1, (2) random-null percentile >= 90, (3) positive mean excess in both halves of the window's decisions",
+            "REJECT": "otherwise",
+            "no_retuning": "the 25th-percentile threshold, the score, one company per industry and the cadence are fixed. Reported as diagnostics that cannot change the decision: every company of the cheap industries (does cheapness of the industry help?), the best company of EVERY industry (does the score help?), the threshold at the 50th percentile, cheapness measured relative to the market's P/E, and the cheapest company (highest trailing earnings yield) of each cheap industry."
+          }
+        },
+        "author": "retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-11)",
+        "code_version": {
+          "code_hash": "eacaa87f461236f9a9de172f6a1355653e391b93d9d7301797d05739d4e7a305",
+          "strategy_version": "examples/cheap_sector_backtest.py as first committed b2ddd6a (2026-11-11T21:00:41+03:30); result commit 0cad8a7"
+        },
+        "config_hash": "25a1e3dbd6e0e8c2530292cc768a927bc8bb8c33af4dd3ea36a9e0466342ed95",
+        "dataset_fingerprint": "fbdd13696870f334",
+        "date": "2026-11-24T09:14:15.641454",
+        "expected_failure": [
+          "Industry valuation in Tehran moves with the exchange rate and commodity cycles more than it reverts to its own mean, and E30's ranking by cheapness did no better than the eligible set. A REJECT is the likelier outcome."
+        ],
+        "experiment_id": "E33-best-of-cheap-industries",
+        "final_verdict": {
+          "decided_by": "retroactive registration 2026-11-23 (verdict as recorded in backtest_output/E33_results.json)",
+          "decision": "REJECT",
+          "rationale": "RETROACTIVE RECORD, registered after the fact on 2026-11-23. Verdict as the experiment's own result file states it (backtest_output/E33_results.json, commit 0cad8a7, 2026-11-11T21:04:10+03:30): {\"alpha\": 0.0125, \"decision\": \"REJECT\", \"primary\": {\"active_periods\": 36, \"beat_control_share_of_active_periods\": 0.556, \"control_annualised_net_pct\": 23.6, \"control_cumulative_net_pct\": 106.2, \"excess_log_per_period_pct\": 0.175, \"first_half_mean_excess_pct\": -0.17, \"mean_names_when_active\": 8.8, \"newey_west_t\": 0.35, \"p_one_sided\": 0.3648, \"periods\": 37, \"second_half_mean_excess_pct\": 0.503, \"strategy_annualised_net_pct\": 26.0, \"strategy_cumulative_net_pct\": 120.0}, \"random_null\": {\"draws\": 1000, \"null_median_pct\": 106.5, \"null_p90_pct\": 204.9, \"percentile\": 84.7, \"strategy_gross_pct\": 179.7}}. Preregistration: backtest_output/E33_preregistration.json, commit b2ddd6a, 2026-11-11T21:00:41+03:30. The Experiment Manager did not adjudicate this experiment when it ran: none of its six stages was run, so Stage 1 is recorded as not run, which the platform reads as a fail. REJECT follows the experiment's own verdict. The stage number says where the platform's record stops; it is NOT the reason the experiment gave.",
+          "rejected_at_stage": 1
+        },
+        "git_commit": "0e6b5087280c21b0c3ecc3607a9281b60ac287a0",
+        "git_dirty": true,
+        "hypothesis": "[Registered retroactively 2026-11-23] Would buying the best company of each industry that is cheaper than usual have made money, and more than holding every eligible company? The user's request of 2026-11-11: 'test the assumption that if you buy the best stock from industries cheaper than usual, you profit'. | H1: The best-of-cheap-industries portfolio beats B1.",
+        "preregistration_hash": "75e211be8d2e1c2afa4d9ba7c49792c14e3813f43abd22ff04c5656a0e233392",
+        "registered_at": "2026-11-24T09:14:15.561101",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": false,
+              "point_in_time": false,
+              "price_sanity": false,
+              "survivorship": false,
+              "universe_valid": false
+            },
+            "detail": {
+              "declared_limits_as_preregistered": [
+                "All of E30's: survivorship, shares from capital lines, dividends under 12% not added back, nominal returns, no monthly reports.",
+                "Industry membership is today's.",
+                "A short window: the industry history starts 2022-05 and needs a year before it can call anything usual.",
+                "Fourth test on the same data (see multiple_testing)."
+              ],
+              "missing_data": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E33_preregistration.json",
+                "value": null
+              },
+              "point_in_time": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E33_results.json / pit_blocked_future_reads",
+                "value": 48619
+              },
+              "price_sanity": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E33_preregistration.json",
+                "value": null
+              },
+              "survivorship": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E33_preregistration.json",
+                "value": null
+              },
+              "universe_valid": {
+                "basis": "NOT RUN THROUGH THE PLATFORM: this experiment never called a gate in sirat.experiments.gates. Recorded False because the platform reads an unmeasured check as a fail, not because the check was run and failed (retroactive record, 2026-11-23).",
+                "source": "backtest_output/E33_preregistration.json",
+                "value": null
+              }
+            },
+            "recorded_at": "2026-11-24T09:14:15.626468",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "FAIL"
+          }
+        ]
+      }
     }
   ],
   "chain": {
-    "entries": 13,
+    "entries": 26,
     "intact": true,
-    "head": "fcc4684bb2c5d394fe2e9d64024b8462eba24ceb47c702ef07a99141dc73b551",
+    "head": "35f2c7a7caf3c77c7b94d38908676c97b3300560093830b7b84f6fd3f7b90922",
     "note": "every entry hashes to its recorded value and every link matches"
   },
-  "exported_at": "2026-08-19T11:25:57.472915"
+  "exported_at": "2026-11-24T09:21:08.058296"
 }

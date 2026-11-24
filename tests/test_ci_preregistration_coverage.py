@@ -102,20 +102,25 @@ class TestPreregistrationCoverage(unittest.TestCase):
 class TestGovernanceStage(unittest.TestCase):
     """The stage's verdict, with everything it reads held still."""
 
-    def _run(self, coverage, intact=True):
-        from sirat.experiments import ledger, manager, universe
+    def _run(self, coverage, intact=True, incomplete=None):
+        from sirat.experiments import ledger, manager, multiplicity, universe
 
         kpi = {"rejections": 0, "meets_target": None,
                "reproducibility": {"reproducible": True}}
         chain = {"entries": 3, "intact": intact, "broken_at": 2,
                  "experiment_id": "E-x", "reason": "altered"}
+        quiet = {"n_trials": 3, "budgets": {},
+                 "luck_hurdle_annual_sharpe": {"5.3y": 0.5, "15y": 0.3}}
 
         with mock.patch.object(manager, "kpi", return_value=kpi), \
                 mock.patch.object(universe, "due",
                                   return_value={"due": False, "latest": "u"}), \
                 mock.patch.object(ledger, "verify", return_value=chain), \
                 mock.patch.object(ci, "preregistration_coverage",
-                                  return_value=coverage):
+                                  return_value=coverage), \
+                mock.patch.object(multiplicity, "summary", return_value=quiet), \
+                mock.patch.object(ci, "preregistration_completeness",
+                                  return_value=incomplete or {}):
             return ci.run_governance()
 
     def test_green_when_every_preregistration_is_in_the_record(self):
@@ -139,7 +144,15 @@ class TestGovernanceStage(unittest.TestCase):
     def test_the_seven_that_predate_the_rule_warn_by_name_and_do_not_fail(self):
         # Their retroactive registration is the owner's step (2026-11-23):
         # named on every build, but only a NEW experiment outside the record
-        # turns it red.
+        # turns it red. The tuple was emptied on 2026-11-24 when E26-E33
+        # were registered; the mechanism is still pinned on its seven names.
+        seven = ("E26_preregistration.json", "E27_preregistration.json",
+                 "E28_preregistration.json", "E30_preregistration.json",
+                 "E31_preregistration.json", "E32_preregistration.json",
+                 "E33_preregistration.json")
+        patch = mock.patch.object(ci, "PENDING_RETROACTIVE", seven)
+        patch.start()
+        self.addCleanup(patch.stop)
         outside = [{"file": name, "experiment_id": name[:3],
                     "reason": "no such experiment in the record"}
                    for name in ci.PENDING_RETROACTIVE]
@@ -177,6 +190,33 @@ class TestGovernanceStage(unittest.TestCase):
             ci._print_governance(report)
 
         self.assertIn("1 OUTSIDE THE RECORD", out.getvalue())
+
+
+class TestCompletenessRule(unittest.TestCase):
+    """From E36 on, an incomplete preregistration turns the build red."""
+
+    def _run(self, incomplete):
+        return TestGovernanceStage._run(self, {"files": 9, "outside": []},
+                                        incomplete=incomplete)
+
+    def test_a_new_incomplete_preregistration_fails(self):
+        report = self._run({"E36_preregistration.json": {
+            "number": 36, "missing": ["the cost model"]}})
+        self.assertFalse(report["passed"])
+        self.assertIn("E36_preregistration.json lacks the cost model",
+                      report["detail"][0])
+
+    def test_older_files_are_reported_not_failed(self):
+        report = self._run({"E26_preregistration.json": {
+            "number": 26, "missing": ["family and multiple-testing correction"]}})
+        self.assertTrue(report["passed"])
+
+    def test_the_live_e35_file_is_complete(self):
+        from sirat.experiments import multiplicity
+        with open(os.path.join(ROOT, "backtest_output",
+                               "E35_preregistration.json"),
+                  encoding="utf-8") as fh:
+            self.assertEqual(multiplicity.prereg_completeness(json.load(fh)), [])
 
 
 if __name__ == "__main__":

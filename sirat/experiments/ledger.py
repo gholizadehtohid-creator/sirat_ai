@@ -334,6 +334,16 @@ def export_markdown(path=None, out=None):
 
         lines += ["", "---", ""]
 
+        # How much each verdict above is worth given how many were reached
+        # (2026-11-24). Reported, never part of the hash chain.
+        try:
+            from sirat.experiments import multiplicity
+            lines += multiplicity.markdown(path)
+        except Exception as exc:                                # noqa: BLE001
+            lines += ["## Multiple testing (generated)", "",
+                      "*Could not be computed: %s: %s*" % (type(exc).__name__,
+                                                           exc), "", "---", ""]
+
         for row in rows:
             lines += _entry_markdown(row)
 
