@@ -1,6 +1,6 @@
-"""E34: do E27 and E28 survive real treasury-bill yields?
+"""E35 (successor of E34): do E27 and E28 survive real treasury-bill yields?
 
-Implements backtest_output/E34_preregistration.json exactly; read that first.
+Implements backtest_output/E35_preregistration.json exactly; read that first.
 
     python examples/real_bills_study.py --register   freeze the record (once)
     python examples/real_bills_study.py --run        compute, write, decide
@@ -9,7 +9,7 @@ Implements backtest_output/E34_preregistration.json exactly; read that first.
 the preregistration is hashed into sirat_research.db and the window is
 recorded. --run refuses to start unless that registration exists and its
 frozen parameters still match the file on disk. It then writes
-backtest_output/E34_results.json, records Stage 1 (data integrity, measured
+backtest_output/E35_results.json, records Stage 1 (data integrity, measured
 here) and closes the experiment as the preregistration's decision rule says.
 """
 
@@ -36,9 +36,16 @@ from allocation_study import (HOLDING_DRAG, memmel, norm_sf,  # noqa: E402
                               per_session, series)
 from gold_sleeve_study import gold_sleeve                       # noqa: E402
 
-EXPERIMENT_ID = "E34-real-bills"
-PREREG = os.path.join(backtest_config.OUTPUT_DIR, "E34_preregistration.json")
-OUT = os.path.join(backtest_config.OUTPUT_DIR, "E34_results.json")
+# E34 ended at Stage 1 on a data-layer defect (every pre-1400 bill maturity
+# read a century late); E35 asks the same questions on corrected maturities.
+# E34's frozen record is untouched; this file now runs E35 by default.
+EXPERIMENTS = {
+    "E34": "E34-real-bills",
+    "E35": "E35-real-bills",
+}
+EXPERIMENT_ID = EXPERIMENTS["E35"]
+PREREG = os.path.join(backtest_config.OUTPUT_DIR, "E35_preregistration.json")
+OUT = os.path.join(backtest_config.OUTPUT_DIR, "E35_results.json")
 
 START = date(2017, 10, 1)
 END = date(2026, 7, 31)
@@ -268,11 +275,12 @@ def register():
             strategy_version="allocation-real-bills-v1",
             researcher=doc["researcher"],
             notes=("Re-test of E27 H1 and E28 H1 against the month-start yield "
-                   "of real treasury bills. " + doc["written_before"] +
+                   "of real treasury bills. " + doc.get("why_a_successor", "") +
+                   " " + doc["written_before"] +
                    " The working tree also carries unrelated, uncommitted work "
                    "by other implementers on 2026-11-24 (corporate actions, "
                    "point-in-time statements, forward scorecard), so git_dirty "
-                   "is expected; E34's own files are committed."),
+                   "is expected; this experiment's own files are committed."),
             expected_failure=" | ".join(doc["expected_failure"]),
             acceptance_criteria=doc["test"]["family"] + " " +
             doc["test"]["accept"],
@@ -295,8 +303,8 @@ def _registered():
         manager = Manager.load(EXPERIMENT_ID)
         frozen = manager.preregistration()
     except Exception as exc:                                    # noqa: BLE001
-        raise SystemExit("E34 is not registered (%s). Run --register first."
-                         % exc)
+        raise SystemExit("%s is not registered (%s). Run --register first."
+                         % (EXPERIMENT_ID, exc))
     if frozen["parameters"] != _prereg():
         raise SystemExit("the preregistration on disk differs from the frozen "
                          "record; register a new id instead of editing it.")
@@ -409,7 +417,7 @@ def run(record_decision=True):
         bill_years.setdefault(k[0], []).append(r["yield"])
 
     result = {
-        "preregistration": "backtest_output/E34_preregistration.json",
+        "preregistration": "backtest_output/%s" % os.path.basename(PREREG),
         "window_months": ["%d-%02d" % months[0], "%d-%02d" % months[-1]],
         "months": len(months),
         "sessions": len(window_sessions),
@@ -485,7 +493,7 @@ def _close(manager, stage1, result):
         out = manager.decide(mgr.REJECT, "Stage 1 failed: %s. The preregistration "
                              "says the experiment then says nothing." %
                              ", ".join(k for k, v in stage1.items() if not v),
-                             by="SIRAT-AI Research (E34 script)")
+                             by="SIRAT-AI Research (%s script)" % EXPERIMENT_ID)
     else:
         v = result["verdict"]
         out = manager.decide(
@@ -494,14 +502,15 @@ def _close(manager, stage1, result):
             "says (ARCHIVE: not a signal for the stage pipeline). Verdicts: "
             "H1 gold vs real bills %s (p %.4f); H2 equity vs real bills %s "
             "(p %.4f); H3 three-part vs gold %s (p %.4f); Holm at 0.05 within "
-            "E34, family 'allocation'. Results: backtest_output/E34_results.json."
+            "the experiment, family 'allocation'. Results: %s."
             % (v["H1_gold_vs_real_bills"],
                result["tests"]["H1_gold_vs_real_bills"]["p"],
                v["H2_equity_vs_real_bills"],
                result["tests"]["H2_equity_vs_real_bills"]["p"],
                v["H3_three_part_vs_gold"],
-               result["tests"]["H3_three_part_vs_gold"]["p"]),
-            by="SIRAT-AI Research (E34 script)")
+               result["tests"]["H3_three_part_vs_gold"]["p"],
+               os.path.relpath(OUT, ROOT)),
+            by="SIRAT-AI Research (%s script)" % EXPERIMENT_ID)
     print("decision:", json.dumps(out, ensure_ascii=False))
 
 

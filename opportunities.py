@@ -265,13 +265,25 @@ def maturity_of(name):
     yy, mm, dd = (int(g) for g in match.groups())
 
     try:
-        return date(*jalali.to_gregorian(1400 + yy, mm, dd))
+        return date(*jalali.to_gregorian(_century(yy) + yy, mm, dd))
     except ValueError:
         return None
 
 
+# Bills were first issued in 1394, so a two-digit year of 94..99 is 13YY.
+# Reading every name as 14YY put each pre-1400 maturity a century late: no
+# series maturing before 1400 looked eligible, and E34 found no yield at all
+# for 2017-10..2020-05 (2026-11-24). Live bills all mature in 14YY, which is
+# why the card never showed it.
+FIRST_ISSUE_YY = 94
+
+
+def _century(yy):
+    return 1300 if yy >= FIRST_ISSUE_YY else 1400
+
+
 def maturity_jalali(name):
-    """The same maturity as written in the name, as 14YY/MM/DD."""
+    """The same maturity as written in the name, as YYYY/MM/DD (Jalali)."""
 
     match = MATURITY.search((name or "").strip())
 
@@ -280,7 +292,7 @@ def maturity_jalali(name):
 
     yy, mm, dd = match.groups()
 
-    return "14%s/%s/%s" % (yy, mm, dd)
+    return "%d/%s/%s" % (_century(int(yy)) + int(yy), mm, dd)
 
 
 def _settles(price_date, today):

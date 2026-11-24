@@ -158,3 +158,19 @@ class StudyArithmetic(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PreFourteenHundredMaturities(unittest.TestCase):
+    """E34's stage-1 failure: a 13YY maturity read as 14YY."""
+
+    def test_thirteen_hundreds_are_read_as_such(self):
+        import opportunities as op
+        self.assertEqual(op.maturity_of("اسنادخزانه-م2بودجه96-970612"),
+                         date(2018, 9, 3))
+        self.assertEqual(op.maturity_jalali("اسنادخزانه-م2بودجه96-970612"),
+                         "1397/06/12")
+        self.assertEqual(op.maturity_of("اسناد خزانه اسلامي 941223").year, 2016)
+        self.assertEqual(op.maturity_of("اسناد خزانه-م13بودجه02-051021"),
+                         date(2027, 1, 11))
+        self.assertEqual(op.maturity_jalali("اسناد خزانه-م13بودجه02-051021"),
+                         "1405/10/21")

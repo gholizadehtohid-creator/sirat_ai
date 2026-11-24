@@ -1,0 +1,49 @@
+{
+ "experiment_id": "E35-real-bills",
+ "successor_of": "E34-real-bills",
+ "why_a_successor": "E34 (registered and closed 2026-11-24) stopped at Stage 1: every month 2017-10..2020-05 had no bill yield. The cause was in the data layer, not the market: opportunities.maturity_of read the two-digit year of every bill name as 14YY, so a series maturing in 1394-1399 looked a century away and none was eligible. E34's record is append-only and says what it says; this experiment asks the SAME three questions with the SAME constants, books, test and decision rule, on the corrected maturities. No statistic of E34 was computed: its run ended at the missing-month check, before any return, Sharpe ratio or p-value existed.",
+ "question": "E27 (equity beat a 20% fixed-income fund) and E28 (a 70/30 equity/gold mix beat 70/30 equity/fixed income) both assumed fixed income earns a constant 20% a year. Treasury bills (اخزا) actually yielded far more for much of the period. Do the two accepted results survive when the fixed-income leg is the yield bills really offered, month by month?",
+ "researcher": "Claude, at the owner's request of 2026-11-24 (research report item 1: «بازآزمایی ترکیب ۷۰/۳۰ با سری واقعی بازده اخزا»); successor of E34 after its Stage-1 failure",
+ "written_before": "Everything E34's file lists, plus: E34's Stage-1 output (the months without a yield); while finding the cause, the parsed maturities and bar DATE ranges of the bill series; and, after the fix, availability counts only -- 106 of 106 months have a month-start yield, none carried and none from the wide tail, 5 to dozens of quotes a month, 12,495 eligible quotes in the window and none rejected as a misprint. No yield value, return, Sharpe ratio or p-value had been computed or looked at. The fix and this file are committed before E35's first run.",
+ "data": {
+  "bills": "bill_history.month_start_yields(): the median annual yield to maturity of every eligible quote in the last 5 sessions of the previous month (eligible = the series traded that day, 90..400 days to maturity, yield within 5%..100%; outside is a misprint and counted); if those 5 sessions hold no quote, the last 20; if still none, the previous month's yield is carried and the month counted as carried. Bars: matured series from the census tables (delisted_sweep.py), live series fetched from TSETMC on 2026-11-24. Yield = opportunities.bill_yield(pClosing, maturity, day + 1). Maturity: the last six digits of the name, YYMMDD Jalali, with YY >= 94 read as 13YY and anything lower as 14YY (bills were first issued in 1394) -- opportunities.maturity_of as corrected on 2026-11-24.",
+  "bill_return": "The simulation runs on a grid of every session in the window plus every calendar month-end (a month-end that is not a session carries no market move). Each grid point earns (1 + y_M)^(gap/365) - 1 on the bill leg, y_M the yield fixed at the start of the point's month M, gap = calendar days since the previous grid point (the first point counts from 2017-09-30). A month's bill leg therefore earns its calendar days at y_M whether or not the exchange traded. This is the yield an investor could lock at the start of the month; the price risk of a longer bill held for one month is not modelled (declared).",
+  "equity": "TEDPIX (a price-and-dividend index) with E27's 1.5%/yr drag for an index fund's fees, as in E27/E28.",
+  "gold": "E28's gold sleeve, unchanged: equal-weight daily return of every gold fund with at least 60 sessions of history; |daily r| > 20% dropped as a data error (count reported).",
+  "window": "calendar months 2017-10 .. 2026-07. 2017-10 is the first whole month in which E28's gold sleeve exists. 2026-07 is the last whole month before the reservation R-FORWARD-2027 (2026-08-19 .. 2027-08-19), which this experiment does NOT read. Months in which the exchange was closed earn the bill accrual and zero on market legs, as they did for a holder."
+ },
+ "books": {
+  "eq70_gold30": "70% equity / 30% gold (E28's H1 book)",
+  "eq70_bills30": "70% equity / 30% bills (E28's comparison book, with real bills in place of the 20% fund)",
+  "eq70_gold15_bills15": "70% equity / 15% gold / 15% bills (the three-part book the research report asked for; equity held at 70% so only the defensive sleeve differs)",
+  "equity_100": "100% equity (E27's H1 book)",
+  "rebalancing": "every 60 sessions to target, as E28. Cost: half of the live fund round trip (config.LIVE_FUND_ROUND_TRIP_PCT = 0.7512%) on each unit of weight traded -- every leg is a fund unit or a bill, exempt from the 0.5% transfer tax. E28 charged 1.039%; the difference is declared, not hidden."
+ },
+ "statistic": "Monthly returns of each book are compounded from the daily simulation within each calendar month. Excess = book return minus the bill return of the same month. Sharpe = mean(excess) / sd(excess), monthly (annualised by sqrt(12) only for display).",
+ "hypotheses": {
+  "H1_gold_vs_real_bills": "Sharpe(eq70_gold30) > Sharpe(eq70_bills30). One-sided. Re-tests E28 H1.",
+  "H2_equity_vs_real_bills": "mean monthly excess of equity_100 over bills > 0. One-sided. Re-tests E27 H1 on the window bills exist.",
+  "H3_three_part_vs_gold": "Sharpe(eq70_gold15_bills15) differs from Sharpe(eq70_gold30). Two-sided."
+ },
+ "test": {
+  "method": "circular block bootstrap of the month index (block length 6 months, 10,000 resamples, seed 20261124). For a statistic d with resampled values d*_b: one-sided p = (1 + #{d*_b - d >= d}) / (1 + B); two-sided p = (1 + #{|d*_b - d| >= |d|}) / (1 + B). The resampled d*_b - d stands in for the null distribution (the studentisation of Ledoit & Wolf 2008 is not used; declared).",
+  "family": "allocation (E27, E28, E34). Within E34: Holm at family alpha 0.05 over H1, H2, H3 -- the smallest p must be below 0.05/3, the next below 0.05/2, the last below 0.05.",
+  "accept": "a hypothesis is ACCEPTED when Holm rejects its null; otherwise NOT ACCEPTED. H3 ACCEPTED states only that the two books differ, in the direction of the observed difference."
+ },
+ "also_reported_not_tested": "Memmel z for H1 and a Newey-West t (lag 6) for H2 (the methods E27/E28 used); the same three comparisons on E28's 20-session blocks; CAGR, volatility, max drawdown of every book and of bills; the bill yield series itself (month, yield, quotes, basis); counts of carried months and rejected quotes; the 20%-fund version of every comparison on this same window.",
+ "stage_1_checks": {
+  "point_in_time": "every month-start yield is built only from quotes dated before the month begins (asserted per month).",
+  "survivorship": "matured series are included: the yield pool of every month draws on series regardless of whether they are listed today (count of matured series used reported).",
+  "universe_valid": "TEDPIX has sessions in the window; the gold sleeve exists before the window starts and has a value on at least 99% of the window's sessions (a session whose only fund return was dropped as a data error has none and earns zero, as in E28).",
+  "missing_data": "carried months are at most 10% of the window's months.",
+  "price_sanity": "quotes rejected as outside 5%..100% are at most 5% of traded quotes in the window, and no monthly book return exceeds +/-100%."
+ },
+ "decision_rule": "Stage 1 failing means the experiment says nothing; recorded as REJECT at stage 1. Otherwise the Manager decision is ARCHIVE (an allocation test is not a signal for the platform's stage pipeline), and the per-hypothesis verdicts change the panel's EVIDENCE wording automatically: H1 not accepted -> the allocation card stops presenting gold as having beaten fixed income and says it has not been shown to beat real bills; H2 not accepted -> the card says holding equity has not been shown to beat real bills on 2017-2026. Any change to the DEFAULT weights of a profile is proposed to the owner, not made by this experiment. The 70/30, 70/15/15 weights, the 60-session cadence and every constant above are fixed here; no other weights, cadences, tenors or block lengths are tried under this id.",
+ "declared_limits": "About 106 months; the window overlaps E28's and windows other experiments spent, and the history has been seen by this programme (Harvey & Liu: no true out-of-sample test on a seen history), so this is a robustness re-test, not a discovery. Nominal only: excess returns over bills are roughly inflation-neutral, and the database holds no CPI series, so the real view the report asked for is deferred. Bills are thinly traded and the 1395-1397 issues few; the median of 5 sessions' quotes is the declared defence. The month-start yield ignores the price risk of holding a 90-400 day bill for one month. Rial devaluation came in steps (2018, 2020, 2022-2025), so blocks are not independent; the 6-month block length is the declared response, not a cure.",
+ "expected_failure": [
+  "H1 fails: E28's gold advantage was measured against a 20% fund that never moved; against bills that paid 25-45% the defensive sleeve's mean is much higher, and gold's extra mean may not cover its volatility.",
+  "H2 fails: at real bill yields the equity premium is a fraction of its 20%-fund size while monthly volatility is unchanged, so about 106 months cannot separate the mean from zero at 0.05/3.",
+  "H3 fails: 15 points of weight moved between two defensive legs changes the book's monthly Sharpe by less than the bootstrap can resolve."
+ ],
+ "seed": 20261124
+}
