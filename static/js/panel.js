@@ -3643,9 +3643,13 @@ function renderAllocation(rep) {
       .map(([k, w]) => `${w}٪ ${esc(labels[k] || k)}`).join("<br>");
     const amounts = Object.entries(p.amounts || {})
       .map(([k, v]) => `${money(v)} ${esc(labels[k] || k)}`).join("<br>");
+    // "provisional": tested once, then re-tested against real treasury
+    // bills (E35) without clearing the preregistered bar (2026-11-24).
     const ev = p.evidence === "tested"
       ? `<span class="badge good"><span class="dot"></span>آزموده‌شده</span>`
-      : `<span class="badge neutral"><span class="dot"></span>توصیفی</span>`;
+      : p.evidence === "provisional"
+        ? `<span class="badge warn"><span class="dot"></span>موقت</span>`
+        : `<span class="badge neutral"><span class="dot"></span>توصیفی</span>`;
     return [
       `<strong>${esc(p.label)}</strong><br>${ev}`,
       weights,
@@ -3680,14 +3684,18 @@ function renderAllocation(rep) {
   // 20% fixed-income return; bills pay 43-44% today, about what TEDPIX made a
   // year over 2023-26 (46.6%). Said here, on the card that leans on them
   // (the 20-year reviewer, 2026-11-11).
+  // E35 (2026-11-24) re-tested both against what bills really paid; its
+  // own sentence, built from its result file, replaces the old caveat.
   const bill = state.valuation && state.valuation.bill_yield_pct;
+  const rt = rep.retest;
   banner("allocationStatus", "allocationStatusText", h ? "" : "",
-    h ? `سابقه‌ی ${esc(h.from)} تا ${esc(h.to)} — صندوق درآمد ثابت در همین ` +
-        `دوره ${num(h.fixed_income.cagr_pct, 0)}٪ در سال فرض شده است. ` +
-        `<strong>برتری سهام و طلا در آزمون‌ها نسبت به همین ۲۰٪ سنجیده شده؛ ` +
-        `اوراق خزانه امروز ${bill ? `حدود ${num(bill, 0)}٪` : "بسیار بیشتر از آن"} ` +
-        "می‌دهد و در ۱۴۰۲ تا ۱۴۰۵ بازده شاخص کل (حدود ۴۷٪ در سال) تقریباً با همین نرخ برابر بوده است؛ " +
-        "پس برتری ترکیب‌ها بر اوراقِ امروز ثابت نشده است.</strong>"
+    h ? `سابقه‌ی ${esc(h.from)} تا ${esc(h.to)} — صندوق درآمد ثابت در جدول ` +
+        `${num(h.fixed_income.cagr_pct, 0)}٪ در سال فرض شده است. ` +
+        (rt ? `<strong>${esc(rt.text)}</strong>` +
+              (bill ? ` اخزا امروز حدود ${num(bill, 0)}٪ می‌دهد.` : "")
+            : `<strong>برتری سهام و طلا در آزمون‌ها نسبت به همین ۲۰٪ سنجیده شده؛ ` +
+              `اوراق خزانه امروز ${bill ? `حدود ${num(bill, 0)}٪` : "بسیار بیشتر از آن"} ` +
+              "می‌دهد؛ پس برتری ترکیب‌ها بر اوراقِ امروز ثابت نشده است.</strong>")
       : "سابقه‌ی شاخص یا صندوق‌های طلا در دیتابیس نیست — ارقام تاریخی " +
         "محاسبه نشد.");
 }
@@ -5000,8 +5008,8 @@ function renderToday() {
   const billText = sellsFixed || holdsBills
     ? `<strong>${sellsFixed ? "پیش از فروش درآمد ثابت:" : "درباره‌ی اخزایی که دارید:"}</strong> ` +
       (holdsBills ? "اخزایی که پیش از سررسید فروخته شود بازده ثابتش را از دست می‌دهد و به قیمت روز می‌رود. " : "") +
-      `برتری سهام و طلا در آزمون‌ها نسبت به صندوق درآمد ثابتِ ۲۰٪ سنجیده شده؛ اوراق خزانه امروز ` +
-      `${billYield ? `حدود ${num(billYield, 0)}٪` : "بسیار بیشتر از آن"} می‌دهد، پس برتری این ترکیب بر اوراقِ امروز ثابت نشده است. `
+      `در بازآزمایی با بازده واقعی اخزا (E35، ۲۰۱۷ تا ۲۰۲۶) برتری سهام و طلا بر اخزا از آستانه‌ی آماری نگذشت؛ اوراق خزانه امروز ` +
+      `${billYield ? `حدود ${num(billYield, 0)}٪` : "بازده بالایی"} می‌دهد. `
     : "";
 
   // Outside the three sleeves, and why that matters for a leveraged fund.

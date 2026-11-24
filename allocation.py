@@ -34,7 +34,9 @@ Nominal rials throughout. Inflation was 87.9% y/y in 2026 and there is no CPI
 series in the database, so nothing here says any profile beat inflation.
 """
 
+import json
 import math
+import os
 
 import numpy as np
 import pandas as pd
@@ -267,13 +269,114 @@ def candidates(limit=3):
     return {sleeve: items[:limit] for sleeve, items in picked.items()}
 
 
+# E35 (2026-11-24) re-tested E27 and E28 against what treasury bills really
+# paid, month by month. Its preregistered rule changes the EVIDENCE these
+# profiles carry, never their weights (a change of weights is the owner's).
+RETEST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "backtest_output", "E35_results.json")
+
+
+def _fa(value, digits=0):
+    """A number for Persian text. The panel's font (Vazirmatn FD) draws
+    Latin digits as Persian ones, so plain formatting is enough."""
+    return ("%%.%df" % digits) % value
+
+
+def retest(path=None):
+    """E35's verdicts and the numbers behind them, or None if not run."""
+
+    try:
+        with open(path or RETEST_FILE, encoding="utf-8") as fh:
+            doc = json.load(fh)
+        books, tests = doc["books"], doc["tests"]
+        verdict = doc["verdict"]
+        holm = tests["holm"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+    def test(key):
+        return {"p": tests[key]["p"],
+                "threshold": holm[key]["holm_threshold"],
+                "accepted": verdict.get(key) == "ACCEPT"}
+
+    out = {
+        "experiment": "E35",
+        "window": doc.get("window_months"),
+        "months": doc.get("months"),
+        "bills_cagr_pct": doc["bills"]["cagr_pct"],
+        "bill_yield_by_year_pct": doc["bills"].get("mean_yield_by_year_pct"),
+        "books": {k: {"cagr_pct": v["cagr_pct"],
+                      "sharpe": v["sharpe_annualised_vs_bills"],
+                      "max_drawdown_pct": v["max_drawdown_pct"]}
+                  for k, v in books.items()},
+        "gold_vs_bills": test("H1_gold_vs_real_bills"),
+        "equity_vs_bills": test("H2_equity_vs_real_bills"),
+        "three_part_vs_gold": test("H3_three_part_vs_gold"),
+        "file": "backtest_output/E35_results.json",
+    }
+    g, b, e = (books["eq70_gold30"], books["eq70_bills30"],
+               books["equity_100"])
+    w = out["window"] or ["?", "?"]
+    out["text"] = (
+        "بازآزمایی E35 با بازده واقعی اخزا (%s تا %s، %d ماه): اخزا سالانه "
+        "%s٪ داد؛ ۷۰٪ سهام + ۳۰٪ طلا %s٪ (بیشترین افت %s٪)، ۷۰٪ سهام + "
+        "۳۰٪ اخزا %s٪، تمام سهام %s٪. برتری طلا بر اخزا (p=%s) و سهام بر "
+        "اخزا (p=%s) از آستانه‌ی آماری از پیش ثبت‌شده نگذشت؛ برآورد نقطه‌ای "
+        "به سود سهام و طلا بود، ولی اثبات نشد." % (
+            w[0], w[1], out["months"] or 0, _fa(out["bills_cagr_pct"], 1),
+            _fa(g["cagr_pct"], 1), _fa(g["max_drawdown_pct"], 0),
+            _fa(b["cagr_pct"], 1), _fa(e["cagr_pct"], 1),
+            _fa(out["gold_vs_bills"]["p"], 3),
+            _fa(out["equity_vs_bills"]["p"], 3)))
+    return out
+
+
+def _profiles_with_retest(found):
+    """PROFILES, their evidence restated where E35 re-tested it."""
+
+    if not found:
+        return [dict(p) for p in PROFILES]
+    out = []
+    for profile in PROFILES:
+        profile = dict(profile)
+        books = found["books"]
+        if profile["key"] == "balanced":
+            t = found["gold_vs_bills"]
+            profile["evidence"] = "tested" if t["accepted"] else "provisional"
+            profile["evidence_text"] = (
+                "E28: در برابر صندوق فرضی ۲۰٪ بهتر بود. بازآزمایی E35 با "
+                "بازده واقعی اخزا: نسبت بازده به ریسک %s در برابر %s برای "
+                "۷۰٪ سهام + ۳۰٪ اخزا — %s (p=%s، آستانه %s)" % (
+                    _fa(books["eq70_gold30"]["sharpe"], 2),
+                    _fa(books["eq70_bills30"]["sharpe"], 2),
+                    "برتری تأیید شد" if t["accepted"]
+                    else "برتری از آستانه‌ی آماری نگذشت",
+                    _fa(t["p"], 3), _fa(t["threshold"], 3)))
+        elif profile["key"] == "growth":
+            t = found["equity_vs_bills"]
+            profile["evidence"] = "tested" if t["accepted"] else "provisional"
+            profile["evidence_text"] = (
+                "E27: ۲۰۰۹ تا ۲۰۲۳ از صندوق فرضی ۲۰٪ جلو زد. بازآزمایی E35 "
+                "با اخزای واقعی: سالانه %s٪ در برابر %s٪ اخزا — %s (p=%s، "
+                "آستانه %s)؛ بیشترین افت %s٪" % (
+                    _fa(books["equity_100"]["cagr_pct"], 1),
+                    _fa(found["bills_cagr_pct"], 1),
+                    "برتری تأیید شد" if t["accepted"]
+                    else "برتری از آستانه‌ی آماری نگذشت",
+                    _fa(t["p"], 3), _fa(t["threshold"], 3),
+                    _fa(books["equity_100"]["max_drawdown_pct"], 0)))
+        out.append(profile)
+    return out
+
+
 def plan(equity=None):
     """The allocation report the panel renders."""
 
     equity = float(equity or config.ACCOUNT_EQUITY)
 
+    found = retest()
     profiles = []
-    for profile in PROFILES:
+    for profile in _profiles_with_retest(found):
         amounts = {k: round(equity * pct / 100.0, 0)
                    for k, pct in profile["weights"].items() if pct}
         profiles.append(dict(profile, amounts=amounts))
@@ -305,7 +408,9 @@ def plan(equity=None):
             "کنید.",
         ],
         "evidence": ["backtest_output/E27_results.json",
-                     "backtest_output/E28_results.json"],
+                     "backtest_output/E28_results.json",
+                     "backtest_output/E35_results.json"],
+        "retest": found,
         # What dealing costs today, for the today card to say beside its
         # amounts (config.LIVE_*): a fund unit pays no transfer tax.
         "costs": {
