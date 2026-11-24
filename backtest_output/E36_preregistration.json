@@ -1,0 +1,68 @@
+{
+ "experiment_id": "E36-allocation-15y",
+
+ "question": "The owner (2026-11-24): Tehran's market moves in cycles -- years of growth, then three or four years of decline -- so a test should cover fifteen years. Measured in dollars TEDPIX bottomed in 1391/07, 1397/07 and 1404/06 and peaked in 1392/10 and 1399/05, a cycle of six to seven years; E35 (2017-10..2026-07) covered about one. Over fifteen years, about two cycles, does a 70/30 equity/gold mix beat 70/30 equity/fixed income, does equity beat fixed income, and does a three-part mix differ from 70/30 equity/gold -- with fixed income at what the market actually paid?",
+
+ "researcher": "Claude, at the owner's request of 2026-11-24 (15-year window, coin before gold funds, lease bonds before bills, 12-month blocks -- all four chosen by the owner)",
+
+ "written_before": "Seen before this file was written: E27's, E28's and E35's complete results (E35: bills 25.5%/yr, 70/30 gold 63.7%, 70/30 bills 49.3%, equity 56.4%, nothing accepted under Holm). To answer the owner's point about cycles, TEDPIX's calendar-year nominal and dollar returns 2012-2026 and its dollar-terms peaks and troughs were computed and shown to the owner. For the years 2011-08..2017-09 only AVAILABILITY was looked at: the coin series' days per year (long_history.coverage), the lease-bond quote counts per year and per month (every month has at least one), and the price UNITS of four early lease bonds (they print per 100 of face, 100.0-101.95) to read them correctly. No lease-bond yield, no coin return, no return or Sharpe ratio of any book over 2011-08..2017-09 or over the whole window had been computed. long_history.py, the bill_history change that lets it take another quote source, and examples/long_allocation_study.py are committed with this file, before their first run.",
+
+ "window_start": "2011-08-01",
+ "window_end": "2026-07-31",
+
+ "data": {
+  "window": "calendar months 2011-08 .. 2026-07, fifteen years. It ends where E35 ends, before the reservation R-FORWARD-2027 (2026-08-19 .. 2027-08-19), which this experiment does NOT read.",
+  "equity": "TEDPIX (a price-and-dividend index) with E27's 1.5%/yr drag for an index fund's fees, as in E27, E28 and E35.",
+  "gold": "Before 2017-10-01: the Emami gold coin's daily price from tgju.org (series sekee, read by fx.parse with its outlier rule), carried to each TEDPIX session; a session earns the coin's move since the previous session. From 2017-10-01: E28's gold-fund sleeve exactly as E35 used it. The splice is the month E35's window starts.",
+  "fixed_income": "The month-start yield of bill_history.month_start_yields with E35's rules (median of eligible quotes in the last 5 sessions before the month, else the last 20, else carried and counted). Before 2017-10: lease bonds (long_history.lease_quotes) -- eligible = the series traded that day, its print within 80%..120% of the face it is quoted against (100 for the early series, 1,000,000 rials later), yield = current yield compounded at the coupon frequency in the name, (1 + c/k * F/P)^k - 1, inside 5%..100%. From 2017-10: treasury bills exactly as E35 (bill_history.quotes).",
+  "fixed_income_return": "As E35: a grid of every session plus every calendar month-end; each point earns (1 + y_M)^(gap/365) - 1 at the yield fixed at the start of its month, gap = calendar days since the previous point (the first counts from 2011-07-31)."
+ },
+
+ "benchmark": "the fixed-income leg above (lease bonds, then treasury bills) is both the defensive alternative and the series every excess return is measured against",
+
+ "books": {
+  "eq70_gold30": "70% equity / 30% gold",
+  "eq70_bills30": "70% equity / 30% fixed income (lease bonds, then bills)",
+  "eq70_gold15_bills15": "70% equity / 15% gold / 15% fixed income",
+  "equity_100": "100% equity",
+  "rebalancing": "every 60 sessions to target, as E28 and E35. Costs: half of config.LIVE_FUND_ROUND_TRIP_PCT (0.7512% round trip) on each unit of weight traded -- the cost of a fund unit. Coin dealers' spreads before 2017-10 were wider; that understates the coin-era cost and is declared."
+ },
+
+ "statistic": "Monthly returns of each book compounded from the daily simulation within each calendar month. Excess = book return minus the fixed-income return of the same month. Sharpe = mean(excess) / sd(excess), monthly.",
+
+ "hypotheses": {
+  "H1_gold_vs_fixed_income": "Sharpe(eq70_gold30) > Sharpe(eq70_bills30). One-sided.",
+  "H2_equity_vs_fixed_income": "mean monthly excess of equity_100 over fixed income > 0. One-sided.",
+  "H3_three_part_vs_gold": "Sharpe(eq70_gold15_bills15) differs from Sharpe(eq70_gold30). Two-sided."
+ },
+
+ "test": {
+  "method": "circular block bootstrap of the month index, block length 12 months (the owner's choice: the market's cycle is six to seven years, and shorter blocks would treat same-phase months as independent), 10,000 resamples, seed 20261125. One-sided p = (1 + #{d*_b - d >= d}) / (1 + B); two-sided p = (1 + #{|d*_b - d| >= |d|}) / (1 + B).",
+  "family": "allocation (E27, E28, E35, E36). Within E36: Holm at family alpha 0.05 over H1, H2, H3 -- the smallest p below 0.05/3, the next below 0.05/2, the last below 0.05.",
+  "accept": "a hypothesis is ACCEPTED when Holm rejects its null; otherwise NOT ACCEPTED."
+ },
+
+ "also_reported_not_tested": "Every book's CAGR, volatility, Sharpe and drawdown over the window and over each of the two cycles -- 2011-08..2018-09 and 2018-10..2026-07, split at the dollar-terms trough of 1397/07 -- and in each era of the splice (2011-08..2017-09 coin and lease bonds; 2017-10..2026-07 = E35's window); the same three p-values with E35's 6-month blocks; Memmel z for H1 and a Newey-West t (lag 12) for H2; the fixed-income yield by year; counts of carried months, rejected quotes, stale coin sessions and dropped gold-fund returns.",
+
+ "stage_1_checks": {
+  "point_in_time": "every month-start yield is built only from quotes dated before the month begins (asserted per month); the coin's price on a session is its last print on or before that session.",
+  "survivorship": "matured lease bonds and bills are included: the yield pools draw on series whatever their listing today (count of matured series used reported).",
+  "universe_valid": "TEDPIX has sessions throughout; the coin has a print within 7 days before at least 99% of the coin era's sessions; the gold-fund sleeve has a value on at least 99% of its era's sessions.",
+  "missing_data": "carried months are at most 10% of the window's 180 months.",
+  "price_sanity": "rejected quotes are at most 5% of traded quotes in the window, and no monthly book return exceeds +/-100%."
+ },
+
+ "decision_rule": "Stage 1 failing means the experiment says nothing; recorded as REJECT at stage 1. Otherwise the Manager decision is ARCHIVE, and the per-hypothesis verdicts become the allocation card's evidence in place of E35's (the longer window supersedes it on the panel; E35 stays on the record): an accepted hypothesis is shown as tested over fifteen years; one not accepted is shown as not established. Any change to a profile's DEFAULT weights is proposed to the owner, not made by this experiment. Weights, cadence, block length, splice dates and every constant above are fixed here; no other value is tried under this id.",
+
+ "window_shorter_reason": "",
+
+ "declared_limits": "Fifteen years is about two cycles: the result rests on two booms and two busts, and twelve-month blocks leave about fifteen of them, so power is low and a non-acceptance is the expected outcome even if an edge exists. The whole window has been seen by this programme (E27 covered 2009-2023, E35 2017-2026, and TEDPIX's yearly returns were computed for the owner today); this is a robustness test across cycles, not a discovery. Before 2017-10 the gold leg is the coin, whose premium over its gold content moves on its own, and fixed income is the current yield of lease bonds at printed (accrued-coupon) prices rather than a yield to maturity; both are declared approximations of what a saver could hold. Nominal only; the database holds no CPI series, and excess returns over fixed income are roughly inflation-neutral.",
+
+ "expected_failure": [
+  "H1 fails: across two cycles gold and Tehran equities both ride the rial's devaluations, so gold's extra mean over fixed income does not cover its volatility at a 12-month block resolution.",
+  "H2 fails: equity's premium over fixed income came in a few boom years (2013, 2019-2020); with fifteen 12-month blocks the bootstrap cannot separate its mean from zero at 0.05/3.",
+  "H3 fails: moving 15 points between two defensive legs changes the monthly Sharpe by less than fifteen blocks can resolve."
+ ],
+
+ "seed": 20261125
+}

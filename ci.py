@@ -102,8 +102,11 @@ PENDING_RETROACTIVE = ()
 
 # From E36 on, a preregistration must name its family and correction, the
 # exact benchmark series, the window, the cost model and the acceptance rule
-# (sirat/experiments/multiplicity.prereg_completeness). Earlier files are
-# reported, not failed: they were written before the rule existed.
+# (sirat/experiments/multiplicity.prereg_completeness), and give its window
+# as dates covering fifteen years -- about two of the market's cycles -- or
+# say why it is shorter (multiplicity.window_rule, the owner's rule of
+# 2026-11-24). Earlier files are reported, not failed: they were written
+# before the rules existed.
 COMPLETENESS_FROM = 36
 
 
@@ -126,7 +129,8 @@ def preregistration_completeness(directory=None):
             out[name] = {"number": int(match.group(1)),
                          "missing": ["unreadable"]}
             continue
-        missing = multiplicity.prereg_completeness(doc)
+        missing = (multiplicity.prereg_completeness(doc) +
+                   multiplicity.window_rule(doc))
         if missing:
             out[name] = {"number": int(match.group(1)), "missing": missing}
     return out

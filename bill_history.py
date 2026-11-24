@@ -290,7 +290,7 @@ def _median(values):
     return values[middle] if n % 2 else (values[middle - 1] + values[middle]) / 2
 
 
-def month_start_yields(sessions, start, end, conn=None):
+def month_start_yields(sessions, start, end, conn=None, quotes_fn=None):
     """{(year, month): record} for EVERY calendar month in start..end.
 
     `sessions` is the market calendar (dates of TEDPIX sessions). The pool for
@@ -304,11 +304,14 @@ def month_start_yields(sessions, start, end, conn=None):
     `to` always precedes the month).
 
     Returns (records, rejected) -- `rejected` as quotes() returns it.
+
+    `quotes_fn` replaces quotes() with another source of the same shape
+    (long_history.lease_quotes, for E36's years before bills).
     """
 
     import bisect
 
-    rows, rejected = quotes(conn)
+    rows, rejected = (quotes_fn or quotes)(conn)
     by_day = {}
     for day, _code, y in rows:
         by_day.setdefault(day, []).append(y)

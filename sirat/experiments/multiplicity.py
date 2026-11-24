@@ -45,7 +45,9 @@ WHAT IS COMPUTED
   historical test on that window cannot make a discovery -- only new data can.
 * `prereg_completeness(doc)` -- the five things every new preregistration
   must name: family and correction, the exact benchmark series, the window,
-  the cost model, the acceptance rule.
+  the cost model, the acceptance rule. `window_rule(doc)` -- the owner's
+  rule of 2026-11-24: the window as dates, fifteen years (about two market
+  cycles) or a stated reason it is shorter.
 
 Nothing here changes a verdict in the ledger. It reports.
 """
@@ -486,6 +488,38 @@ def prereg_completeness(doc):
     if not any(w in text for w in ("accept", "decision_rule", "decision rule")):
         missing.append("the acceptance rule")
     return missing
+
+
+# The owner's rule of 2026-11-24: Tehran's market moves in cycles of six to
+# seven years (in dollars it bottomed in 1391/07, 1397/07 and 1404/06), so a
+# test that sees five years sees one phase. From E36 on a preregistration
+# names its window as dates, and a window under MIN_WINDOW_YEARS says why.
+MIN_WINDOW_YEARS = 15.0
+WINDOW_TOLERANCE_YEARS = 0.05
+
+
+def _date_of(value):
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def window_rule(doc):
+    """[] when the window is fifteen years or explained; else what is missing."""
+
+    data = doc.get("data") if isinstance(doc.get("data"), dict) else {}
+    start = _date_of(doc.get("window_start") or data.get("window_start"))
+    end = _date_of(doc.get("window_end") or data.get("window_end"))
+    if not (start and end) or end <= start:
+        return ["window_start and window_end as dates"]
+    years = (end - start).days / 365.25
+    reason = str(doc.get("window_shorter_reason") or "").strip()
+    if years < MIN_WINDOW_YEARS - WINDOW_TOLERANCE_YEARS and not reason:
+        return ["a %.0f-year window (about two market cycles), or "
+                "window_shorter_reason (this one is %.1f years)"
+                % (MIN_WINDOW_YEARS, years)]
+    return []
 
 
 def summary(path=None):
