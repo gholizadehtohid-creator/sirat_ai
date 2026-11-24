@@ -127,3 +127,8 @@ graphify-out/.graphify_*
 graphify-out/manifest.json
 # Agent worktrees are scratch copies of this repository.
 .claude/worktrees/
+
+# The Bale bot (2026-11-24): its token and its users' data never go to git
+# (the repository is public). data/bale_bot.json holds the token and the
+# settings; data/bale_bot.db the users, their holdings and the outbox.
+data/bale_bot*

@@ -1702,6 +1702,146 @@ def api_track_record():
                         "error_detail": "%s: %s" % (type(exc).__name__, exc)})
 
 
+# ---- the Bale bot's admin page (2026-11-24) ------------------------------
+# The owner gives the bot to other people and administers them here. Every
+# route is under the same-origin guard above, and the panel binds 127.0.0.1:
+# whoever reaches these routes is at this machine. The token goes in through
+# /api/bot/config and never comes back out (bot_store.public_config).
+
+BOT_TIME = __import__("re").compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+
+
+def _bot_state():
+    import bale_bot
+    import bot_store
+    bot_store.initialise()
+    return {"config": bot_store.public_config(),
+            "runner": bale_bot.runner_status(),
+            "stats": bot_store.stats(),
+            "users": bot_store.list_users()}
+
+
+@app.route("/admin/bot")
+def bot_admin_page():
+    return render_template("bot_admin.html")
+
+
+@app.route("/api/bot/state")
+def api_bot_state():
+    try:
+        return jsonify(_bot_state())
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
+@app.route("/api/bot/config", methods=["POST"])
+def api_bot_config():
+    """Save the settings; a new token is checked with getMe before it is kept."""
+
+    import bale_bot
+    import bot_api
+    import bot_store
+
+    body = request.get_json(silent=True) or {}
+    changes = {}
+    for key in ("summary_time", "alerts_time"):
+        if key in body:
+            value = str(body[key] or "").strip()
+            if not BOT_TIME.match(value):
+                return jsonify({"error": "ساعت باید به شکل HH:MM باشد"}), 400
+            changes[key] = value
+    for key, top in (("daily_quota", 1000), ("pdf_quota", 100)):
+        if key in body:
+            try:
+                value = int(body[key])
+            except (TypeError, ValueError):
+                return jsonify({"error": "سهمیه باید عدد باشد"}), 400
+            changes[key] = max(0, min(value, top))
+    if "enabled" in body:
+        changes["enabled"] = bool(body["enabled"])
+    token = str(body.get("token") or "").strip()
+    if token:
+        if len(token) > 200 or any(ch.isspace() for ch in token):
+            return jsonify({"error": "توکن معتبر نیست"}), 400
+        config = bot_store.load_config()
+        try:
+            bot_api.BaleApi(token, config.get("api_base") or
+                            "https://tapi.bale.ai").get_me()
+        except bot_api.BaleError as exc:
+            return jsonify({"error": "بله این توکن را نپذیرفت (%s)" % exc}), 400
+        changes["token"] = token
+    try:
+        bot_store.save_config(changes)
+        if token:
+            bale_bot.stop()               # restart on the new token
+        bale_bot.ensure(app)
+        return jsonify(_bot_state())
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
+@app.route("/api/bot/users/<int:chat_id>", methods=["POST"])
+def api_bot_user(chat_id):
+    """approve / block / pending / admin / user / quota / note / delete."""
+
+    import bot_content
+    import bot_store
+    import bale_bot
+
+    body = request.get_json(silent=True) or {}
+    action = str(body.get("action") or "")
+    user = bot_store.get_user(chat_id)
+    if not user:
+        return jsonify({"error": "کاربر پیدا نشد"}), 404
+    try:
+        if action == "approve":
+            bot_store.set_status(chat_id, bot_store.APPROVED)
+            bot_store.enqueue(chat_id, bot_content.welcome_approved(user.get("first_name")),
+                              markup=bale_bot.MENU_KEYBOARD)
+        elif action == "block":
+            bot_store.set_status(chat_id, bot_store.BLOCKED)
+            bot_store.enqueue(chat_id, bot_content.BLOCKED)
+        elif action == "pending":
+            bot_store.set_status(chat_id, bot_store.PENDING)
+        elif action in ("admin", "user"):
+            if user.get("status") != bot_store.APPROVED:
+                return jsonify({"error": "فقط کاربر تأییدشده ادمین می‌شود"}), 400
+            bot_store.set_role(chat_id, action)
+        elif action == "quota":
+            fields = {}
+            for key in ("daily_quota", "pdf_quota"):
+                value = body.get(key)
+                fields[key] = None if value in (None, "") else max(0, min(int(value), 1000))
+            bot_store.set_fields(chat_id, fields)
+        elif action == "note":
+            bot_store.set_fields(chat_id, {"note": str(body.get("note") or "")[:200]})
+        elif action == "delete":
+            bot_store.delete_user(chat_id)
+        else:
+            return jsonify({"error": "اقدام ناشناخته"}), 400
+        return jsonify(_bot_state())
+    except (TypeError, ValueError):
+        return jsonify({"error": "مقدار نامعتبر"}), 400
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
+@app.route("/api/bot/broadcast", methods=["POST"])
+def api_bot_broadcast():
+    import bot_store
+
+    body = request.get_json(silent=True) or {}
+    text = str(body.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "متن خالی است"}), 400
+    audience = "admins" if body.get("audience") == "admins" else "approved"
+    try:
+        bot_store.initialise()
+        return jsonify({"queued": bot_store.broadcast(text[:3500], audience)})
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 @app.route("/api/bootstrap")
 def api_bootstrap_status():
     """What data is present, missing or stale, and any fetch in flight."""
@@ -1956,6 +2096,15 @@ def main():
         print(f"Fetching in the background: {', '.join(pending)}")
         print("  progress: /api/bootstrap")
         bootstrap.start_background()
+
+    # The Bale bot, when /admin/bot has it enabled with a token (2026-11-24).
+    # In this process, handed this app: one copy of the panel's caches.
+    try:
+        import bale_bot
+        if bale_bot.start(app):
+            print("Bale bot: running (manage it at /admin/bot)")
+    except Exception as exc:                                    # noqa: BLE001
+        print(f"Bale bot: not started ({type(exc).__name__}: {exc})")
     else:
         print("All data present and current.")
 

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIRAT AI — مدیریت ربات بله</title>
+<link rel="preload" href="{{ url_for('static', filename='fonts/VazirmatnFD-wght.woff') }}" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232563d6'/><path d='M7 21l6-6 4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- The admin page of the Bale bot (2026-11-24). Served by the panel on
+       127.0.0.1 only: whoever can open it is at this machine, which is the
+       admin check. The token is written here and never read back. -->
+  <header class="top">
+    <div class="brand">SIRAT AI <span>مدیریت ربات بله</span></div>
+    <div class="top-actions">
+      <a class="button" href="/">→ بازگشت به پنل</a>
+      <button id="reloadBtn" class="primary">↻ تازه‌سازی</button>
+    </div>
+  </header>
+
+  <div id="botBanner" class="banner is-idle" aria-live="polite">
+    <span class="icon">…</span><div id="botBannerText">در حال خواندن وضعیت ربات…</div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>وضعیت و راه‌اندازی</h2></div>
+    <div class="kpi-row" id="botKpis"></div>
+    <details class="help" open>
+      <summary>راه‌اندازی: سه قدم</summary>
+      <div class="help-body">
+        <p>۱. در پیام‌رسان بله با <b>@botfather</b> یک ربات بسازید و توکنی را که می‌دهد اینجا بچسبانید.</p>
+        <p>۲. «روشن» را بزنید. ربات کنار همین پنل اجرا می‌شود؛ وقتی پنل بسته است یا لپ‌تاپ خاموش است، ربات هم پاسخ نمی‌دهد.</p>
+        <p>۳. خودتان در بله به ربات <b>/start</b> بفرستید، بعد در جدول کاربران پایین خودتان را «تأیید» و «ادمین» کنید. از آن به بعد درخواست‌های عضویت تازه با دکمه‌ی تأیید/رد در بله هم به شما می‌رسد.</p>
+        <p class="help-warn">ارائه‌ی توصیه‌ی سرمایه‌گذاری به دیگران در ایران به مجوز سازمان بورس نیاز دارد. ربات هر پیام را «اطلاعات و آموزش، نه توصیه» معرفی می‌کند و راهبردهای ردشده در آزمون‌ها را اصلاً نشان نمی‌دهد.</p>
+      </div>
+    </details>
+    <form id="configForm" class="bot-form">
+      <label>توکن ربات
+        <input id="tokenInput" type="password" autocomplete="off" placeholder="فقط برای تغییر توکن پر کنید">
+      </label>
+      <label>ساعت خلاصه‌ی روزانه (تهران)
+        <input id="summaryTime" type="time">
+      </label>
+      <label>ساعت هشدار رویدادها
+        <input id="alertsTime" type="time">
+      </label>
+      <label>سهمیه‌ی درخواست روزانه
+        <input id="dailyQuota" type="number" min="0" max="1000">
+      </label>
+      <label>سهمیه‌ی PDF روزانه
+        <input id="pdfQuota" type="number" min="0" max="100">
+      </label>
+      <label class="inline-check"><input id="enabledInput" type="checkbox"> ربات روشن باشد</label>
+      <button type="submit" class="primary">ذخیره</button>
+    </form>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-head">
+      <h2>کاربران</h2>
+      <div class="top-actions">
+        <select id="statusFilter" aria-label="وضعیت">
+          <option value="">همه</option>
+          <option value="pending">در انتظار تأیید</option>
+          <option value="approved">تأییدشده</option>
+          <option value="blocked">مسدود</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap" id="usersTable"></div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-head"><h2>پیام همگانی</h2></div>
+    <form id="broadcastForm" class="bot-form">
+      <label class="wide">متن پیام
+        <textarea id="broadcastText" rows="4" maxlength="3500" placeholder="متنی که برای کاربران فرستاده می‌شود"></textarea>
+      </label>
+      <label>گیرندگان
+        <select id="broadcastAudience">
+          <option value="approved">همه‌ی کاربران تأییدشده</option>
+          <option value="admins">فقط ادمین‌ها</option>
+        </select>
+      </label>
+      <button type="submit" class="primary">ارسال</button>
+    </form>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="card-head"><h2>آمار ۲۴ ساعت گذشته</h2></div>
+    <div class="table-wrap" id="statsTable"></div>
+    <ul class="evidence" id="errorsList" style="margin-top:12px"></ul>
+  </div>
+
+</div>
+<script type="module" src="{{ url_for('static', filename='js/bot_admin.js') }}"></script>
+</body>
+</html>

@@ -2544,3 +2544,28 @@ td:first-child { font-weight: 600; color: var(--text-primary); }
 .calendar-part > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .inline-check { display: inline-flex; gap: 6px; align-items: center; cursor: pointer;
                 font-size: 0.9rem; }
+
+/* ---- the Bale bot's admin page (2026-11-24) ------------------------------- */
+a.button {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 10px; text-decoration: none;
+  border: 1px solid var(--border-strong); color: var(--text);
+  background: var(--surface-1); font-size: 14px;
+}
+.bot-form {
+  display: grid; gap: 12px 16px; margin-top: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); align-items: end;
+}
+.bot-form label { display: grid; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+.bot-form label.wide { grid-column: 1 / -1; }
+.bot-form input, .bot-form select, .bot-form textarea { width: 100%; box-sizing: border-box; }
+.bot-form .inline-check { display: inline-flex; align-items: center; gap: 8px; }
+.bot-acts { white-space: nowrap; }
+.bot-acts button { padding: 4px 8px; font-size: 12px; margin: 2px; }
+.bot-form input, .bot-form select, .bot-form textarea {
+  background: var(--surface-1); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 10px;
+  padding: 9px 12px; font: inherit; color-scheme: light dark;
+}
+.bot-form textarea { resize: vertical; min-height: 96px; }
+.bot-form input[type="time"], .bot-form input[type="password"] { direction: ltr; text-align: right; }
