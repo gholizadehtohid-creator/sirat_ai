@@ -351,6 +351,22 @@ class TestContentAndApi(unittest.TestCase):
             for banned in ("حد ضرر", "حد سود", "هدف قیمت اول"):
                 self.assertNotIn(banned, text)
 
+    def test_todays_provisional_figures_are_labelled(self):
+        """2026-11-24: before the exchange publishes the session, the market
+        summary carries the overview's index and the flow estimate -- each
+        marked provisional -- and nothing of the kind once it is official."""
+        indices = {"indices": [], "provisional": {
+            "session": "2026-11-24",
+            "indices": {"TEDPIX": {"value": 8591498.89, "change_pct": 2.4}}}}
+        flow = {"provisional": {"session": "2026-11-24", "flow": {
+            "net_individual": 4.4e13, "breadth_pct": 65.1}}}
+        text = content.market_text(indices=indices, flow=flow)
+        self.assertIn("موقت تا انتشار رسمی", text)
+        self.assertIn("برآورد پول حقیقی امروز", text)
+        self.assertIn(content.DISCLAIMER, text)
+        plain = content.market_text(indices={"indices": []}, flow={})
+        self.assertNotIn("موقت", plain)
+
     def test_persian_digits(self):
         self.assertEqual(content.fa(1234567), "۱٬۲۳۴٬۵۶۷")
         self.assertEqual(content.pct(-1.25, 1), "−۱٫۲٪")

@@ -2036,6 +2036,16 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: 1
 
 .tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; line-height: 1.6; }
 
+/* Today's figures before the exchange publishes the session
+   (today_provisional.py, 2026-11-24): a dashed edge and the label say
+   "provisional" without colour alone. */
+.card .tile.is-provisional,
+.tile.is-provisional {
+  border: 1px dashed var(--warning-text);
+  background: transparent;
+}
+.tile.is-provisional .k { color: var(--warning-text); }
+
 /* A sign belongs to its number: in a right-to-left line "+32.5%" rendered
    as "32.5%+" and "-1,300" split into "1,300 -" (2026-11-11). */
 .up, .down { unicode-bidi: isolate; direction: ltr; display: inline-block; }

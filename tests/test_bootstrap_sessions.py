@@ -236,6 +236,8 @@ class AttemptTests(unittest.TestCase):
                 mock.patch.object(bootstrap, "STEPS",
                                   [("indices", lambda: state, ())]), \
                 mock.patch.object(bootstrap, "_last_fetch", return_value=fetched), \
+                mock.patch.object(bootstrap, "_last_fetch_deferred",
+                                  return_value=False), \
                 mock.patch.object(bootstrap, "_now",
                                   return_value=TUESDAY.replace(tzinfo=timezone.utc)), \
                 mock.patch.object(bootstrap, "_ready_moment",

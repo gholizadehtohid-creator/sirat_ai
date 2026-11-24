@@ -230,7 +230,9 @@ class BootstrapHookTests(unittest.TestCase):
 
         import bootstrap
 
-        source = inspect.getsource(bootstrap.ensure)
+        # The run's body moved into _fetch_planned() on 2026-11-24, when
+        # ensure() took the cross-process run lock around it.
+        source = inspect.getsource(bootstrap._fetch_planned)
         self.assertLess(source.index("_outlook_inputs()"),
                         source.index("_outlook_forward_log()"))
 

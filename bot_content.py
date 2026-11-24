@@ -277,6 +277,21 @@ def market_text(indices=None, flow=None, valuation=None, bill_yield=None):
                 money(flow.get("sum_5")), money(flow.get("sum_20"))))
         parts.append("(جریان پول حقیقی در آزمون‌های بات پیش‌بینی‌کننده‌ی بازده نبود؛ "
                      "فقط برای شناخت فضای بازار است.)")
+    # Today, before the exchange publishes the official series (2026-11-24):
+    # the overview's index and a volume x price estimate of the flow, each
+    # sent only while the official series lacks the day (today_provisional).
+    prov = (indices or {}).get("provisional") or {}
+    today_index = (prov.get("indices") or {}).get("TEDPIX")
+    if today_index:
+        parts.append("امروز %s (موقت تا انتشار رسمی): شاخص کل %s، %s" % (
+            jdate(prov.get("session")), fa(today_index.get("value")),
+            pct(today_index.get("change_pct"), 2, True)))
+    prov_flow = (flow or {}).get("provisional") or {}
+    today_flow = prov_flow.get("flow")
+    if today_flow:
+        parts.append("برآورد پول حقیقی امروز %s (موقت، حجم × قیمت): %s؛ %s از نمادها ورود پول" % (
+            jdate(prov_flow.get("session")), money(today_flow.get("net_individual")),
+            pct(today_flow.get("breadth_pct"), 0)))
     now = (valuation or {}).get("now") or {}
     if now.get("pe"):
         parts.append("P/E بازار: %s — صدک %s در تاریخچه‌ی خودش (میانه %s)" % (

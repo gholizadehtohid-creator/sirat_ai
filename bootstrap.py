@@ -33,6 +33,9 @@ Three rules this follows, because "fetch automatically" must not become
     python bootstrap.py --force    # refetch everything regardless of age
 """
 
+import json
+import os
+import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -40,6 +43,25 @@ from datetime import datetime, timedelta, timezone
 import config
 import database
 import settings
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Where the cross-process files below live. The suite points it at a scratch
+# directory (tests/__init__.py) so a test never writes into the live tree.
+RUNTIME_DIR = os.environ.get("SIRAT_RUNTIME_DIR") or os.path.join(ROOT, "data")
+
+# Touched whenever any process -- the panel or the evening task -- stores a
+# component that changed. The panel's cache key reads it (data_stamp), so data
+# the evening task delivered is not answered from before it.
+STAMP_PATH = os.path.join(RUNTIME_DIR, "bootstrap_stamp")
+
+# Held while a process fetches, so the panel and the evening task never fetch
+# the same ~1,600 per-symbol requests at once. The holder touches it every
+# LOCK_HEARTBEAT; one untouched for LOCK_FRESH is a dead holder's and ignored.
+# No PID probe: os.kill(pid, 0) TERMINATES the process on Windows.
+RUN_LOCK_PATH = os.path.join(RUNTIME_DIR, "bootstrap_run.lock")
+LOCK_HEARTBEAT = 60.0
+LOCK_FRESH = timedelta(minutes=5)
 
 
 # The minimum gap between two fetch attempts of the same component. This is
@@ -163,6 +185,24 @@ def _index_has_today():
 
 # The components that gain one row per trading session.
 SESSION_COMPONENTS = ("indices", "history", "flow")
+
+# A fetch of these made before today's figures were final cannot have found
+# them, however recent. The snapshot joined the session components here on
+# 2026-11-24: the panel opened at 11:25 kept that mid-session market watch --
+# its prices, its P/Es -- for the rest of the day, because six hours had not
+# passed. One request after the close replaces it with the final one.
+AFTER_CLOSE = SESSION_COMPONENTS + ("snapshot",)
+
+# What the panel fetches by itself, at startup and from the keeper: all but
+# Codal. A Codal batch is minutes of paced requests that nothing on the
+# session's cards waits for, and it ran first thing on every panel start
+# (its coverage is always "behind"); the evening task, the refresh button
+# and codal_sync's own schedule still run it.
+AUTOMATIC = ("universe", "snapshot", "indices", "history", "sectors", "flow")
+
+# What the keeper checks every KEEPER_INTERVAL while the panel runs.
+KEEPER_COMPONENTS = ("snapshot",) + SESSION_COMPONENTS
+KEEPER_INTERVAL = 600.0
 
 # What a fresh fetch of each component changes the answer for: today's index
 # bar says a session happened; new bars say which names owe flow.
@@ -301,11 +341,17 @@ def _snapshot_state():
     info = database.snapshot_info()
     captured = _parse(info["captured_at"])
 
+    # Taken before today's session was final: the day's closing prices are
+    # out, and this is the morning's market watch (AFTER_CLOSE).
+    before_close = (captured is not None and _ready_today()
+                    and captured < _ready_moment())
+
     return {
         "present": info["rows"] > 0,
-        "detail": f"{info['rows']} rows",
+        "detail": f"{info['rows']} rows"
+                  + (", taken before today's close" if before_close else ""),
         "updated_at": captured,
-        "behind": _age_behind(captured, MAX_AGE["snapshot"]),
+        "behind": _age_behind(captured, MAX_AGE["snapshot"]) or before_close,
     }
 
 
@@ -589,6 +635,23 @@ STEPS = [
 DEFERRED_RETRY = timedelta(minutes=45)
 _DEFERRED = {}
 
+# Per component, from 2026-11-24. Asking for the index again is two
+# requests, and a deferred bar update costs the overview, the market watch
+# and at most seed_import.HISTORY_CANARY history requests -- so those two
+# are asked again after 15 minutes, not 45: the published series showed up
+# to 45 minutes late on the panel. Flow keeps 45: a partial flow session is
+# re-asked name by name, some 700 requests a try.
+DEFERRED_RETRY_BY = {
+    "indices": timedelta(minutes=15),
+    "history": timedelta(minutes=15),
+}
+
+
+def _deferred_retry(name):
+    """How long after a deferred fetch `name` is attempted again."""
+
+    return DEFERRED_RETRY_BY.get(name, DEFERRED_RETRY)
+
 # The scheduled run is one bootstrap an evening, and status() is asked again
 # only when the panel happens to be open: the 45-minute retry never ran on
 # the scheduled path, and a deferred session was lost to the forward log
@@ -789,16 +852,16 @@ def _probe_all():
         # nothing new and each leaving the component still "behind".
         fetched_at = _last_fetch(name)
 
+        wait = _deferred_retry(name) if _last_fetch_deferred(name) else MAX_AGE[name]
+
         attempted_recently = (
-            fetched_at is not None
-            and (_now() - fetched_at) < (
-                DEFERRED_RETRY if _last_fetch_deferred(name) else MAX_AGE[name])
+            fetched_at is not None and (_now() - fetched_at) < wait
         )
 
         # A fetch made before today's figures were final cannot have found
         # them: the panel opened at 10:00 would otherwise make the 19:00 run
         # skip the session that closed in between.
-        if (attempted_recently and name in SESSION_COMPONENTS
+        if (attempted_recently and name in AFTER_CLOSE
                 and _ready_today() and fetched_at < _ready_moment()):
             attempted_recently = False
 
@@ -812,9 +875,7 @@ def _probe_all():
         # when the next try is due.
         next_try = None
         if state.get("behind", False) and attempted_recently:
-            next_try = (fetched_at + (
-                DEFERRED_RETRY if _last_fetch_deferred(name) else MAX_AGE[name])
-            ).isoformat(timespec="seconds")
+            next_try = (fetched_at + wait).isoformat(timespec="seconds")
 
         cooling = _last_failure.get(name)
         cooldown_left = None
@@ -1027,9 +1088,19 @@ def ensure(force=False, only=None):
     cost the user their price history too.
     """
 
+    # The other process -- the evening task, or the panel -- is fetching: its
+    # data reaches this one through the store (and data_stamp), and fetching
+    # the same sessions alongside it would double the requests.
+    holder = _lock_holder()
+    if holder is not None:
+        _note("another process (PID %s, since %s) is fetching; this run "
+              "leaves it to that one" % (holder.get("pid"),
+                                         _clock(holder.get("started_at"))))
+        with _lock:
+            _state["planned"] = []
+        return {}
+
     report = status(fresh=True)
-    results = {}
-    satisfied = set()
 
     # What this run intends to download, decided before the first request so
     # the panel can show "step 2 of 4" rather than an open-ended list.
@@ -1041,6 +1112,28 @@ def ensure(force=False, only=None):
 
     with _lock:
         _state["planned"] = planned
+
+    if not planned:
+        return _fetch_planned(report, planned, force, only)
+
+    holder = _acquire_run_lock()
+    if holder is not None:
+        _note("another process (PID %s) started fetching first; this run "
+              "leaves it to that one" % holder.get("pid"))
+        with _lock:
+            _state["planned"] = []
+        return {}
+    try:
+        return _fetch_planned(report, planned, force, only)
+    finally:
+        _release_run_lock()
+
+
+def _fetch_planned(report, planned, force, only):
+    """The body of ensure(): fetch what `report` says, in order."""
+
+    results = {}
+    satisfied = set()
 
     def record(name, outcome):
         results[name] = outcome
@@ -1134,10 +1227,20 @@ def ensure(force=False, only=None):
             # The component's own probe is the honest post-fetch detail: a
             # fetch that "succeeded" but stored 3 of 818 histories should not
             # read as simply done.
+            after = _step_state(name)
+            # The panel's cache key moves HERE, per step, not when the whole
+            # run ends (2026-11-24): the index landed in seconds and then
+            # waited behind ten minutes of flow and Codal before any view
+            # showed it. Only a step that changed what is stored moves it --
+            # a deferred retry every 15 minutes that found nothing new must
+            # not recompute every cached scan each time.
+            if (after.get("detail"), _iso(after.get("updated_at"))) != (
+                    state["detail"], state["updated_at"]):
+                _bump_stamp(name)
             record(name, {
                 "action": "fetched",
                 "seconds": elapsed,
-                "detail": _step_detail(name),
+                "detail": after.get("detail"),
             })
             _note(f"{name}: fetched in {elapsed}s")
         else:
@@ -1240,15 +1343,270 @@ def _outlook_forward_log():
               % (type(exc).__name__, str(exc)[:160]))
 
 
-def _step_detail(name):
-    """Re-probe one component, for the line shown under a finished step."""
+def _step_state(name):
+    """Re-probe one component after its fetch: its detail and newest date."""
 
     probe = dict((n, p) for n, p, _r in STEPS)[name]
 
     try:
-        return probe()["detail"]
-    except Exception as exc:
-        return f"{type(exc).__name__}: {exc}"
+        return probe()
+    except Exception as exc:                                    # noqa: BLE001
+        return {"detail": f"{type(exc).__name__}: {exc}", "updated_at": None}
+
+
+def _step_detail(name):
+    """Re-probe one component, for the line shown under a finished step."""
+
+    return _step_state(name).get("detail")
+
+
+def _iso(stamp):
+    return stamp.isoformat(timespec="seconds") if stamp else None
+
+
+def _clock(stamp):
+    """An ISO stamp as local HH:MM, for a note."""
+
+    moment = _parse(stamp)
+    return moment.astimezone().strftime("%H:%M") if moment else "?"
+
+
+# ==============================
+# ACROSS PROCESSES: THE DATA STAMP AND THE RUN LOCK
+# ==============================
+
+def _bump_stamp(name=None):
+    """Say that stored data changed: in this process and, via STAMP_PATH, in
+    every other one (the evening task's fetches reach the panel's cache)."""
+
+    stamp = _now().isoformat(timespec="microseconds")
+    with _lock:
+        _state["data_stamp"] = stamp
+    try:
+        os.makedirs(RUNTIME_DIR, exist_ok=True)
+        with open(STAMP_PATH, "w", encoding="utf-8") as handle:
+            handle.write("%s %s\n" % (stamp, name or ""))
+    except OSError:
+        pass
+    try:
+        import today_provisional
+
+        today_provisional.forget_official()
+    except Exception:                                           # noqa: BLE001
+        pass
+
+
+def data_stamp():
+    """A token that moves whenever any process stored a changed component.
+
+    The panel's cache key (app.data_version). It was finished_at(), which
+    moved only when this process's whole run ended -- so an index fetched in
+    seconds waited behind the flow and Codal steps, and what the evening task
+    stored never moved it at all (2026-11-24). Cheap: a dict lookup and one
+    stat() of a file.
+    """
+
+    # Not finished_at(): the keeper ends a run every time it retries a
+    # deferred session, and a run that stored nothing new must leave every
+    # cached scan where it is.
+    try:
+        shared = os.stat(STAMP_PATH).st_mtime_ns
+    except OSError:
+        shared = None
+    with _lock:
+        own = _state.get("data_stamp")
+    return "%s|%s" % (own or "-", shared or "-")
+
+
+def _lock_holder():
+    """Who holds the run lock, if it is another live process; else None."""
+
+    try:
+        touched = os.stat(RUN_LOCK_PATH).st_mtime
+    except OSError:
+        return None
+    if time.time() - touched > LOCK_FRESH.total_seconds():
+        return None                     # its holder stopped beating: gone
+    try:
+        with open(RUN_LOCK_PATH, encoding="utf-8") as handle:
+            holder = json.load(handle)
+    except (OSError, ValueError):
+        holder = {}
+    if holder.get("pid") == os.getpid():
+        return None
+    return holder
+
+
+_run_lock = {"beat": None, "owned": False}
+
+
+def _acquire_run_lock():
+    """Take the run lock. None if taken (or unusable), else who holds it."""
+
+    record = json.dumps({"pid": os.getpid(),
+                         "started_at": _now().isoformat(timespec="seconds"),
+                         "by": os.path.basename(sys.argv[0] if sys.argv else "python")})
+    for _attempt in range(2):
+        try:
+            handle = os.open(RUN_LOCK_PATH,
+                             os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            holder = _lock_holder()
+            if holder is not None:
+                return holder
+            try:                        # a dead holder's, or our own leftover
+                os.remove(RUN_LOCK_PATH)
+            except OSError:
+                pass
+            continue
+        except OSError:
+            return None                 # no lock to be had; fetch unlocked
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.write(record)
+        stop = threading.Event()
+
+        def beat():
+            while not stop.wait(LOCK_HEARTBEAT):
+                try:
+                    os.utime(RUN_LOCK_PATH)
+                except OSError:
+                    pass
+
+        threading.Thread(target=beat, name="bootstrap-lock",
+                         daemon=True).start()
+        _run_lock.update(beat=stop, owned=True)
+        return None
+    return None
+
+
+def _release_run_lock():
+    if not _run_lock["owned"]:
+        return
+    if _run_lock["beat"] is not None:
+        _run_lock["beat"].set()
+    _run_lock.update(beat=None, owned=False)
+    try:
+        with open(RUN_LOCK_PATH, encoding="utf-8") as handle:
+            mine = json.load(handle).get("pid") == os.getpid()
+    except (OSError, ValueError):
+        mine = False
+    if mine:
+        try:
+            os.remove(RUN_LOCK_PATH)
+        except OSError:
+            pass
+
+
+def wait_for_other_run(limit=timedelta(hours=3), sleep=None):
+    """Block while another process holds the run lock, up to `limit`.
+
+    For the evening task: started while the panel is fetching, it waits for
+    that run's data rather than fetching it a second time, then runs its own
+    steps against the result. Returns True if it waited.
+    """
+
+    sleep = sleep or time.sleep
+    holder = _lock_holder()
+    if holder is None:
+        return False
+    print("another process (PID %s, since %s) is fetching; waiting for it"
+          % (holder.get("pid"), _clock(holder.get("started_at"))), flush=True)
+    give_up = time.time() + limit.total_seconds()
+    while _lock_holder() is not None and time.time() < give_up:
+        sleep(15.0)
+    return True
+
+
+# ==============================
+# THE KEEPER
+# ==============================
+
+_keeper = {"thread": None, "stop": None, "last": None, "next": None,
+           "outcome": None}
+
+
+def keep_fresh_once():
+    """One pass of the keeper. Returns what it did, for the log and tests.
+
+    The panel used to fetch only when a page asked, and a deferred session
+    was retried only if a page happened to ask after the retry was due: on
+    2026-11-24 the 15:16 attempt found no index for the day and nothing asked
+    again until the evening. While the panel runs, this asks every
+    KEEPER_INTERVAL -- through the same status() gates, so nothing is
+    fetched more often than before, only without waiting for a reader.
+    """
+
+    done = {"provisional": None, "started": []}
+
+    try:
+        import today_provisional
+
+        reading = today_provisional.refresh_if_due()
+        if reading is not None:
+            done["provisional"] = reading.get("session") or reading.get("error")
+            _note("today, provisionally (%s): %s" % (
+                reading.get("session") or "-",
+                "stored" if not reading.get("error") else reading["error"]))
+    except Exception as exc:                                    # noqa: BLE001
+        _note("provisional figures failed: %s: %s"
+              % (type(exc).__name__, str(exc)[:160]))
+
+    if is_running() or _lock_holder() is not None:
+        return done
+
+    report = status(fresh=True)
+    wanted = [name for name in KEEPER_COMPONENTS
+              if (report.get(name) or {}).get("needs_fetch")]
+    if wanted and start_background(only=wanted):
+        done["started"] = wanted
+    return done
+
+
+def start_keeper(interval=None, first_delay=20.0):
+    """Run keep_fresh_once() every `interval` seconds in a daemon thread.
+
+    The wait is sliced against the wall clock, so a laptop that suspends
+    mid-wait checks again soon after it wakes (the 11-10 stall).
+    """
+
+    interval = KEEPER_INTERVAL if interval is None else interval
+    if _keeper["thread"] is not None and _keeper["thread"].is_alive():
+        return False
+    stop = threading.Event()
+
+    def loop():
+        due = time.time() + first_delay
+        while not stop.is_set():
+            _keeper["next"] = datetime.fromtimestamp(
+                due, timezone.utc).isoformat(timespec="seconds")
+            while time.time() < due and not stop.is_set():
+                stop.wait(min(30.0, max(0.5, due - time.time())))
+            if stop.is_set():
+                break
+            _keeper["last"] = _now().isoformat(timespec="seconds")
+            try:
+                _keeper["outcome"] = keep_fresh_once()
+            except Exception as exc:                            # noqa: BLE001
+                _keeper["outcome"] = {"error": "%s: %s" % (
+                    type(exc).__name__, str(exc)[:160])}
+            due = time.time() + interval
+
+    thread = threading.Thread(target=loop, name="sirat-keeper", daemon=True)
+    _keeper.update(thread=thread, stop=stop)
+    thread.start()
+    return True
+
+
+def stop_keeper():
+    if _keeper["stop"] is not None:
+        _keeper["stop"].set()
+
+
+def keeper_state():
+    thread = _keeper["thread"]
+    return {"running": bool(thread is not None and thread.is_alive()),
+            "last_check": _keeper["last"], "next_check": _keeper["next"],
+            "interval_seconds": KEEPER_INTERVAL}
 
 
 def run(force=False, only=None):
@@ -1345,6 +1703,24 @@ def progress():
     snapshot["order"] = [name for name, _probe, _requires in STEPS]
     snapshot["labels"] = dict(STEP_LABELS)
     snapshot["overall"] = _overall(snapshot)
+
+    # For the status strip (2026-11-24): the token the page reloads its views
+    # on, the keeper's schedule, another process's fetch, and today's
+    # provisional figures while the official series lacks them.
+    snapshot["data_stamp"] = data_stamp()
+    snapshot["keeper"] = keeper_state()
+    holder = _lock_holder()
+    snapshot["other_run"] = ({"pid": holder.get("pid"),
+                              "started_at": holder.get("started_at"),
+                              "by": holder.get("by")} if holder else None)
+    try:
+        import today_provisional
+
+        snapshot["provisional"] = today_provisional.current()
+        snapshot["official"] = today_provisional.official_dates()
+    except Exception:                                           # noqa: BLE001
+        snapshot["provisional"] = None
+        snapshot["official"] = None
 
     return snapshot
 
@@ -1465,6 +1841,10 @@ if __name__ == "__main__":
 
     print(f"\nprovider: {settings.PROVIDER}   chain: {settings.PROVIDER_CHAIN}")
     print()
+
+    # The panel may be fetching the same sessions right now (its keeper, or
+    # a page): wait for it, then run against what it stored.
+    wait_for_other_run()
 
     # Same progress the panel draws, rendered on one rewritten line: a fetch of
     # 800+ histories should not look like a hung process from the console

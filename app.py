@@ -336,10 +336,13 @@ def data_version():
     """
 
     try:
-        # finished_at(), not progress(): progress() calls status(), which
+        # data_stamp(), not progress(): progress() calls status(), which
         # re-probes the database (~5 s) once its own short cache is cold, and
-        # this runs on nearly every request.
-        return str(bootstrap.finished_at() or "-")
+        # this runs on nearly every request. It moves when a STEP delivers
+        # changed data, in this process or the evening task's (2026-11-24),
+        # where finished_at() moved only when this process's whole run ended:
+        # an index fetched in seconds waited behind flow and Codal.
+        return bootstrap.data_stamp()
     except Exception:
         # A cache key is not worth failing a request over. A constant here
         # degrades to exactly the previous behaviour rather than to no cache.
@@ -790,7 +793,8 @@ def api_indices():
     def build():
         return indices.analyse_all(params=params, bars=bars)
 
-    report = memoise(key, build, force=force)
+    report = dict(memoise(key, build, force=force) or {})
+    report["provisional"] = _provisional("indices")
 
     return jsonify(_with_autofetch(report, "indices"))
 
@@ -1594,14 +1598,38 @@ def api_marketflow():
     key = cache_key("marketflow", data_version(), sessions)
 
     try:
-        report = memoise(key, lambda: moneyflow.market_daily(sessions=sessions),
-                         force=force)
-        return jsonify(_with_autofetch(report or {}, "flow", "universe"))
+        report = dict(memoise(key, lambda: moneyflow.market_daily(sessions=sessions),
+                              force=force) or {})
+        report["provisional"] = _provisional("flow")
+        return jsonify(_with_autofetch(report, "flow", "universe"))
     except Exception as exc:                                    # noqa: BLE001
         return handle_error(exc)
 
 
 AUTOFETCH_STATUS_AGE = 60.0
+
+
+def _provisional(part):
+    """Today's figures while the official series lacks them, or None.
+
+    today_provisional: the overview's index values and a volume x price
+    estimate of the day's حقیقی flow, kept apart from every stored series and
+    shown labelled «موقت تا انتشار رسمی». Outside the memoised answer: it
+    changes on its own schedule, and reading it is a stat() and a cached
+    lookup.
+    """
+
+    try:
+        import today_provisional
+
+        reading = today_provisional.current()
+    except Exception:                                           # noqa: BLE001
+        return None
+    if not reading or not reading.get(part):
+        return None
+    return {"session": reading["session"], "fetched_at": reading["fetched_at"],
+            "market_state": reading.get("market_state"),
+            "official": reading.get("official"), part: reading[part]}
 
 
 def _with_autofetch(report, *components):
@@ -2087,15 +2115,28 @@ def main():
     # Work out what is missing and download it while the UI comes up, rather
     # than serving empty tables and instructions. The panel binds immediately;
     # progress is at /api/bootstrap.
+    #
+    # All but Codal (bootstrap.AUTOMATIC): a Codal batch is minutes of paced
+    # requests nothing on the session's cards waits for, and it ran on every
+    # start. The evening task and the refresh button still run it.
     pending = [
         name for name, state in bootstrap.status().items()
-        if state["needs_fetch"]
+        if state["needs_fetch"] and name in bootstrap.AUTOMATIC
     ]
 
     if pending:
         print(f"Fetching in the background: {', '.join(pending)}")
         print("  progress: /api/bootstrap")
-        bootstrap.start_background()
+        bootstrap.start_background(only=bootstrap.AUTOMATIC)
+    else:
+        print("All data present and current.")
+
+    # While the panel runs, check every ten minutes for a session the
+    # exchange has published since, and for today's provisional figures
+    # after the close -- rather than only when a page happens to ask
+    # (2026-11-24: a deferred index waited from 15:16 to the evening).
+    bootstrap.start_keeper()
+    print(f"Keeper: checking every {int(bootstrap.KEEPER_INTERVAL // 60)} min")
 
     # The Bale bot, when /admin/bot has it enabled with a token (2026-11-24).
     # In this process, handed this app: one copy of the panel's caches.
@@ -2105,8 +2146,6 @@ def main():
             print("Bale bot: running (manage it at /admin/bot)")
     except Exception as exc:                                    # noqa: BLE001
         print(f"Bale bot: not started ({type(exc).__name__}: {exc})")
-    else:
-        print("All data present and current.")
 
     print("=" * 60)
 

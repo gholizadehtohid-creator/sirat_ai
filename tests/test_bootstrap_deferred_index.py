@@ -110,11 +110,15 @@ class TheHoldTests(unittest.TestCase):
             tried + bootstrap.MAX_AGE["indices"]).isoformat(timespec="seconds"))
 
     def test_a_deferred_index_is_not_asked_again_within_the_gap(self):
-        """Bounded: never two attempts closer than DEFERRED_RETRY."""
+        """Bounded: never two attempts closer than its deferred retry (15
+        minutes for the index since 2026-11-24: two requests a try)."""
         report, tried = self.probe(deferred=True, minutes_ago=10)
         self.assertFalse(report["needs_fetch"])
         self.assertEqual(report["next_try"], (
-            tried + bootstrap.DEFERRED_RETRY).isoformat(timespec="seconds"))
+            tried + bootstrap._deferred_retry("indices")
+        ).isoformat(timespec="seconds"))
+        self.assertEqual(bootstrap._deferred_retry("indices"),
+                         timedelta(minutes=15))
 
     def test_the_report_says_which_components_are_per_session(self):
         report, _tried = self.probe(deferred=True, minutes_ago=10)

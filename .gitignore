@@ -132,3 +132,10 @@ graphify-out/manifest.json
 # (the repository is public). data/bale_bot.json holds the token and the
 # settings; data/bale_bot.db the users, their holdings and the outbox.
 data/bale_bot*
+
+# Panel freshness (2026-11-24): today's provisional figures, the cross-process
+# data stamp and the run lock -- one machine's state, rewritten every session.
+data/today_provisional.json
+data/today_provisional.json.tmp
+data/bootstrap_stamp
+data/bootstrap_run.lock

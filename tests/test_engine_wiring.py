@@ -383,19 +383,19 @@ class CacheIsolationTest(unittest.TestCase):
         import app
         import bootstrap
 
-        original = bootstrap._state.get("finished_at")
+        # Since 2026-11-24 the key moves when a STEP stores changed data
+        # (bootstrap._bump_stamp), not when a whole run ends.
+        original = bootstrap._state.get("data_stamp")
 
         try:
-            bootstrap._state["finished_at"] = "2026-08-15T09:00:00"
             before = app.data_version()
-
-            bootstrap._state["finished_at"] = "2026-08-15T09:04:00"
+            bootstrap._bump_stamp("history")
             after = app.data_version()
         finally:
-            bootstrap._state["finished_at"] = original
+            bootstrap._state["data_stamp"] = original
 
         self.assertNotEqual(before, after,
-                            "a completed fetch does not change the cache key")
+                            "a delivered fetch does not change the cache key")
 
     def test_the_data_version_is_stable_between_fetches(self):
         """Otherwise the cache would never hit and every reload would rescan."""

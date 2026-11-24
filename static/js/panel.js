@@ -251,7 +251,7 @@ function table(headers, rows) {
 
 function tiles(node, items) {
   $(node).innerHTML = items.map(t => `
-    <div class="tile">
+    <div class="tile${t.cls ? ` ${t.cls}` : ""}">
       <div class="k">${t.k}</div>
       <div class="v">${t.v}</div>
       <div class="sub">${t.sub}</div>
@@ -931,7 +931,16 @@ function renderIndexCard(index, prefix, rep) {
       `<span class="dot"></span>${esc(sig.call_fa)}</span>`
     : "—";
 
+  // Today's value before the exchange publishes the series: the market
+  // overview's figure, shown apart and labelled (today_provisional.py). The
+  // analysis below stays on the official series.
+  const prov = rep && rep.provisional && rep.provisional.indices
+    ? rep.provisional.indices[index.key] : null;
+
   tiles(prefix + "Kpis", [
+    ...(prov ? [{ cls: "is-provisional", k: "امروز — موقت تا انتشار رسمی",
+                  v: num(prov.value, 0),
+                  sub: `${signed(prov.change_pct, 2)} · ${faDay(rep.provisional.session, true)}` }] : []),
     { k: "مقدار شاخص", v: num(index.close, 0), sub: index.last_date },
     { k: "امتیاز تکنیکال", v: t.scored === false ? "—" : t.score,
       sub: badge(t.status || "NO DATA") },
@@ -3449,7 +3458,11 @@ function renderBootstrap(p) {
     $("loadStage").textContent =
       `داده‌ی آخرین جلسه هنوز کامل نیست: ` +
       waiting.map(n => shortLabel(labels[n] || n)).join("، ") +
-      ` — بورس آن را کامل منتشر نکرده (یا امروز بازار تعطیل بوده) و تلاش قبلی تازه است` +
+      // With today's provisional figures in hand the market did trade: the
+      // holiday reading of the wait no longer applies.
+      (p.provisional
+        ? ` — بورس سری رسمی جلسه را هنوز منتشر نکرده و تلاش قبلی تازه است`
+        : ` — بورس آن را کامل منتشر نکرده (یا امروز بازار تعطیل بوده) و تلاش قبلی تازه است`) +
       (tries.length ? `؛ تلاش بعدی از ساعت ${tehranClock(tries[0])}.` : ".");
 
   } else {
@@ -3461,6 +3474,30 @@ function renderBootstrap(p) {
       ? `پایان — ${failed.length} مرحله ناموفق بود؛ بقیه ذخیره شد.`
       : "همه‌ی داده‌ها موجود و به‌روز است.";
   }
+
+  // What the reader needs from this strip besides the steps (2026-11-24):
+  // which session the official series is through, that today's figures on
+  // the cards are provisional until the exchange publishes them, who is
+  // fetching, and that nobody has to press anything -- the panel checks
+  // again by itself.
+  const facts = [];
+  const officialDay = (p.official || {}).indices;
+  if (officialDay) facts.push(`سری رسمی تا ${faDay(officialDay, true)}`);
+  if (p.provisional) {
+    facts.push(`جلسه‌ی ${faDay(p.provisional.session, true)}: ` +
+      (p.provisional.indices ? "شاخص" : "") +
+      (p.provisional.indices && p.provisional.flow ? " و " : "") +
+      (p.provisional.flow ? "برآورد پول حقیقی" : "") + " موقت تا انتشار رسمی");
+  }
+  if (p.other_run) {
+    facts.push(`کار زمان‌بندی‌شده از ساعت ${tehranClock(p.other_run.started_at)} در حال دریافت است؛ ` +
+      "داده‌ها پس از ذخیره خودکار نمایش داده می‌شوند");
+  }
+  const keeper = p.keeper || {};
+  if (!running && keeper.running && (waiting.length || missing.length || p.provisional)) {
+    facts.push(`پنل خودش هر ${Math.round((keeper.interval_seconds || 600) / 60).toLocaleString("fa-IR")} دقیقه دوباره بررسی می‌کند`);
+  }
+  if (facts.length) $("loadStage").textContent += "  ·  " + facts.join("  ·  ");
 
   // Recede only when there is genuinely nothing to look at. A panel reporting
   // missing data or a failed stage should not be the faintest thing on screen.
@@ -3672,22 +3709,57 @@ function setTask(id, state, detail, count) {
   renderTasks();
 }
 
-// A finished download only helps if the views waiting on it are re-run.
-function afterBootstrap(p) {
-  const fetched = Object.entries(p.steps || {})
-    .filter(([, s]) => s.action === "fetched")
+// A download only helps if the views waiting on it are re-run -- and as
+// each step delivers, not when the whole run ends: the index landed in
+// seconds and then waited behind ten minutes of flow and Codal (2026-11-24).
+// The server's data_stamp moves when a step stores CHANGED data, in this
+// panel's run or the evening task's. Only tabs already opened are re-run,
+// and without &refresh=1: the moved stamp is a new cache key already.
+let bootStamp = null;
+let bootRun = null;
+const bootHandled = new Set();
+let provKey = null;
+
+function refreshAfter(steps) {
+  const has = n => steps.includes(n);
+  if (loadedTabs.has("analysis")) {
+    if (has("indices") || has("history")) { loadIndices(); loadRegime(); }
+    if (has("sectors") || has("history") || has("universe")) loadSectors();
+    if (has("flow")) loadMoneyflow();
+  }
+  if (loadedTabs.has("summary")) {
+    if (has("flow")) loadMarketflow();
+    if (has("snapshot") || has("history")) loadHoldings();
+  }
+  if (loadedTabs.has("stocks") && ["universe", "snapshot", "history"].some(has)) {
+    loadScreen().then(() => loadPortfolio());
+  }
+}
+
+function noticeDelivered(p) {
+  if (p.started_at !== bootRun) { bootRun = p.started_at; bootHandled.clear(); }
+  const fresh = Object.entries(p.steps || {})
+    .filter(([name, s]) => s.action === "fetched" && !bootHandled.has(name))
     .map(([name]) => name);
+  fresh.forEach(n => bootHandled.add(n));
 
-  if (!fetched.length) return;
+  const stamp = p.data_stamp || null;
+  const moved = bootStamp !== null && stamp !== null && stamp !== bootStamp;
+  bootStamp = stamp;
+  // Another process's delivery names no step here: re-run what a session's
+  // data changes.
+  if (moved) refreshAfter(fresh.length ? fresh : ["indices", "history", "flow", "snapshot"]);
 
-  if (fetched.includes("indices") || fetched.includes("history")) {
-    loadIndices(true);
-    loadRegime(true);
+  // Today's provisional figures ride on /api/indices and /api/marketflow;
+  // a new reading (or the official series replacing it) re-reads those two.
+  const pr = p.provisional || null;
+  state.provisional = pr;
+  const key = pr ? `${pr.session}|${pr.fetched_at}|${!!pr.indices}|${!!pr.flow}` : "";
+  if (provKey !== null && key !== provKey) {
+    if (loadedTabs.has("summary")) { loadMarketflow(); renderToday(); }
+    if (loadedTabs.has("analysis")) loadIndices();
   }
-  if (fetched.some(n => ["sectors", "history", "universe"].includes(n))) loadSectors(true);
-  if (fetched.some(n => ["universe", "snapshot", "history"].includes(n))) {
-    loadScreen(true).then(() => loadPortfolio(true));
-  }
+  provKey = key;
 }
 
 let bootPolling = false;
@@ -3714,10 +3786,9 @@ async function pollBootstrap(fast = false) {
 
   try {
     const p = await getJSON("/api/bootstrap");
-    const wasRunning = bootRunning;
     bootRunning = !!p.running;
     renderBootstrap(p);
-    if (wasRunning && !bootRunning) afterBootstrap(p);
+    noticeDelivered(p);
   } catch (err) {
     $("loadStage").textContent = `وضعیت پیشرفت در دسترس نیست — ${err.message}`;
     console.error(err);
@@ -4017,11 +4088,21 @@ function renderMarketflow(d) {
   }
   const last = d.last, typ = d.typical || {}, st = d.streak || {};
   const days = (d.sessions || []);
+  // Today's estimate while the exchange has not published the session
+  // (today_provisional.py): the session task's volumes x price. Its own
+  // tile, never a bar of the chart or a term of the sums.
+  const pv = d.provisional && d.provisional.flow ? d.provisional : null;
   banner("marketflowStatus", "marketflowStatusText", "is-live",
     `آخرین جلسه‌ی ثبت‌شده ${faDay(last.date, true)} — ${num(last.symbols, 0)} سهم` +
-    (d.partial_days_skipped ? ` · ${num(d.partial_days_skipped, 0)} روز با داده‌ی ناقص کنار گذاشته شد` : ""));
+    (d.partial_days_skipped ? ` · ${num(d.partial_days_skipped, 0)} روز با داده‌ی ناقص کنار گذاشته شد` : "") +
+    (pv ? ` · جلسه‌ی ${faDay(pv.session, true)} هنوز رسماً منتشر نشده؛ کاشیِ «امروز» برآورد موقت است.` : ""));
 
   tiles("marketflowKpis", [
+    ...(pv ? [{ cls: "is-provisional", k: "امروز · برآورد موقت",
+                v: tomanCell(pv.flow.net_individual),
+                sub: `میلیارد تومان · ${signed(pv.flow.net_pct, 1)} از ارزش معاملات · ` +
+                     `${Math.round(pv.flow.breadth_pct || 0).toLocaleString("fa-IR")}٪ نمادها با ورود پول` +
+                     (pv.flow.complete ? "" : " · تا پیش از پایان جلسه") }] : []),
     { k: "آخرین جلسه (میلیارد تومان)", v: tomanCell(last.net_individual),
       sub: `${signed(last.net_pct, 1)} از ارزش معاملات` },
     { k: "۵ جلسه‌ی اخیر", v: tomanCell(d.sum_5), sub: "جمع خالص پول حقیقی" },
@@ -5034,6 +5115,17 @@ function todayUnits(amount, price) {
   return n > 0 ? ` <span class="hint">≈ ${num(n, 0)} واحد به قیمت ${num(price, 0)}</span>` : "";
 }
 
+// Today's index, before the exchange publishes the series: from the
+// bootstrap poll (state.provisional), labelled as provisional.
+function todayProvisionalLine() {
+  const pr = state.provisional;
+  const ix = pr && pr.indices && pr.indices.TEDPIX;
+  if (!ix) return "";
+  return ` · شاخص کل ${faDay(pr.session)}: <strong>${num(ix.value, 0)}</strong> ` +
+    `${signed(ix.change_pct, 2)} <span class="badge neutral" title="از نمای کلی بازار در TSETMC؛ ` +
+    `سری رسمی شاخص معمولاً عصر منتشر می‌شود و آن‌وقت جای این عدد را می‌گیرد">موقت تا انتشار رسمی</span>`;
+}
+
 function renderToday() {
   const rep = state.allocation;
   const opp = state.opportunities;
@@ -5057,7 +5149,8 @@ function renderToday() {
     // The session's state only: queue counts here invited acting on the
     // day's mood, which the plan below does not depend on (the review
     // panel, 2026-11-11). They stay on the live tab.
-    $("todayMarket").innerHTML = `بازار <strong>${open}</strong>` + (captured && age ? ` — ${age}` : "");
+    $("todayMarket").innerHTML = `بازار <strong>${open}</strong>` + (captured && age ? ` — ${age}` : "") +
+      todayProvisionalLine();
   }
 
   if (!rep) {

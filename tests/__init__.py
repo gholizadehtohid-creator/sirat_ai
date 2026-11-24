@@ -126,3 +126,19 @@ _os.environ["SIRAT_BIND_SOURCE_IP"] = "off"
 _settings = __import__("sys").modules.get("settings")
 if _settings is not None:                   # imported before this package was
     _settings.BIND_SOURCE_IP = "off"
+
+
+# ---- runtime files go to the scratch directory (2026-11-24) -------------------
+# bootstrap's run lock and data stamp and today_provisional's reading are plain
+# files under data/. A test that runs ensure() would otherwise take the live
+# run lock -- and the panel's keeper would skip its fetch while the suite runs.
+_os.environ["SIRAT_RUNTIME_DIR"] = _SCRATCH
+
+for _name, _files in (("bootstrap", {"STAMP_PATH": "bootstrap_stamp",
+                                     "RUN_LOCK_PATH": "bootstrap_run.lock"}),
+                      ("today_provisional", {"PATH": "today_provisional.json"})):
+    _module = __import__("sys").modules.get(_name)
+    if _module is not None:                 # imported before this package was
+        _module.RUNTIME_DIR = _SCRATCH
+        for _attr, _file in _files.items():
+            setattr(_module, _attr, _os.path.join(_SCRATCH, _file))
