@@ -15,6 +15,7 @@ const STATUS_CLS = { pending: "warn", approved: "good", blocked: "bad" };
 const ROLE_FA = { user: "کاربر", admin: "ادمین" };
 
 let state = null;
+let helpFolded = false;
 
 function banner(kind, html) {
   const node = $("botBanner");
@@ -62,6 +63,10 @@ function renderState(s) {
     tile("صف ارسال", esc((s.stats || {}).outbox_waiting || 0), "پیام در انتظار ارسال"),
   ].join("");
 
+  // The three setup steps fill half the page; once a token is set they are
+  // folded (the reader can open them), so the users table comes up first.
+  if (!helpFolded && c.token_set) { $("setupHelp").open = false; }
+  helpFolded = true;
   $("summaryTime").value = c.summary_time || "19:30";
   $("alertsTime").value = c.alerts_time || "20:00";
   $("dailyQuota").value = c.daily_quota ?? 60;

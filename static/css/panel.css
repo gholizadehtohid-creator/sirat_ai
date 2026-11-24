@@ -2569,3 +2569,83 @@ a.button {
 }
 .bot-form textarea { resize: vertical; min-height: 96px; }
 .bot-form input[type="time"], .bot-form input[type="password"] { direction: ltr; text-align: right; }
+
+/* ---- wide screens: use the width (2026-11-24) ------------------------------
+   The owner: "too many empty places on the page". Measured at 1920px, 47%
+   of the summary tab was empty: a 1360px column with ~280px of nothing on
+   each side, every card full width and stacked, its running text held to
+   96ch -- half a card. On a wide screen the column now widens, the four
+   medium summary cards pair up, the analysis groups and the health notes
+   lie in columns, and running text runs longer. Below 1200px nothing
+   changes. */
+@media (min-width: 1200px) {
+  .card p.hint, .card > p, .card details.help p, .banner > div,
+  .track-line, .gate-note { max-width: 130ch; }
+}
+
+@media (min-width: 1500px) {
+  .wrap { max-width: min(1840px, 96vw); }
+
+  .card p.hint, .card > p, .card details.help p, .banner > div,
+  .track-line, .gate-note { max-width: 170ch; }
+
+  /* Summary: full-width cards stay full; the four marked span-half pair
+     up ("dense" lets a later half fill the hole beside an earlier one). */
+  .tab-panel.is-active[data-tab="summary"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 18px;
+    grid-auto-flow: row dense;
+    align-items: stretch;
+  }
+  .tab-panel.is-active[data-tab="summary"] > * { grid-column: 1 / -1; }
+  .tab-panel.is-active[data-tab="summary"] > .span-half { grid-column: auto; }
+
+  /* Analysis: closed groups two to a row; an opened group takes the row. */
+  .tab-panel.is-active[data-tab="analysis"] {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+    align-items: start;
+  }
+  .tab-panel.is-active[data-tab="analysis"] > * { grid-column: 1 / -1; }
+  .tab-panel.is-active[data-tab="analysis"] > details.evidence-group:not([open]) {
+    grid-column: auto;
+  }
+
+  /* The system-health notes: two or three to a row instead of a column. */
+  .health-list { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); }
+
+  /* The bot's admin page: broadcast and statistics side by side. */
+  .bot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.bot-grid { display: grid; gap: 16px; margin-top: 16px; }
+.bot-grid > .card { margin: 0; }
+
+/* A rejected strategy's sub-card held nothing but a note once its levels
+   were hidden: it is now left out until the reader reveals the strategy. */
+.card.levels-hidden { display: none !important; }
+
+@media (min-width: 1500px) {
+  /* Pairs of about the same height: money flow beside the Codal notices,
+     the market's P/E beside the cheapest ways to buy. */
+  .tab-panel.is-active[data-tab="summary"] > * { order: 10; }
+  .tab-panel.is-active[data-tab="summary"] > .guide-nudge { order: 1; }
+  .tab-panel.is-active[data-tab="summary"] > .today-card { order: 2; }
+  .tab-panel.is-active[data-tab="summary"] > #holdingsCard { order: 3; }
+  .tab-panel.is-active[data-tab="summary"] > #marketFlowCard { order: 4; }
+  .tab-panel.is-active[data-tab="summary"] > #announcementsCard { order: 5; }
+  .tab-panel.is-active[data-tab="summary"] > .section-title { order: 6; }
+  .tab-panel.is-active[data-tab="summary"] > #valuationCard { order: 8; }
+  .tab-panel.is-active[data-tab="summary"] > #cheapestCard { order: 9; }
+
+  /* The guide used a 1080px column on any screen. */
+  .guide { max-width: 1600px; }
+  .guide-routine { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  .guide-routine::before, .guide-routine li::before { display: none; }
+  .guide-faq { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; align-items: start; }
+}
+@media (min-width: 1500px) {
+  .tab-panel.is-active[data-tab="summary"] > #allocationCard { order: 7; }
+}

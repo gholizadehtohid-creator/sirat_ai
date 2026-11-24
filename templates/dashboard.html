@@ -214,7 +214,7 @@
 
   <!-- Net individual money into the whole equity market, one bar per
        session, from the daily حقیقی/حقوقی data. See moneyflow.market_daily. -->
-  <div class="card">
+  <div class="card span-half" id="marketFlowCard">
     <div class="card-head">
       <h2>ورود و خروج پول حقیقی به بازار</h2>
       <div class="top-actions">
@@ -262,7 +262,7 @@
        did not, and is labelled paper-only. See allocation.py. -->
   <div class="section-title">تخصیص دارایی</div>
 
-  <div class="card">
+  <div class="card" id="allocationCard">
     <div class="card-head">
       <h2>چقدر در سهام، طلا و درآمد ثابت؟</h2>
       <div class="top-actions">
@@ -295,7 +295,7 @@
        not a tested timing signal -- which is why it sits after the
        allocation: that card is the only advice here that passed a
        preregistered test, and it keeps the first place. -->
-  <div class="card" id="valuationCard">
+  <div class="card span-half" id="valuationCard">
     <div class="card-head">
       <h2>بازار ارزان است یا گران؟</h2>
     </div>
@@ -345,7 +345,7 @@
   <!-- How to fill each part of the allocation as cheaply as possible today.
        Facts, not forecasts: a fund's price against its own NAV, and a bill's
        fixed yield to maturity. See opportunities.py. -->
-  <div class="card">
+  <div class="card span-half" id="cheapestCard">
     <div class="card-head">
       <h2>ارزان‌ترین راه پر کردن هر بخش</h2>
       <div class="top-actions">
@@ -377,7 +377,7 @@
   <!-- Codal letters that move a price on the day: AGMs and dividends,
        capital increases, material disclosures, halts, management changes.
        Filled by the feed watch every two hours. See codal_announcements.py. -->
-  <div class="card">
+  <div class="card span-half" id="announcementsCard">
     <div class="card-head">
       <h2>اطلاعیه‌های مهم کدال</h2>
       <div class="top-actions">
@@ -1739,14 +1739,7 @@
       <article class="guide-card">
         <div class="guide-icon" aria-hidden="true">🧭</div>
         <h4>تقسیم درست سرمایه <span class="guide-badge">موقت — بازآزموده در ۱۵ سال</span></h4>
-        <p>چند درصد در سهام، چند درصد طلا، چند درصد درآمد ثابت. آزمون‌های اول
-        (E27، E28) سهام و ترکیب ۷۰٪ شاخص با ۳۰٪ طلا را با صندوقی سنجیدند که بازده‌اش
-        <b>۲۰٪ فرض شده بود</b>. بازآزمایی ۱۵ ساله‌ی E36 (مرداد ۱۳۹۰ تا تیر ۱۴۰۵، حدود
-        دو چرخه‌ی بازار؛ درآمد ثابت واقعی سالانه حدود <b>۲۴٪</b>): ترکیب ۷۰/۳۰ با طلا
-        سالانه حدود <b>۴۴٪</b>، با درآمد ثابت حدود <b>۳۷٪</b>، تمام سهام حدود <b>۴۰٪</b>؛
-        برآورد به سود سهام و طلا بود ولی با اصلاح آماری از پیش ثبت‌شده معنادار نشد. در
-        شش سال اول (۱۳۹۰ تا ۱۳۹۶) سهام تقریباً هم‌اندازه‌ی اوراق اجاره داد. طلا مسیر را
-        آرام‌تر نکرد: بیشترین افت ۷۰/۳۰ با طلا حدود ۴۰٪ و با درآمد ثابت حدود ۳۳٪ بود.</p>
+        <p>چند درصد در سهام، چند درصد طلا، چند درصد درآمد ثابت. در آزمون ۱۵ ساله (۱۳۹۰ تا ۱۴۰۵) ترکیب ۷۰٪ شاخص با ۳۰٪ طلا سالانه حدود <b>۴۴٪</b> داد و درآمد ثابت واقعی حدود <b>۲۴٪</b>؛ برتری معنادار نشد، پس این ترکیب‌ها «موقت»اند. بیشترین افت آن ترکیب حدود ۴۰٪ بود.</p>
         <button type="button" class="link" data-goto="summary:allocationTable">کارت تخصیص دارایی ←</button>
       </article>
       <article class="guide-card">

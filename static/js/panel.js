@@ -3597,6 +3597,7 @@ function renderTrackRecords(reg) {
   trackState.reg = reg;
   document.querySelectorAll(".track-line, .gate-note").forEach(n => n.remove());
   document.querySelectorAll(".levels-gated").forEach(n => n.classList.remove("levels-gated"));
+  document.querySelectorAll(".levels-hidden").forEach(n => n.classList.remove("levels-hidden"));
   const lined = new Set();
   for (const c of reg.cards) {
     const revealed = trackRevealed(c.id);
@@ -3604,11 +3605,11 @@ function renderTrackRecords(reg) {
     (c.panel_titles || []).forEach((title, i) => {
       for (const { h, card } of trackCardsByTitle(title)) {
         if (gated) card.classList.add("levels-gated");
-        if (gated && i !== 0 && !card.querySelector(".gate-note")) {
-          // A sub-card of a rejected strategy: say why it is empty.
-          (h.closest(".card-head") || h).insertAdjacentHTML("afterend",
-            `<div class="gate-note gate-mini">${esc(c.hidden_levels_label_fa || "ردشده در آزمون، فقط برای پژوهش")} — ` +
-            `با تأیید در کارت «${esc((c.panel_titles || [])[0] || "")}» نمایش داده می‌شود.</div>`);
+        if (gated && i !== 0) {
+          // A sub-card of a rejected strategy held nothing but a note once its
+          // levels were hidden -- an empty box (the owner, 2026-11-24: "too
+          // many empty places"). It is left out until the strategy is revealed.
+          card.classList.add("levels-hidden");
         }
         if (i !== 0 || lined.has(card)) continue;
         lined.add(card);
