@@ -1,0 +1,1554 @@
+{
+ "preregistration": "backtest_output/E36_preregistration.json",
+ "window_months": [
+  "2011-08",
+  "2026-07"
+ ],
+ "months": 180,
+ "sessions": 3610,
+ "gold": {
+  "coin_fresh_share": 1.0,
+  "fund_sessions_with_value_share": 0.9991,
+  "gold_fund_first_session": "2017-09-04",
+  "gold_funds_at_end": 14,
+  "gold_fund_returns_dropped": 3
+ },
+ "fixed_income": {
+  "carried_months": 0,
+  "quotes_in_window": 23422,
+  "rejected_quotes_in_window": 0,
+  "lease_series_used": 21,
+  "bill_series_used": 82,
+  "mean_yield_by_year_pct": {
+   "2011": 21.48,
+   "2012": 21.54,
+   "2013": 21.55,
+   "2014": 21.55,
+   "2015": 21.55,
+   "2016": 21.49,
+   "2017": 20.42,
+   "2018": 23.48,
+   "2019": 21.43,
+   "2020": 18.18,
+   "2021": 21.64,
+   "2022": 23.09,
+   "2023": 26.37,
+   "2024": 31.02,
+   "2025": 34.72,
+   "2026": 38.68
+  },
+  "cagr_pct": 23.88,
+  "series": [
+   {
+    "month": "2011-08",
+    "yield_pct": 21.5,
+    "quotes": 10,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2011-09",
+    "yield_pct": 21.54,
+    "quotes": 12,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2011-10",
+    "yield_pct": 21.5,
+    "quotes": 19,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2011-11",
+    "yield_pct": 21.46,
+    "quotes": 18,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2011-12",
+    "yield_pct": 21.38,
+    "quotes": 19,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-01",
+    "yield_pct": 21.43,
+    "quotes": 20,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-02",
+    "yield_pct": 21.55,
+    "quotes": 12,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-03",
+    "yield_pct": 21.55,
+    "quotes": 22,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-04",
+    "yield_pct": 21.55,
+    "quotes": 19,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-05",
+    "yield_pct": 21.55,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-06",
+    "yield_pct": 21.52,
+    "quotes": 24,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-07",
+    "yield_pct": 21.55,
+    "quotes": 31,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-08",
+    "yield_pct": 21.55,
+    "quotes": 38,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-09",
+    "yield_pct": 21.55,
+    "quotes": 37,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-10",
+    "yield_pct": 21.55,
+    "quotes": 40,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-11",
+    "yield_pct": 21.55,
+    "quotes": 40,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2012-12",
+    "yield_pct": 21.55,
+    "quotes": 33,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-01",
+    "yield_pct": 21.55,
+    "quotes": 39,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-02",
+    "yield_pct": 21.55,
+    "quotes": 37,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-03",
+    "yield_pct": 21.55,
+    "quotes": 39,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-04",
+    "yield_pct": 21.55,
+    "quotes": 36,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-05",
+    "yield_pct": 21.55,
+    "quotes": 41,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-06",
+    "yield_pct": 21.55,
+    "quotes": 41,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-07",
+    "yield_pct": 21.55,
+    "quotes": 40,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-08",
+    "yield_pct": 21.55,
+    "quotes": 40,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-09",
+    "yield_pct": 21.55,
+    "quotes": 33,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-10",
+    "yield_pct": 21.55,
+    "quotes": 42,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-11",
+    "yield_pct": 21.55,
+    "quotes": 39,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2013-12",
+    "yield_pct": 21.55,
+    "quotes": 45,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-01",
+    "yield_pct": 21.55,
+    "quotes": 48,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-02",
+    "yield_pct": 21.55,
+    "quotes": 60,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-03",
+    "yield_pct": 21.55,
+    "quotes": 62,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-04",
+    "yield_pct": 21.55,
+    "quotes": 54,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-05",
+    "yield_pct": 21.55,
+    "quotes": 63,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-06",
+    "yield_pct": 21.55,
+    "quotes": 57,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-07",
+    "yield_pct": 21.55,
+    "quotes": 62,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-08",
+    "yield_pct": 21.55,
+    "quotes": 54,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-09",
+    "yield_pct": 21.55,
+    "quotes": 62,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-10",
+    "yield_pct": 21.55,
+    "quotes": 60,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-11",
+    "yield_pct": 21.55,
+    "quotes": 53,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2014-12",
+    "yield_pct": 21.55,
+    "quotes": 50,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-01",
+    "yield_pct": 21.55,
+    "quotes": 50,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-02",
+    "yield_pct": 21.55,
+    "quotes": 52,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-03",
+    "yield_pct": 21.55,
+    "quotes": 54,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-04",
+    "yield_pct": 21.55,
+    "quotes": 50,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-05",
+    "yield_pct": 21.55,
+    "quotes": 55,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-06",
+    "yield_pct": 21.55,
+    "quotes": 53,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-07",
+    "yield_pct": 21.55,
+    "quotes": 53,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-08",
+    "yield_pct": 21.55,
+    "quotes": 51,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-09",
+    "yield_pct": 21.55,
+    "quotes": 37,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-10",
+    "yield_pct": 21.55,
+    "quotes": 35,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-11",
+    "yield_pct": 21.55,
+    "quotes": 33,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2015-12",
+    "yield_pct": 21.55,
+    "quotes": 28,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-01",
+    "yield_pct": 21.55,
+    "quotes": 38,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-02",
+    "yield_pct": 21.55,
+    "quotes": 36,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-03",
+    "yield_pct": 21.55,
+    "quotes": 35,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-04",
+    "yield_pct": 21.66,
+    "quotes": 26,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-05",
+    "yield_pct": 21.55,
+    "quotes": 38,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-06",
+    "yield_pct": 21.55,
+    "quotes": 44,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-07",
+    "yield_pct": 21.36,
+    "quotes": 29,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-08",
+    "yield_pct": 21.45,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-09",
+    "yield_pct": 21.28,
+    "quotes": 23,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-10",
+    "yield_pct": 21.34,
+    "quotes": 26,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-11",
+    "yield_pct": 21.42,
+    "quotes": 24,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2016-12",
+    "yield_pct": 21.55,
+    "quotes": 37,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-01",
+    "yield_pct": 21.55,
+    "quotes": 35,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-02",
+    "yield_pct": 21.55,
+    "quotes": 32,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-03",
+    "yield_pct": 21.55,
+    "quotes": 32,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-04",
+    "yield_pct": 21.55,
+    "quotes": 22,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-05",
+    "yield_pct": 21.55,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-06",
+    "yield_pct": 21.55,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-07",
+    "yield_pct": 21.55,
+    "quotes": 23,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-08",
+    "yield_pct": 21.55,
+    "quotes": 29,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-09",
+    "yield_pct": 21.55,
+    "quotes": 23,
+    "basis": "tail",
+    "source": "lease"
+   },
+   {
+    "month": "2017-10",
+    "yield_pct": 19.69,
+    "quotes": 15,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2017-11",
+    "yield_pct": 16.05,
+    "quotes": 10,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2017-12",
+    "yield_pct": 15.4,
+    "quotes": 5,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-01",
+    "yield_pct": 16.42,
+    "quotes": 5,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-02",
+    "yield_pct": 15.74,
+    "quotes": 18,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-03",
+    "yield_pct": 21.02,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-04",
+    "yield_pct": 20.99,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-05",
+    "yield_pct": 22.42,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-06",
+    "yield_pct": 23.03,
+    "quotes": 26,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-07",
+    "yield_pct": 25.36,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-08",
+    "yield_pct": 28.63,
+    "quotes": 20,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-09",
+    "yield_pct": 29.19,
+    "quotes": 28,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-10",
+    "yield_pct": 29.23,
+    "quotes": 28,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-11",
+    "yield_pct": 25.71,
+    "quotes": 41,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2018-12",
+    "yield_pct": 24.01,
+    "quotes": 37,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-01",
+    "yield_pct": 21.64,
+    "quotes": 46,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-02",
+    "yield_pct": 21.15,
+    "quotes": 50,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-03",
+    "yield_pct": 21.2,
+    "quotes": 52,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-04",
+    "yield_pct": 21.85,
+    "quotes": 53,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-05",
+    "yield_pct": 23.69,
+    "quotes": 43,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-06",
+    "yield_pct": 22.53,
+    "quotes": 35,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-07",
+    "yield_pct": 21.16,
+    "quotes": 40,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-08",
+    "yield_pct": 21.94,
+    "quotes": 37,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-09",
+    "yield_pct": 21.35,
+    "quotes": 30,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-10",
+    "yield_pct": 20.3,
+    "quotes": 28,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-11",
+    "yield_pct": 20.3,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2019-12",
+    "yield_pct": 20.0,
+    "quotes": 20,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-01",
+    "yield_pct": 19.94,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-02",
+    "yield_pct": 19.53,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-03",
+    "yield_pct": 20.8,
+    "quotes": 20,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-04",
+    "yield_pct": 19.6,
+    "quotes": 20,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-05",
+    "yield_pct": 16.92,
+    "quotes": 10,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-06",
+    "yield_pct": 15.19,
+    "quotes": 9,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-07",
+    "yield_pct": 15.05,
+    "quotes": 15,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-08",
+    "yield_pct": 17.74,
+    "quotes": 29,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-09",
+    "yield_pct": 17.34,
+    "quotes": 28,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-10",
+    "yield_pct": 18.47,
+    "quotes": 33,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-11",
+    "yield_pct": 18.83,
+    "quotes": 30,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2020-12",
+    "yield_pct": 18.74,
+    "quotes": 37,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-01",
+    "yield_pct": 19.15,
+    "quotes": 42,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-02",
+    "yield_pct": 19.69,
+    "quotes": 45,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-03",
+    "yield_pct": 20.75,
+    "quotes": 44,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-04",
+    "yield_pct": 21.34,
+    "quotes": 42,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-05",
+    "yield_pct": 21.87,
+    "quotes": 45,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-06",
+    "yield_pct": 22.25,
+    "quotes": 35,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-07",
+    "yield_pct": 21.95,
+    "quotes": 37,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-08",
+    "yield_pct": 21.54,
+    "quotes": 35,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-09",
+    "yield_pct": 21.74,
+    "quotes": 40,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-10",
+    "yield_pct": 22.41,
+    "quotes": 36,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-11",
+    "yield_pct": 22.99,
+    "quotes": 30,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2021-12",
+    "yield_pct": 24.01,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-01",
+    "yield_pct": 24.54,
+    "quotes": 29,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-02",
+    "yield_pct": 23.34,
+    "quotes": 32,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-03",
+    "yield_pct": 22.66,
+    "quotes": 23,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-04",
+    "yield_pct": 22.69,
+    "quotes": 16,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-05",
+    "yield_pct": 22.18,
+    "quotes": 24,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-06",
+    "yield_pct": 22.12,
+    "quotes": 27,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-07",
+    "yield_pct": 21.87,
+    "quotes": 19,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-08",
+    "yield_pct": 22.11,
+    "quotes": 23,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-09",
+    "yield_pct": 22.0,
+    "quotes": 31,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-10",
+    "yield_pct": 21.99,
+    "quotes": 29,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-11",
+    "yield_pct": 24.82,
+    "quotes": 46,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2022-12",
+    "yield_pct": 26.76,
+    "quotes": 34,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-01",
+    "yield_pct": 28.29,
+    "quotes": 40,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-02",
+    "yield_pct": 27.1,
+    "quotes": 39,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-03",
+    "yield_pct": 27.92,
+    "quotes": 34,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-04",
+    "yield_pct": 27.25,
+    "quotes": 15,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-05",
+    "yield_pct": 26.64,
+    "quotes": 27,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-06",
+    "yield_pct": 26.12,
+    "quotes": 24,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-07",
+    "yield_pct": 25.25,
+    "quotes": 24,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-08",
+    "yield_pct": 24.15,
+    "quotes": 20,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-09",
+    "yield_pct": 26.42,
+    "quotes": 21,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-10",
+    "yield_pct": 25.66,
+    "quotes": 20,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-11",
+    "yield_pct": 25.71,
+    "quotes": 23,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2023-12",
+    "yield_pct": 25.89,
+    "quotes": 30,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-01",
+    "yield_pct": 26.99,
+    "quotes": 36,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-02",
+    "yield_pct": 29.28,
+    "quotes": 41,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-03",
+    "yield_pct": 31.06,
+    "quotes": 46,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-04",
+    "yield_pct": 33.19,
+    "quotes": 31,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-05",
+    "yield_pct": 32.09,
+    "quotes": 36,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-06",
+    "yield_pct": 34.63,
+    "quotes": 39,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-07",
+    "yield_pct": 29.65,
+    "quotes": 31,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-08",
+    "yield_pct": 30.39,
+    "quotes": 35,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-09",
+    "yield_pct": 30.29,
+    "quotes": 33,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-10",
+    "yield_pct": 31.66,
+    "quotes": 29,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-11",
+    "yield_pct": 32.25,
+    "quotes": 27,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2024-12",
+    "yield_pct": 30.75,
+    "quotes": 23,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-01",
+    "yield_pct": 32.12,
+    "quotes": 24,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-02",
+    "yield_pct": 33.34,
+    "quotes": 34,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-03",
+    "yield_pct": 34.34,
+    "quotes": 32,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-04",
+    "yield_pct": 34.75,
+    "quotes": 33,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-05",
+    "yield_pct": 34.16,
+    "quotes": 26,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-06",
+    "yield_pct": 34.42,
+    "quotes": 24,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-07",
+    "yield_pct": 34.89,
+    "quotes": 19,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-08",
+    "yield_pct": 35.08,
+    "quotes": 19,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-09",
+    "yield_pct": 35.62,
+    "quotes": 12,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-10",
+    "yield_pct": 35.65,
+    "quotes": 15,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-11",
+    "yield_pct": 35.5,
+    "quotes": 14,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2025-12",
+    "yield_pct": 36.8,
+    "quotes": 25,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2026-01",
+    "yield_pct": 36.81,
+    "quotes": 34,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2026-02",
+    "yield_pct": 37.96,
+    "quotes": 33,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2026-03",
+    "yield_pct": 40.34,
+    "quotes": 28,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2026-04",
+    "yield_pct": 39.35,
+    "quotes": 27,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2026-05",
+    "yield_pct": 37.0,
+    "quotes": 34,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2026-06",
+    "yield_pct": 40.26,
+    "quotes": 31,
+    "basis": "tail",
+    "source": "bills"
+   },
+   {
+    "month": "2026-07",
+    "yield_pct": 39.03,
+    "quotes": 31,
+    "basis": "tail",
+    "source": "bills"
+   }
+  ]
+ },
+ "books": {
+  "equity_100": {
+   "total_pct": 16055.4,
+   "cagr_pct": 40.35,
+   "monthly_vol_pct": 10.18,
+   "sharpe_monthly_vs_bills": 0.148,
+   "sharpe_annualised_vs_bills": 0.513,
+   "max_drawdown_pct": -47.91
+  },
+  "eq70_gold30": {
+   "total_pct": 24014.6,
+   "cagr_pct": 44.15,
+   "monthly_vol_pct": 8.47,
+   "sharpe_monthly_vs_bills": 0.1898,
+   "sharpe_annualised_vs_bills": 0.657,
+   "max_drawdown_pct": -40.25
+  },
+  "eq70_bills30": {
+   "total_pct": 11444.1,
+   "cagr_pct": 37.24,
+   "monthly_vol_pct": 7.35,
+   "sharpe_monthly_vs_bills": 0.1506,
+   "sharpe_annualised_vs_bills": 0.522,
+   "max_drawdown_pct": -33.3
+  },
+  "eq70_gold15_bills15": {
+   "total_pct": 16931.7,
+   "cagr_pct": 40.85,
+   "monthly_vol_pct": 7.77,
+   "sharpe_monthly_vs_bills": 0.1747,
+   "sharpe_annualised_vs_bills": 0.605,
+   "max_drawdown_pct": -36.54
+  }
+ },
+ "cycles": {
+  "2011-08..2018-09": {
+   "equity_100": {
+    "total_pct": 597.8,
+    "cagr_pct": 31.13,
+    "monthly_vol_pct": 7.17,
+    "sharpe_monthly_vs_bills": 0.1229,
+    "sharpe_annualised_vs_bills": 0.426,
+    "max_drawdown_pct": -33.43
+   },
+   "eq70_gold30": {
+    "total_pct": 737.0,
+    "cagr_pct": 34.5,
+    "monthly_vol_pct": 6.58,
+    "sharpe_monthly_vs_bills": 0.1614,
+    "sharpe_annualised_vs_bills": 0.559,
+    "max_drawdown_pct": -23.36
+   },
+   "eq70_bills30": {
+    "total_pct": 524.8,
+    "cagr_pct": 29.13,
+    "monthly_vol_pct": 5.15,
+    "sharpe_monthly_vs_bills": 0.1248,
+    "sharpe_annualised_vs_bills": 0.432,
+    "max_drawdown_pct": -18.27
+   },
+   "eq70_gold15_bills15": {
+    "total_pct": 631.2,
+    "cagr_pct": 31.99,
+    "monthly_vol_pct": 5.7,
+    "sharpe_monthly_vs_bills": 0.1502,
+    "sharpe_annualised_vs_bills": 0.52,
+    "max_drawdown_pct": -20.28
+   }
+  },
+  "2018-10..2026-07": {
+   "equity_100": {
+    "total_pct": 2215.1,
+    "cagr_pct": 49.35,
+    "monthly_vol_pct": 12.31,
+    "sharpe_monthly_vs_bills": 0.1687,
+    "sharpe_annualised_vs_bills": 0.585,
+    "max_drawdown_pct": -47.91
+   },
+   "eq70_gold30": {
+    "total_pct": 2781.2,
+    "cagr_pct": 53.58,
+    "monthly_vol_pct": 9.89,
+    "sharpe_monthly_vs_bills": 0.2129,
+    "sharpe_annualised_vs_bills": 0.738,
+    "max_drawdown_pct": -40.25
+   },
+   "eq70_bills30": {
+    "total_pct": 1747.5,
+    "cagr_pct": 45.11,
+    "monthly_vol_pct": 8.89,
+    "sharpe_monthly_vs_bills": 0.1721,
+    "sharpe_annualised_vs_bills": 0.596,
+    "max_drawdown_pct": -33.3
+   },
+   "eq70_gold15_bills15": {
+    "total_pct": 2229.3,
+    "cagr_pct": 49.47,
+    "monthly_vol_pct": 9.27,
+    "sharpe_monthly_vs_bills": 0.1959,
+    "sharpe_annualised_vs_bills": 0.679,
+    "max_drawdown_pct": -36.54
+   }
+  }
+ },
+ "eras": {
+  "2011-08..2017-09 (coin, lease bonds)": {
+   "equity_100": {
+    "total_pct": 211.6,
+    "cagr_pct": 20.23,
+    "monthly_vol_pct": 5.7,
+    "sharpe_monthly_vs_bills": 0.0106,
+    "sharpe_annualised_vs_bills": 0.037,
+    "max_drawdown_pct": -33.43
+   },
+   "eq70_gold30": {
+    "total_pct": 236.9,
+    "cagr_pct": 21.76,
+    "monthly_vol_pct": 5.34,
+    "sharpe_monthly_vs_bills": 0.0265,
+    "sharpe_annualised_vs_bills": 0.092,
+    "max_drawdown_pct": -23.36
+   },
+   "eq70_bills30": {
+    "total_pct": 225.9,
+    "cagr_pct": 21.11,
+    "monthly_vol_pct": 4.0,
+    "sharpe_monthly_vs_bills": 0.0113,
+    "sharpe_annualised_vs_bills": 0.039,
+    "max_drawdown_pct": -18.27
+   },
+   "eq70_gold15_bills15": {
+    "total_pct": 234.1,
+    "cagr_pct": 21.6,
+    "monthly_vol_pct": 4.46,
+    "sharpe_monthly_vs_bills": 0.0214,
+    "sharpe_annualised_vs_bills": 0.074,
+    "max_drawdown_pct": -20.28
+   }
+  },
+  "2017-10..2026-07 (E35's window)": {
+   "equity_100": {
+    "total_pct": 5084.3,
+    "cagr_pct": 56.39,
+    "monthly_vol_pct": 12.29,
+    "sharpe_monthly_vs_bills": 0.2042,
+    "sharpe_annualised_vs_bills": 0.708,
+    "max_drawdown_pct": -47.91
+   },
+   "eq70_gold30": {
+    "total_pct": 7057.5,
+    "cagr_pct": 62.2,
+    "monthly_vol_pct": 9.97,
+    "sharpe_monthly_vs_bills": 0.2632,
+    "sharpe_annualised_vs_bills": 0.912,
+    "max_drawdown_pct": -40.25
+   },
+   "eq70_bills30": {
+    "total_pct": 3442.5,
+    "cagr_pct": 49.78,
+    "monthly_vol_pct": 8.9,
+    "sharpe_monthly_vs_bills": 0.2071,
+    "sharpe_annualised_vs_bills": 0.717,
+    "max_drawdown_pct": -33.3
+   },
+   "eq70_gold15_bills15": {
+    "total_pct": 4997.3,
+    "cagr_pct": 56.09,
+    "monthly_vol_pct": 9.31,
+    "sharpe_monthly_vs_bills": 0.2396,
+    "sharpe_annualised_vs_bills": 0.83,
+    "max_drawdown_pct": -36.54
+   }
+  }
+ },
+ "stage_1": {
+  "point_in_time": true,
+  "survivorship": true,
+  "universe_valid": true,
+  "missing_data": true,
+  "price_sanity": true
+ },
+ "tests": {
+  "H1_gold_vs_fixed_income": {
+   "observed": 0.039148,
+   "p": 0.09279,
+   "ci90": [
+    -0.002986,
+    0.088429
+   ],
+   "sided": "one"
+  },
+  "H2_equity_vs_fixed_income": {
+   "observed": 0.015087,
+   "p": 0.08569,
+   "ci90": [
+    -0.000554,
+    0.033736
+   ],
+   "sided": "one"
+  },
+  "H3_three_part_vs_gold": {
+   "observed": -0.0151,
+   "p": 0.21988,
+   "ci90": [
+    -0.037134,
+    0.004574
+   ],
+   "sided": "two"
+  },
+  "holm": {
+   "H2_equity_vs_fixed_income": {
+    "p": 0.08569,
+    "holm_threshold": 0.01667,
+    "null_rejected": false
+   },
+   "H1_gold_vs_fixed_income": {
+    "p": 0.09279,
+    "holm_threshold": 0.025,
+    "null_rejected": false
+   },
+   "H3_three_part_vs_gold": {
+    "p": 0.21988,
+    "holm_threshold": 0.05,
+    "null_rejected": false
+   }
+  }
+ },
+ "reported_not_tested": {
+  "with_e35_6_month_blocks": {
+   "H1_gold_vs_fixed_income": 0.08339,
+   "H2_equity_vs_fixed_income": 0.07929,
+   "H3_three_part_vs_gold": 0.19868
+  },
+  "memmel_monthly_H1": {
+   "z": 1.346,
+   "p_one_sided": 0.08919,
+   "rho": 0.926
+  },
+  "newey_west_H2_lag12": {
+   "t": 1.417,
+   "p_one_sided": 0.0783
+  },
+  "mean_annualised_equity_excess_pct": 19.68
+ },
+ "verdict": {
+  "H1_gold_vs_fixed_income": "NOT ACCEPTED",
+  "H2_equity_vs_fixed_income": "NOT ACCEPTED",
+  "H3_three_part_vs_gold": "NOT ACCEPTED",
+  "family": "allocation; Holm at 0.05 over H1-H3, 12-month blocks"
+ }
+}

@@ -275,6 +275,24 @@ def candidates(limit=3):
 RETEST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "backtest_output", "E35_results.json")
 
+# E36 (2026-11-24, the owner's fifteen years, about two market cycles) asks
+# E35's questions over 2011-08..2026-07 and, by its preregistered rule,
+# replaces E35 on the panel; E35 is read only when E36 has no result.
+LONG_RETEST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "backtest_output", "E36_results.json")
+
+# The two files name their keys differently: E35 says bills, E36 says fixed
+# income (lease bonds, then bills).
+RETEST_KEYS = {
+    "E35": {"h1": "H1_gold_vs_real_bills", "h2": "H2_equity_vs_real_bills",
+            "h3": "H3_three_part_vs_gold", "fixed": "bills",
+            "fixed_fa": "اخزای واقعی", "window_fa": "بازده واقعی اخزا"},
+    "E36": {"h1": "H1_gold_vs_fixed_income", "h2": "H2_equity_vs_fixed_income",
+            "h3": "H3_three_part_vs_gold", "fixed": "fixed_income",
+            "fixed_fa": "درآمد ثابت واقعی (اوراق اجاره، سپس اخزا)",
+            "window_fa": "پانزده سال، حدود دو چرخه‌ی بازار"},
+}
+
 
 def _fa(value, digits=0):
     """A number for Persian text. The panel's font (Vazirmatn FD) draws
@@ -283,14 +301,30 @@ def _fa(value, digits=0):
 
 
 def retest(path=None):
-    """E35's verdicts and the numbers behind them, or None if not run."""
+    """The latest allocation re-test's verdicts and numbers: E36 (fifteen
+    years) when it has a result, else E35; None if neither does."""
 
+    if path is not None:
+        candidates = [path]
+    else:
+        candidates = [LONG_RETEST_FILE, RETEST_FILE]
+    for candidate in candidates:
+        found = _read_retest(candidate)
+        if found:
+            return found
+    return None
+
+
+def _read_retest(path):
     try:
-        with open(path or RETEST_FILE, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             doc = json.load(fh)
+        experiment = "E36" if "fixed_income" in doc else "E35"
+        keys = RETEST_KEYS[experiment]
         books, tests = doc["books"], doc["tests"]
         verdict = doc["verdict"]
         holm = tests["holm"]
+        fixed = doc[keys["fixed"]]
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -300,34 +334,45 @@ def retest(path=None):
                 "accepted": verdict.get(key) == "ACCEPT"}
 
     out = {
-        "experiment": "E35",
+        "experiment": experiment,
         "window": doc.get("window_months"),
         "months": doc.get("months"),
-        "bills_cagr_pct": doc["bills"]["cagr_pct"],
-        "bill_yield_by_year_pct": doc["bills"].get("mean_yield_by_year_pct"),
+        "fixed_label": keys["fixed_fa"],
+        "bills_cagr_pct": fixed["cagr_pct"],
+        "bill_yield_by_year_pct": fixed.get("mean_yield_by_year_pct"),
         "books": {k: {"cagr_pct": v["cagr_pct"],
                       "sharpe": v["sharpe_annualised_vs_bills"],
                       "max_drawdown_pct": v["max_drawdown_pct"]}
                   for k, v in books.items()},
-        "gold_vs_bills": test("H1_gold_vs_real_bills"),
-        "equity_vs_bills": test("H2_equity_vs_real_bills"),
-        "three_part_vs_gold": test("H3_three_part_vs_gold"),
-        "file": "backtest_output/E35_results.json",
+        "gold_vs_bills": test(keys["h1"]),
+        "equity_vs_bills": test(keys["h2"]),
+        "three_part_vs_gold": test(keys["h3"]),
+        "cycles": {name: {k: {"cagr_pct": v["cagr_pct"],
+                              "sharpe": v["sharpe_annualised_vs_bills"]}
+                          for k, v in part.items()}
+                   for name, part in (doc.get("cycles") or {}).items()},
+        "file": "backtest_output/%s_results.json" % experiment,
     }
     g, b, e = (books["eq70_gold30"], books["eq70_bills30"],
                books["equity_100"])
     w = out["window"] or ["?", "?"]
     out["text"] = (
-        "بازآزمایی E35 با بازده واقعی اخزا (%s تا %s، %d ماه): اخزا سالانه "
-        "%s٪ داد؛ ۷۰٪ سهام + ۳۰٪ طلا %s٪ (بیشترین افت %s٪)، ۷۰٪ سهام + "
-        "۳۰٪ اخزا %s٪، تمام سهام %s٪. برتری طلا بر اخزا (p=%s) و سهام بر "
-        "اخزا (p=%s) از آستانه‌ی آماری از پیش ثبت‌شده نگذشت؛ برآورد نقطه‌ای "
-        "به سود سهام و طلا بود، ولی اثبات نشد." % (
-            w[0], w[1], out["months"] or 0, _fa(out["bills_cagr_pct"], 1),
+        "آزمون %s (%s؛ %s تا %s، %d ماه): %s سالانه %s٪ داد؛ ۷۰٪ سهام + "
+        "۳۰٪ طلا %s٪ (بیشترین افت %s٪)، ۷۰٪ سهام + ۳۰٪ درآمد ثابت %s٪، "
+        "تمام سهام %s٪. برتری طلا (p=%s) و سهام (p=%s) بر درآمد ثابت از "
+        "آستانه‌ی آماری از پیش ثبت‌شده نگذشت؛ برآورد نقطه‌ای به سود سهام و "
+        "طلا بود، ولی اثبات نشد." % (
+            experiment, keys["window_fa"], w[0], w[1], out["months"] or 0,
+            keys["fixed_fa"], _fa(out["bills_cagr_pct"], 1),
             _fa(g["cagr_pct"], 1), _fa(g["max_drawdown_pct"], 0),
             _fa(b["cagr_pct"], 1), _fa(e["cagr_pct"], 1),
             _fa(out["gold_vs_bills"]["p"], 3),
             _fa(out["equity_vs_bills"]["p"], 3)))
+    early = (doc.get("eras") or {}).get("2011-08..2017-09 (coin, lease bonds)")
+    if early:
+        out["text"] += (
+            " در شش سال اول (۱۳۹۰ تا ۱۳۹۶) سهام سالانه %s٪ داد، تقریباً هم‌اندازه‌ی "
+            "اوراق اجاره." % _fa(early["equity_100"]["cagr_pct"], 1))
     return out
 
 
@@ -344,9 +389,10 @@ def _profiles_with_retest(found):
             t = found["gold_vs_bills"]
             profile["evidence"] = "tested" if t["accepted"] else "provisional"
             profile["evidence_text"] = (
-                "E28: در برابر صندوق فرضی ۲۰٪ بهتر بود. بازآزمایی E35 با "
-                "بازده واقعی اخزا: نسبت بازده به ریسک %s در برابر %s برای "
-                "۷۰٪ سهام + ۳۰٪ اخزا — %s (p=%s، آستانه %s)" % (
+                "E28: در برابر صندوق فرضی ۲۰٪ بهتر بود. بازآزمایی %s با "
+                "درآمد ثابت واقعی: نسبت بازده به ریسک %s در برابر %s برای "
+                "۷۰٪ سهام + ۳۰٪ درآمد ثابت — %s (p=%s، آستانه %s)" % (
+                    found["experiment"],
                     _fa(books["eq70_gold30"]["sharpe"], 2),
                     _fa(books["eq70_bills30"]["sharpe"], 2),
                     "برتری تأیید شد" if t["accepted"]
@@ -356,9 +402,10 @@ def _profiles_with_retest(found):
             t = found["equity_vs_bills"]
             profile["evidence"] = "tested" if t["accepted"] else "provisional"
             profile["evidence_text"] = (
-                "E27: ۲۰۰۹ تا ۲۰۲۳ از صندوق فرضی ۲۰٪ جلو زد. بازآزمایی E35 "
-                "با اخزای واقعی: سالانه %s٪ در برابر %s٪ اخزا — %s (p=%s، "
+                "E27: ۲۰۰۹ تا ۲۰۲۳ از صندوق فرضی ۲۰٪ جلو زد. بازآزمایی %s "
+                "با درآمد ثابت واقعی: سالانه %s٪ در برابر %s٪ — %s (p=%s، "
                 "آستانه %s)؛ بیشترین افت %s٪" % (
+                    found["experiment"],
                     _fa(books["equity_100"]["cagr_pct"], 1),
                     _fa(found["bills_cagr_pct"], 1),
                     "برتری تأیید شد" if t["accepted"]
@@ -409,7 +456,8 @@ def plan(equity=None):
         ],
         "evidence": ["backtest_output/E27_results.json",
                      "backtest_output/E28_results.json",
-                     "backtest_output/E35_results.json"],
+                     "backtest_output/E35_results.json",
+                     "backtest_output/E36_results.json"],
         "retest": found,
         # What dealing costs today, for the today card to say beside its
         # amounts (config.LIVE_*): a fund unit pays no transfer tax.

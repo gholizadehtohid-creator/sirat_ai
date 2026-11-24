@@ -116,12 +116,42 @@ class FromTheFilesTests(unittest.TestCase):
         self.assertIsNone(cards["basket"]["badge"])
         self.assertIsNone(cards["allocation"]["error"])
 
+    def with_retest(self, mutate, name="E35_results.json"):
+        """E35's file through `mutate`, E36's absent: the fallback path.
+        (E36, fifteen years, answers first when it has a result.)"""
+        real = tr.results
+
+        def fake(asked):
+            if asked == "E36_results.json" and name != asked:
+                return None
+            data = real(asked)
+            if asked == name:
+                data = copy.deepcopy(data) if data is not None else None
+                data = mutate(data)
+            return data
+
+        return mock.patch.object(tr, "results", side_effect=fake)
+
+    def test_e36_answers_first_and_is_named(self):
+        verdict = {"H1_gold_vs_fixed_income": "NOT ACCEPTED",
+                   "H2_equity_vs_fixed_income": "NOT ACCEPTED"}
+        doc = {"verdict": verdict, "months": 180, "fixed_income": {"cagr_pct": 23.9},
+               "books": {"equity_100": {"cagr_pct": 40.4}},
+               "tests": {"H1_gold_vs_fixed_income": {"p": 0.093},
+                         "H2_equity_vs_fixed_income": {"p": 0.086}}}
+        with self.with_retest(lambda d: doc, name="E36_results.json"):
+            card = tr.card_allocation()
+        self.assertEqual(card["badge_key"], tr.PROVISIONAL)
+        self.assertIn("E36", card["warning_fa"])
+        self.assertNotIn("E35", card["warning_fa"])
+        self.assertIn("0.093", card["warning_fa"])
+
     def e34(self, verdict):
         return {"verdict": verdict, "months": 106,
                 "books": {"equity_100": {"cagr_pct": 50.0}}, "bills": {"cagr_pct": 35.0}}
 
     def test_allocation_waits_for_e34(self):
-        with self.with_results("E35_results.json", lambda d: None):
+        with self.with_retest(lambda d: None):
             card = tr.card_allocation()
         self.assertEqual(card["badge_key"], tr.PROVISIONAL)
         self.assertEqual(card["extra"]["retest"]["state_fa"], tr.IN_TEST)
@@ -129,7 +159,7 @@ class FromTheFilesTests(unittest.TestCase):
     def test_allocation_accepted_when_e34_accepts_both(self):
         verdict = {"H1_gold_vs_real_bills": "ACCEPT", "H2_equity_vs_real_bills": "ACCEPT",
                    "H3_three_part_vs_gold": "NOT ACCEPTED"}
-        with self.with_results("E35_results.json", lambda d: self.e34(verdict)):
+        with self.with_retest(lambda d: self.e34(verdict)):
             card = tr.card_allocation()
         self.assertEqual(card["badge_key"], tr.ACCEPTED)
         self.assertIn("50.0٪", card["vs_tedpix"]["after_live_cost_fa"])
@@ -137,7 +167,7 @@ class FromTheFilesTests(unittest.TestCase):
     def test_allocation_provisional_when_e34_does_not_accept_one(self):
         verdict = {"H1_gold_vs_real_bills": "NOT ACCEPTED",
                    "H2_equity_vs_real_bills": "ACCEPT"}
-        with self.with_results("E35_results.json", lambda d: self.e34(verdict)):
+        with self.with_retest(lambda d: self.e34(verdict)):
             card = tr.card_allocation()
             gold = tr.card_gold()
         self.assertEqual(card["badge_key"], tr.PROVISIONAL)
@@ -145,8 +175,7 @@ class FromTheFilesTests(unittest.TestCase):
         self.assertIn("نگذشت", gold["warning_fa"])
 
     def test_a_stage_one_failure_of_e34_says_nothing(self):
-        with self.with_results("E35_results.json",
-                               lambda d: {"verdict": {"stage_1": "FAIL"}}):
+        with self.with_retest(lambda d: {"verdict": {"stage_1": "FAIL"}}):
             card = tr.card_allocation()
         self.assertEqual(card["badge_key"], tr.PROVISIONAL)
         self.assertEqual(card["extra"]["retest"]["state"], "no_result")

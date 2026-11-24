@@ -7,10 +7,10 @@ breaks every link after it and `ledger.verify()` names the first entry that fail
 
 | | |
 |---|---|
-| entries | 26 |
+| entries | 27 |
 | chain intact | **True** |
-| head | `35f2c7a7caf3c77c7b94d38908676c97b3300560093830b7b84f6fd3f7b90922` |
-| exported | 2026-11-24T09:21:07 |
+| head | `bd3f33fde7b47a4686ef343ea0215c1f30eab87cfd27615f591500a9c522e342` |
+| exported | 2026-11-24T11:09:46 |
 
 ---
 
@@ -44,6 +44,7 @@ breaks every link after it and `ledger.verify()` names the first entry that fail
 | 24 | `E31-laggard-quality-flow-turn` | **REJECT** | 1 | no | retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-10 ('yes, do it')) |
 | 25 | `E32-forward-fundamental-quality` | **REJECT** | 1 | no | retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-10) |
 | 26 | `E33-best-of-cheap-industries` | **REJECT** | 1 | no | retroactive registration 2026-11-23 (original researcher, as preregistered: Claude, at the user's request of 2026-11-11) |
+| 27 | `E36-allocation-15y` | **ARCHIVE** | — | no | Claude, at the owner's request of 2026-11-24 (15-year window, coin before gold funds, lease bonds before bills, 12-month blocks -- all four chosen by the owner) |
 
 ---
 
@@ -53,24 +54,27 @@ Every number here is recomputed from the record and the result files on each exp
 
 | | |
 |---|---|
-| experiments in the record | 26 |
-| trials counted (N) | 25 |
+| experiments in the record | 27 |
+| trials counted (N) | 26 |
 | not counted | E34: stopped at Stage 1 on a data-layer defect before any return existed (successor E35) |
-| expected best standardised Sharpe of N skill-less tries | 2.00 |
-| ... per year on 5.3 / 9 / 15 years | 0.87 / 0.67 / 0.52 |
+| expected best standardised Sharpe of N skill-less tries | 2.01 |
+| ... per year on 5.3 / 9 / 15 years | 0.88 / 0.67 / 0.52 |
 | a new positive needs | t > 3 or DSR > 0.95, not p < 0.05 |
 
-### Reading A — every hypothesis one family (Holm at 0.05, m = 29)
+### Reading A — every hypothesis one family (Holm at 0.05, m = 32)
 
 | hypothesis | p | threshold | survives |
 |---|---|---|---|
-| E28 H2_gold_alone | 0.00025 | 0.001724 | **yes** |
-| E27 H1_passive | 0.00727 | 0.001786 | no |
-| E28 H1_gold_as_defence | 0.01467 | 0.001852 | no |
-| E35 H1_gold_vs_real_bills | 0.04050 | 0.001923 | no |
-| E35 H2_equity_vs_real_bills | 0.06119 | 0.002 | no |
-| E35 H3_three_part_vs_gold | 0.06599 | 0.002083 | no |
-| E27 H2_trend | 0.18863 | 0.002174 | no |
+| E28 H2_gold_alone | 0.00025 | 0.001563 | **yes** |
+| E27 H1_passive | 0.00727 | 0.001613 | no |
+| E28 H1_gold_as_defence | 0.01467 | 0.001667 | no |
+| E35 H1_gold_vs_real_bills | 0.04050 | 0.001724 | no |
+| E35 H2_equity_vs_real_bills | 0.06119 | 0.001786 | no |
+| E35 H3_three_part_vs_gold | 0.06599 | 0.001852 | no |
+| E36 H2_equity_vs_fixed_income | 0.08569 | 0.001923 | no |
+| E36 H1_gold_vs_fixed_income | 0.09279 | 0.002 | no |
+| E27 H2_trend | 0.18863 | 0.002083 | no |
+| E36 H3_three_part_vs_gold | 0.21988 | 0.002174 | no |
 | E30 H1 | 0.24140 | 0.002273 | no |
 | E32 H1 | 0.24440 | 0.002381 | no |
 | E31 H1 | 0.25880 | 0.0025 | no |
@@ -93,22 +97,28 @@ Hypotheses with no p-value in a result file count in m and never survive.
 | E35 H1_gold_vs_real_bills | 0.04050 | Holm at 0.05 over H1-H3 | no |
 | E35 H2_equity_vs_real_bills | 0.06119 | Holm at 0.05 over H1-H3 | no |
 | E35 H3_three_part_vs_gold | 0.06599 | Holm at 0.05 over H1-H3 | no |
+| E36 H1_gold_vs_fixed_income | 0.09279 | Holm at 0.05 over H1-H3, 12-month blocks | no |
+| E36 H2_equity_vs_fixed_income | 0.08569 | Holm at 0.05 over H1-H3, 12-month blocks | no |
+| E36 H3_three_part_vs_gold | 0.21988 | Holm at 0.05 over H1-H3, 12-month blocks | no |
 
 ### Reading C — families declared 2026-11-24
 
 Prospective for E35 onward; post hoc for everything earlier (the boundaries were drawn after E27 and E28 were known), which is why A and B stand beside it.
 
-**allocation** — what to hold: equity, gold, fixed income, bills -- not which stock (E1, E4, E27, E28, E34, E35)
+**allocation** — what to hold: equity, gold, fixed income, bills -- not which stock (E1, E4, E27, E28, E34, E35, E36)
 
 | hypothesis | p | threshold | survives |
 |---|---|---|---|
-| E28 H2_gold_alone | 0.00025 | 0.005556 | **yes** |
-| E27 H1_passive | 0.00727 | 0.00625 | no |
-| E28 H1_gold_as_defence | 0.01467 | 0.007143 | no |
-| E35 H1_gold_vs_real_bills | 0.04050 | 0.008333 | no |
-| E35 H2_equity_vs_real_bills | 0.06119 | 0.01 | no |
-| E35 H3_three_part_vs_gold | 0.06599 | 0.0125 | no |
-| E27 H2_trend | 0.18863 | 0.016667 | no |
+| E28 H2_gold_alone | 0.00025 | 0.004167 | **yes** |
+| E27 H1_passive | 0.00727 | 0.004545 | no |
+| E28 H1_gold_as_defence | 0.01467 | 0.005 | no |
+| E35 H1_gold_vs_real_bills | 0.04050 | 0.005556 | no |
+| E35 H2_equity_vs_real_bills | 0.06119 | 0.00625 | no |
+| E35 H3_three_part_vs_gold | 0.06599 | 0.007143 | no |
+| E36 H2_equity_vs_fixed_income | 0.08569 | 0.008333 | no |
+| E36 H1_gold_vs_fixed_income | 0.09279 | 0.01 | no |
+| E27 H2_trend | 0.18863 | 0.0125 | no |
+| E36 H3_three_part_vs_gold | 0.21988 | 0.016667 | no |
 | E1 (no p stated) | — | — | no |
 | E4 (no p stated) | — | — | no |
 
@@ -147,14 +157,14 @@ Prospective for E35 onward; post hoc for everything earlier (the boundaries were
 | E24 (no p stated) | — | — | no |
 | E25 (no p stated) | — | — | no |
 
-### Deflated Sharpe ratio at N = 25
+### Deflated Sharpe ratio at N = 26
 
 | result | SR per period | obs | basis | PSR vs 0 | DSR | > 0.95 |
 |---|---|---|---|---|---|---|
-| E27 H1 passive equity vs 20% fund | 0.1874 | 170 | t / sqrt(blocks), 20-session blocks | 0.9921 | 0.6706 | no |
-| E28 H2 gold alone vs 20% fund | 0.3315 | 110 | t / sqrt(blocks), 20-session blocks | 0.9996 | 0.9242 | no |
-| E35 70/30 equity/gold vs real bills | 0.2704 | 106 | monthly | 0.9968 | 0.7791 | no |
-| E35 equity vs real bills | 0.2042 | 106 | monthly | 0.9808 | 0.5413 | no |
+| E27 H1 passive equity vs 20% fund | 0.1874 | 170 | t / sqrt(blocks), 20-session blocks | 0.9921 | 0.6647 | no |
+| E28 H2 gold alone vs 20% fund | 0.3315 | 110 | t / sqrt(blocks), 20-session blocks | 0.9996 | 0.9219 | no |
+| E35 70/30 equity/gold vs real bills | 0.2704 | 106 | monthly | 0.9968 | 0.7743 | no |
+| E35 equity vs real bills | 0.2042 | 106 | monthly | 0.9808 | 0.5348 | no |
 
 Normal returns assumed (skew 0, kurtosis 3) where the result file does not store the series; fat tails lower the DSR.
 
@@ -164,28 +174,28 @@ Normal returns assumed (skew 0, kurtosis 3) where the result file does not store
 |---|---|
 | 2009 | 1 — E27 |
 | 2010 | 1 — E27 |
-| 2011 | 1 — E27 |
-| 2012 | 1 — E27 |
-| 2013 | 1 — E27 |
-| 2014 | 1 — E27 |
-| 2015 | 1 — E27 |
-| 2016 | 1 — E27 |
-| 2017 | 3 — E27, E28, E35 |
-| 2018 | 3 — E27, E28, E35 |
-| 2019 | 3 — E27, E28, E35 |
-| 2020 | 3 — E27, E28, E35 |
-| 2021 | 6 — E27, E28, E30, E31, E32, E35 |
-| 2022 | 6 — E27, E28, E30, E31, E32, E35 |
-| 2023 | 8 — E19, E27, E28, E30, E31, E32, E33, E35 |
-| 2024 | 10 — E19, E21, E26, E27, E28, E30, E31, E32, E33, E35 |
-| 2025 | 9 — E21, E26, E27, E28, E30, E31, E32, E33, E35 |
-| 2026 | 9 — E21, E26, E27, E28, E30, E31, E32, E33, E35 |
+| 2011 | 2 — E27, E36 |
+| 2012 | 2 — E27, E36 |
+| 2013 | 2 — E27, E36 |
+| 2014 | 2 — E27, E36 |
+| 2015 | 2 — E27, E36 |
+| 2016 | 2 — E27, E36 |
+| 2017 | 4 — E27, E28, E35, E36 |
+| 2018 | 4 — E27, E28, E35, E36 |
+| 2019 | 4 — E27, E28, E35, E36 |
+| 2020 | 4 — E27, E28, E35, E36 |
+| 2021 | 7 — E27, E28, E30, E31, E32, E35, E36 |
+| 2022 | 7 — E27, E28, E30, E31, E32, E35, E36 |
+| 2023 | 9 — E19, E27, E28, E30, E31, E32, E33, E35, E36 |
+| 2024 | 11 — E19, E21, E26, E27, E28, E30, E31, E32, E33, E35, E36 |
+| 2025 | 10 — E21, E26, E27, E28, E30, E31, E32, E33, E35, E36 |
+| 2026 | 10 — E21, E26, E27, E28, E30, E31, E32, E33, E35, E36 |
 
 | window | years | trials recorded / upper bound | next trial's luck hurdle (annual Sharpe) | max trials | exhausted |
 |---|---|---|---|---|---|
-| selection 2021-06..2026-08 | 5.2 | 10 / 25 | 0.88 | 50 | no |
-| allocation 2017-10..2026-07 | 8.8 | 10 / 25 | 0.68 | 382 | no |
-| full 2009..2026-08 | 17.6 | 10 / 25 | 0.48 | 10000 | no |
+| selection 2021-06..2026-08 | 5.2 | 11 / 26 | 0.89 | 50 | no |
+| allocation 2017-10..2026-07 | 8.8 | 11 / 26 | 0.68 | 382 | no |
+| full 2009..2026-08 | 17.6 | 11 / 26 | 0.48 | 10000 | no |
 
 Windows recorded by the Manager only: Phase 1's replays and E20/E22/E24/E25 recorded none, so the per-year counts are a lower bound; the stop rule uses every trial as the upper bound.
 
@@ -974,6 +984,33 @@ SUCCESSOR PATH, in the order that unblocks the most for the least work:
 | Stage | Status | Checks |
 |---|---|---|
 | 1 DATA INTEGRITY | **FAIL** | failed: missing_data, point_in_time, price_sanity, survivorship, universe_valid |
+
+---
+
+## 27. `E36-allocation-15y`
+
+> H1_gold_vs_fixed_income: Sharpe(eq70_gold30) > Sharpe(eq70_bills30). One-sided. | H2_equity_vs_fixed_income: mean monthly excess of equity_100 over fixed income > 0. One-sided. | H3_three_part_vs_gold: Sharpe(eq70_gold15_bills15) differs from Sharpe(eq70_gold30). Two-sided.
+
+| Field | Value |
+|---|---|
+| date | 2026-11-24T11:07:29 |
+| author | Claude, at the owner's request of 2026-11-24 (15-year window, coin before gold funds, lease bonds before bills, 12-month blocks -- all four chosen by the owner) |
+| strategy version | allocation-15y-v1 |
+| code hash | `efa9b322269b46599d86002a` |
+| git commit | `667816663dce1eb2d3ef0450` |
+| config hash | `44136fa355b3678a1146ad16` |
+| dataset fingerprint | `2f7e029ad03db26e` |
+| universe snapshot | `UNAVAILABLE` |
+| preregistration hash | `cfbaabea45721aa4814c7eab` |
+| reproducible | False |
+| **verdict** | **ARCHIVE** |
+| entry hash | `bd3f33fde7b47a4686ef343e` |
+
+**Rationale.** Allocation over fifteen years (2011-08..2026-07), closed as the preregistration's decision rule says (ARCHIVE). H1 gold vs fixed income NOT ACCEPTED (p 0.0928); H2 equity vs fixed income NOT ACCEPTED (p 0.0857); H3 three-part vs gold NOT ACCEPTED (p 0.2199); Holm at 0.05, 12-month blocks. Results: backtest_output/E36_results.json.
+
+| Stage | Status | Checks |
+|---|---|---|
+| 1 DATA INTEGRITY | **PASS** | all 5 passed |
 
 ---
 

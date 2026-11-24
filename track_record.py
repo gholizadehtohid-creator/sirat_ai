@@ -352,20 +352,37 @@ def _e34():
     """The real-bills re-test's state (E35, successor of E34): running, no
     result, or its per-hypothesis verdicts."""
 
-    data = results("E35_results.json")
+    # E36 (fifteen years) replaces E35 on the panel once it has a result.
+    data = results("E36_results.json")
+    rid = "E36"
     if data is None:
-        return {"state": "running", "state_fa": IN_TEST}
+        data, rid = results("E35_results.json"), "E35"
+    if data is None:
+        return {"state": "running", "state_fa": IN_TEST, "id": "E36"}
     verdict = data.get("verdict")
     if not isinstance(verdict, dict) or verdict.get("stage_1") == "FAIL":
         return {"state": "no_result", "state_fa": "بی‌نتیجه (مرحله‌ی ۱)",
-                "verdict": verdict, "data": data}
-    h1 = str(verdict.get("H1_gold_vs_real_bills") or "")
-    h2 = str(verdict.get("H2_equity_vs_real_bills") or "")
+                "verdict": verdict, "data": data, "id": rid}
+    k1, k2 = (("H1_gold_vs_fixed_income", "H2_equity_vs_fixed_income")
+              if rid == "E36" else
+              ("H1_gold_vs_real_bills", "H2_equity_vs_real_bills"))
+    # One spelling downstream, whichever file answered.
+    data = dict(data)
+    data.setdefault("bills", data.get("fixed_income") or {})
+    tests_ = dict(data.get("tests") or {})
+    tests_.setdefault("H1_gold_vs_real_bills", tests_.get(k1) or {})
+    tests_.setdefault("H2_equity_vs_real_bills", tests_.get(k2) or {})
+    data["tests"] = tests_
+    verdict = dict(verdict)
+    verdict.setdefault("H1_gold_vs_real_bills", verdict.get(k1))
+    verdict.setdefault("H2_equity_vs_real_bills", verdict.get(k2))
     return {"state": "done", "state_fa": "انجام شد", "verdict": verdict,
-            "h1": h1 == "ACCEPT", "h2": h2 == "ACCEPT", "data": data}
+            "h1": str(verdict.get(k1) or "") == "ACCEPT",
+            "h2": str(verdict.get(k2) or "") == "ACCEPT", "data": data,
+            "id": rid}
 
 
-def _allocation_evidence():
+def _allocation_evidence_raw():
     e27 = results("E27_results.json")
     e28 = results("E28_results.json")
     if not e27 or not e28:
@@ -464,6 +481,33 @@ def _allocation_evidence():
         "sources": ["backtest_output/E27_results.json", "backtest_output/E28_results.json",
                     "backtest_output/E35_results.json", "data/bill_yield.json"],
     }
+
+
+def _retag(obj, rid):
+    """The re-test's sentences were written for E35; when E36 (fifteen years,
+    lease bonds then bills) answered, say so in every string."""
+
+    if rid in (None, "E35"):
+        return obj
+    if isinstance(obj, str):
+        return (obj.replace("E35_results.json", "%s_results.json" % rid)
+                .replace("E35", rid).replace("اخزای واقعی", "درآمد ثابت واقعی")
+                .replace("بازده واقعی اخزا", "بازده واقعی درآمد ثابت"))
+    if isinstance(obj, list):
+        return [_retag(x, rid) for x in obj]
+    if isinstance(obj, tuple):
+        return tuple(_retag(x, rid) for x in obj)
+    if isinstance(obj, dict):
+        return {k: _retag(v, rid) for k, v in obj.items()}
+    return obj
+
+
+def _allocation_evidence():
+    return _retag(_allocation_evidence_raw(), _e34().get("id"))
+
+
+def card_gold():
+    return _retag(_card_gold_raw(), _e34().get("id"))
 
 
 def card_allocation():
@@ -879,7 +923,7 @@ def card_smart_money():
         sources=["sirat_research.db ledger", "E25_STAGE1_REPORT.md"])
 
 
-def card_gold():
+def _card_gold_raw():
     e28 = results("E28_results.json")
     if not e28:
         raise ValueError("E28_results.json is missing")
@@ -1011,6 +1055,20 @@ def card_announcements():
         warning=("اثر هیچ نوع اطلاعیه‌ای (افزایش سرمایه، مجمع، سود) بر قیمت در این "
                  "ربات آزموده نشده است."),
         hide_levels=False, sources=[])
+
+
+def card_calendar():
+    return _card(
+        "calendar", "تقویم مجمع، سود و افزایش سرمایه", "summary",
+        ["تقویم مجمع، سود و افزایش سرمایه"], DESCRIPTIVE,
+        reason="تاریخ مجمع‌ها، مهلت پرداخت سود و مرحله‌ی افزایش سرمایه را از نامه‌های "
+               "کدال و تعدیل‌های بورس گزارش می‌کند.",
+        experiments=[], test_period=None, n=None, hit_rate=None,
+        vs_tedpix=_vs(NOT_MEASURED, None, measured=False), sample="none",
+        warning=("پژوهش‌های بورس تهران رابطه‌ای میان افزایش سرمایه و بازده آتی "
+                 "نیافته‌اند و اثر مجمع و سود بر قیمت در این ربات آزموده نشده است؛ "
+                 "این تاریخ‌ها برای برنامه‌ریزی معامله‌اند، نه انتخاب سهم."),
+        hide_levels=False, sources=["corporate_calendar.py"])
 
 
 def card_fundamentals():
@@ -1189,6 +1247,7 @@ REGISTRY = (
     ("fund_discount", card_fund_discount),
     ("bills", card_bills),
     ("announcements", card_announcements),
+    ("calendar", card_calendar),
     ("basket", card_basket),
     ("live", card_live),
     ("regime", card_regime),

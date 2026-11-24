@@ -3125,13 +3125,97 @@
           }
         ]
       }
+    },
+    {
+      "seq": 27,
+      "experiment_id": "E36-allocation-15y",
+      "appended_at": "2026-11-24T11:07:29.663151",
+      "prev_hash": "35f2c7a7caf3c77c7b94d38908676c97b3300560093830b7b84f6fd3f7b90922",
+      "entry_hash": "bd3f33fde7b47a4686ef343ea0215c1f30eab87cfd27615f591500a9c522e342",
+      "entry": {
+        "acceptance_criteria": "allocation (E27, E28, E35, E36). Within E36: Holm at family alpha 0.05 over H1, H2, H3 -- the smallest p below 0.05/3, the next below 0.05/2, the last below 0.05. a hypothesis is ACCEPTED when Holm rejects its null; otherwise NOT ACCEPTED.",
+        "author": "Claude, at the owner's request of 2026-11-24 (15-year window, coin before gold funds, lease bonds before bills, 12-month blocks -- all four chosen by the owner)",
+        "code_version": {
+          "code_hash": "efa9b322269b46599d86002a2c0552b76697af3fab1c4270101e2ba14febc546",
+          "strategy_version": "allocation-15y-v1"
+        },
+        "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "dataset_fingerprint": "2f7e029ad03db26e",
+        "date": "2026-11-24T11:07:29.640549",
+        "expected_failure": "H1 fails: across two cycles gold and Tehran equities both ride the rial's devaluations, so gold's extra mean over fixed income does not cover its volatility at a 12-month block resolution. | H2 fails: equity's premium over fixed income came in a few boom years (2013, 2019-2020); with fifteen 12-month blocks the bootstrap cannot separate its mean from zero at 0.05/3. | H3 fails: moving 15 points between two defensive legs changes the monthly Sharpe by less than fifteen blocks can resolve.",
+        "experiment_id": "E36-allocation-15y",
+        "final_verdict": {
+          "decided_by": "SIRAT-AI Research (E36-allocation-15y script)",
+          "decision": "ARCHIVE",
+          "rationale": "Allocation over fifteen years (2011-08..2026-07), closed as the preregistration's decision rule says (ARCHIVE). H1 gold vs fixed income NOT ACCEPTED (p 0.0928); H2 equity vs fixed income NOT ACCEPTED (p 0.0857); H3 three-part vs gold NOT ACCEPTED (p 0.2199); Holm at 0.05, 12-month blocks. Results: backtest_output/E36_results.json.",
+          "rejected_at_stage": null
+        },
+        "git_commit": "667816663dce1eb2d3ef0450e7bc0e931df612ca",
+        "git_dirty": true,
+        "hypothesis": "H1_gold_vs_fixed_income: Sharpe(eq70_gold30) > Sharpe(eq70_bills30). One-sided. | H2_equity_vs_fixed_income: mean monthly excess of equity_100 over fixed income > 0. One-sided. | H3_three_part_vs_gold: Sharpe(eq70_gold15_bills15) differs from Sharpe(eq70_gold30). Two-sided.",
+        "preregistration_hash": "cfbaabea45721aa4814c7eab35b39539a8fec0b656704bcf4b17308b9a349f4f",
+        "registered_at": "2026-11-24T11:07:14.290708",
+        "reproducible": false,
+        "universe_snapshot": "UNAVAILABLE",
+        "validation_evidence": [
+          {
+            "checks": {
+              "missing_data": true,
+              "point_in_time": true,
+              "price_sanity": true,
+              "survivorship": true,
+              "universe_valid": true
+            },
+            "detail": {
+              "fixed_income": {
+                "bill_series_used": 82,
+                "cagr_pct": 23.88,
+                "carried_months": 0,
+                "lease_series_used": 21,
+                "mean_yield_by_year_pct": {
+                  "2011": 21.48,
+                  "2012": 21.54,
+                  "2013": 21.55,
+                  "2014": 21.55,
+                  "2015": 21.55,
+                  "2016": 21.49,
+                  "2017": 20.42,
+                  "2018": 23.48,
+                  "2019": 21.43,
+                  "2020": 18.18,
+                  "2021": 21.64,
+                  "2022": 23.09,
+                  "2023": 26.37,
+                  "2024": 31.02,
+                  "2025": 34.72,
+                  "2026": 38.68
+                },
+                "quotes_in_window": 23422,
+                "rejected_quotes_in_window": 0
+              },
+              "gold": {
+                "coin_fresh_share": 1.0,
+                "fund_sessions_with_value_share": 0.9991,
+                "gold_fund_first_session": "2017-09-04",
+                "gold_fund_returns_dropped": 3,
+                "gold_funds_at_end": 14
+              },
+              "months": 180
+            },
+            "recorded_at": "2026-11-24T11:07:29.625732",
+            "stage": 1,
+            "stage_name": "DATA INTEGRITY",
+            "status": "PASS"
+          }
+        ]
+      }
     }
   ],
   "chain": {
-    "entries": 26,
+    "entries": 27,
     "intact": true,
-    "head": "35f2c7a7caf3c77c7b94d38908676c97b3300560093830b7b84f6fd3f7b90922",
+    "head": "bd3f33fde7b47a4686ef343ea0215c1f30eab87cfd27615f591500a9c522e342",
     "note": "every entry hashes to its recorded value and every link matches"
   },
-  "exported_at": "2026-11-24T09:21:08.058296"
+  "exported_at": "2026-11-24T11:09:46.471575"
 }

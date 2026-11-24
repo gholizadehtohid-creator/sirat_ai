@@ -72,7 +72,7 @@ DECLARED_ON = "2026-11-24"
 # everything earlier (see the module docstring, reading C).
 FAMILIES = {
     "allocation": "what to hold: equity, gold, fixed income, bills -- not "
-                  "which stock (E1, E4, E27, E28, E34, E35)",
+                  "which stock (E1, E4, E27, E28, E34, E35, E36)",
     "selection": "which stock: baskets, fundamental and price rules "
                  "(E2, E6, E9, E11, E13, E19, E20, E26, E30-E33)",
     "execution": "can a signal be traded: costs, queues, fills "
@@ -83,6 +83,7 @@ FAMILIES = {
 FAMILY_OF = {
     "E1": "allocation", "E4": "allocation", "E27": "allocation",
     "E28": "allocation", "E34": "allocation", "E35": "allocation",
+    "E36": "allocation",
     "E2": "selection", "E6": "selection", "E9": "selection",
     "E11": "selection", "E13": "selection", "E19": "selection",
     "E20": "selection", "E26": "selection", "E30": "selection",
@@ -137,6 +138,15 @@ PRIMARY = {
                   "H3_three_part_vs_gold": ("tests", "H3_three_part_vs_gold",
                                             "p")},
             "own_alpha": None, "own_rule": "Holm at 0.05 over H1-H3"},
+    "E36": {"file": "E36_results.json",
+            "p": {"H1_gold_vs_fixed_income": ("tests", "H1_gold_vs_fixed_income",
+                                              "p"),
+                  "H2_equity_vs_fixed_income": ("tests",
+                                                "H2_equity_vs_fixed_income", "p"),
+                  "H3_three_part_vs_gold": ("tests", "H3_three_part_vs_gold",
+                                            "p")},
+            "own_alpha": None,
+            "own_rule": "Holm at 0.05 over H1-H3, 12-month blocks"},
 }
 
 
