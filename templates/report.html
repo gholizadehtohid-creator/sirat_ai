@@ -198,21 +198,24 @@ td.est { background: var(--accent-soft); font-weight: 700; }
     <tr><td>فروش / درآمد</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.revenue|amt }}</td>{% endfor %}</tr>
     <tr><td>سود ناخالص</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.gross|amt }}</td>{% endfor %}</tr>
     <tr><td>سود عملیاتی</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.operating|amt }}</td>{% endfor %}</tr>
-    <tr><td>سود خالص سهم صاحبان شرکت</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.owners|amt }}</td>{% endfor %}</tr>
+    <tr><td>سود خالص سهم صاحبان شرکت</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.owners|amt }}{% if col.get('first_owners') is not none %}<br><span class="note first">نخستین گزارش: {{ col.first_owners|amt }}</span>{% endif %}</td>{% endfor %}</tr>
     <tr><td>حاشیه سود خالص</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.margin|pct }}</td>{% endfor %}</tr>
     <tr><td>سود هر سهم (ریال، به تعداد سهم امروز)</td>{% for col in statements %}<td class="n {{ 'est' if col.estimate }}">{{ col.eps|num }}</td>{% endfor %}</tr>
   </table>
+  {% if statements|selectattr('first_owners')|list %}<p class="note">«نخستین گزارش»: سودی که شرکت در اولین انتشار صورت همان سال اعلام کرد (پیش از حسابرسی یا اصلاحیه)؛ فقط جایی آمده که با رقم فعلی بیش از ۵٪ فرق دارد. جدول و برآورد با رقم فعلی ساخته شده‌اند.</p>{% endif %}
   {% endif %}
 
   <h3>این برآورد چقدر قابل اتکاست؟</h3>
   {% if rg %}
   <p>
-    {% if rg.basis == "next_year" %}این برآورد برای سالی است که هنوز صورتی از آن منتشر نشده. همین روش روی <b>{{ rg.n|num }}</b> برآورد مشابه گذشته (سال‌های ۱۳۹۹ تا ۱۴۰۴{% if rg.band_label %}، حاشیه‌ی سود {{ rg.band_label }}{% endif %}) اجرا
+    {% set yrs = ("سال‌های %s تا %s" % (rg.years[0], rg.years[1])) if rg.years else "سال‌های ۱۳۹۹ تا ۱۴۰۴" %}
+    {% if rg.basis == "next_year" %}این برآورد برای سالی است که هنوز صورتی از آن منتشر نشده. همین روش روی <b>{{ rg.n|num }}</b> برآورد مشابه گذشته ({{ yrs }}{% if rg.band_label %}، حاشیه‌ی سود {{ rg.band_label }}{% endif %}) اجرا
     {% elif rg.basis == "monthly" %}برآورد بر پایه‌ی گزارش ماهانه را نمی‌شود مستقیم در گذشته سنجید (گزارش‌های ماهانه از ۱۴۰۵ ذخیره شده‌اند)؛ همین فرمول روی <b>{{ rg.n|num }}</b> صورت مالی گذشته <b>شبیه‌سازی</b> شد (فروشِ صورت مالی به جای گزارش ماهانه، با {{ rg.months_bucket|num }} ماه از سال معلوم{% if rg.band_label %} و حاشیه‌ی سود {{ rg.band_label }}{% endif %})
-    {% else %}همین روش روی <b>{{ rg.n|num }}</b> برآورد گذشته (سال‌های ۱۳۹۹ تا ۱۴۰۴، با {{ rg.months_bucket|num }} ماه از سال معلوم{% if rg.band_label %} و حاشیه‌ی سود {{ rg.band_label }}{% endif %}) اجرا
+    {% else %}همین روش روی <b>{{ rg.n|num }}</b> برآورد گذشته ({{ yrs }}، با {{ rg.months_bucket|num }} ماه از سال معلوم{% if rg.band_label %} و حاشیه‌ی سود {{ rg.band_label }}{% endif %}) اجرا
     {% endif %}
-    و با سودی که شرکت‌ها بعداً گزارش کردند مقایسه شد: خطای میانه <b>{{ rg.median_abs_error_pct|pct(0) }}</b>.
-    در نیمی از موارد سود واقعی بین {{ (rg.q25 * 100)|num(0) }}٪ و {{ (rg.q75 * 100)|num(0) }}٪ برآورد بود، و در ۸۰٪ موارد بین {{ (rg.q10 * 100)|num(0) }}٪ و {{ (rg.q90 * 100)|num(0) }}٪.</p>
+    {% if rg.source == "pit" %}— هر بار در روزی که آن صورت نخستین بار منتشر شد و فقط با ارقامی که تا آن روز منتشر شده بود — و با نخستین سودی که شرکت برای آن سال گزارش کرد مقایسه شد{% else %}و با سودی که شرکت‌ها بعداً گزارش کردند مقایسه شد{% endif %}: خطای میانه <b>{{ rg.median_abs_error_pct|pct(0) }}</b>.
+    در نیمی از موارد سود واقعی بین {{ (rg.q25 * 100)|num(0) }}٪ و {{ (rg.q75 * 100)|num(0) }}٪ برآورد بود، و در ۸۰٪ موارد بین {{ (rg.q10 * 100)|num(0) }}٪ و {{ (rg.q90 * 100)|num(0) }}٪.
+    {% set cv = rg.coverage %}{% if cv and cv.total %}آزمون سال‌های کنارگذاشته (بازه هر بار بدون آن سال ساخته شد): {{ cv.covered|num }} از {{ cv.total|num }} برآورد، یعنی حدود {{ cv.per10 }} از ۱۰، داخل بازه‌ی نیمه افتاد (انتظار ۵ از ۱۰){% if rg.coverage80 and rg.coverage80.total %} و {{ (rg.coverage80.rate * 100)|num(0) }}٪ داخل بازه‌ی ۸۰٪{% endif %}{% if cv.worst_year %}؛ اما سال به سال یکسان نبود: در {{ cv.worst_year.year }} فقط {{ (cv.worst_year.rate * 100)|num(0) }}٪ داخل بازه‌ی نیمه بود{% endif %}.{% endif %}</p>
   <table>
     <tr><th></th><th class="n">کم (۲۵٪)</th><th class="n">برآورد</th><th class="n">زیاد (۷۵٪)</th><th class="n">بازه‌ی ۸۰٪</th></tr>
     <tr><td>سود سال جاری ({{ unit_label }})</td><td class="n">{{ rg.profit_low|amt }}</td><td class="n est">{{ f.profit|amt }}</td><td class="n">{{ rg.profit_high|amt }}</td><td class="n">{{ rg.profit_low80|amt }} تا {{ rg.profit_high80|amt }}</td></tr>
@@ -328,7 +331,7 @@ td.est { background: var(--accent-soft); font-weight: 700; }
     بازده اخزا: میانه‌ی اوراق خزانه با بیش از ۹۰ روز تا سررسید ({{ h.source or "" }}، {{ h.as_of or "" }}).
     دلار: tgju.org (بازار آزاد و مرکز مبادله).
     سود سهم صاحبان شرکت در هر سهم با تعداد سهم امروز بورس حساب شده است. «برآورد» یعنی برآورد همین سامانه از صورت‌ها و گزارش‌های منتشرشده، نه پیش‌بینی خود شرکت.
-    بازه‌ی خطا از اجرای همین روش روی سال‌های گذشته است (outlook_calibration).
+    بازه‌ی خطا از اجرای همین روش روی سال‌های گذشته است (outlook_calibration){% if rg and rg.source == "pit" %}، «نقطه‌در‌زمان»: هر برآورد فقط با نسخه‌هایی از صورت‌ها که در روز آن برآورد منتشر شده بود (pit_fundamentals){% endif %}.
   </p>
   <div class="footer">SIRAT · {{ r.symbol }} · ساخته‌شده {{ today }} ساعت {{ built_at }} · این سند توصیه‌ی سرمایه‌گذاری نیست.</div>
 </section>

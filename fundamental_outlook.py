@@ -1363,6 +1363,13 @@ def calibrated_range(calibration, months_known, margin, profit, shares, price,
            "months_bucket": b["months_bucket"], "band": b["band"],
            "band_label": outlook_calibration.MARGIN_LABELS.get(b["band"]),
            "median_abs_error_pct": _pct(b.get("median_abs_error")),
+           # 2026-11-24: what the band was measured on ("pit": decided the
+           # day the statement was first published, scored against the
+           # year's first release; "restated": the latest releases), the
+           # fiscal years behind it, and how it held on years left out of
+           # it (outlook_calibration.range_for; None where not measured).
+           "source": b.get("source") or "restated", "years": b.get("years"),
+           "coverage": b.get("coverage"), "coverage80": b.get("coverage80"),
            "wide": (b["q75"] - b["q25"]) > outlook_calibration.WIDE_BAND,
            "profit_low": profit * b["q25"], "profit_high": profit * b["q75"],
            "profit_low80": profit * b["q10"], "profit_high80": profit * b["q90"]}
@@ -2344,6 +2351,8 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
             "bar_pct": opportunity["rate_pct"],
             "opportunity": opportunity,
             "calibration": ({"built_at": calibration.get("built_at"),
-                             "points": calibration.get("points")}
+                             "points": calibration.get("points"),
+                             "source": (calibration.get("band") or {}).get(
+                                 "source", "restated")}
                             if calibration else None),
             "dollar": fx.summary(fx_record) if fx_record else None}

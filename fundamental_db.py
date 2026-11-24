@@ -1058,7 +1058,8 @@ def sync_from_market_db(verbose=False):
 
     # New, or re-parsed since it was carried (codal_backfill.reparse_latest
     # re-reads a filing for line items added after its first parse).
-    fresh = [row for row in database.load_codal_filings()
+    source = database.load_codal_filings()
+    fresh = [row for row in source
              if row.get("tracing_no")
              and (str(row["tracing_no"]) not in seen
                   or (row.get("updated_at") or "") > seen[str(row["tracing_no"])])]
@@ -1132,12 +1133,166 @@ def sync_from_market_db(verbose=False):
     result = {"new": len(fresh), "imported": imported,
               "superseded": superseded, "thin": thin, "empty": empty}
 
+    # Every release as well, not only the period's winner: the point-in-time
+    # store (pit_fundamentals). A failure there is reported, never allowed
+    # to undo or block the import above.
+    try:
+        result["versions"] = sync_versions(source)
+    except (sqlite3.DatabaseError, OSError) as exc:
+        result["versions"] = {"error": "%s: %s" % (type(exc).__name__,
+                                                   str(exc)[:160])}
+
     if verbose:
         print("fundamental store: %(new)d new letters, %(imported)d imported, "
               "%(superseded)d older than what is stored, %(thin)d lacking a "
               "statement the stored release has, %(empty)d empty" % result)
+        print("versions: %s" % (result["versions"],))
 
     return result
+
+
+# ==============================
+# EVERY RELEASE, AS PUBLISHED (2026-11-24)
+# ==============================
+#
+# `metrics` keeps ONE row per company-period, the most recently published
+# release, and everything downstream reads it. That is right for "what does
+# the company say today" and wrong for "what could anyone have known on
+# date D": 7,838 of 16,060 company-periods have more than one release
+# (unaudited, audited, amended; separate and consolidated), and in 40% of
+# the same-basis ones the net profit moved by more than 1% between the
+# first release and the last. The outlook's error band was measured on the
+# last word for both its inputs and its "actual" -- look-ahead twice.
+#
+# metric_versions mirrors codal_filings (the market database's per-letter
+# table) here, beside `metrics`, one row per tracing number, with a sortable
+# Gregorian publication stamp. Read through pit_fundamentals. Created by the
+# sync, not by create_database(), like imported_letters: a reader never
+# needs to write, and a read-only store (the test suite's view of the live
+# one) never meets a CREATE it cannot run.
+
+VERSIONS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS metric_versions (
+    tracing_no        TEXT PRIMARY KEY,
+    ins_code          TEXT NOT NULL,
+    period_end        TEXT NOT NULL,
+    period_months     INTEGER,
+    consolidated      INTEGER,
+    audited           INTEGER,
+    published_at      TEXT,
+    published_iso     TEXT,
+    title             TEXT,
+    items             TEXT,
+    ratios            TEXT,
+    source_updated_at TEXT,
+    synced_at         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_versions_period
+    ON metric_versions (ins_code, period_end, period_months, published_iso);
+CREATE INDEX IF NOT EXISTS idx_versions_published
+    ON metric_versions (published_iso);
+"""
+
+
+def published_iso(published_at):
+    """Codal's Jalali stamp ('1400/01/30 12:18:18') as a sortable Gregorian
+    'YYYY-MM-DDTHH:MM:SS', or None. A stamp without a clock is the END of
+    its day (jalali.parse), so a same-day decision cannot claim to have
+    seen it."""
+
+    import jalali
+
+    stamp = jalali.parse(published_at)
+    return stamp.isoformat(timespec="seconds") if stamp else None
+
+
+def sync_versions(rows=None):
+    """Mirror codal_filings into metric_versions. Incremental; cheap.
+
+    `rows` is the WHOLE codal_filings table as database.load_codal_filings()
+    returns it (sync_from_market_db passes the copy it already read); a
+    subset would read as deletions. A release is written when its tracing
+    number is new or its source row was re-parsed since (updated_at newer),
+    and a tracing number no longer in codal_filings is dropped: the
+    subsidiary purge (codal_backfill.purge_subsidiaries) deletes letters
+    there, and another company's statement must not linger here either.
+    An empty source deletes nothing -- an unreadable table is not a purge.
+
+    Returns {written, new, removed, undated}: `undated` counts releases
+    whose published_at did not parse (stored, but invisible to as_of).
+    """
+
+    import database
+
+    if rows is None:
+        rows = database.load_codal_filings()
+
+    conn = _connect()
+    try:
+        conn.executescript(VERSIONS_SCHEMA)
+        held = {str(t): (stamp or "") for t, stamp in conn.execute(
+            "SELECT tracing_no, source_updated_at FROM metric_versions")}
+
+        now = _now()
+        batch = []
+        source_ids = set()
+        undated = 0
+        for row in rows:
+            tracing = row.get("tracing_no")
+            if tracing is None or not row.get("period_end"):
+                continue
+            tracing = str(tracing)
+            source_ids.add(tracing)
+            stamp = row.get("updated_at") or ""
+            if tracing in held and held[tracing] >= stamp:
+                continue
+            iso = published_iso(row.get("published_at"))
+            if iso is None:
+                undated += 1
+            batch.append((
+                tracing, str(row.get("ins_code")), str(row["period_end"]),
+                row.get("period_months"),
+                None if row.get("consolidated") is None
+                else int(bool(row["consolidated"])),
+                None if row.get("audited") is None else int(bool(row["audited"])),
+                row.get("published_at"), iso, row.get("title"),
+                _dumps(row.get("items") or {}), _dumps(row.get("ratios") or {}),
+                stamp, now))
+
+        if batch:
+            conn.executemany("""
+                INSERT INTO metric_versions
+                    (tracing_no, ins_code, period_end, period_months,
+                     consolidated, audited, published_at, published_iso, title,
+                     items, ratios, source_updated_at, synced_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(tracing_no) DO UPDATE SET
+                    ins_code = excluded.ins_code,
+                    period_end = excluded.period_end,
+                    period_months = excluded.period_months,
+                    consolidated = excluded.consolidated,
+                    audited = excluded.audited,
+                    published_at = COALESCE(excluded.published_at,
+                                            metric_versions.published_at),
+                    published_iso = COALESCE(excluded.published_iso,
+                                             metric_versions.published_iso),
+                    title = excluded.title, items = excluded.items,
+                    ratios = excluded.ratios,
+                    source_updated_at = excluded.source_updated_at,
+                    synced_at = excluded.synced_at
+            """, batch)
+
+        gone = sorted(set(held) - source_ids) if source_ids else []
+        if gone:
+            conn.executemany("DELETE FROM metric_versions WHERE tracing_no = ?",
+                             [(t,) for t in gone])
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"written": len(batch),
+            "new": sum(1 for b in batch if b[0] not in held),
+            "removed": len(gone), "undated": undated}
 
 
 def import_from_market_db(limit=None, verbose=True):

@@ -61,14 +61,15 @@ def rows():
 
 class PageTests(unittest.TestCase):
 
-    def context(self):
+    def context(self, releases=()):
         r = fo.analyse("x", price=5_000, rows=rows(), today=(1405, 8, 14),
                        opportunity={"rate_pct": 44.0, "as_of": "t", "source": "t"},
                        peers={"sector_pe": {"s": 6.0}, "sector_n": {"s": 9},
                               "market_pe": 7.0, "own_pe": {}},
                        sector="s")
         r.update(symbol="آزمون", name="شرکت آزمون", sector="s")
-        with mock.patch.object(sr.fundamental_db, "load_metrics", return_value=rows()):
+        with mock.patch.object(sr.fundamental_db, "load_metrics", return_value=rows()), \
+                mock.patch.object(sr, "first_releases", return_value=list(releases)):
             statements = sr.statement_table("x", r)
         return {"r": r, "inst": {}, "code": "x", "today": "1405/09/02",
                 "built_at": "10:00", "statements": statements, "prices": None,
@@ -91,6 +92,65 @@ class PageTests(unittest.TestCase):
         cols = self.context()["statements"]
         self.assertEqual([c["title"] for c in cols][-2:], ["۱۲ ماه گذشته", "برآورد سال جاری"])
         self.assertTrue(cols[-1]["estimate"])
+        self.assertNotIn("first_owners", cols[0])
+        self.assertNotIn("نخستین گزارش", sr.render_html(self.context()))
+
+    def test_the_point_in_time_band_and_its_left_out_years_are_explained(self):
+        ctx = self.context()
+        ctx["r"]["forward"]["range"] = {
+            "q10": .5, "q25": .8, "q50": 1.0, "q75": 1.2, "q90": 1.5, "n": 324,
+            "key": "6|15_30", "basis": "statement", "months_known": 6, "months_bucket": 6,
+            "band": "15_30", "band_label": "۱۵ تا ۳۰٪", "median_abs_error_pct": 21.7,
+            "source": "pit", "years": [1400, 1405], "wide": False,
+            "coverage": {"covered": 159, "total": 324, "rate": .49, "per10": 5,
+                         "nominal": .5, "worst_year": {"year": 1405, "rate": .2}},
+            "coverage80": {"covered": 258, "total": 324, "rate": .796, "nominal": .8},
+            "profit_low": 1e9, "profit_high": 2e9, "profit_low80": 1e9, "profit_high80": 3e9,
+            "eps_low": 1, "eps_high": 2, "eps_low80": 1, "eps_high80": 3,
+            "pe_low": 5, "pe_high": 9}
+        html = sr.render_html(ctx)
+        self.assertIn("سال‌های 1400 تا 1405", html)
+        self.assertIn("نخستین سودی که شرکت برای آن سال گزارش کرد", html)
+        self.assertIn("حدود 5 از ۱۰", html)
+        self.assertIn("در 1405 فقط 20٪", html)
+        self.assertIn("pit_fundamentals", html)
+
+
+def first_published(net_first, net_audited=60 * B):
+    """The 1404 annual's two releases: first published at `net_first`,
+    audited at the figure rows() holds."""
+
+    import fundamental_db
+
+    def rel(tracing, published, net):
+        return {"tracing_no": tracing, "ins_code": "x", "period_end": "1404/12/29",
+                "period_months": 12, "consolidated": False, "audited": False,
+                "published_at": published,
+                "published_iso": fundamental_db.published_iso(published),
+                "title": "t", "items": {"revenue": 300 * B, "net_profit": net},
+                "ratios": {}}
+    return [rel("1", "1405/01/31 10:00:00", net_first),
+            rel("2", "1405/03/20 10:00:00", net_audited)]
+
+
+class RevisionTests(unittest.TestCase):
+    """A year whose profit was later revised shows its first release."""
+
+    context = PageTests.context
+
+    def test_a_revised_year_shows_its_first_release(self):
+        ctx = self.context(first_published(48 * B))
+        col = [c for c in ctx["statements"] if c["title"] == "سال 1404/12"][0]
+        self.assertAlmostEqual(col["first_owners"], 48 * B)
+        self.assertAlmostEqual(col["revision_pct"], 25.0)
+        html = sr.render_html(ctx)
+        self.assertIn("نخستین گزارش: 48", html)
+        self.assertIn("«نخستین گزارش»", html)               # the footnote
+        self.assertIn("default-src 'none'", html)           # the CSP stays
+
+    def test_a_revision_within_five_percent_is_not_marked(self):
+        cols = self.context(first_published(59 * B))["statements"]
+        self.assertFalse([c for c in cols if c.get("first_owners") is not None])
 
 
 class HousekeepingTests(unittest.TestCase):

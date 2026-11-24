@@ -154,5 +154,172 @@ class SensitivityTests(unittest.TestCase):
 
 import unittest.mock  # noqa: E402
 
+
+# ---- point in time (2026-11-24) ---------------------------------------------
+
+def release(code, tracing, end, months, published, revenue, net, cons=False):
+    import fundamental_db
+    return {"tracing_no": tracing, "ins_code": code, "period_end": end,
+            "period_months": months, "consolidated": cons, "audited": False,
+            "published_at": published,
+            "published_iso": fundamental_db.published_iso(published), "title": "t",
+            "items": {"revenue": revenue, "net_profit": net, "capital": 100 * B},
+            "ratios": {}}
+
+
+def releases(code, years, margin=0.2, growth=0.5):
+    """company() as Codal releases: each statement published about a month
+    (an annual, about two) after its period."""
+
+    out = []
+    revenue = 100 * B
+    for y in years:
+        half = revenue * 0.45
+        out.append(release(code, "%s-%d-6" % (code, y), "%d/06/31" % y, 6,
+                           "%d/07/28 10:00:00" % y, half, half * margin))
+        out.append(release(code, "%s-%d-12" % (code, y), "%d/12/29" % y, 12,
+                           "%d/02/20 10:00:00" % (y + 1), revenue, revenue * margin))
+        revenue *= 1 + growth
+    return out
+
+
+def sixes(found, year=None):
+    return [p[2] for p in found if p[0] == "6" and (year is None or p[3] == year)]
+
+
+class PointInTimeTests(unittest.TestCase):
+
+    def test_a_steady_company_is_estimated_exactly_point_in_time(self):
+        found = oc.measure_pit({"1": releases("1", range(1400, 1405))}, lags=(0,))[0]
+        self.assertEqual(sorted({p[3] for p in found["points"] if p[0] == "6"}),
+                         [1401, 1402, 1403, 1404])
+        for ratio in sixes(found["points"]):
+            self.assertAlmostEqual(ratio, 1.0, places=6)
+        self.assertTrue([p for p in found["points"] if p[0] == "12"])
+
+    def test_the_actual_is_the_first_release_and_the_latest_is_kept_beside_it(self):
+        rel = releases("1", range(1400, 1405))
+        # 1402's annual restated a year later, its profit half as high again
+        rel.append(release("1", "late", "1402/12/29", 12, "1404/05/01 10:00:00",
+                           100 * B * 1.5 ** 2, 100 * B * 1.5 ** 2 * 0.2 * 1.5))
+        found = oc.measure_pit({"1": rel}, lags=(0,))[0]
+        self.assertAlmostEqual(sixes(found["points"], 1402)[0], 1.0, places=6)
+        self.assertAlmostEqual(sixes(found["latest"], 1402)[0], 1.5, places=6)
+
+    def test_inputs_are_the_releases_known_on_the_decision_day(self):
+        rel = releases("1", range(1400, 1405))
+        # last year's annual restated (sales +20%) eighteen days after this
+        # year's six months were first published
+        rel.append(release("1", "restated", "1401/12/29", 12, "1402/08/15 10:00:00",
+                           100 * B * 1.5 * 1.2, 100 * B * 1.5 * 0.2))
+        found = oc.measure_pit({"1": rel}, lags=(0, 30))
+        self.assertAlmostEqual(sixes(found[0]["points"], 1402)[0], 1.0, places=6)
+        self.assertNotAlmostEqual(sixes(found[30]["points"], 1402)[0], 1.0, places=3)
+
+    def test_an_actual_already_public_is_not_an_estimate(self):
+        rel = releases("1", range(1400, 1405))
+        for r in rel:                       # 1403's six months filed after its year
+            if r["tracing_no"] == "1-1403-6":
+                r.update(published_at="1404/03/01 10:00:00",
+                         published_iso="2025-05-22T10:00:00")
+        found = oc.measure_pit({"1": rel}, lags=(0,))[0]
+        self.assertEqual(sixes(found["points"], 1403), [])
+        self.assertEqual(found["skipped"].get("actual_known"), 1)
+
+    def test_the_decision_day_is_passed_as_its_jalali_date(self):
+        import fundamental_outlook as fo
+        seen = []
+        original = fo.analyse
+
+        def spy(*args, **kwargs):
+            seen.append(kwargs.get("today"))
+            return original(*args, **kwargs)
+
+        with unittest.mock.patch.object(fo, "analyse", spy):
+            oc.measure_pit({"1": releases("1", range(1400, 1403))}, lags=(0, 30))
+        self.assertIn((1401, 7, 28), seen)          # the six months' first release
+        self.assertIn((1401, 8, 28), seen)          # thirty days on
+
+    def test_wilson_interval(self):
+        low, high = oc.wilson(5, 10)
+        self.assertAlmostEqual(low, 0.2366, places=3)
+        self.assertAlmostEqual(high, 0.7634, places=3)
+        self.assertEqual(oc.wilson(0, 0), (None, None))
+
+    def test_leave_one_year_out_holds_on_exchangeable_years_and_names_a_shock(self):
+        grid = [0.5 + (i + 0.5) / 200 for i in range(200)]
+        points = [("6", None, r, y) for y in range(1400, 1405) for r in grid]
+        held = oc.loyo(points)
+        rate = held["overall"]["statement"]["q25_q75"]["rate"]
+        self.assertAlmostEqual(rate, 0.5, delta=0.02)
+        self.assertTrue(held["overall"]["statement"]["q25_q75"]["consistent"])
+        self.assertAlmostEqual(held["buckets"]["6"]["q10_q90"]["rate"], 0.8, delta=0.02)
+
+        shocked = points + [("6", None, r + 2.0, 1405) for r in grid]
+        held = oc.loyo(shocked)
+        worst = held["year_spread"]["statement"]["q25_q75"]["worst"]
+        self.assertEqual((worst["year"], worst["covered"]), (1405, 0))
+        self.assertGreaterEqual(held["year_spread"]["statement"]["q25_q75"]["outside"], 1)
+
+    def test_the_band_falls_back_explicitly(self):
+        s = {"n": 100, "q10": .5, "q25": .8, "q50": 1, "q75": 1.2, "q90": 1.5,
+             "median_abs_error": .2}
+        thin = dict(s, n=5)
+        buckets, fallback = oc.choose_band({"6": s, "6|lt5": thin, "9": thin},
+                                           {"6": s, "6|lt5": s, "9": dict(s, q25=.7)})
+        self.assertEqual(buckets["6"]["source"], "pit")
+        # a thin (months, margin) bucket stays thin: range_for drops to "6"
+        self.assertEqual((buckets["6|lt5"]["n"], buckets["6|lt5"]["source"]), (5, "pit"))
+        self.assertEqual(oc.range_for({"buckets": buckets}, 7, 0.02)["key"], "6")
+        # a thin months bucket takes the restated one, and says so
+        self.assertEqual((buckets["9"]["source"], buckets["9"]["q25"], buckets["9"]["pit_n"]),
+                         ("restated", .7, 5))
+        self.assertEqual(fallback, {"restated": ["9"], "thin": ["6|lt5"]})
+
+    def test_the_range_carries_its_source_years_and_coverage(self):
+        s = {"n": 100, "q10": .5, "q25": .8, "q50": 1, "q75": 1.2, "q90": 1.5,
+             "median_abs_error": .2}
+        cov = {"covered": 40, "total": 100, "nominal": 0.5, "rate": 0.4,
+               "low95": .31, "high95": .5, "consistent": True}
+        record = {"buckets": {"6": dict(s, source="pit")},
+                  "band": {"years": [1400, 1405]},
+                  "loyo": {"buckets": {"6": {"q25_q75": cov, "q10_q90": dict(cov, nominal=.8)}},
+                           "year_spread": {"statement": {"q25_q75": {
+                               "years": 6, "outside": 3,
+                               "worst": {"year": 1405, "covered": 2, "total": 10, "rate": .2}}}}}}
+        b = oc.range_for(record, 7, None)
+        self.assertEqual((b["source"], b["years"]), ("pit", [1400, 1405]))
+        self.assertEqual((b["coverage"]["per10"], b["coverage"]["years_outside"],
+                          b["coverage"]["worst_year"]["year"]), (4, 3, 1405))
+        self.assertEqual(b["coverage80"]["nominal"], .8)
+
+        import fundamental_outlook as fo
+        out = fo.calibrated_range(record, 7, None, 100 * B, 1e9, 1000)
+        self.assertEqual((out["source"], out["coverage"]["covered"]), ("pit", 40))
+
+        # a record from before 2026-11-24: restated, nothing measured on left-out years
+        old = oc.range_for({"buckets": {"6": s}}, 7, None)
+        self.assertEqual((old["source"], old["coverage"], old["years"]), ("restated", None, None))
+
+    def test_without_releases_the_band_stays_restated_and_says_so(self):
+        record = oc.build(statements=company("1", range(1400, 1405)), fx_record={},
+                          sector_of={}, versions={})
+        self.assertEqual(record["band"]["source"], "restated")
+        self.assertEqual(record["buckets"], record["restated_buckets"])
+        self.assertIsNone(record["loyo"])
+
+    def test_the_band_is_read_from_the_point_in_time_points(self):
+        with unittest.mock.patch.object(oc, "MIN_N", 1):
+            record = oc.build(statements=company("1", range(1400, 1405)), fx_record={},
+                              sector_of={}, versions={"1": releases("1", range(1400, 1405))})
+        self.assertEqual(record["band"]["source"], "pit")
+        self.assertEqual(record["buckets"]["6"]["source"], "pit")
+        self.assertEqual(set(record["pit"]["lags"]), {"0", "30", "60", "90"})
+        self.assertEqual(record["points"], record["pit"]["lags"]["0"]["points"])
+        self.assertIn("6", record["restated_buckets"])
+        self.assertIsNotNone(record["loyo"])
+        self.assertEqual(record["pit"]["store"]["periods"], 10)
+
+
 if __name__ == "__main__":
     unittest.main()

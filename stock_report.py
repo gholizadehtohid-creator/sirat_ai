@@ -330,18 +330,28 @@ def statement_table(code, result):
     annual = [p for p in ps if p["months"] == 12][:STATEMENT_YEARS]
     annual.reverse()
     shares = (result.get("valuation") or {}).get("shares")
+    # Every release of these years (pit_fundamentals): where the profit the
+    # table shows -- the latest release -- differs materially from the one
+    # the company first published, the first is shown beside it (2026-11-24).
+    versions = first_releases(code)
     cols = []
     for p in annual:
         it = p["items"]
         owners = fo._profit(it)
-        cols.append({"title": "سال %s" % p["end"][:7], "sub": "حسابرسی‌شده" if p.get("audited") else "",
-                     "revenue": _f(it.get("revenue")), "gross": _f(it.get("gross_profit")),
-                     "operating": _f(it.get("operating_profit")),
-                     "net": _f(it.get("net_profit")), "owners": owners,
-                     "eps": owners / shares if owners is not None and shares else None,
-                     "margin": (_f(it.get("net_profit")) / _f(it.get("revenue")) * 100
-                                if _f(it.get("net_profit")) is not None and _f(it.get("revenue"))
-                                else None)})
+        col = {"title": "سال %s" % p["end"][:7], "sub": "حسابرسی‌شده" if p.get("audited") else "",
+               "revenue": _f(it.get("revenue")), "gross": _f(it.get("gross_profit")),
+               "operating": _f(it.get("operating_profit")),
+               "net": _f(it.get("net_profit")), "owners": owners,
+               "eps": owners / shares if owners is not None and shares else None,
+               "margin": (_f(it.get("net_profit")) / _f(it.get("revenue")) * 100
+                          if _f(it.get("net_profit")) is not None and _f(it.get("revenue"))
+                          else None)}
+        revised = revision(code, p, versions)
+        if revised:
+            col.update(first_owners=revised["first_net_profit"],
+                       first_published=str(revised["first_published_at"] or "")[:10],
+                       revision_pct=revised["change"] * 100)
+        cols.append(col)
     ttm, fwd = result.get("ttm") or {}, result.get("forward") or {}
     if ttm.get("revenue"):
         cols.append({"title": "۱۲ ماه گذشته", "sub": "تا %s" % result["latest"]["period_end"],
@@ -356,6 +366,30 @@ def statement_table(code, result):
                      "margin": (fwd["profit"] / fwd["revenue"] * 100
                                 if fwd.get("profit") is not None and fwd.get("revenue") else None)})
     return cols
+
+
+def first_releases(code):
+    """The company's stored releases (pit_fundamentals), or [] when the
+    point-in-time store cannot be read -- the table stands without them."""
+
+    try:
+        import pit_fundamentals
+        return pit_fundamentals.load_versions(code).get(str(code), [])
+    except Exception:                                           # noqa: BLE001
+        return []
+
+
+def revision(code, period, versions):
+    """pit_fundamentals.revision_of() for one of the table's periods: the
+    first release's net profit where the latest differs from it by more
+    than MATERIAL_REVISION, else None."""
+
+    if not versions:
+        return None
+    import pit_fundamentals
+    return pit_fundamentals.revision_of(
+        code, period["end"], period["months"], period.get("consolidated"),
+        period["items"], versions=versions)
 
 
 def price_series(code):
