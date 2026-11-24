@@ -1,0 +1,15 @@
+# What graphify leaves out of the knowledge graph (it already honours .gitignore).
+# Experiment outputs and panels are evidence files, not code: thousands of
+# rows of JSON/CSV would drown the code graph.
+backtest_output/
+sirat/fixtures/data/
+static/fonts/
+data/
+reports/
+logs/
+*.db
+*.csv
+*.csv.gz
+*.jsonl
+*.png
+*.docx

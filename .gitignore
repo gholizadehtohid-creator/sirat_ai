@@ -117,3 +117,13 @@ data/fx_rates.json
 data/outlook_calibration.json
 # Per-stock PDF reports (stock_report.py), built on demand.
 reports/
+
+# graphify (2026-11-24): the readable report and the interactive view are
+# committed; the 10 MB graph.json and the caches are rebuilt locally with
+# `graphify update .` (about 50 s, no LLM) and would bloat every push.
+graphify-out/graph.json
+graphify-out/cache/
+graphify-out/.graphify_*
+graphify-out/manifest.json
+# Agent worktrees are scratch copies of this repository.
+.claude/worktrees/
