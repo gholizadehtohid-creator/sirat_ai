@@ -392,6 +392,28 @@ def revision(code, period, versions):
         period["items"], versions=versions)
 
 
+DIVIDEND_ROWS = 5
+
+
+def dividend_rows(code, limit=DIVIDEND_ROWS):
+    """The last few dividends the exchange adjusted for, newest first:
+    [{date (Jalali), dps, yield_pct}]. Empty when the lists were never
+    fetched; never raises -- the rest of the report stands."""
+
+    try:
+        import corporate_actions
+        rows = corporate_actions.dividend_history(code, codal=False)
+    except Exception:                                           # noqa: BLE001
+        return []
+    out = []
+    for row in rows[:limit]:
+        if not row.get("dps"):
+            continue
+        out.append({"date": row.get("date_jalali") or row.get("date"),
+                    "dps": row["dps"], "yield_pct": row.get("yield_pct")})
+    return out
+
+
 def price_series(code):
     """[(jalali label, adjusted close)] and TEDPIX's, both rebased to 100."""
 
@@ -400,14 +422,30 @@ def price_series(code):
     bars = database.load_history_by_inscode(code, limit=PRICE_SESSIONS)
     if bars is None or len(bars) < 20:
         return None
+    # The exchange's own adjustment factors first (corporate_actions,
+    # 2026-11-24): dividends reinvested and capital increases at the
+    # exchange's base -- the same total-return basis as TEDPIX, which the
+    # chart compares it with. back_adjust's gap rules are the fallback for
+    # a name whose lists were never fetched.
+    basis = "heuristic"
+    try:
+        import corporate_actions
+        exchange = corporate_actions.exchange_adjust(bars, code, fill_untraded=True)
+        if exchange is not None and exchange.attrs.get("exchange_events"):
+            bars, basis = exchange, "exchange"
+    except Exception:                                           # noqa: BLE001
+        pass
     bars = bars[bars["volume"].fillna(0) > 0] if "volume" in bars.columns else bars
     # A halted share can have bars and not one trade among them (63 names on
     # 2026-11-23; the route answered HTTP 500 for دتهران and پرشیا): no
     # price chart, and the rest of the report stands.
     if len(bars) < 2:
         return None
-    adjusted, _events = back_adjust(bars)
-    adjusted = adjusted.reset_index(drop=True)
+    if basis == "exchange":
+        adjusted = bars.reset_index(drop=True)
+    else:
+        adjusted, _events = back_adjust(bars)
+        adjusted = adjusted.reset_index(drop=True)
     try:
         index = database.load_index_history(config.INDICES["TEDPIX"]["insCode"])
     except Exception:                                           # noqa: BLE001
@@ -438,6 +476,7 @@ def price_series(code):
            "stock_return_pct": (closes[-1] / base - 1) * 100,
            "index_return_pct": ((idx[-1][1] - 100) if idx and idx[-1][1] else None),
            "from": jalali_label(dates[0]), "to": jalali_label(dates[-1]),
+           "basis": basis,
            "sessions": len(calendar), "traded": len(dates)}
     return out
 
@@ -511,6 +550,7 @@ def gather(symbol, refresh_inputs=True):
            "built_at": datetime.now().strftime("%H:%M"),
            "statements": statement_table(code, result),
            "prices": price_series(code),
+           "dividends": dividend_rows(code),
            "method_text": METHOD_TEXT.get(result.get("method"), "برآورد ممکن نشد."),
            "basis_text": BASIS_TEXT.get(result.get("basis"), result.get("basis")),
            "opportunity": result.get("hurdle") or {}}

@@ -4423,6 +4423,124 @@ async function lookupOutlook() {
   }
 }
 
+/* ---------- AGM, dividend and capital-increase calendar (2026-11-24) ----------
+   Research report item 2: the dates a hand trader acts on -- a meeting
+   halts the symbol, a dividend is due within the legal deadline, a capital
+   increase moves through its stages. corporate_calendar.calendar() builds it
+   from stored Codal letters and the exchange's own adjustment list, with no
+   request of its own. Operational information, never a buy signal. */
+var calendarState = { data: null };
+
+function calendarHeld() {
+  const held = new Set();
+  for (const line of holdingsText().split(/\r?\n/)) {
+    const first = line.trim().split(/\s+/)[0];
+    if (first) held.add(first.replace(/ي/g, "ی").replace(/ك/g, "ک"));
+  }
+  return held;
+}
+
+function calendarDate(d) {
+  return d && d.jalali ? esc(d.jalali) : "—";
+}
+
+function calendarLink(letter, text) {
+  if (!letter || !letter.url) return esc(text || "");
+  return `<a href="${esc(safeUrl(letter.url))}" target="_blank" rel="noopener noreferrer">${esc(text || letter.title || "")}</a>`;
+}
+
+function calendarSymbol(sym, held) {
+  const mine = held.has(String(sym || "").replace(/ي/g, "ی").replace(/ك/g, "ک"));
+  return `<strong>${esc(sym || "")}</strong>` +
+    (mine ? ` <span class="badge good"><span class="dot"></span>در سبد شما</span>` : "");
+}
+
+function calendarSort(items, held) {
+  const key = (x) => held.has(String(x.symbol || "").replace(/ي/g, "ی").replace(/ك/g, "ک")) ? 0 : 1;
+  return [...items].sort((a, b) => key(a) - key(b));
+}
+
+function renderCalendar(rep) {
+  calendarState.data = rep;
+  const held = calendarHeld();
+  const onlyMine = !!($("calendarMine") && $("calendarMine").checked);
+  const keep = (items) => calendarSort(items || [], held).filter(x =>
+    !onlyMine || held.has(String(x.symbol || "").replace(/ي/g, "ی").replace(/ك/g, "ک")));
+  const LIMIT = 15;
+  const cut = (items) => items.slice(0, LIMIT);
+  const more = (items) => items.length > LIMIT
+    ? `<p class="hint">${num(items.length - LIMIT, 0)} مورد دیگر نشان داده نشد؛ «فقط نمادهای سبد من» را بزنید یا کارت اطلاعیه‌ها را ببینید.</p>` : "";
+
+  const pending = keep(rep.pending_meetings);
+  const decided = keep(rep.recent_decisions);
+  const capital = keep((rep.capital_increases || []).filter(c => c.status !== "stale"));
+  const stale = (rep.capital_increases || []).filter(c => c.status === "stale").length;
+
+  const pendingRows = cut(pending).map(p => [
+    calendarSymbol(p.symbol, held),
+    esc(p.meeting_type_fa || ""),
+    calendarLink(p.invitation, (p.invitation || {}).published_jalali || "دعوت"),
+    `${calendarDate(p.expected_from)} تا ${calendarDate(p.expected_to)}`,
+    calendarDate(p.typical_date),
+    esc(p.status_fa || ""),
+  ]);
+  const decidedRows = cut(decided).map(d => {
+    const dps = d.dps_exchange != null ? d.dps_exchange : d.dps_codal;
+    const src = d.dps_exchange != null ? "تعدیل بورس" : (d.dps_codal != null ? "کدال" : "");
+    return [
+      calendarSymbol(d.symbol, held),
+      esc(d.meeting_type_fa || ""),
+      calendarLink(d.decision, (d.meeting_date || {}).jalali || "—") +
+        (d.meeting_date_basis === "letter_published_approx" ? ' <span class="hint">(تاریخ نامه)</span>' : ""),
+      dps != null ? `${num(dps, 0)} ریال <span class="hint">(${esc(src)})</span>` : "—",
+      d.payment_deadline ? calendarDate(d.payment_deadline) : "—",
+    ];
+  });
+  const capitalRows = cut(capital).map(c => [
+    calendarSymbol(c.symbol, held),
+    calendarLink(c.latest_stage, (c.latest_stage || {}).label_fa || ""),
+    calendarDate((c.latest_stage || {}).date),
+    calendarDate(c.started),
+    esc(c.status_fa || ""),
+  ]);
+
+  const section = (title, count, open, body) =>
+    `<details class="calendar-part"${open ? " open" : ""}><summary>${esc(title)} — ${num(count, 0)} مورد</summary>${body}</details>`;
+
+  $("calendarBody").innerHTML =
+    section("مجمع‌های در پیش (نماد معمولاً در روز مجمع متوقف می‌شود)", pending.length, true,
+      pendingRows.length ? table(["نماد", "نوع مجمع", "دعوت", "بازه‌ی قانونی برگزاری", "تاریخ معمول", "وضعیت"], pendingRows) + more(pending)
+                         : `<p class="hint">موردی نیست.</p>`) +
+    section("تصمیم‌های اخیر مجمع و سود نقدی", decided.length, true,
+      decidedRows.length ? table(["نماد", "نوع مجمع", "تاریخ مجمع", "سود هر سهم", (rep.rules || {}).payment_deadline_label || "مهلت پرداخت"], decidedRows) + more(decided)
+                         : `<p class="hint">موردی نیست.</p>`) +
+    section("افزایش سرمایه در جریان", capital.length, false,
+      (capitalRows.length ? table(["نماد", "آخرین مرحله", "تاریخ", "شروع", "وضعیت"], capitalRows) + more(capital)
+                          : `<p class="hint">موردی نیست.</p>`) +
+      (stale ? `<p class="hint">${num(stale, 0)} پرونده‌ی افزایش سرمایه مدتی است نامه‌ی تازه‌ای ندارد و نشان داده نشد.</p>` : ""));
+
+  const cov = rep.coverage || {};
+  const watch = cov.watch_since && cov.watch_since.jalali;
+  const unwatched = (cov.unwatched_codes || []).length;
+  banner("calendarStatus", "calendarStatusText", "is-live",
+    `${esc(rep.note || "")} ` +
+    (watch ? `پایش خوراک کدال از ${esc(watch)} همه‌ی نامه‌های مجمع و افزایش سرمایه را نگه داشته؛ ` : "") +
+    (unwatched ? `${num(unwatched, 0)} نوع نامه (مثل مهلت حق تقدم) فقط با جست‌وجوی تک‌شرکتی می‌رسد و ممکن است جا افتاده باشد. ` : "") +
+    `تاریخ‌ها تا ${esc(rep.as_of_jalali || "")}.`);
+}
+
+async function loadCalendar() {
+  if (!$("calendarBody")) return;
+  try {
+    renderCalendar(await getJSON("/api/corporate_calendar"));
+  } catch (err) {
+    banner("calendarStatus", "calendarStatusText", "is-error",
+      `تقویم خوانده نشد: ${esc(err.message || err)}`);
+  }
+}
+
+on("calendarMine", "change", () => { if (calendarState.data) renderCalendar(calendarState.data); });
+
 /* ---------- my holdings (holdings.py) ----------
    The list is the user's own and lives in this browser only; the server is
    asked for the numbers, never told to remember the book. */
@@ -4738,7 +4856,7 @@ async function loadValuation() {
 const TAB_LOADERS = {
   // Live first in the summary too: the "today" card's market line reads it.
   summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities(),
-            () => loadMarketflow(), () => loadAnnouncements(),
+            () => loadMarketflow(), () => loadAnnouncements(), () => loadCalendar(),
             () => loadHoldings(), () => loadValuation()],
   stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
   live: [() => loadLive()],
@@ -5158,7 +5276,7 @@ function renderToday() {
   const billText = sellsFixed || holdsBills
     ? `<strong>${sellsFixed ? "پیش از فروش درآمد ثابت:" : "درباره‌ی اخزایی که دارید:"}</strong> ` +
       (holdsBills ? "اخزایی که پیش از سررسید فروخته شود بازده ثابتش را از دست می‌دهد و به قیمت روز می‌رود. " : "") +
-      `در بازآزمایی با بازده واقعی اخزا (E35، ۲۰۱۷ تا ۲۰۲۶) برتری سهام و طلا بر اخزا از آستانه‌ی آماری نگذشت؛ اوراق خزانه امروز ` +
+      `در بازآزمایی ۱۵ ساله با درآمد ثابت واقعی (E36، ۱۳۹۰ تا ۱۴۰۵) برتری سهام و طلا بر درآمد ثابت از آستانه‌ی آماری نگذشت؛ اوراق خزانه امروز ` +
       `${billYield ? `حدود ${num(billYield, 0)}٪` : "بازده بالایی"} می‌دهد. `
     : "";
 

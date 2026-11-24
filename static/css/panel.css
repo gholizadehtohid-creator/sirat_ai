@@ -2539,3 +2539,8 @@ td:first-child { font-weight: 600; color: var(--text-primary); }
 .gate-note .gate-ack { display: block; margin: 8px 0; cursor: pointer; }
 .gate-note button[disabled] { opacity: 0.5; cursor: not-allowed; }
 .gate-note.gate-mini { font-size: 0.85rem; padding: 6px 10px; color: var(--text-muted); }
+
+.calendar-part { margin: 8px 0; }
+.calendar-part > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.inline-check { display: inline-flex; gap: 6px; align-items: center; cursor: pointer;
+                font-size: 0.9rem; }

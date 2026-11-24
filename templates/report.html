@@ -312,6 +312,8 @@ td.est { background: var(--accent-soft); font-weight: 700; }
     <tr><td>پوشش هزینه‌ی مالی</td><td class="n">{{ b.interest_cover|num(1) }}</td><td class="note">سود عملیاتی چند برابر هزینه‌ی مالی</td></tr>
     <tr><td>دوره‌ی وصول مطالبات</td><td class="n">{{ b.receivable_days|num }} روز</td><td class="note">رشد مطالبات {{ b.receivable_growth_pct|pct(0, true) }}</td></tr>
     <tr><td>سود نقدی آخرین مجمع</td><td class="n">{{ v.dps|num }} ریال</td><td class="note">سال مالی {{ v.dividend_fiscal_year or "—" }}{% if v.dividend_stale %} — مجمع سال بعد ثبت نشده{% endif %}؛ بازده {{ v.dividend_yield_pct|pct }}</td></tr>
+    {% if dividends %}<tr><td>سود نقدی سال‌های گذشته</td><td class="n">{{ dividends|length }} مجمع</td>
+      <td class="note">{% for d in dividends %}{{ (d.date or "")[:7] }}: {{ d.dps|num }} ({{ d.yield_pct|pct(1) }}){% if not loop.last %}، {% endif %}{% endfor %} ریال — تعدیل قیمت بورس</td></tr>{% endif %}
     <tr><td>ROE دوازده‌ماهه / P/B</td><td class="n">{{ v.roe_ttm_pct|pct }} / {{ v.pb|num(2) }}</td><td class="note">حقوق صاحبان سهام دوره‌ی اخیر</td></tr>
     {% if v.price_to_nav is not none %}<tr><td>P/NAV</td><td class="n">{{ v.price_to_nav|num(2) }}{% if v.nav_stale and v.price_to_nav_est is not none %} (تخمینی {{ v.price_to_nav_est|num(2) }}){% endif %}</td>
       <td class="note">پرتفوی {{ v.nav_period }}{% if v.nav_stale %}؛ کهنه، با حرکت شاخص ({{ v.nav_index_move_pct|pct(0, true) }}) به‌روز شد{% endif %}</td></tr>{% endif %}
@@ -322,7 +324,7 @@ td.est { background: var(--accent-soft); font-weight: 700; }
   {% if prices %}
   <div class="figure"><div class="cap">قیمت تعدیل‌شده‌ی {{ r.symbol }} و شاخص کل، هر دو از {{ prices.from }} برابر ۱۰۰ ({{ prices.sessions|num }} جلسه‌ی معاملاتی تا {{ prices.to }})</div>{{ svg.price }}</div>
   <p>بازده سهم در این دوره <b class="{{ 'up' if prices.stock_return_pct >= 0 else 'down' }}">{{ prices.stock_return_pct|pct(0, true) }}</b>،
-     شاخص کل {{ prices.index_return_pct|pct(0, true) }}. <span class="note">قیمت برای افزایش سرمایه و سود نقدیِ دیده‌شده در سری تعدیل شده است.</span></p>
+     شاخص کل {{ prices.index_return_pct|pct(0, true) }}. <span class="note">{% if prices.basis == "exchange" %}بازده کل: سود نقدی و افزایش سرمایه با ضرایب تعدیل خود بورس برگردانده شده‌اند، همان مبنای شاخص کل.{% else %}قیمت برای افزایش سرمایه و سود نقدیِ دیده‌شده در سری تعدیل شده است.{% endif %}</span></p>
   {% else %}<p class="note">سابقه‌ی قیمت کافی نیست.</p>{% endif %}
 
   <h3>روش و منابع</h3>

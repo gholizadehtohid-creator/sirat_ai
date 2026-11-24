@@ -1658,6 +1658,32 @@ def api_health():
                                    % type(exc).__name__})
 
 
+@app.route("/api/corporate_calendar")
+def api_corporate_calendar():
+    """Meetings, dividends and capital increases (2026-11-24).
+
+    corporate_calendar.calendar() reads stored Codal letters and the
+    exchange's adjustment list and makes no request. Each capital increase's
+    full stage list is dropped here (the panel shows the latest stage); the
+    answer stays under ~150 KB instead of ~480 KB.
+    """
+
+    import corporate_calendar
+
+    try:
+        back = int(request.args.get("back", 45))
+        ahead = int(request.args.get("ahead", 60))
+    except ValueError:
+        back, ahead = 45, 60
+    rep = corporate_calendar.calendar(back_days=max(1, min(back, 365)),
+                                      ahead_days=max(1, min(ahead, 365)))
+    for item in rep.get("capital_increases") or []:
+        item.pop("stages", None)
+    for item in rep.get("recent_decisions") or []:
+        item.pop("other_letters", None)
+    return jsonify(rep)
+
+
 @app.route("/api/track_record")
 def api_track_record():
     """Each card's badge, record and one specific warning (2026-11-24).
