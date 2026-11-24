@@ -1,0 +1,130 @@
+{
+ "protocol_id": "OUTLOOK-FORWARD-v1",
+ "written_at": "2026-11-24",
+ "written_by": "SIRAT-AI Research",
+ "written_before": "No entry of backtest_output/outlook_forward_log.jsonl existed when this file was written, and no forward estimate of the outlook had been compared with any statement published after it. The only numbers seen were the in-sample calibration (data/outlook_calibration.json, built 2026-11-23: median |error| 21-37% by months known) and the population size of today's screen (130 ranked names).",
+ "question": "Do the fundamental outlook's forward estimates of a company's fiscal-year profit, and the range it puts around them, hold up on statements published AFTER the estimate was written down -- and do they beat the naive forecast 'this year's profit will be last year's'?",
+ "what_this_is_not": [
+  "Not a test of any ranking, pick or return. The ranking by forward earnings yield was already tested as a stock-selection rule (E30) and rejected; nothing here revisits that.",
+  "Not an experiment of the Experiment Manager and it claims no reserved window. R-FORWARD-2027 belongs to the E21 forward log (backtest_output/forward_predictions.jsonl) and is untouched by this protocol.",
+  "Nothing here can change the estimator. A change to fundamental_outlook or outlook_calibration is recorded per entry (method, band key, calibration build time); this protocol scores whatever was logged."
+ ],
+
+ "population": {
+  "source": "fundamental_outlook.screen(limit=None)['ranked'] at log time -- every operating company the panel ranks, with no further selection (not the top 60, not the cheapest).",
+  "requires": "forward.range is not null (method in year_completed, next_year_trend, monthly_sales and forward profit > 0) and a fiscal year can be named.",
+  "not_logged_but_counted": "screen()'s excluded counts, the financials list and any ranked name without a range are recorded as counts in each entry, never as names."
+ },
+
+ "logging": {
+  "file": "backtest_output/outlook_forward_log.jsonl",
+  "writer": "outlook_forward_log.log_once(), run by bootstrap's post-run hook after each data run, and by hand with `python outlook_forward_log.py`.",
+  "cadence": "at most one entry per Tehran calendar date; a date with an entry is never written again (idempotent). A date with no run has no entry: a gap, never back-filled.",
+  "chain": "entry_hash = sha256(prev_hash + canonical JSON of the entry without entry_hash), canonical = sorted keys, no spaces, UTF-8; genesis prev_hash = 'OUTLOOK-FORWARD-v1'. The writer refuses to extend a broken chain.",
+  "protocol_hash": "every entry carries protocol_sha256 = sha256 of this file's bytes, with CRLF line endings read as LF (git on Windows rewrites line endings on checkout; nothing else is normalised). The writer refuses to append when the file's hash differs from the first entry's: a changed protocol is a new log, not an edit of this one.",
+  "network": "none. screen() reads the local stores only (verified 2026-11-24 with every socket connect blocked: 0 attempts).",
+  "entry_fields": {
+   "spec": "ofl-v1",
+   "date": "Tehran calendar date of the write (YYYY-MM-DD)",
+   "logged_at": "UTC ISO time of the write",
+   "logged_at_jalali": "the same instant in Tehran local time, Jalali 'YYYY/MM/DD HH:MM:SS' -- the format of codal_filings.published_at, so the admissibility rule is a string comparison",
+   "protocol_sha256": "see above",
+   "market_session": "the newest stored equity session (the date the logged prices belong to)",
+   "calibration_built_at": "outlook_calibration's build time, as the band's provenance",
+   "calibration_source": "what the calibration was measured on, as screen() states it ('pit' or 'restated'); null where it does not say",
+   "population": "counts: ranked, logged, ranked without a range, financials, excluded{...}",
+   "names": "one record per logged name, below"
+  },
+  "name_fields": {
+   "ins_code": "TSETMC instrument code",
+   "symbol": "Persian symbol at log time",
+   "fy": "targeted fiscal year end 'YYYY/MM' (Jalali): year_completed -> the newest statement's fiscal year; monthly_sales -> the monthly report's fiscal year; next_year_trend -> the year after the newest (annual) statement",
+   "method": "fundamental_outlook method",
+   "months_known": "the range's months_known",
+   "series_basis": "fundamental_outlook basis: consolidated | separate | mixed | separate_fallback",
+   "consolidated": "the consolidated flag of the newest statement the estimate was built on -- the basis an outcome must match",
+   "latest_period": "period_end and months of that statement",
+   "profit": "central (the estimate itself, owners' share), low/high = central x q25/q75, low80/high80 = central x q10/q90, rounded to whole rials",
+   "eps": "central/low/high = profit / shares at log time",
+   "ratios": "q10, q25, q50, q75, q90 of actual/estimate from the calibration bucket",
+   "band": "bucket key, bucket n, bucket basis, the bucket's source and fiscal years where the range states them, and the nominal coverage of the inner (q25..q75) and outer (q10..q90) band: 0.50 and 0.80 by construction, or the nominal the range itself states (never an empirical coverage)",
+   "naive": "last_annual_profit (owners' profit of the newest stored 12-month statement on the estimate's basis, else the newest on either basis, flagged), its period_end and basis, and ttm_profit (the outlook's trailing twelve months, owners' share)",
+   "price": "the price the outlook used, its share count and forward P/E"
+  }
+ },
+
+ "resolution": {
+  "outcome": "owners' net profit (net_profit_owners, else net_profit) of the FIRST published 12-month statement for the targeted fiscal year in sirat_market.db codal_filings.",
+  "match": "same ins_code; period_months = 12; the Jalali year and month of period_end equal the targeted fiscal year end; consolidated flag equal to the logged one.",
+  "first": "the matching row with the smallest published_at. Amendments (اصلاحیه) and the audited version published later are ignored: the first figure the market saw is the outcome.",
+  "basis_substitution": "only when the logged series_basis is 'mixed' (the outlook itself treated both bases as one series) AND no same-basis 12-month statement was published by the deadline: the first-published other-basis statement resolves it, flagged basis_substituted. Never for any other basis.",
+  "deadline_months": 8,
+  "deadline_rule": "an entry whose targeted fiscal year ended 8 or more Jalali months before the scoring date and is still unresolved is EXPIRED: counted and listed, excluded from N.",
+  "admissibility": "a record is admissible only if logged_at_jalali is strictly earlier than the resolving statement's published_at. Otherwise it is 'outcome public at log' (counted, excluded from N): a forecast of something already published is no forecast.",
+  "losses": "an outcome <= 0 is a real outcome and is scored as reported."
+ },
+
+ "scoring_unit": {
+  "primary": "the company-year (ins_code, targeted fiscal year). Its forecast is the FIRST admissible logged record of it (the longest lead time; chosen by rule, never by result). Each company-year counts once, so N counts outcomes, not days of logging.",
+  "diagnostic": "the first admissible record per (ins_code, fiscal year, months_known), reported by months known. Diagnostic only: it never decides anything."
+ },
+
+ "metrics": {
+  "quantile_forecasts": "Q_tau = central x ratio_tau for tau in 0.10, 0.25, 0.50, 0.75, 0.90.",
+  "coverage": "inner: share of resolved company-years with Q_0.25 <= actual <= Q_0.75 (nominal 0.50 unless the logged band states another); outer: Q_0.10 <= actual <= Q_0.90 (nominal 0.80). Each with its exact (Clopper-Pearson) binomial 95% interval.",
+  "pinball": "per company-year, the mean over the five tau of rho_tau(actual - Q_tau) / s, with rho_tau(u) = u x (tau - 1[u < 0]) and s = max(|last_annual_profit|, |ttm_profit|): a scale fixed at log time, the same for both forecasters and independent of either forecast, so the rule stays proper. A company-year with s = 0 or unknown is excluded from pinball and skill (counted).",
+  "naive_benchmark": "median N_0.50 = last_annual_profit (the last reported annual profit, known at log time); N_tau = last_annual_profit x ratio_tau / ratio_0.50 -- the estimate's own band shape, centred on last year's profit. A company-year whose last_annual_profit is missing or <= 0 has no naive and is excluded from skill (counted).",
+  "skill": "1 - sum(pinball of the outlook) / sum(pinball of the naive), over the company-years both can score. > 0: the outlook beats the naive.",
+  "direction_hit_rate": "share of company-years where sign(central - last_annual_profit) equals sign(actual - last_annual_profit), with its 95% interval. Reported beside the share of outcomes that rose (what 'always up' would score). Diagnostic only.",
+  "median_abs_error": "median of |actual / central - 1|, comparable with the calibration's in-sample median_abs_error. Diagnostic only.",
+  "secondary_naive_ttm": "the same skill against N_0.50 = ttm_profit. Diagnostic only; promoting it after seeing results would be selection, and this sentence is the record that says so."
+ },
+
+ "verdict": {
+  "min_resolved_n": 30,
+  "window": "rolling: the company-years whose resolving statement was published in the 12 months up to the scoring date.",
+  "states": {
+   "collecting": "fewer than 30 resolved company-years in the window: no verdict, the range is shown as the outlook draws it, labelled 'forward test collecting'.",
+   "active": "at least 30 and no retirement condition holds.",
+   "retired": "at least 30 and a retirement condition holds at any scoring date since the log began."
+  },
+  "retirement_conditions": [
+   "skill <= 0: the outlook's quantiles do no better than last year's profit with the same band shape;",
+   "the inner band's nominal coverage (0.50) lies outside the exact binomial 95% interval of its empirical coverage."
+  ],
+  "retirement_effect": "the range is demoted to 'report only': the panel keeps showing it under a visible label (برآورد فقط برای گزارش: در آزمون پیش‌رو رد شد) and nothing may present it as a calibrated range.",
+  "retirement_is_sticky": "evaluated at every date a company-year resolved; once triggered it stays. Reinstating the range takes a new protocol, a new log and a new hash.",
+  "not_gating": "the outer band, the diagnostic months-known breakdown, the direction hit-rate, the median error and the TTM naive are reported and never decide."
+ },
+
+ "parameters": {
+  "genesis": "OUTLOOK-FORWARD-v1",
+  "spec": "ofl-v1",
+  "quantiles": [0.10, 0.25, 0.50, 0.75, 0.90],
+  "inner_band": ["q25", "q75"],
+  "inner_nominal": 0.50,
+  "outer_band": ["q10", "q90"],
+  "outer_nominal": 0.80,
+  "ci_level": 0.95,
+  "ci_method": "clopper_pearson",
+  "min_resolved_n": 30,
+  "rolling_window_months": 12,
+  "resolution_deadline_months": 8,
+  "retire_if_skill_at_most": 0.0,
+  "retire_if_inner_nominal_outside_ci": true,
+  "retirement_sticky": true
+ },
+
+ "declared_limits": [
+  "Most of the ranked names target the fiscal year ending 1405/12 (March 2027), whose annual statements are published from about April to July 2027: the first verdict is unlikely before mid-2027.",
+  "Company-years are not independent: a market-wide margin shock moves many at once. The binomial interval treats them as independent and is therefore too narrow in a common-shock year; the declared response is the rolling 12-month window, not a cure.",
+  "The naive benchmark is weak in a year of 40-80% inflation (last year's profit is almost always below this year's); the TTM naive is reported beside it so a reader can see how weak.",
+  "codal_filings holds what the store has fetched. A statement the store never fetched leaves its company-year unresolved until it expires."
+ ],
+
+ "label_fa": {
+  "collecting": "آزمون پیش‌رو در حال گردآوری: هنوز %d سال-شرکت از %d لازم حل شده؛ داوری ندارد",
+  "active": "آزمون پیش‌رو: محدوده‌ی برآورد بر %d سال-شرکت حل‌شده سنجیده شد و رد نشد",
+  "retired": "برآورد فقط برای گزارش: در آزمون پیش‌رو رد شد"
+ }
+}

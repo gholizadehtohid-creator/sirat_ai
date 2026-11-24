@@ -2506,3 +2506,36 @@ td:first-child { font-weight: 600; color: var(--text-primary); }
 .health-list li .what { color: var(--text-primary); }
 .health-list li.bad .what { color: var(--danger-text); }
 .health-list li .todo { display: block; font-size: 12px; color: var(--text-muted); max-width: 110ch; }
+
+/* ---- track records and rejected strategies (2026-11-24) ---------------- */
+.track-line {
+  margin: 4px 0 10px;
+  font-size: 0.88rem;
+  line-height: 1.75;
+  max-width: 96ch;
+  color: var(--text-muted);
+}
+.track-line .track-warning { color: var(--text); }
+.track-line .track-details { margin-top: 2px; }
+.track-line .track-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  width: fit-content;
+}
+.track-line .track-details ul.evidence { margin-top: 6px; }
+.card.levels-gated { background: var(--surface-2); }
+.card.levels-gated > :not(.card-head):not(h2):not(.track-line):not(.gate-note) {
+  display: none !important;
+}
+.gate-note {
+  border: 1px dashed var(--border-strong);
+  background: var(--surface-3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0 4px;
+  max-width: 96ch;
+  line-height: 1.8;
+}
+.gate-note .gate-ack { display: block; margin: 8px 0; cursor: pointer; }
+.gate-note button[disabled] { opacity: 0.5; cursor: not-allowed; }
+.gate-note.gate-mini { font-size: 0.85rem; padding: 6px 10px; color: var(--text-muted); }

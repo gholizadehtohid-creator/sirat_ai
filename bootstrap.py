@@ -1167,6 +1167,7 @@ def ensure(force=False, only=None):
 
     _forward_log()
     _outlook_inputs()
+    _outlook_forward_log()
 
     return results
 
@@ -1214,6 +1215,28 @@ def _forward_log():
         _note("forward log: %s" % log_once(verbose=False))
     except Exception as exc:                                    # noqa: BLE001
         _note("forward log failed to run: %s: %s"
+              % (type(exc).__name__, str(exc)[:160]))
+
+
+def _outlook_forward_log():
+    """Write down today's forward profit estimates, once per Tehran date.
+
+    outlook_forward_log.py logs every ranked company's estimate and range,
+    hash-chained, under the rules fixed in advance in
+    backtest_output/OUTLOOK_FORWARD_PROTOCOL.json, so forward_scorecard.py
+    can later score them against statements published after them. It runs
+    after _outlook_inputs() so the day's calibration is the one logged; it
+    makes no network request, is a no-op once today is logged, and returns a
+    message instead of raising -- and this wrapper still guards the import:
+    a data run that succeeded must never be taken down by this bookkeeping.
+    """
+
+    try:
+        import outlook_forward_log
+
+        _note(outlook_forward_log.log_once(verbose=False))
+    except Exception as exc:                                    # noqa: BLE001
+        _note("outlook forward log failed to run: %s: %s"
               % (type(exc).__name__, str(exc)[:160]))
 
 

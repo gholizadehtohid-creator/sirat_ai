@@ -1658,6 +1658,24 @@ def api_health():
                                    % type(exc).__name__})
 
 
+@app.route("/api/track_record")
+def api_track_record():
+    """Each card's badge, record and one specific warning (2026-11-24).
+
+    track_record.registry() reads the experiments' result files and the
+    forward logs, caches for two minutes and never raises; a card whose
+    evidence cannot be read comes back with `error` set and no badge.
+    """
+
+    try:
+        import track_record
+        return jsonify(track_record.registry(
+            use_cache=request.args.get("refresh") != "1"))
+    except Exception as exc:                                    # noqa: BLE001
+        return jsonify({"cards": [], "by_id": {}, "badges": {},
+                        "error_detail": "%s: %s" % (type(exc).__name__, exc)})
+
+
 @app.route("/api/bootstrap")
 def api_bootstrap_status():
     """What data is present, missing or stale, and any fetch in flight."""

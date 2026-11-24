@@ -3523,6 +3523,137 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) loadHealth();
 });
 
+/* ---------- track records (2026-11-24) ----------
+   One line under each card's title: its badge, one SPECIFIC warning, and
+   its record behind a fold (period, count, hit rate with its denominator,
+   result against TEDPIX and at today's cost, in or out of sample) -- all
+   from track_record.registry(), which reads the result files. A card whose
+   strategy the bot's own tests rejected is greyed, and its list and levels
+   stay hidden until the reader makes an active choice (research report,
+   item 6: a specific warning works, a generic one does not; levels of a
+   rejected scanner are not shown by default). */
+var trackState = { reg: null };
+
+const TRACK_BADGE_CLS = { accepted: "good", provisional: "warn",
+                          rejected: "bad", descriptive: "neutral" };
+
+function trackRevealKey(id) { return `sirat.reveal.${id}`; }
+
+function trackRevealed(id) {
+  try { return sessionStorage.getItem(trackRevealKey(id)) === "1"; }
+  catch (err) { return false; }
+}
+
+function trackCardsByTitle(title) {
+  const want = String(title || "").trim();
+  return [...document.querySelectorAll(".card h2")]
+    .filter(h => h.textContent.trim() === want)
+    .map(h => ({ h, card: h.closest(".card") }))
+    .filter(x => x.card);
+}
+
+function trackLineHtml(c, revealed) {
+  if (c.error) return `<span class="hint">کارنامه‌ی این کارت خوانده نشد.</span>`;
+  const cls = TRACK_BADGE_CLS[c.badge_key] || "neutral";
+  const def = ((trackState.reg || {}).badges || {})[c.badge_key] || {};
+  const vs = c.vs_tedpix || {};
+  const ex = c.extra || {};
+  const rows = [];
+  if (c.badge_reason_fa) rows.push(c.badge_reason_fa);
+  if (c.test_period) rows.push(`دوره‌ی آزمون: ${c.test_period}`);
+  if (c.n && c.n.text_fa) rows.push(`شمار: ${c.n.text_fa}`);
+  if (c.hit_rate && c.hit_rate.text_fa) rows.push(`نرخ موفقیت: ${c.hit_rate.text_fa}`);
+  if (vs.text_fa) rows.push(`در برابر شاخص: ${vs.text_fa}`);
+  if (vs.after_live_cost_fa) rows.push(`با هزینه‌ی امروز: ${vs.after_live_cost_fa}`);
+  if (c.sample_fa) rows.push(c.sample_fa);
+  if (ex.calibration_text_fa) rows.push(ex.calibration_text_fa);
+  if (ex.forward && ex.forward.label_fa) rows.push(ex.forward.label_fa);
+  const e21 = ex.forward_e21;
+  if (e21 && e21.sessions_expected != null) {
+    rows.push(`دفتر پیش‌بینی E21: از ${num(e21.sessions_expected, 0)} جلسه‌ی مورد انتظار ` +
+              `${num(e21.timely, 0)} به‌موقع ثبت شد و ${num(e21.clean, 0)} پاک بود؛ ` +
+              `سنجش آن با نتیجه تا پایان دوره‌ی رزرو (${(e21.reservation || {}).end || ""}) بسته است.`);
+  }
+  if (c.doubt) rows.push(`تردید: ${c.doubt}`);
+  const hide = c.hide_levels && revealed
+    ? ` <button type="button" class="link" data-gate-hide="${esc(c.id)}">پنهان کردن دوباره</button>` : "";
+  return `<span class="badge ${cls}" title="${esc(def.definition_fa || "")}"><span class="dot"></span>${esc(c.badge || "—")}</span> ` +
+    `<span class="track-warning">${esc(c.warning_fa || "")}</span>${hide}` +
+    `<details class="track-details"><summary>کارنامه</summary><ul class="evidence">` +
+    rows.map(r => `<li>${esc(r)}</li>`).join("") + `</ul></details>`;
+}
+
+function trackGateHtml(c) {
+  return `<div class="gate-note" data-gate="${esc(c.id)}">` +
+    `<strong>${esc(c.hidden_levels_label_fa || "ردشده در آزمون، فقط برای پژوهش")}</strong> — ` +
+    `فهرست، سطوح ورود، حد ضرر و هدفِ این کارت پنهان است، چون آزمون خود بات این روش را رد کرده است.` +
+    `<label class="gate-ack"><input type="checkbox" data-gate-ack="${esc(c.id)}"> ` +
+    `می‌دانم این روش در آزمون رد شده و آنچه نشان داده می‌شود توصیه‌ی خرید نیست.</label>` +
+    `<button type="button" data-gate-reveal="${esc(c.id)}" disabled>نمایش برای پژوهش</button></div>`;
+}
+
+function renderTrackRecords(reg) {
+  if (!reg || !Array.isArray(reg.cards)) return;
+  trackState.reg = reg;
+  document.querySelectorAll(".track-line, .gate-note").forEach(n => n.remove());
+  document.querySelectorAll(".levels-gated").forEach(n => n.classList.remove("levels-gated"));
+  const lined = new Set();
+  for (const c of reg.cards) {
+    const revealed = trackRevealed(c.id);
+    const gated = !!c.hide_levels && !revealed;
+    (c.panel_titles || []).forEach((title, i) => {
+      for (const { h, card } of trackCardsByTitle(title)) {
+        if (gated) card.classList.add("levels-gated");
+        if (gated && i !== 0 && !card.querySelector(".gate-note")) {
+          // A sub-card of a rejected strategy: say why it is empty.
+          (h.closest(".card-head") || h).insertAdjacentHTML("afterend",
+            `<div class="gate-note gate-mini">${esc(c.hidden_levels_label_fa || "ردشده در آزمون، فقط برای پژوهش")} — ` +
+            `با تأیید در کارت «${esc((c.panel_titles || [])[0] || "")}» نمایش داده می‌شود.</div>`);
+        }
+        if (i !== 0 || lined.has(card)) continue;
+        lined.add(card);
+        const line = document.createElement("div");
+        line.className = "track-line";
+        line.dataset.track = c.id;
+        line.innerHTML = trackLineHtml(c, revealed);
+        const anchor = h.closest(".card-head") || h;
+        anchor.insertAdjacentElement("afterend", line);
+        if (gated) line.insertAdjacentHTML("afterend", trackGateHtml(c));
+      }
+    });
+  }
+}
+
+async function loadTrackRecords() {
+  try {
+    renderTrackRecords(await getJSON("/api/track_record"));
+  } catch (err) {
+    // An older panel process without the route: the cards stay as they were.
+  }
+}
+
+document.addEventListener("change", (ev) => {
+  const box = ev.target.closest && ev.target.closest("[data-gate-ack]");
+  if (!box) return;
+  const btn = document.querySelector(`[data-gate-reveal="${CSS.escape(box.dataset.gateAck)}"]`);
+  if (btn) btn.disabled = !box.checked;
+});
+
+document.addEventListener("click", (ev) => {
+  const reveal = ev.target.closest && ev.target.closest("[data-gate-reveal]");
+  const hide = ev.target.closest && ev.target.closest("[data-gate-hide]");
+  if (!reveal && !hide) return;
+  const id = reveal ? reveal.dataset.gateReveal : hide.dataset.gateHide;
+  try {
+    if (reveal) sessionStorage.setItem(trackRevealKey(id), "1");
+    else sessionStorage.removeItem(trackRevealKey(id));
+  } catch (err) { /* storage refused: the choice lasts this render only */ }
+  renderTrackRecords(trackState.reg);
+});
+
+loadTrackRecords();
+setInterval(loadTrackRecords, 10 * 60 * 1000);
+
 function renderTasks() {
   if (!$("taskSteps")) return;
 
@@ -4013,10 +4144,29 @@ function rangeCell(rg) {
   // What the band was measured on: the statement method on its own past, the
   // monthly method by emulation, or a year no statement of which exists yet.
   const on = {monthly: "شبیه‌سازی روش گزارش ماهانه روی", next_year: "سال هنوز شروع‌نشده؛"}[rg.basis] || "";
+  // How often this band held on years it was NOT built from (leave one
+  // fiscal year out, point-in-time figures; outlook_calibration, 2026-11-24).
+  // A natural frequency, not a percentage, and the worst year beside the
+  // pooled rate: one shock year (1405) hits every company at once.
+  const cv = rg.coverage;
+  const expect = cv && cv.nominal != null ? Math.round(cv.nominal * 10) : null;
+  const held = cv && cv.per10 != null
+    ? `؛ در سال‌های کنارگذاشته ${num(cv.per10, 0)} مورد از ۱۰ داخل این بازه افتاد` +
+      (expect != null ? ` (انتظار ${num(expect, 0)})` : "") +
+      (cv.worst_year && cv.worst_year.rate != null && cv.worst_year.year
+        ? `، در ${esc(cv.worst_year.year)} فقط ${num(Math.round(cv.worst_year.rate * 10), 0)} از ۱۰` : "")
+    : "";
+  const pit = rg.source === "pit" ? "، با ارقامی که در روز تصمیم منتشر شده بود" : "";
+  // The forward test's retirement rule (OUTLOOK_FORWARD_PROTOCOL.json):
+  // once retired, the range is shown as a report only.
+  const outlookCard = typeof trackState !== "undefined" && trackState.reg
+    ? (trackState.reg.by_id || {}).outlook : null;
+  const reportOnly = outlookCard && outlookCard.extra && outlookCard.extra.range_report_only
+    ? ' <span class="badge warn"><span class="dot"></span>فقط گزارش — در آزمون پیش‌رو بازنشسته شد</span>' : "";
   return `${num(rg.eps_low, 0)} تا ${num(rg.eps_high, 0)} ریال` +
     ` <span class="hint">(خطای میانه ${num(rg.median_abs_error_pct, 0)}٪ در ${on} ${num(rg.n, 0)} برآورد گذشته` +
-    `${rg.band_label ? "، حاشیه‌ی " + esc(rg.band_label) : ""})</span>` +
-    (rg.wide ? ' <span class="down">پراکنده</span>' : "");
+    `${rg.band_label ? "، حاشیه‌ی " + esc(rg.band_label) : ""}${pit}${held})</span>` +
+    (rg.wide ? ' <span class="down">پراکنده</span>' : "") + reportOnly;
 }
 
 // Reference multiples on the trailing EPS; the industry's is the centre.

@@ -57,6 +57,7 @@ logs/
 # committed; the lock is one run's claim on the file, and a committed lock
 # would travel to a machine where the process holding it never existed.
 backtest_output/forward_predictions.jsonl.lock
+backtest_output/outlook_forward_log.jsonl.lock
 
 # ---- NOT ignored, on purpose ----------------------------------------------
 # backtest_output/*.json   the experiment artifacts ARE the record of Phase 1

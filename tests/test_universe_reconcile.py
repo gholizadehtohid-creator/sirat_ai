@@ -584,7 +584,7 @@ class ReconcileTests(unittest.TestCase):
                     mock.patch.object(bootstrap, "_last_fetch",
                                       return_value=None), \
                     mock.patch.object(bootstrap, "_forward_log"), \
-                    mock.patch.object(bootstrap, "_outlook_inputs"), \
+                    mock.patch.object(bootstrap, "_outlook_inputs"), mock.patch.object(bootstrap, "_outlook_forward_log"), \
                     mock.patch.object(seed_import, "get_provider",
                                       side_effect=AssertionError("asked")):
                 results = bootstrap.ensure()
@@ -906,7 +906,7 @@ class MissingSectorTests(unittest.TestCase):
                     mock.patch.object(bootstrap, "_step_detail",
                                       return_value=""), \
                     mock.patch.object(bootstrap, "_forward_log"), \
-                    mock.patch.object(bootstrap, "_outlook_inputs"), \
+                    mock.patch.object(bootstrap, "_outlook_inputs"), mock.patch.object(bootstrap, "_outlook_forward_log"), \
                     mock.patch.dict(bootstrap._last_failure, clear=True):
                 action = bootstrap.ensure()["sectors"]["action"]
                 retry = "sectors" in bootstrap._last_failure
