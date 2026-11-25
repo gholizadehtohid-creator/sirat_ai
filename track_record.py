@@ -89,6 +89,9 @@ SAMPLE_FA = {"out_of_sample": "بیرون از نمونه", "in_sample": "درو
              "mixed": "بخشی بیرون از نمونه، بخشی درون‌نمونه",
              "forward": "آزمون پیش‌رو", "none": "آزموده نشده"}
 HIDDEN_LEVELS_LABEL_FA = "ردشده در آزمون، فقط برای پژوهش"
+# What a gate says it hides, when the card does not name its own parts.
+GATE_TEXT_FA = ("فهرست، سطوح ورود، حد ضرر و هدفِ این کارت پنهان است، چون آزمون "
+                "خود بات این روش را رد کرده است.")
 
 
 # ==============================
@@ -320,7 +323,15 @@ def _vs(text_fa, cost, measured=True, after=None):
 
 def _card(cid, title, tab, panel_titles, badge, *, reason, experiments,
           test_period, n, hit_rate, vs_tedpix, sample, warning, hide_levels,
-          doubt=None, sources=(), extra=None, headline=None):
+          doubt=None, sources=(), extra=None, headline=None, gated_titles=None,
+          gate_text=None):
+    """One card's record. With `hide_levels`, the panel hides the card's
+    content until the reader reveals it: all of `panel_titles` by default, or
+    only `gated_titles` where the card names the parts that carry what was
+    rejected (2026-11-26: the single-symbol technical card hid its
+    indicators, charts and support/resistance too, and the owner read that as
+    the technical analysis not reporting at all). `gate_text` says what is
+    hidden."""
     sample_fa = SAMPLE_FA.get(sample, sample)
     ids = [e["id"] for e in experiments]
     line = [BADGES[badge]["fa"]]
@@ -339,6 +350,9 @@ def _card(cid, title, tab, panel_titles, badge, *, reason, experiments,
         "vs_tedpix": vs_tedpix, "sample": sample, "sample_fa": sample_fa,
         "warning_fa": warning, "hide_levels": bool(hide_levels),
         "hidden_levels_label_fa": HIDDEN_LEVELS_LABEL_FA if hide_levels else None,
+        "gated_titles": (list(gated_titles) if hide_levels and gated_titles
+                         else list(panel_titles) if hide_levels else []),
+        "gate_text_fa": (gate_text or GATE_TEXT_FA) if hide_levels else None,
         "doubt": doubt, "track_line_fa": " · ".join(line),
         "sources": list(sources), "extra": extra or {}, "error": None,
     }
@@ -657,6 +671,13 @@ def card_technical():
         "technical", "تحلیل تکنیکال نماد", "analysis",
         ["تحلیل تکنیکال نماد", "سیگنال تکنیکال", "اهداف قیمتی",
          "قیمت، سطوح و حجم", "مقاومت‌ها و حمایت‌ها"], REJECTED,
+        # The vote and the price targets are what E19/E20 and the v1 basket
+        # tested and rejected. The indicators, the charts and the support and
+        # resistance pivots describe the price; they stay in view.
+        gated_titles=["سیگنال تکنیکال", "اهداف قیمتی"],
+        gate_text=("رأی خرید/فروش و اهداف قیمتی (ورود، حد ضرر، هدف) این کارت پنهان "
+                   "است، چون آزمون خود بات این روش را رد کرده است. اندیکاتورها، "
+                   "نمودارها و حمایت و مقاومت توصیف قیمت‌اند و نمایش داده می‌شوند."),
         reason="نزدیک‌ترین آزمون ثبت‌شده‌ی این نوع سیگنال (E19، E20) رد شد و سبد "
                "v1 که با همین امتیاز ساخته می‌شود به شاخص باخت.",
         experiments=ev["experiments"], test_period=ev["test_period"], n=ev["n"],

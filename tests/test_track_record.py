@@ -35,7 +35,8 @@ class RegistryTests(unittest.TestCase):
                 "badge_reason_fa", "experiments", "experiments_detail",
                 "test_period", "n", "hit_rate", "vs_tedpix", "sample", "sample_fa",
                 "warning_fa", "hide_levels", "hidden_levels_label_fa", "doubt",
-                "track_line_fa", "sources", "extra", "error"}
+                "track_line_fa", "sources", "extra", "error", "gated_titles",
+                "gate_text_fa"}
         for cid, card in self.cards.items():
             self.assertEqual(set(card), keys, cid)
             self.assertIn(card["badge_key"], tr.BADGES, cid)
@@ -54,6 +55,27 @@ class RegistryTests(unittest.TestCase):
         for cid, card in self.cards.items():
             if card["badge_key"] != tr.REJECTED:
                 self.assertFalse(card["hide_levels"], cid)
+                self.assertEqual(card["gated_titles"], [], cid)
+            else:
+                # what is gated is a part of the card, named, with a text
+                self.assertTrue(card["gated_titles"], cid)
+                self.assertTrue(set(card["gated_titles"]) <= set(card["panel_titles"]), cid)
+                self.assertTrue(card["gate_text_fa"], cid)
+
+    def test_the_technical_reading_hides_its_vote_and_targets_only(self):
+        """2026-11-26: the owner read the gate as "the technical analysis
+        reports nothing" -- it hid the indicators, the charts and support and
+        resistance, which describe the price and were never what was tested."""
+
+        card = self.cards["technical"]
+        self.assertEqual(card["gated_titles"], ["سیگنال تکنیکال", "اهداف قیمتی"])
+        for shown in ("تحلیل تکنیکال نماد", "قیمت، سطوح و حجم", "مقاومت‌ها و حمایت‌ها"):
+            self.assertNotIn(shown, card["gated_titles"])
+        self.assertIn("رأی خرید/فروش", card["gate_text_fa"])
+        # the lists stay behind the gate whole
+        for cid in ("technical_top", "technical_inflow", "screen"):
+            self.assertEqual(self.cards[cid]["gated_titles"],
+                             self.cards[cid]["panel_titles"], cid)
 
     def test_descriptive_cards(self):
         for cid in ("fund_discount", "bills", "news", "holdings", "announcements",

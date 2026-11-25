@@ -3623,7 +3623,7 @@ function trackLineHtml(c, revealed) {
 function trackGateHtml(c) {
   return `<div class="gate-note" data-gate="${esc(c.id)}">` +
     `<strong>${esc(c.hidden_levels_label_fa || "ردشده در آزمون، فقط برای پژوهش")}</strong> — ` +
-    `فهرست، سطوح ورود، حد ضرر و هدفِ این کارت پنهان است، چون آزمون خود بات این روش را رد کرده است.` +
+    esc(c.gate_text_fa || "فهرست، سطوح ورود، حد ضرر و هدفِ این کارت پنهان است، چون آزمون خود بات این روش را رد کرده است.") +
     `<label class="gate-ack"><input type="checkbox" data-gate-ack="${esc(c.id)}"> ` +
     `می‌دانم این روش در آزمون رد شده و آنچه نشان داده می‌شود توصیه‌ی خرید نیست.</label>` +
     `<button type="button" data-gate-reveal="${esc(c.id)}" disabled>نمایش برای پژوهش</button></div>`;
@@ -3638,10 +3638,14 @@ function renderTrackRecords(reg) {
   const lined = new Set();
   for (const c of reg.cards) {
     const revealed = trackRevealed(c.id);
-    const gated = !!c.hide_levels && !revealed;
+    // Only the parts the card names carry what the test rejected; a card
+    // that names none hides all of them, as before (2026-11-26: the
+    // single-symbol technical card hid its indicators and charts too).
+    const parts = new Set(c.gated_titles || c.panel_titles || []);
     (c.panel_titles || []).forEach((title, i) => {
+      const gated = !!c.hide_levels && !revealed && parts.has(title);
       for (const { h, card } of trackCardsByTitle(title)) {
-        if (gated) card.classList.add("levels-gated");
+        if (gated && i === 0) card.classList.add("levels-gated");
         if (gated && i !== 0) {
           // A sub-card of a rejected strategy held nothing but a note once its
           // levels were hidden -- an empty box (the owner, 2026-11-24: "too
@@ -3656,7 +3660,7 @@ function renderTrackRecords(reg) {
         line.innerHTML = trackLineHtml(c, revealed);
         const anchor = h.closest(".card-head") || h;
         anchor.insertAdjacentElement("afterend", line);
-        if (gated) line.insertAdjacentHTML("afterend", trackGateHtml(c));
+        if (c.hide_levels && !revealed) line.insertAdjacentHTML("afterend", trackGateHtml(c));
       }
     });
   }
