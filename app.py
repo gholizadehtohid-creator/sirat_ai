@@ -1196,6 +1196,9 @@ def api_outlook():
                                    else "هیچ‌گاه")}), 404
             result = fundamental_outlook.analyse(
                 code, price=fundamental_outlook.latest_prices().get(code))
+            # An investment company's or a holding's portfolio at the bot's
+            # fundamental value of each holding (portfolio_value.py).
+            fundamental_outlook.attach_forward(result)
             if not result:
                 return jsonify({"error": "صورت مالی ثبت‌شده‌ای برای %s نیست"
                                 % symbol}), 404

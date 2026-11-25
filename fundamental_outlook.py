@@ -472,7 +472,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             portfolio=_UNSET, opportunity=None, bars=_UNSET, band=_UNSET,
             published=_UNSET, calibration=_UNSET, fx_record=_UNSET,
             capital_events=_UNSET, peers=_UNSET, inflation_pct=None,
-            preread=None):
+            preread=None, holdings=_UNSET, prices_all=_UNSET):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
@@ -509,6 +509,11 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     load_metrics, codal_monthly.load and halted_since would return here,
     so the read is still the store's: unlike `rows`, they change nothing
     else about how the company is read.
+
+    `holdings` (the portfolio's rows, load_portfolio_rows) and `prices_all`
+    (latest_prices) value an investment company's or a holding's listed
+    portfolio at today's prices (portfolio_value.py, 2026-11-25); read from
+    the stores when not given, and absent with `rows`.
     """
 
     rows_from_store = rows is None
@@ -816,6 +821,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # The portfolio filing (ن-31) is the parent's own holdings, so its book
     # equity is the parent's: the newest SEPARATE period when there is one.
     nav_result = price_to_nav = price_to_nav_est = nav_move = None
+    nav_today = nav_valued = None
     nav_stale = False
     # Every company that files a portfolio, not only those the exchange
     # files under a financial industry: سیدکو, تاصیکو, برکت and خگستر are
@@ -882,6 +888,25 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                 estimate = dict(nav_result,
                                 nav=nav_result["nav"] + listed * nav_move)
                 price_to_nav_est = nav_module.price_to_nav(market_cap, estimate)
+
+        # Each listed holding at TODAY's price (portfolio_value.py, the
+        # owner's request of 2026-11-25), where the filing's rows are held:
+        # the index's move above moved a petrochemical holding with the
+        # banks. Not on a report whose rows contradict themselves.
+        if holdings is _UNSET:
+            holdings = None
+            if rows_from_store:
+                key = (str(ins_code), portfolio.get("period_end"))
+                holdings = database.load_portfolio_rows([key]).get(key)
+        if holdings and own_equity is not None and \
+                not (portfolio.get("inconsistent_rows") or 0):
+            import portfolio_value
+            got = portfolio_value.value_today(
+                portfolio, holdings, own_equity, shares, price,
+                latest_prices() if prices_all is _UNSET else prices_all,
+                parent=ins_code)
+            if got:
+                nav_today, nav_valued = got
 
     # ---- age -------------------------------------------------------------
     age_months = _age_months(latest["end"], today)
@@ -1096,7 +1121,22 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         # warnings its earnings ranking counts.
         for note in nav_notes:
             flag(note)
-        if nav_stale:
+        today_ptn = (nav_today or {}).get("price_to_nav")
+        if today_ptn is not None:
+            (positives if today_ptn < 1 else flags).append(
+                "P/NAV به قیمت امروز سهام پرتفوی %.2f — %s (پرتفوی %s، %d سهم "
+                "بورسی%s)" % (
+                    today_ptn,
+                    "زیر ارزش خالص دارایی‌ها" if today_ptn < 1
+                    else "بالاتر از ارزش خالص دارایی‌ها",
+                    portfolio.get("period_end"), nav_today["holdings"],
+                    "؛ %d سهم بی‌قیمت به ارزش پایان دوره" % nav_today["unpriced"]
+                    if nav_today["unpriced"] else ""))
+            if (nav_today.get("unlisted_share_pct") or 0) >= 30:
+                flag("%.0f٪ ارزش خالص دارایی‌ها سهام غیربورسی به بهای تمام‌شده "
+                     "است؛ ارزش واقعی‌شان معلوم نیست و NAV یک کف است"
+                     % nav_today["unlisted_share_pct"])
+        elif nav_stale:
             flag("پرتفوی ثبت‌شده مال %s است و شاخص کل از آن زمان %s تغییر کرده؛ "
                  "P/NAV به قیمت‌های آن روز %.2f است%s"
                  % (portfolio.get("period_end"),
@@ -1161,6 +1201,9 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                       "nav_notes": nav_notes,
                       "nav": (nav_result or {}).get("nav"),
                       "nav_complete": (nav_result or {}).get("complete"),
+                      "price_to_nav_today": _round((nav_today or {}).get("price_to_nav")),
+                      "nav_today": nav_today,
+                      "nav_forward": None,
                       "nav_period": (portfolio or {}).get("period_end")
                       if nav_result else None},
         "hurdle": {"rate_pct": opportunity["rate_pct"],
@@ -1268,7 +1311,14 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         nav_result=nav_result, nav_stale=nav_stale,
         nav_estimate=(price_to_nav_est and market_cap
                       and market_cap / price_to_nav_est),
-        shares=shares, doubts=doubts)
+        shares=shares, doubts=doubts, nav_today=nav_today)
+
+    # The portfolio row by row, at today's prices; attach_forward() adds
+    # each holding's fundamental value once the other companies are read.
+    if nav_valued:
+        import portfolio_value
+        result["holdings"] = portfolio_value.top(nav_valued)
+        result["_valued"] = nav_valued
 
     # What the tape says about the price every multiple above rests on. First
     # among the warnings: a P/E on a price nobody can deal at is not a
@@ -1636,7 +1686,7 @@ def valuation_peers():
 
 def fair_value(kind, ins_code, sector, eps_ttm, eps, estimate_range, price,
                peers, nav_result=None, nav_stale=False, nav_estimate=None,
-               shares=None, doubts=()):
+               shares=None, doubts=(), nav_today=None):
     """A value range from reference multiples, or None.
 
     Operating companies. The reference multiples -- the industry's median
@@ -1657,8 +1707,11 @@ def fair_value(kind, ins_code, sector, eps_ttm, eps, estimate_range, price,
     """
 
     if kind == FINANCIAL:
-        nav = (nav_estimate if nav_stale and nav_estimate else
-               (nav_result or {}).get("nav"))
+        # Today's prices for the listed holdings where the rows are held
+        # (portfolio_value); else the filing's, moved with the index.
+        today = (nav_today or {}).get("nav")
+        nav = today or (nav_estimate if nav_stale and nav_estimate else
+                        (nav_result or {}).get("nav"))
         if not nav or not shares or nav <= 0:
             return None
         per_share = nav / shares
@@ -1669,7 +1722,8 @@ def fair_value(kind, ins_code, sector, eps_ttm, eps, estimate_range, price,
         floor = (nav_result or {}).get("complete") is False
         return {"basis": "nav", "central": per_share, "low": None, "high": None,
                 "anchors": [{"label": "ارزش خالص دارایی هر سهم" +
-                             (" (تخمینی با حرکت شاخص)" if nav_stale else ""),
+                             (" (پرتفوی بورسی به قیمت امروز)" if today else
+                              " (تخمینی با حرکت شاخص)" if nav_stale else ""),
                              "multiple": None, "value": per_share}],
                 "floor": floor,
                 "price_to_value": _round(price / per_share) if price else None,
@@ -2273,6 +2327,114 @@ def _preread_all(codes, periods=12):
     return one
 
 
+def _inputs(codes=None):
+    """What analyse() reads for many companies, read once (screen and
+    fair_values). `codes` limits the per-company batches."""
+
+    instruments = {str(r["ins_code"]): r
+                   for r in database.load_instruments(equities_only=True)}
+    wanted = list(instruments) if codes is None else [str(c) for c in codes]
+    import codal_announcements
+    import fx
+    import outlook_calibration
+    portfolios = database.load_codal_portfolio_latest()
+    try:
+        holdings = database.load_portfolio_rows(
+            [(c, p.get("period_end")) for c, p in portfolios.items()])
+    except Exception:                                           # noqa: BLE001
+        holdings = None             # each company reads its own, as before
+    return {
+        "instruments": instruments,
+        "prices": latest_prices(),
+        "shares": exchange_shares(),
+        "bands": price_bands(),
+        "published": published_pe(),
+        "tails": database.load_history_tail(wanted, TRADING_SESSIONS),
+        "portfolios": portfolios,
+        "holdings": holdings,
+        "opportunity": opportunity_rate(),
+        "calibration": outlook_calibration.load(),
+        "fx_record": fx.load(),
+        "capital": capital_events_for(None),
+        "peers": valuation_peers(),
+        "halted": database.halted_codes(),
+        "dividends": codal_announcements.latest_dividends(),
+        "preread": _preread_all(wanted),
+    }
+
+
+def _analyse_with(code, inputs, today=None):
+    """analyse() for one company on the shared inputs."""
+
+    inst = inputs["instruments"].get(code) or {}
+    portfolio = inputs["portfolios"].get(code)
+    extra = {}
+    if inputs.get("holdings") is not None:
+        extra["holdings"] = inputs["holdings"].get(
+            (code, (portfolio or {}).get("period_end")))
+    return analyse(code, price=inputs["prices"].get(code), today=today,
+                   preread=inputs["preread"](code),
+                   dividend=inputs["dividends"].get(code),
+                   shares=inputs["shares"].get(code),
+                   sector=inst.get("sector_name"),
+                   portfolio=portfolio, opportunity=inputs["opportunity"],
+                   bars=inputs["tails"].get(code), band=inputs["bands"].get(code),
+                   published=inputs["published"].get(code),
+                   calibration=inputs["calibration"],
+                   fx_record=inputs["fx_record"],
+                   capital_events=inputs["capital"].get(code),
+                   peers=inputs["peers"], prices_all=inputs["prices"], **extra)
+
+
+# The fundamental values the last screen() read for every company, for the
+# single-company view's portfolio (attach_forward): one company's holdings
+# are tens of other companies, each a full read.
+_FAIR = {"at": None, "value": None}
+FAIR_TTL = 3 * 3600.0
+
+
+def fair_values(codes):
+    """{ins_code: fair_value()} for these companies: the last screen's when
+    it is fresh and has them, else read now."""
+
+    import time as _time
+
+    codes = [str(c) for c in codes if c]
+    # The last screen read every equity: a code it has no value for has
+    # none (a halted name, a fund, a right), not one still to be read.
+    cached = _FAIR["value"]
+    if cached is not None and _time.monotonic() - _FAIR["at"] < FAIR_TTL:
+        return cached
+    inputs = _inputs(codes)
+    out = {}
+    for code in codes:
+        if code in inputs["halted"] or code not in inputs["instruments"]:
+            continue
+        result = _analyse_with(code, inputs)
+        if result and result.get("fair_value"):
+            out[code] = result["fair_value"]
+    return out
+
+
+def attach_forward(result, fair_by_code=None):
+    """Add the forward-looking value of a portfolio to an analyse() result:
+    every listed holding at the bot's fundamental value of that share
+    (portfolio_value.fundamental). Drops the per-row working list."""
+
+    valued = result.pop("_valued", None) if result else None
+    if not valued:
+        return result
+    import portfolio_value
+    if fair_by_code is None:
+        fair_by_code = fair_values([r.get("ins_code") for r in valued])
+    v = result["valuation"]
+    v["nav_forward"] = portfolio_value.fundamental(
+        v.get("nav_today"), valued, fair_by_code, price=v.get("price"),
+        shares=v.get("shares"))
+    result["holdings"] = portfolio_value.top(valued)
+    return result
+
+
 def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     """Every company with a forward estimate, in two lists.
 
@@ -2290,52 +2452,34 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     company is worth.
     """
 
-    instruments = {str(r["ins_code"]): r
-                   for r in database.load_instruments(equities_only=True)}
-    prices = latest_prices()
-    shares = exchange_shares()
-    bands = price_bands()
-    published = published_pe()
-    tails = database.load_history_tail(list(instruments), TRADING_SESSIONS)
-    portfolios = database.load_codal_portfolio_latest()
-    opportunity = opportunity_rate()
+    # Each company's statements, monthly reports, last traded day and
+    # portfolio rows, read for all of them at once (_inputs): per company,
+    # through a connection each, the reads were 16 of this function's 26 s
+    # (2026-11-25).
     import fx
-    import outlook_calibration
-    calibration = outlook_calibration.load()
-    fx_record = fx.load()
-    capital = capital_events_for(None)
-    peers = valuation_peers()
+
+    inputs = _inputs()
+    instruments = inputs["instruments"]
+    opportunity = inputs["opportunity"]
+    calibration = inputs["calibration"]
+    fx_record = inputs["fx_record"]
+    analysed = {}
 
     ranked, financials, suspect, thin, doubtful = [], [], [], [], []
     excluded = {"no_filing": 0, "stale": 0, "no_estimate": 0, "flags": 0,
                 "loss": 0, "halted": 0, "suspect": 0, "basis_gap": 0,
                 "illiquid": 0, "doubtful": 0}
-    halted = database.halted_codes()
-    import codal_announcements
-    dividends = codal_announcements.latest_dividends()
-
-    # Each company's statements, monthly reports and last traded day, read
-    # for all of them at once: per company, through a connection each, they
-    # were 16 of this function's 26 s (2026-11-25). A batch that fails
-    # leaves analyse() to read that store per company, as before.
-    preread = _preread_all(list(instruments))
+    halted = inputs["halted"]
 
     for code, inst in instruments.items():
         if code in halted:
             excluded["halted"] += 1
             continue
-        result = analyse(code, price=prices.get(code), today=today,
-                         preread=preread(code),
-                         dividend=dividends.get(code), shares=shares.get(code),
-                         sector=inst.get("sector_name"),
-                         portfolio=portfolios.get(code), opportunity=opportunity,
-                         bars=tails.get(code), band=bands.get(code),
-                         published=published.get(code),
-                         calibration=calibration, fx_record=fx_record,
-                         capital_events=capital.get(code), peers=peers)
+        result = _analyse_with(code, inputs, today)
         if not result:
             excluded["no_filing"] += 1
             continue
+        analysed[code] = result
         result.update(symbol=inst.get("symbol_fa"), name=inst.get("name_fa"),
                       sector=inst.get("sector_name"))
         age = result["latest"]["age_months"]
@@ -2419,12 +2563,24 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
         r["valuation"]["pe_vs_sector"] = _round(pe / median) if median and pe             else None
         r["valuation"]["sector_peers"] = len(by_sector.get(r["sector"]) or [])
 
+    # Every portfolio's forward-looking value, on the fundamental values
+    # just read for every company; and the per-row working lists dropped.
+    import time as _time
+    fair_by_code = {c: r["fair_value"] for c, r in analysed.items()
+                    if r.get("fair_value")}
+    _FAIR.update(at=_time.monotonic(), value=fair_by_code)
+    for result in analysed.values():
+        attach_forward(result, fair_by_code)
+
     ranked.sort(key=lambda r: -r["valuation"]["earnings_yield_forward_pct"])
     def _nav_key(r):
-        # A stale portfolio's estimate (listed holdings carried at the
-        # index's move) orders the list; a fresh one stands as filed.
+        # Today's prices for the listed holdings where the rows are held;
+        # else a stale portfolio's estimate (holdings carried at the index's
+        # move); else the filing as it stands.
         v = r["valuation"]
-        nav = v["price_to_nav_est"] if v.get("nav_stale") else v["price_to_nav"]
+        nav = v.get("price_to_nav_today")
+        if nav is None:
+            nav = v["price_to_nav_est"] if v.get("nav_stale") else v["price_to_nav"]
         return (nav is None, nav if nav is not None else (v["pb"] or 99))
 
     financials.sort(key=_nav_key)

@@ -540,6 +540,7 @@ def gather(symbol, refresh_inputs=True):
         refresh_inputs_once()
     price = fo.latest_prices().get(code)
     result = fo.analyse(code, price=price)
+    fo.attach_forward(result)
     if not result:
         raise ReportError("صورت مالی ثبت‌شده‌ای برای %s نیست" % symbol)
     result.update(symbol=inst.get("symbol_fa"), name=inst.get("name_fa"),

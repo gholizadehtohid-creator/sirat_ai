@@ -141,6 +141,32 @@ td.est { background: var(--accent-soft); font-weight: 700; }
          قیمت امروز <b>{{ (fv.price_to_value * 100 if fv.price_to_value is not none else none)|num(0) }}٪</b> آن است.
          {% for a in fv.anchors %}<span class="note">({{ a.label }})</span>{% endfor %}</p>
       <p class="note">هلدینگ‌ها و شرکت‌های سرمایه‌گذاری معمولاً با تخفیف نسبت به NAV معامله می‌شوند؛ فاصله‌ی قیمت تا NAV به‌تنهایی «جای رشد» نیست.</p>
+      {# Today's and the forward-looking value of the portfolio (portfolio_value.py, 2026-11-25). #}
+      {% set nt = v.nav_today %}{% set nf = v.nav_forward %}
+      {% if nt %}
+      <table>
+        <tr><th>دارایی‌ها</th><th class="n">مبلغ</th><th>یعنی</th></tr>
+        <tr><td>ارزش روز دارایی‌ها (NAV)</td><td class="n">{{ nt.nav|money }}</td>
+          <td class="note">هر سهم {{ nt.per_share|num }} ریال؛ P/NAV {{ nt.price_to_nav|num(2) }}؛ سهام بورسی پرتفوی {{ nt.period_end }} به قیمت امروز</td></tr>
+        <tr><td>سهام بورسی: امروز</td><td class="n">{{ nt.listed_today|money }}</td>
+          <td class="note">در تاریخ گزارش {{ nt.listed_period|money }} ({{ nt.listed_change_pct|pct(0, true) }})؛ {{ nt.holdings|num }} سهم{% if nt.unpriced %}، {{ nt.unpriced|num }} بی‌قیمت به ارزش پایان دوره{% endif %}</td></tr>
+        <tr><td>سهام غیربورسی</td><td class="n">{{ nt.unlisted_cost|money }}</td>
+          <td class="note">به بهای تمام‌شده، {{ nt.unlisted_share_pct|pct(0) }} NAV؛ ارزش واقعی‌شان معلوم نیست، پس NAV کف است</td></tr>
+        <tr><td>سایر دارایی‌ها منهای بدهی‌ها</td><td class="n">{{ nt.other_net|money }}</td>
+          <td class="note">از صورت مالی جداگانه‌ی شرکت</td></tr>
+        {% if nf %}<tr><td>ارزش آینده‌نگر دارایی‌ها</td><td class="n">{{ nf.nav|money }}</td>
+          <td class="note">هر سهم {{ nf.per_share|num }} ریال؛ قیمت به آن {{ nf.price_to_value|num(2) }}؛ بازه {{ nf.low|money }} تا {{ nf.high|money }}؛ {{ nf.covered_pct|pct(0) }} پرتفوی بورسی ارزش بنیادی داشت، بقیه به قیمت روز</td></tr>{% endif %}
+      </table>
+      {% if r.holdings %}
+      <table>
+        <tr><th>سهم‌های بزرگ پرتفوی</th><th class="n">وزن</th><th class="n">ارزش امروز</th><th class="n">ارزش بنیادی هر سهم / قیمت</th></tr>
+        {% for hh in r.holdings[:8] %}<tr><td>{{ hh.symbol or hh.name }}{% if hh.right %} (حق تقدم){% endif %}</td><td class="n">{{ hh.weight_pct|pct(1) }}</td>
+          <td class="n">{{ hh.value_today|money }}</td>
+          <td class="n">{{ hh.fair_per_share|num if hh.fair_per_share else "—" }} / {{ hh.price|num }}</td></tr>{% endfor %}
+      </table>
+      {% endif %}
+      <p class="note">ارزش آینده‌نگر: هر سهم بورسی پرتفوی با ارزش بنیادی‌ای که بات برای همان سهم حساب می‌کند (سود ۱۲ ماهه × P/E صنعت یا تاریخچه‌ی خود سهم) به جای قیمت امروز. آزموده نشده؛ یک سهم بزرگ می‌تواند کل آن را جابه‌جا کند، و نقد و بدهی شرکت پس از تاریخ گزارش تا گزارش بعدی معلوم نیست.</p>
+      {% endif %}
     {% endif %}
     {% if fv.doubtful %}<p class="note"><span class="pill warn">احتیاط</span> ضریب‌ها روی سودی تکیه دارند که این گزارش در آن تردید کرده است (پایین را ببینید).</p>{% endif %}
   </div>

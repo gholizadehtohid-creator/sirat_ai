@@ -422,6 +422,68 @@ def reparse_archived(verbose=True, only_empty=True):
     return out
 
 
+def _archived_sheets(tracing):
+    """The sheets of an archived filing, or None (no copy, or unreadable)."""
+
+    import gzip
+    import os
+
+    if not tracing:
+        return None
+    path = os.path.join(codal.ARCHIVE_DIR, str(tracing)[-2:], "%s.gz" % tracing)
+    if not os.path.exists(path):
+        return None
+    with gzip.open(path, "rb") as handle:
+        body = handle.read()
+    try:
+        if body[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+            return codal.split_sheets_xls(body)
+        return codal.split_sheets(body.decode("utf-8", errors="replace"))
+    except Exception:                                           # noqa: BLE001
+        return None
+
+
+def backfill_rows(verbose=True, only_missing=True):
+    """Read each stored portfolio's holdings from the raw archive. No request.
+
+    The rows are kept from 2026-11-25 (nav.extract_holdings) and value a
+    portfolio at today's prices (portfolio_value.py); the portfolios stored
+    before that have their totals only. Every newest portfolio, and any
+    other the archive holds, gets its rows here.
+    """
+
+    import nav
+
+    database.create_database()
+    conn = database._connect()
+    stored = conn.execute(
+        "SELECT p.ins_code, p.period_end, p.tracing_no FROM codal_portfolio p"
+        + (" WHERE NOT EXISTS (SELECT 1 FROM codal_portfolio_rows r WHERE "
+           "r.ins_code = p.ins_code AND r.period_end = p.period_end)"
+           if only_missing else "")).fetchall()
+    conn.close()
+
+    out = {"portfolios": len(stored), "filled": 0, "rows": 0,
+           "no_archive": 0, "no_rows": 0}
+    for code, period, tracing in stored:
+        sheets = _archived_sheets(tracing)
+        if sheets is None:
+            out["no_archive"] += 1
+            continue
+        rows = nav.extract_holdings(sheets)
+        if not rows:
+            out["no_rows"] += 1
+            continue
+        out["rows"] += database.save_portfolio_rows(code, period, rows)
+        out["filled"] += 1
+    if verbose:
+        print("portfolio rows: %(portfolios)d portfolios, %(filled)d filled "
+              "with %(rows)d holdings from the archive, %(no_archive)d without "
+              "an archived copy, %(no_rows)d with no holding rows" % out,
+              flush=True)
+    return out
+
+
 def report():
     """How old the held portfolios are."""
 
@@ -447,6 +509,9 @@ def main(argv=None):
     parser.add_argument("--reparse-archived", action="store_true",
                         help="re-read empty-looking portfolios from the raw "
                              "archive (no request)")
+    parser.add_argument("--rows", action="store_true",
+                        help="read the stored portfolios' holdings from the "
+                             "raw archive (no request)")
     parser.add_argument("--all", action="store_true",
                         help="with --reparse-archived: every archived "
                              "portfolio, not only the empty-looking ones")
@@ -458,6 +523,9 @@ def main(argv=None):
     if args.reparse_archived:
         reparse_archived(only_empty=not args.all)
         report()
+        return 0
+    if args.rows:
+        backfill_rows(only_missing=not args.all)
         return 0
 
     lock = codal_monthly._single_instance("codal_portfolio.lock")

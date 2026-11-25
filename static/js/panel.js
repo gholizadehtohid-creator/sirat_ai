@@ -4312,6 +4312,64 @@ function quickLookup() {
   lookupOutlook();
 }
 
+// Price against the portfolio at the bot's fundamental values
+// (portfolio_value.fundamental): the range, and how much of it rests on one.
+function forwardCell(f) {
+  if (!f || f.price_to_value == null) return "—";
+  const lo = f.low && f.nav ? f.price_to_value * f.nav / f.high : null;
+  const hi = f.low && f.nav ? f.price_to_value * f.nav / f.low : null;
+  return `${num(f.price_to_value, 2)}` +
+    (lo != null && hi != null && Math.abs(hi - lo) > 0.01
+      ? ` <span class="hint">(${num(lo, 2)} تا ${num(hi, 2)})</span>` : "") +
+    ` <span class="hint">· ${num(f.covered_pct || 0, 0)}٪ پرتفوی با ارزش بنیادی</span>`;
+}
+
+// What an investment company or a holding owns, today and at the bot's
+// fundamental values (portfolio_value.py, 2026-11-25).
+function navDetailHtml(r) {
+  const v = r.valuation || {}, t = v.nav_today, f = v.nav_forward;
+  if (!t) return "";
+  const rial = x => x == null ? "—" : `${money(x)} ریال`;
+  const rows = [
+    ["ارزش روز دارایی‌ها (NAV)", `${rial(t.nav)} — هر سهم ${num(t.per_share, 0)} ریال، ` +
+      `P/NAV ${num(t.price_to_nav, 2)}`],
+    ["سهام بورسی: به قیمت امروز / در تاریخ گزارش",
+      `${rial(t.listed_today)} / ${rial(t.listed_period)} (${signed(t.listed_change_pct, 1)}) — ` +
+      `${num(t.holdings, 0)} سهم، گزارش ${esc(t.period_end || "")}` +
+      (t.unpriced ? `؛ ${num(t.unpriced, 0)} سهم بی‌قیمت به ارزش پایان دوره` : "")],
+    ["سهام غیربورسی (به بهای تمام‌شده)", `${rial(t.unlisted_cost)}` +
+      (t.unlisted_share_pct != null ? ` — ${num(t.unlisted_share_pct, 0)}٪ NAV` : "") +
+      (t.unlisted_cost > 0 ? " <span class=\"hint\">ارزش واقعی معلوم نیست؛ NAV کف است</span>" : "")],
+    ["سایر دارایی‌ها منهای بدهی‌ها", rial(t.other_net)],
+    ["سود نقدی سهام پرتفوی پس از تاریخ گزارش / سود مصوب خود شرکت",
+      `${rial(t.dividends_in)} / ${rial(t.own_dividend)}`],
+  ];
+  if (f) {
+    rows.push(["ارزش آینده‌نگر دارایی‌ها (ارزش بنیادی سهام پرتفوی)",
+      `${rial(f.nav)} — هر سهم ${num(f.per_share, 0)} ریال؛ بازه ${money(f.low)} تا ${money(f.high)} ریال؛ ` +
+      `قیمت به این ارزش ${num(f.price_to_value, 2)} (${signed(f.change_vs_today_pct, 0)} نسبت به ارزش روز)`]);
+    rows.push(["سهم پرتفوی بورسی که ارزش بنیادی دارد", `${num(f.covered_pct || 0, 0)}٪ ` +
+      `<span class="hint">بقیه (زیان‌ده، مالی، یا بدون برآورد) به قیمت روز</span>`]);
+  }
+  const hold = (r.holdings || []).map(h => [
+    (h.symbol ? `<strong>${esc(h.symbol)}</strong>` : `<span class="hint">${esc(h.name || "")}</span>`) +
+      (h.right ? ' <span class="hint">(حق تقدم)</span>' : ""),
+    `${num(h.weight_pct, 1)}٪`,
+    rial(h.value_today),
+    signed(h.change_pct, 0),
+    h.price == null ? "—" : num(h.price, 0),
+    h.fair_per_share == null ? "—" :
+      `${num(h.fair_per_share, 0)} <span class="hint">(${signed((h.fair_per_share / h.price - 1) * 100, 0)})</span>`,
+  ]);
+  return `<h3 style="margin-top:12px">دارایی‌های شرکت: ارزش روز و آینده‌نگر</h3>` +
+    table(["شاخص", "مقدار"], rows) +
+    (hold.length ? table(["سهم پرتفوی", "وزن", "ارزش امروز", "تغییر از تاریخ گزارش",
+                          "قیمت امروز", "ارزش بنیادی هر سهم"], hold) : "") +
+    `<p class="hint">ارزش بنیادی هر سهم همان عددی است که بات در کارت آن شرکت نشان می‌دهد (سود ۱۲ ماهه × P/E صنعت ` +
+    `یا تاریخچه‌ی خود سهم)؛ آزموده نشده و یک سهم بزرگ می‌تواند کل ارزش آینده‌نگر را جابه‌جا کند. ` +
+    `نقد و بدهی و خرید و فروش شرکت پس از تاریخ گزارش تا گزارش بعدی معلوم نیست.</p>`;
+}
+
 function renderOutlookDetail(r) {
   const v = r.valuation || {}, g = r.growth || {}, mg = r.margins || {};
   const c = r.cash || {}, b = r.balance || {}, l = r.latest || {};
@@ -4338,7 +4396,12 @@ function renderOutlookDetail(r) {
       r.hurdle && r.hurdle.required_growth_pct != null
         ? `${hurdleCell(r.hurdle)} — اخزا ${pctCell(r.hurdle.rate_pct, 1)} (${esc(r.hurdle.as_of || "")})`
         : "—"],
-    ["P/NAV (ارزش خالص دارایی‌ها)", v.price_to_nav == null ? "—" :
+    ["P/NAV (ارزش خالص دارایی‌ها)", v.nav_today && v.nav_today.price_to_nav != null
+      ? `${num(v.nav_today.price_to_nav, 2)} به قیمت امروز سهام پرتفوی (جزئیات پایین)؛ ` +
+        `به قیمت تاریخ گزارش ${esc(v.nav_period || "")}: ${num(v.price_to_nav, 2)}` +
+        ((v.nav_notes || []).length
+          ? `<br><span class="hint">⚠ ${(v.nav_notes || []).map(esc).join("<br>⚠ ")}</span>` : "")
+      : v.price_to_nav == null ? "—" :
       `${num(v.price_to_nav, 2)} — پرتفوی ${esc(v.nav_period || "")}` +
       (v.nav_stale && v.price_to_nav_est != null
         ? ` (کهنه؛ با حرکت شاخص حدود ${num(v.price_to_nav_est, 2)}، تخمینی)` : "") +
@@ -4403,7 +4466,7 @@ function renderOutlookDetail(r) {
   $("outlookDetail").innerHTML =
     `${record}<h3>${esc(r.symbol || "")} <span class="hint">${esc(r.name || "")}</span>` +
     ` <a class="link" href="/api/report?symbol=${encodeURIComponent(r.symbol || "")}" target="_blank" rel="noopener">گزارش PDF ←</a></h3>` +
-    table(["شاخص", "مقدار"], rows) + monthlyHtml +
+    table(["شاخص", "مقدار"], rows) + navDetailHtml(r) + monthlyHtml +
     `<ul class="evidence" style="margin-top:8px">${flags}${pos}</ul>`;
 }
 
@@ -4424,12 +4487,17 @@ function renderOutlook(rep) {
   });
   const fin = (rep.financials || []).map(r => {
     const v = r.valuation || {};
+    const t = v.nav_today, f = v.nav_forward;
     return [`<strong>${esc(r.symbol)}</strong>`, esc(r.sector || ""),
-      v.price_to_nav == null ? "—"
+      t && t.price_to_nav != null
+        ? `${num(t.price_to_nav, 2)} <span class="hint">(پرتفوی ${esc(t.period_end || "")} به قیمت امروز` +
+          (t.unlisted_share_pct >= 30 ? `؛ ${num(t.unlisted_share_pct, 0)}٪ غیربورسی به بهای تمام‌شده` : "") + `)</span>`
+        : v.price_to_nav == null ? "—"
         : v.nav_stale
           ? (v.price_to_nav_est != null ? `${num(v.price_to_nav_est, 2)} <span class="hint">تخمینی</span> ` : "") +
             `<span class="hint">(به قیمت ${esc(v.nav_period || "")}: ${num(v.price_to_nav, 2)}؛ شاخص از آن زمان ${signed(v.nav_index_move_pct, 0)})</span>`
           : `${num(v.price_to_nav, 2)} <span class="hint">(${esc(v.nav_period || "")})</span>`,
+      forwardCell(f),
       num(v.pb, 2), pctCell(v.roe_ttm_pct), pctCell(v.dividend_yield_pct)];
   });
   const sus = (rep.suspect || []).map(x =>
@@ -4451,7 +4519,11 @@ function renderOutlook(rep) {
     : '<div class="empty">هنوز شرکتی با داده‌ی کافی برای برآورد نیست</div>') +
     (fin.length ? `<h3 style="margin-top:16px">بانک، بیمه، سرمایه‌گذاری و هلدینگ
       <span class="hint">— با P/NAV و P/B سنجیده می‌شوند، نه P/E (ارزان‌ترین اول)</span></h3>` +
-      table(["نماد", "صنعت", "P/NAV (تاریخ پرتفوی)", "P/B", "ROE دوازده‌ماهه", "بازده نقدی"], fin) : "") +
+      table(["نماد", "صنعت", "P/NAV (ارزش روز دارایی‌ها)", "قیمت به ارزش آینده‌نگر", "P/B", "ROE دوازده‌ماهه", "بازده نقدی"], fin) +
+      `<p class="hint">ارزش روز: هر سهم بورسی پرتفوی به قیمت امروز (با افزایش سرمایه و سود نقدی پس از تاریخ گزارش)، ` +
+      `سهام غیربورسی به بهای تمام‌شده. ارزش آینده‌نگر: همان پرتفوی با ارزش بنیادی‌ای که بات برای هر سهم حساب می‌کند ` +
+      `(سود ۱۲ ماهه × P/E صنعت یا تاریخچه‌ی خود سهم)؛ سهمی که ارزش بنیادی ندارد به قیمت روز می‌ماند. ` +
+      `هیچ‌کدام آزموده نشده؛ برای شناخت‌اند، نه انتخاب خرید.</p>` : "") +
     (sus ? `<p class="hint" style="margin-top:12px">⚠ داده‌ی ناممکن — رتبه‌بندی نشد، صورت مالی را دستی ببینید: ${sus}</p>` : "") +
     (doubt ? `<p class="hint" style="margin-top:12px">⚠ P/E غیرقابل اتکا — رتبه‌بندی نشد؛ ` +
       `این فهرست بر همین P/E مرتب می‌شود و این‌جا P/E ارزش‌گذاری نیست (برای جزئیات نماد را بررسی کنید): ${doubt}</p>` : "") +

@@ -346,6 +346,27 @@ def create_database():
     )
     """)
 
+    # Each holding of a stored portfolio, row by row (nav.extract_holdings,
+    # 2026-11-25): what values a holding at TODAY's price
+    # (portfolio_value.py). Replaced with the portfolio it belongs to.
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS codal_portfolio_rows (
+        ins_code        TEXT NOT NULL,
+        period_end      TEXT NOT NULL,
+        row_no          INTEGER NOT NULL,
+        section         TEXT NOT NULL,
+        name            TEXT,
+        capital         REAL,
+        par             REAL,
+        shares          REAL,
+        ownership_pct   REAL,
+        cost            REAL,
+        market          REAL,
+        value_per_share REAL,
+        PRIMARY KEY (ins_code, period_end, row_no)
+    )
+    """)
+
     # The incremental engine's memory: when each symbol was last checked,
     # last successfully fetched, and what went wrong if anything. Without this
     # every run would re-search all 818 symbols and re-download whatever it
@@ -1756,10 +1777,76 @@ def save_codal_portfolio(ins_code, record):
 
     written = cursor.rowcount
 
+    # The holdings, when the filing's rows were read: replaced with the
+    # totals they belong to, never on their own (a refused older release
+    # keeps the newer rows too).
+    if written and record.get("rows") is not None:
+        _write_portfolio_rows(conn, str(ins_code), record["period_end"],
+                              record["rows"])
+
     conn.commit()
     conn.close()
 
     return 1 if written else 0
+
+
+ROW_COLUMNS = ("section", "name", "capital", "par", "shares", "ownership_pct",
+               "cost", "market", "value_per_share")
+
+
+def _write_portfolio_rows(conn, ins_code, period_end, rows):
+    conn.execute("DELETE FROM codal_portfolio_rows WHERE ins_code = ? AND "
+                 "period_end = ?", (ins_code, period_end))
+    conn.executemany(
+        "INSERT INTO codal_portfolio_rows (ins_code, period_end, row_no, %s) "
+        "VALUES (?, ?, ?, %s)" % (", ".join(ROW_COLUMNS),
+                                  ", ".join("?" * len(ROW_COLUMNS))),
+        [(ins_code, period_end, k) + tuple(row.get(c) for c in ROW_COLUMNS)
+         for k, row in enumerate(rows)])
+
+
+def save_portfolio_rows(ins_code, period_end, rows):
+    """Store one stored portfolio's holdings on their own: the archive
+    backfill (codal_portfolio.backfill_rows), for portfolios read before
+    the rows were kept. Returns the number of rows written."""
+
+    create_database()
+    conn = _connect()
+    try:
+        _write_portfolio_rows(conn, str(ins_code), period_end, rows or [])
+        conn.commit()
+    finally:
+        conn.close()
+    return len(rows or [])
+
+
+def load_portfolio_rows(keys=None):
+    """{(ins_code, period_end): [row, ...]} for the stored holdings.
+
+    `keys` limits it to those company-periods; None reads every one. One
+    query, ordered as the filing lists them.
+    """
+
+    create_database()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT ins_code, period_end, row_no, %s FROM codal_portfolio_rows "
+            "ORDER BY ins_code, period_end, row_no" % ", ".join(ROW_COLUMNS)
+        ).fetchall()
+    finally:
+        conn.close()
+
+    wanted = None if keys is None else {(str(a), b) for a, b in keys}
+    out = {}
+    for row in rows:
+        key = (str(row[0]), row[1])
+        if wanted is not None and key not in wanted:
+            continue
+        record = dict(zip(ROW_COLUMNS, row[3:]))
+        record["row"] = row[2]
+        out.setdefault(key, []).append(record)
+    return out
 
 
 def load_codal_portfolio_latest(ins_codes=None):

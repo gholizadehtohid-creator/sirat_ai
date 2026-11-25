@@ -178,7 +178,24 @@ def stock_text(o, events=None):
                     jdate(worst["year"]), fa(round(worst["rate"] * 10)))
 
     fair = ""
-    if fv.get("central"):
+    nav_today = v.get("nav_today") or {}
+    nav_forward = v.get("nav_forward") or {}
+    if nav_today.get("per_share"):
+        # An investment company or a holding: its portfolio at today's
+        # prices, and at the bot's fundamental value of each holding
+        # (portfolio_value.py, 2026-11-25).
+        fair = ("ارزش روز دارایی‌ها هر سهم: %s ریال (P/NAV %s؛ سهام بورسی پرتفوی "
+                "%s به قیمت امروز%s)") % (
+            fa(nav_today["per_share"]), fa(nav_today.get("price_to_nav"), 2),
+            jdate(nav_today.get("period_end") or ""),
+            "، غیربورسی‌ها به بهای تمام‌شده — کف ارزش" if nav_today.get("unlisted_cost") else "")
+        if nav_forward.get("per_share"):
+            fair += ("\nارزش آینده‌نگر دارایی‌ها هر سهم (ارزش بنیادی سهام پرتفوی): %s ریال؛ "
+                     "قیمت به آن %s؛ %s پرتفوی ارزش بنیادی داشت، بقیه به قیمت روز. "
+                     "آزموده نشده؛ نشانه‌ی خرید نیست.") % (
+                fa(nav_forward["per_share"]), fa(nav_forward.get("price_to_value"), 2),
+                pct(nav_forward.get("covered_pct"), 0))
+    elif fv.get("central"):
         if fv.get("basis") == "nav":
             fair = "ارزش خالص دارایی هر سهم: %s ریال (کف ارزش، نه هدف قیمت)" % fa(
                 fv["central"])

@@ -324,6 +324,91 @@ def extract_portfolio(sheets):
 
         out["unlisted_cost"] = cost * scale if cost is not None else None
 
+    # The holdings themselves, for a NAV at today's prices (2026-11-25).
+    try:
+        out["rows"] = extract_holdings(sheets)
+    except Exception:                                           # noqa: BLE001
+        out["rows"] = None          # the totals stand on their own
+
+    return out
+
+
+SHARES = "تعداد سهام"
+VALUE_PER_SHARE = "ارزش هر سهم"
+OWNERSHIP = "درصد مالکیت"
+
+
+def extract_holdings(sheets):
+    """Every holding of one ن-۳۱ filing, row by row (added 2026-11-25).
+
+    extract_portfolio() keeps only the totals, and a NAV from totals can move
+    only with the index. The rows are what values each holding at TODAY's
+    price (portfolio_value.py). Each row:
+
+        {"section": "listed" | "unlisted", "row": n, "name",
+         "capital" (rials), "par" (rials), "shares" (at period end),
+         "ownership_pct", "cost" (rials), "market" (rials, listed only),
+         "value_per_share" (rials, listed only)}
+
+    The period-end share count is its own column where the filing has one,
+    else the start plus the period's change -- the layout seen on 2026-11-25
+    has no end count. Subtotal («جمع») and heading rows (a label and no
+    figure, «سهام پذیرفته شده در بورس و فرابورس») are left out.
+    """
+
+    scale = config.CODAL_AMOUNT_SCALE
+    out = []
+
+    for section, names in (("listed", LISTED_SHEETS), ("unlisted", UNLISTED_SHEETS)):
+        frame = _pick(sheets, names)
+        if frame is None:
+            continue
+
+        total = _total_row(frame)
+        upto = total if total is not None else len(frame)
+        first = frame.columns[0]
+
+        c_capital = _column(frame, "سرمایه", "سرمایه")
+        c_par = _column(frame, "ارزش اسمی", "ارزش اسمی")
+        c_start = _column(frame, "ابتدای دوره", SHARES)
+        c_change = _column(frame, "تغییرات", SHARES)
+        c_end = _column(frame, END_OF_PERIOD, SHARES)
+        c_pct = _column(frame, END_OF_PERIOD, OWNERSHIP)
+        c_cost = _column(frame, END_OF_PERIOD, COST)
+        c_market = _column(frame, END_OF_PERIOD, MARKET_VALUE)
+        c_per_share = _column(frame, END_OF_PERIOD, VALUE_PER_SHARE)
+
+        for i in range(upto):
+            name = _text(frame.iloc[i][first])
+            if not name or name.startswith("جمع"):
+                continue
+
+            cost = _value_at(frame, i, c_cost)
+            market = _value_at(frame, i, c_market) if section == "listed" else None
+            shares = _value_at(frame, i, c_end)
+            if shares is None:
+                start = _value_at(frame, i, c_start)
+                change = _value_at(frame, i, c_change)
+                if start is not None or change is not None:
+                    shares = (start or 0.0) + (change or 0.0)
+            if cost is None and market is None and not shares:
+                continue                # a heading row
+
+            capital = _value_at(frame, i, c_capital)
+            out.append({
+                "section": section,
+                "row": len(out),
+                "name": name,
+                "capital": capital * scale if capital is not None else None,
+                "par": _value_at(frame, i, c_par),
+                "shares": shares,
+                "ownership_pct": _value_at(frame, i, c_pct),
+                "cost": cost * scale if cost is not None else None,
+                "market": market * scale if market is not None else None,
+                "value_per_share": (_value_at(frame, i, c_per_share)
+                                    if section == "listed" else None),
+            })
+
     return out
 
 
