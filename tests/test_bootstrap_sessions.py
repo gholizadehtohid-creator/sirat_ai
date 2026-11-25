@@ -432,11 +432,28 @@ class ScheduledRetryTests(unittest.TestCase):
                 mock.patch.object(bootstrap, "_note"):
             self.assertTrue(bootstrap._fetch_flow(lambda *a: None))
         self.assertTrue(bootstrap._DEFERRED["flow"])
+        import fund_flows
         with mock.patch.object(seed_import, "import_client_type", return_value=5), \
                 mock.patch.object(bootstrap, "_flow_session_coverage",
-                                  return_value=("2026-11-22", 748, 740)):
+                                  return_value=("2026-11-22", 748, 740)), \
+                mock.patch.object(fund_flows, "update", return_value="fund flows: x") as funds:
             bootstrap._fetch_flow(lambda *a: None)
         self.assertFalse(bootstrap._DEFERRED["flow"])
+        # A complete session brings the funds' flow along (2026-11-26)...
+        funds.assert_called_once()
+        bootstrap._DEFERRED.clear()
+
+    def test_a_deferred_session_does_not_fetch_the_funds_yet(self):
+        import fund_flows
+        import seed_import
+        bootstrap._DEFERRED.clear()
+        with mock.patch.object(seed_import, "import_client_type", return_value=5), \
+                mock.patch.object(bootstrap, "_flow_session_coverage",
+                                  return_value=("2026-11-22", 748, 36)), \
+                mock.patch.object(bootstrap, "_note"), \
+                mock.patch.object(fund_flows, "update") as funds:
+            bootstrap._fetch_flow(lambda *a: None)
+        funds.assert_not_called()
         bootstrap._DEFERRED.clear()
 
 

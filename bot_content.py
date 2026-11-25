@@ -300,7 +300,7 @@ def calendar_events_for(calendar, symbol):
 # ---- the market ---------------------------------------------------------------
 
 def market_text(indices=None, flow=None, valuation=None, bill_yield=None,
-                commodities=None):
+                commodities=None, fund_flows=None):
     parts = ["📊 خلاصه‌ی بازار"]
     tedpix = None
     for item in (indices or {}).get("indices") or []:
@@ -349,8 +349,26 @@ def market_text(indices=None, flow=None, valuation=None, bill_yield=None,
     world = commodities_line(commodities)
     if world:
         parts.append(world)
+    funds = fund_flows_line(fund_flows)
+    if funds:
+        parts.append(funds)
     parts.append(DISCLAIMER)
     return _lines(*parts)
+
+
+def fund_flows_line(rep):
+    """Individuals' net buying of the main fund kinds over 5 sessions, in
+    thousand billion rials (GET /api/fundflows), or ""."""
+
+    cats = {c.get("key"): c for c in ((rep or {}).get("categories") or [])}
+    bits = []
+    for key in ("fixed", "equity", "gold"):
+        c = cats.get(key)
+        if c and c.get("net_5") is not None:
+            bits.append("%s %s" % (c["label"], fa(c["net_5"] / 1e12, 1, True)))
+    if not bits:
+        return ""
+    return "💧 پول حقیقی در صندوق‌ها، ۵ جلسه (هزار میلیارد ریال): " + "، ".join(bits)
 
 
 def commodities_line(rep):

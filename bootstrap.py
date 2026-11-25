@@ -1018,6 +1018,16 @@ def _fetch_flow(on_item):
     if _DEFERRED["flow"]:
         _note("flow: session %s has %d of %d traded names so far -- the rest "
               "is published later; retried" % (session, flowed, traded))
+    elif ok:
+        # The funds' flow, by kind (fund_flows.py, 2026-11-26): its own
+        # table, at most every 6 h, once the session's equity flow is in.
+        # Never raises, and never fails the equity step.
+        try:
+            import fund_flows
+            _note(fund_flows.update())
+        except Exception as exc:                                # noqa: BLE001
+            _note("fund flows failed to run: %s: %s" % (type(exc).__name__,
+                                                        str(exc)[:160]))
     return ok
 
 

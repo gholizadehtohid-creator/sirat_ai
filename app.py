@@ -1155,6 +1155,19 @@ def api_commodities():
         return handle_error(exc)
 
 
+@app.route("/api/fundflows")
+def api_fundflows():
+    """Individuals' net buying of the funds by kind -- fixed income, equity,
+    gold... (fund_flows.py, 2026-11-26): where the public's money is going.
+    A read of the stored table, no network."""
+
+    try:
+        import fund_flows
+        return jsonify(fund_flows.summary() or {"available": False})
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 @app.route("/api/announcements")
 def api_announcements():
     """Codal's important announcements of the last days. See codal_announcements.py.

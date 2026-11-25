@@ -258,6 +258,29 @@
     <div class="chart" id="marketflowChart" style="margin-top:12px"></div>
   </div>
 
+  <!-- Where the public's money is going among the funds (fund_flows.py,
+       2026-11-26, from the owner's walk through BourseView): individuals'
+       net buying of fixed-income, equity, gold and other funds. -->
+  <div class="card span-half" id="fundFlowCard">
+    <div class="card-head">
+      <h2>پول حقیقی به کدام صندوق‌ها می‌رود؟</h2>
+    </div>
+    <p class="hint">
+      خالص خرید حقیقی (خرید منهای فروش اشخاص) در صندوق‌های قابل معامله، به تفکیک نوع:
+      درآمد ثابت، سهامی، طلا، مختلط، اهرمی، املاک. نشان می‌دهد پول مردم از سهام به
+      اوراق یا طلا می‌رود یا برعکس. جدول به میلیارد ریال؛ نمودار جمع آن از ۶۰ جلسه پیش،
+      به هزار میلیارد ریال.
+    </p>
+    <div id="fundFlowStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
+      <span class="icon">…</span><div id="fundFlowStatusText">در حال بارگذاری…</div>
+    </div>
+    <div class="table-wrap" id="fundFlowTable"></div>
+    <div class="chart" id="fundFlowChart"></div>
+    <p class="hint" style="margin-top:6px">توصیف است، نه سیگنال: آزمون‌های خود بات
+    (E21، E22) جریان پول حقیقی را پیش‌بینی‌کننده‌ی قابل معامله نیافتند. فقط صندوق‌هایی که
+    نوعشان از نامشان معلوم است حساب شده‌اند.</p>
+  </div>
+
   <!-- ================= SUGGESTED PORTFOLIO =================
        The answer comes first. Everything below it is the evidence that
        produced it, and evidence belongs after the conclusion, not in front

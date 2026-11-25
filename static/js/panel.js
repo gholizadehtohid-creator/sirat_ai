@@ -5116,6 +5116,59 @@ async function loadCommodities() {
   }
 }
 
+/* ---------- individuals' money among the funds (2026-11-26) ----------
+   fund_flows.py: net individual buying per fund kind, the last session,
+   5 and 20 sessions, and a cumulative line per kind over 60 sessions. */
+// Each kind keeps its own palette slot whatever is shown (the colour follows
+// the entity, not its rank): gold the amber slot, fixed income the green.
+const FUND_FLOW_COLORS = { equity: "--series-1", mixed: "--series-2", fixed: "--series-3",
+                           gold: "--series-4", leveraged: "--series-5" };
+
+function renderFundFlows(rep) {
+  const cats = (rep && rep.categories) || [];
+  if (!cats.length) {
+    banner("fundFlowStatus", "fundFlowStatusText", "is-warn",
+      "هنوز جریان صندوق‌ها ذخیره نشده؛ بعد از اجرای عصر می‌آید.");
+    $("fundFlowTable").innerHTML = "";
+    $("fundFlowChart").innerHTML = "";
+    return;
+  }
+  const bn = v => signed(v / 1e9, 0, "");
+  banner("fundFlowStatus", "fundFlowStatusText", "is-live",
+    `تا ${esc(faDay(rep.as_of, true))} — ${num(rep.funds_classified, 0)} صندوق با نوع معلوم.`);
+  $("fundFlowTable").innerHTML = table(
+    ["نوع صندوق", "صندوق‌ها", "آخرین جلسه", "۵ جلسه", "۲۰ جلسه"],
+    cats.map(c => [esc(c.label), num(c.funds, 0), bn(c.net_1), bn(c.net_5), bn(c.net_20)]));
+  // Cumulative net buying over the window, one line per main kind.
+  const main = cats.filter(c => FUND_FLOW_COLORS[c.key]);
+  const dates = (main[0] || cats[0]).series.map(p => p.date);
+  const running = {};
+  const data = dates.map((d, i) => {
+    const row = { date: d };
+    for (const c of main) {
+      running[c.key] = (running[c.key] || 0) + ((c.series[i] || {}).net || 0) / 1e12;
+      row[c.key] = running[c.key];
+    }
+    return row;
+  });
+  lineChart($("fundFlowChart"), {
+    data, xKey: "date", height: 200,
+    series: main.map(c => ({ key: c.key, label: c.label,
+                             color: cssVar(FUND_FLOW_COLORS[c.key]) })),
+    format: v => num(v, 1),
+  });
+}
+
+async function loadFundFlows() {
+  try {
+    renderFundFlows(await getJSON("/api/fundflows"));
+  } catch (err) {
+    $("fundFlowTable").innerHTML = "";
+    banner("fundFlowStatus", "fundFlowStatusText", "is-error",
+      `<strong>بارگذاری نشد.</strong> ${esc(err.message)}`);
+  }
+}
+
 /* ---------- tabs ----------
    Four tabs instead of one long page (2026-11-05). Each tab's data is
    requested the first time the tab is opened, so the summary is on screen
@@ -5125,7 +5178,8 @@ const TAB_LOADERS = {
   // Live first in the summary too: the "today" card's market line reads it.
   summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities(),
             () => loadMarketflow(), () => loadAnnouncements(), () => loadCalendar(),
-            () => loadHoldings(), () => loadValuation(), () => loadCommodities()],
+            () => loadHoldings(), () => loadValuation(), () => loadCommodities(),
+            () => loadFundFlows()],
   stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
   live: [() => loadLive()],
   // The guide is static HTML: nothing to fetch.
