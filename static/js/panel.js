@@ -3707,6 +3707,7 @@ function renderTasks() {
 function setTask(id, state, detail, count) {
   taskState[id] = { state, detail, count };
   renderTasks();
+  launcherStatus();
 }
 
 // A download only helps if the views waiting on it are re-run -- and as
@@ -5932,6 +5933,202 @@ document.querySelectorAll("details.evidence-group").forEach(group => {
   });
 });
 
+/* ---------- tile controls (2026-11-25) ----------
+   The owner, a graphic designer: a dropdown hides its choices behind a
+   click. Each short <select> becomes a row of tile buttons -- every choice
+   visible, the chosen one marked, one click. The <select> stays in the
+   page, hidden, so every reader of .value and every "change" listener
+   works unchanged; a click sets it and fires "change". A radio group for
+   assistive technology, with the arrow keys of a right-to-left row. */
+
+const SEGMENTED = ["todayProfile", "marketflowSessions", "announcementsKind",
+                   "announcementsDays", "intelWindow"];
+
+function segmentize(select) {
+  if (!select || select.dataset.segmented) return;
+  select.dataset.segmented = "1";
+  const group = document.createElement("div");
+  group.className = "seg";
+  group.setAttribute("role", "radiogroup");
+  group.setAttribute("aria-label", select.getAttribute("aria-label") || select.title || "");
+  // "متعادل — ۷۰٪ سهام، ۳۰٪ طلا": the name on the tile, the rest under it.
+  group.innerHTML = [...select.options].map(o => {
+    const [main, ...rest] = o.textContent.split(" — ");
+    return `<button type="button" role="radio" class="seg-btn" data-value="${esc(o.value)}">` +
+      `<span class="seg-main">${esc(main)}</span>` +
+      (rest.length ? `<span class="seg-sub">${esc(rest.join(" — "))}</span>` : "") +
+      `</button>`;
+  }).join("");
+  select.classList.add("seg-source");
+  select.after(group);
+
+  const buttons = [...group.querySelectorAll(".seg-btn")];
+  const sync = () => buttons.forEach(b => {
+    const on = b.dataset.value === select.value;
+    b.setAttribute("aria-checked", on ? "true" : "false");
+    b.classList.toggle("is-on", on);
+    b.tabIndex = on ? 0 : -1;
+  });
+  const choose = (b, focus) => {
+    if (select.value !== b.dataset.value) {
+      select.value = b.dataset.value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    sync();
+    if (focus) b.focus();
+  };
+  buttons.forEach((b, i) => {
+    b.addEventListener("click", () => choose(b));
+    b.addEventListener("keydown", (ev) => {
+      const rtl = getComputedStyle(group).direction === "rtl";
+      const step = { ArrowLeft: rtl ? 1 : -1, ArrowRight: rtl ? -1 : 1,
+                     ArrowDown: 1, ArrowUp: -1 }[ev.key];
+      let j = null;
+      if (step) j = (i + step + buttons.length) % buttons.length;
+      else if (ev.key === "Home") j = 0;
+      else if (ev.key === "End") j = buttons.length - 1;
+      if (j === null) return;
+      ev.preventDefault();
+      choose(buttons[j], true);
+    });
+  });
+  select.addEventListener("change", sync);
+  sync();
+}
+
+/* ---------- the analysis tab as tiles (2026-11-25) ----------
+   Ten folded sections read as ten identical grey bars. They are now a grid
+   of tiles -- an icon, a name, what it shows, and the section's state from
+   the analysis steps -- and the chosen one opens below the grid, alone.
+   The <details> stay as they were, so the deep links (?tech=, ?intel=,
+   ?indices=) and the guide's "برو به" buttons, which open a fold, still
+   work: opening any one closes the others and marks its tile. */
+
+const LAUNCH_ICONS = {
+  thermo: "M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z",
+  chart: "M3 3v18h18M7 15l4-4 3 3 5-6",
+  factory: "M3 21V10l5 3v-3l5 3v-3l5 3V4h3v17zM7 17h2M12 17h2",
+  money: "M7 7h11l-3-3M17 17H6l3 3",
+  doc: "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5",
+  grid: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
+  candle: "M7 3v4M7 17v4M5 7h4v10H5zM17 3v6M17 15v6M15 9h4v6h-4z",
+  radar: "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM21 21l-5-5M11 8v6M8 11h6",
+  coin: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM12 7v10M15 9.5c0-1-1.3-1.8-3-1.8s-3 .8-3 1.8 1.3 1.6 3 1.9 3 .9 3 1.9-1.3 1.8-3 1.8-3-.8-3-1.8",
+  news: "M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5M8 16h3",
+};
+
+// The tile order is the reading order: the market first, then single names.
+const LAUNCH = {
+  evidenceRegime:     { icon: "thermo", title: "دمای بازار", note: "روند، مشارکت و پهنای بازار", task: "regime" },
+  evidenceIndices:    { icon: "chart", title: "شاخص‌ها", note: "تکنیکال شاخص کل و هم‌وزن", task: "indices" },
+  evidenceSectors:    { icon: "factory", title: "صنایع", note: "بنیادی و تکنیکال هر صنعت", task: "sectors" },
+  evidenceFlow:       { icon: "money", title: "جریان پول", note: "حقیقی و حقوقی هر نماد", task: "flow" },
+  evidenceCodal:      { icon: "doc", title: "بنیادی کدال", note: "صورت‌های مالی شرکت‌ها", task: "fundamentals" },
+  evidenceScreen:     { icon: "grid", title: "پایش کل بازار", note: "همه‌ی نمادها و دلیل ماندن یا رفتن", task: "screen" },
+  evidenceTechnical:  { icon: "candle", title: "تکنیکال یک نماد", note: "نماد را بنویسید و تحلیل کنید" },
+  evidenceSmartMoney: { icon: "radar", title: "پویشگر ورود پول", note: "خرید درشت حقیقی در کف قیمت" },
+  evidenceGold:       { icon: "coin", title: "صندوق‌های طلا", note: "تکنیکال و تاریخچه‌ی صندوق‌ها" },
+  evidenceIntel:      { icon: "news", title: "هوش بازار", note: "خبرهای طلا، نفت، دلار و بورس" },
+};
+
+function launchIcon(name) {
+  const d = LAUNCH_ICONS[name] || LAUNCH_ICONS.grid;
+  return `<svg viewBox="0 0 24 24" focusable="false"><path d="${d}"/></svg>`;
+}
+
+function buildLauncher() {
+  const panel = document.querySelector('.tab-panel[data-tab="analysis"]');
+  if (!panel || $("analysisLauncher")) return;
+  const groups = [...panel.querySelectorAll(":scope > details.evidence-group")];
+  if (!groups.length) return;
+
+  // A section added later without an entry above still gets a tile.
+  const ids = [...Object.keys(LAUNCH).filter(id => groups.some(g => g.id === id)),
+               ...groups.filter(g => !LAUNCH[g.id]).map(g => g.id)];
+  const grid = document.createElement("div");
+  grid.className = "launcher";
+  grid.id = "analysisLauncher";
+  grid.innerHTML = ids.map(id => {
+    const spec = LAUNCH[id] || {
+      title: ($(id).querySelector("summary")?.textContent || id).trim(), note: "" };
+    return `<button type="button" class="launch-tile" data-target="${esc(id)}" ` +
+      `aria-controls="${esc(id)}" aria-expanded="false">` +
+      `<span class="lt-icon" aria-hidden="true">${launchIcon(spec.icon)}</span>` +
+      `<span class="lt-text"><span class="lt-title">${esc(spec.title)}</span>` +
+      (spec.note ? `<span class="lt-note">${esc(spec.note)}</span>` : "") +
+      `<span class="lt-status" data-status-for="${esc(id)}"></span></span></button>`;
+  }).join("");
+
+  const title = panel.querySelector(":scope > .section-title");
+  if (title) {
+    title.textContent = "تحلیل‌ها — یکی را انتخاب کنید";
+    title.after(grid);
+  } else {
+    panel.prepend(grid);
+  }
+  const hint = document.createElement("p");
+  hint.className = "hint launcher-hint";
+  hint.textContent = "روی یکی از کاشی‌ها بزنید تا همان تحلیل همین‌جا، زیر کاشی‌ها، باز شود.";
+  grid.after(hint);
+  panel.classList.add("has-launcher");
+
+  grid.addEventListener("click", (ev) => {
+    const tile = ev.target.closest(".launch-tile");
+    if (!tile) return;
+    const group = $(tile.dataset.target);
+    if (!group) return;
+    group.open = !group.open;
+    if (group.open) {
+      // Below the grid; bring it up only if it opened out of sight.
+      requestAnimationFrame(() => {
+        if (group.getBoundingClientRect().top > window.innerHeight * 0.7) {
+          group.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    }
+  });
+
+  groups.forEach(group => group.addEventListener("toggle", () => {
+    if (group.open) groups.forEach(other => { if (other !== group && other.open) other.open = false; });
+    syncLauncher();
+  }));
+
+  // The section read last is open again on the next visit.
+  try {
+    const last = localStorage.getItem("sirat-analysis");
+    if (last && $(last) && !groups.some(g => g.open)) $(last).open = true;
+  } catch (e) { /* private mode */ }
+  syncLauncher();
+  launcherStatus();
+}
+
+function syncLauncher() {
+  const grid = $("analysisLauncher");
+  if (!grid) return;
+  let open = "";
+  grid.querySelectorAll(".launch-tile").forEach(tile => {
+    const on = !!$(tile.dataset.target)?.open;
+    if (on) open = tile.dataset.target;
+    tile.classList.toggle("is-on", on);
+    tile.setAttribute("aria-expanded", on ? "true" : "false");
+  });
+  document.querySelector(".launcher-hint")?.classList.toggle("hidden", !!open);
+  try { localStorage.setItem("sirat-analysis", open); } catch (e) { /* private mode */ }
+}
+
+// Each tile carries its section's state from the analysis steps (TASKS).
+function launcherStatus() {
+  document.querySelectorAll(".lt-status[data-status-for]").forEach(node => {
+    const spec = LAUNCH[node.dataset.statusFor];
+    const s = spec && spec.task ? taskState[spec.task] : null;
+    if (!s) { node.textContent = ""; node.className = "lt-status"; return; }
+    const state = ["running", "done", "failed", "warn"].includes(s.state) ? s.state : "queued";
+    node.className = `lt-status is-${state}`;
+    node.textContent = state === "running" ? "در حال تحلیل…" : (s.detail || "");
+    node.title = s.detail || "";
+  });
+}
+
 let resizeTimer;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
@@ -6007,6 +6204,10 @@ try {
   const savedProfile = localStorage.getItem("sirat-profile");
   if (savedProfile) $("todayProfile").value = savedProfile;
 } catch (e) { /* */ }
+
+// After the stored profile is restored: the tiles read the select's value.
+SEGMENTED.forEach(id => segmentize($(id)));
+buildLauncher();
 
 // The data panel shows one line when all is well; a click opens the detail.
 on("loadPanel", "click", (ev) => {
