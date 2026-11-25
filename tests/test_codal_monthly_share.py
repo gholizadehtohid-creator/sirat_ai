@@ -25,6 +25,9 @@ import fundamental_db  # noqa: E402
 TITLE = "گزارش فعالیت ماهانه دوره 1 ماهه منتهی به %s"
 SMALL = ("filing returned only 1583 bytes — too small to be a statement, "
          "treating as throttled")
+# What codal.parse_body says of the empty workbook, named by its content.
+EMPTY = ("filing returned only 1583 bytes — %s an empty workbook, not a block "
+         "page; left pending until it repeats" % codal.EXPORTER_EMPTY)
 
 
 class Clock:
@@ -115,13 +118,15 @@ class Store(unittest.TestCase):
         finally:
             conn.close()
 
-    def client(self, small=(), refused=()):
+    def client(self, small=(), refused=(), empty=()):
         """A client whose downloads answer by tracing number."""
 
         asked = []
 
         def fetch(url, archive_key=None):
             asked.append(archive_key)
+            if archive_key in empty:
+                return answer(ok=False, transient=True, error=EMPTY)
             if archive_key in small:
                 return answer(ok=False, transient=True, error=SMALL)
             if archive_key in refused:
@@ -255,6 +260,82 @@ class SmallAnswerTests(Store):
         totals, asked = self.history(23, refused={"t2"})
         self.assertEqual(asked, ["t2", "u1"])       # t3 waits for the pacer
         self.assertEqual(self.rows("SELECT COUNT(*) FROM monthly_attempts"), [(0,)])
+
+
+class EmptyExportTests(Store):
+    """2026-11-25: "4 downloaded, 0 stored" two nights running. The history
+    began with the companies that had every month missing; Codal exports
+    theirs as an empty workbook (تملت); three in a row were three refusals,
+    and the pacer's 15 minutes were the rest of the night."""
+
+    def history(self, day, due=None, **answers):
+        client, asked = self.client(**answers)
+        patches = [mock.patch.object(codal_monthly, "due_companies", return_value=[]),
+                   mock.patch.object(codal_monthly, "_now",
+                                     return_value="2026-11-%02dT20:00:00+00:00" % day)]
+        if due is not None:
+            patches.append(mock.patch.object(codal_monthly, "history_due",
+                                             return_value=due))
+        for p in patches:
+            p.start()
+        try:
+            totals = codal_monthly.run(hours=0.1, verbose=False, client=client)
+        finally:
+            for p in patches:
+                p.stop()
+        return totals, asked
+
+    def letters(self, count):
+        return [(str(n), [{"tracing_no": "h%d" % n, "symbol": "s",
+                           "excel_url": "x/h%d" % n, "title": TITLE % "1405/05/31",
+                           "published_at": "1405/06/05"}]) for n in range(count)]
+
+    def test_a_run_of_empty_exports_does_not_stop_the_night(self):
+        totals, asked = self.history(25, due=self.letters(6),
+                                     empty={"h0", "h1", "h2", "h3"})
+        self.assertEqual(asked, ["h%d" % n for n in range(6)])
+        self.assertEqual(totals["history_stored"], 2)
+        self.assertEqual(totals["empty"], 4)
+        self.assertEqual(totals["failed"], 0)
+        self.assertIsNone(totals["cut_short"])
+
+    def test_it_is_counted_without_a_success_beside_it(self):
+        """Named by its content, it cannot be the firewall's answer."""
+
+        self.history(25, due=self.letters(3), empty={"h0", "h1", "h2"})
+        self.assertEqual(sorted(self.rows(
+            "SELECT tracing_no, attempts, bytes FROM monthly_attempts")),
+            [("h0", 1, 1583), ("h1", 1, 1583), ("h2", 1, 1583)])
+
+    def test_the_same_empty_export_on_three_days_settles_the_letter(self):
+        for day in (25, 25, 26):                # twice on the 25th: one count
+            self.history(day, due=self.letters(1), empty={"h0"})
+        self.assertEqual(self.rows("SELECT attempts FROM monthly_attempts"), [(2,)])
+        totals, _asked = self.history(27, due=self.letters(1), empty={"h0"})
+        self.assertEqual(totals["settled"], 1)
+        self.assertIn("h0", codal_monthly._known())
+
+    def test_a_throttle_page_of_that_size_is_still_a_refusal(self):
+        """Without the exporter's name on it, a small body is what it was."""
+
+        totals, asked = self.history(25, due=self.letters(6),
+                                     small={"h%d" % n for n in range(6)})
+        self.assertEqual(asked, ["h0", "h1", "h2"])
+        self.assertIn("throttled", totals["cut_short"])
+
+    def test_companies_with_a_report_stored_are_asked_first(self):
+        conn = sqlite3.connect(self.market)
+        conn.executemany(
+            "INSERT INTO codal_letters VALUES (?,?,?,?,?,?,?,?,1,0,'')",
+            [("u%d" % n, "2", "s2", "ن-30", TITLE % ("1405/%02d/30" % (8 - n)),
+              "1405/%02d/05" % (9 - n), "u", "x/u%d" % n) for n in range(2, 6)])
+        conn.commit()
+        conn.close()
+        due = codal_monthly.history_due(15, today=(1405, 9, 2))
+        # "2" has five months missing and nothing stored; "1" has two missing
+        # and one stored: the one whose reports are known to parse goes first.
+        self.assertEqual([(code, len(letters)) for code, letters in due],
+                         [("1", 2), ("2", 5)])
 
 
 class ShareTests(Store):

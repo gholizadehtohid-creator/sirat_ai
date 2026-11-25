@@ -110,6 +110,18 @@ CUT_SHORT_EXIT = 3
 # the request after it both succeeded (a throttle refuses in runs), the
 # size is the same as last time, and at most once a day -- so three counts
 # are three different days.
+#
+# 2026-11-25: the 1,583 bytes are an empty Excel workbook, and since that
+# day codal.py names it by its CONTENT (codal.exporter_empty), so it needs
+# no neighbour to prove it is not the firewall. It mattered: the history
+# put the companies with every month missing first, those are the ones
+# whose exports are empty (تملت, an investment company), three of them in
+# a row read as three refusals, the pacer cooled off for 15 minutes and the
+# night ended -- "4 downloaded, 0 stored" two nights running, 4,121 months
+# waiting behind them. A named empty export is now no refusal for the
+# pacer and is counted at once (still once a day, still SMALL_BODY_TRIES
+# days to settle), and history_due() asks the companies that have a stored
+# report -- a parse that is known to work -- before those that have none.
 SMALL_BODY_TRIES = 3
 _SMALL_BODY = re.compile(r"returned only (\d+) bytes")
 
@@ -224,7 +236,10 @@ def history_due(months=HISTORY_MONTHS, today=None, have=None):
     The window is the `months` closed months up to the last one. One letter
     per company-month, the newest published (a correction wins); companies
     with the most missing months first, so a run that stops early has
-    filled the emptiest histories. Nothing here asks codal.ir anything.
+    filled the emptiest histories -- but a company with no stored report at
+    all comes after every company that has one: nothing has shown its
+    reports can be read, and the ones Codal exports empty are all there
+    (2026-11-25). Nothing here asks codal.ir anything.
     """
 
     if not months:
@@ -269,7 +284,8 @@ def history_due(months=HISTORY_MONTHS, today=None, have=None):
             "published_at": published, "excel_url": url})
     out = [(code, [by_month[m] for m in sorted(by_month, reverse=True)])
            for code, by_month in wanted.items()]
-    out.sort(key=lambda pair: (-len(pair[1]), pair[0]))
+    read = {code for code, _month in stored}
+    out.sort(key=lambda pair: (pair[0] not in read, -len(pair[1]), pair[0]))
     return out
 
 
@@ -319,7 +335,19 @@ class _SmallAnswers:
 
     def ok(self):
         held, self.held, self.clear = self.held, None, True
-        if held and _count_small(*held):
+        if held:
+            self._count(held)
+
+    def empty(self, code, letter, size):
+        """The exporter's empty answer, named by its content: the host
+        answered, so an answer held stands, and this one is counted without
+        waiting for a neighbour."""
+
+        self.ok()
+        self._count((code, letter, size))
+
+    def _count(self, held):
+        if _count_small(*held):
             _code, letter, size = held
             self.have.add(letter["tracing_no"])
             self.totals["unreadable"] += 1
@@ -353,14 +381,25 @@ def _fetch_one(client, pace, code, letter, have, totals, small=None):
     told, this letter: it is handed to `small` and the caller carries on
     with the company's next letter (the pacer still counts it, so three in
     a row cool off as before).
+
+    An empty export Codal's exporter is named for (codal.exporter_empty) is
+    neither: the host answered, the pacer is told so, and the letter is
+    counted at once.
     """
 
     got = client.fetch_sheets(letter["excel_url"], archive_key=letter["tracing_no"])
-    pace(got.transient if not got.ok else False)
+    size = None if got.ok else _small_body(got.error)
+    empty = bool(not got.ok and got.transient and size is not None
+                 and codal.EXPORTER_EMPTY in (got.error or ""))
+    pace(False if got.ok or empty else got.transient)
+    if empty:
+        totals["empty"] = totals.get("empty", 0) + 1
+        if small is not None:
+            small.empty(code, letter, size)
+        return True
     if not got.ok:
         if got.transient:
             totals["failed"] += 1
-            size = _small_body(got.error)
             if small is not None and size is not None:
                 small.small(code, letter, size)
                 return True
@@ -600,8 +639,11 @@ def run(hours=None, per_company=2, limit=None, verbose=True, client=None,
         totals["history_stored"] = totals["stored"] - before
         totals["history_downloaded"] = taken
         if verbose:
-            print("monthly history: %d downloaded, %d stored"
-                  % (taken, totals["history_stored"]), flush=True)
+            print("monthly history: %d downloaded, %d stored%s"
+                  % (taken, totals["history_stored"],
+                     ", %d answered empty by Codal's exporter"
+                     % totals["empty"] if totals.get("empty") else ""),
+                  flush=True)
         remaining = min(history_limit, known) - taken
         if stopped in ("throttled", "time is up") and remaining > 0:
             cut.append("the history: %s, %d of this run's letters left"
