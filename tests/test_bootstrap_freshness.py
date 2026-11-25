@@ -87,32 +87,44 @@ class PacingTests(unittest.TestCase):
 
 class SnapshotAfterTheCloseTests(unittest.TestCase):
 
+    def setUp(self):
+        # The clock is this afternoon, whatever hour the suite runs at. On
+        # the real clock a "14:05" snapshot passed the six-hour snapshot
+        # limit at 20:05, and the test failed in every evening run (found
+        # 2026-11-25).
+        self.now = datetime.now().astimezone().replace(
+            hour=15, minute=0, second=0, microsecond=0)
+
+    def at(self, hour, minute):
+        return self.now.replace(hour=hour, minute=minute)
+
     def snapshot(self, captured, ready=True):
-        moment = datetime.now().astimezone().replace(
-            hour=14, minute=0, second=0, microsecond=0)
+        moment = self.at(14, 0)
         with mock.patch.object(bootstrap.database, "snapshot_info",
                                return_value={"rows": 900,
                                              "captured_at": captured.isoformat()}), \
                 mock.patch.object(bootstrap, "_ready_today", return_value=ready), \
-                mock.patch.object(bootstrap, "_ready_moment", return_value=moment):
+                mock.patch.object(bootstrap, "_ready_moment", return_value=moment), \
+                mock.patch.object(bootstrap, "_now",
+                                  return_value=self.now.astimezone(timezone.utc)):
             return bootstrap._snapshot_state(), moment
 
     def test_the_mornings_market_watch_is_behind_after_the_close(self):
-        moment = datetime.now().astimezone().replace(
-            hour=11, minute=25, second=0, microsecond=0)
-        got, _ = self.snapshot(moment)
+        got, _ = self.snapshot(self.at(11, 25))
         self.assertTrue(got["behind"])
         self.assertIn("before today's close", got["detail"])
 
     def test_one_taken_after_the_close_is_current(self):
-        moment = datetime.now().astimezone().replace(
-            hour=14, minute=5, second=0, microsecond=0)
-        got, _ = self.snapshot(moment)
+        got, _ = self.snapshot(self.at(14, 5))
         self.assertFalse(got["behind"])
 
+    def test_a_snapshot_past_the_age_limit_is_behind_all_the_same(self):
+        got, _ = self.snapshot(self.now - bootstrap.MAX_AGE["snapshot"]
+                               - timedelta(minutes=1), ready=False)
+        self.assertTrue(got["behind"])
+
     def test_not_on_a_day_without_a_session(self):
-        moment = datetime.now().astimezone() - timedelta(hours=1)
-        got, _ = self.snapshot(moment, ready=False)
+        got, _ = self.snapshot(self.now - timedelta(hours=1), ready=False)
         self.assertFalse(got["behind"])
 
     def test_a_recent_attempt_before_the_close_does_not_hold_it(self):
