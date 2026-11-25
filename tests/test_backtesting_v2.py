@@ -1265,6 +1265,109 @@ class BackfillQueue(unittest.TestCase):
 
         self.assertEqual(self.codal_backfill.settled_failures(), set())
 
+    EMPTY = ("B1: filing returned only 13185 bytes — Codal's exporter sent an "
+             "unrendered template, not a block page; left pending until it "
+             "repeats")
+
+    def fetch_on(self, day, error):
+        from unittest import mock
+
+        with mock.patch.object(self.codal_backfill, "_today",
+                               return_value=day):
+            return self.fetch_failing(error)
+
+    def test_an_empty_export_is_settled_on_its_third_day(self):
+        """The 2026-11-25 queue: seven filings Codal's exporter answered
+        empty 31 times each, every round taken for a throttle."""
+
+        days = ["2026-11-26", "2026-11-27", "2026-11-28"]
+        for day in days[:-1]:
+            result = self.fetch_on(day, self.EMPTY)
+            self.assertEqual((result["failed"], result["empty_exports"]), (0, 1))
+            self.assertFalse(result["throttled"])
+            self.assertNotIn("B1", self.codal_backfill.settled_failures())
+
+        result = self.fetch_on(days[-1], self.EMPTY)
+
+        self.assertEqual(result["unparseable"], 1)
+        self.assertIn("empty statement export", result["reasons"].popitem()[0])
+        self.assertIn("B1", self.codal_backfill.settled_failures())
+
+    def test_an_empty_export_is_asked_for_once_a_day(self):
+        from unittest import mock
+
+        for _ in range(5):
+            self.fetch_on("2026-11-26", self.EMPTY)
+        self.assertNotIn("B1", self.codal_backfill.settled_failures())
+
+        with mock.patch.object(self.codal_backfill, "_today",
+                               return_value="2026-11-26"):
+            today = [i["tracing_no"] for i in
+                     self.codal_backfill.pending("1402/01/01", "1405/12/29")]
+        with mock.patch.object(self.codal_backfill, "_today",
+                               return_value="2026-11-27"):
+            tomorrow = [i["tracing_no"] for i in
+                        self.codal_backfill.pending("1402/01/01", "1405/12/29")]
+
+        self.assertNotIn("B1", today)
+        self.assertIn("B2", today, "only the empty one waits")
+        self.assertIn("B1", tomorrow)
+
+    def test_a_different_size_starts_the_count_again(self):
+        self.fetch_on("2026-11-26", self.EMPTY)
+        self.fetch_on("2026-11-27", self.EMPTY.replace("13185", "14000"))
+        self.fetch_on("2026-11-28", self.EMPTY)
+
+        self.assertNotIn("B1", self.codal_backfill.settled_failures())
+
+    def test_a_queue_of_empty_exports_finishes_the_campaign(self):
+        """What the seven did: no back-off, one request each, then the
+        campaign's finished state (watching the feed) for the rest of its
+        hours -- not a round every few hours on the same documents."""
+
+        from unittest import mock
+        import codal
+
+        clock = {"now": 1_000_000.0}
+        calls = []
+
+        def parse(client, letter):
+            calls.append(letter["tracing_no"])
+            return None, letter["tracing_no"] + self.EMPTY[2:], \
+                codal.KIND_TRANSIENT
+
+        def sleep_until(until, deadline=float("inf")):
+            clock["now"] = min(until, deadline)
+
+        with mock.patch("time.time", side_effect=lambda: clock["now"]), \
+                mock.patch.object(self.codal_backfill, "_today",
+                                  return_value="2026-11-26"), \
+                mock.patch.object(self.codal_backfill, "remaining_to_discover",
+                                  return_value=[]), \
+                mock.patch.object(self.codal_backfill.codal, "CodalClient"), \
+                mock.patch.object(self.codal_backfill.codal_sync,
+                                  "parse_letter", side_effect=parse), \
+                mock.patch.object(self.codal_backfill, "_watch_due"), \
+                mock.patch.object(self.codal_backfill, "_sleep_until",
+                                  side_effect=sleep_until):
+            totals = self.codal_backfill.campaign(
+                "1402/01/01", "1405/12/29", hours=23.5, verbose=False)
+
+        self.assertEqual(sorted(calls), sorted(set(calls)),
+                         "each empty export asked for once that day")
+        self.assertEqual(totals["rounds"], 2,
+                         "the second round finds nothing left and watches")
+        self.assertEqual(totals["pauses"], 1)
+
+    def test_a_throttle_pages_too_small_never_counts_as_empty(self):
+        throttle = ("B1: filing returned only 3035 bytes — too small to be a "
+                    "statement, treating as throttled")
+
+        for day in ("2026-11-26", "2026-11-27", "2026-11-28", "2026-11-29"):
+            self.assertEqual(self.fetch_on(day, throttle)["failed"], 1)
+
+        self.assertEqual(self.codal_backfill.settled_failures(), set())
+
     def test_a_pause_ends_by_the_wall_clock_after_the_laptop_sleeps(self):
         """The 2026-11-10 overrun: a four-hour time.sleep begun at 07:00 was
         still waiting at 21:30, because the wait does not advance while the

@@ -161,6 +161,19 @@ def _ensure_state_table():
     )
     """)
 
+    # FILINGS CODAL'S EXPORTER ANSWERS EMPTY (2026-11-25): the days each one
+    # has answered the same empty document (codal.exporter_empty), so the
+    # third day settles it and no day asks twice. See EMPTY_EXPORT_SETTLE_DAYS.
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS codal_backfill_empty (
+        tracing_no TEXT PRIMARY KEY,
+        ins_code   TEXT,
+        bytes      INTEGER,
+        days       INTEGER DEFAULT 1,
+        last_day   TEXT
+    )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -222,7 +235,80 @@ def retried_filings():
     return {str(row[0]): int(row[1] or 0) for row in rows}
 
 
-SUBSIDIARY_REASON = "subsidiary's statement (not the issuer's own)"
+# A filing Codal's exporter answers EMPTY (codal.exporter_empty) on this many
+# different days, the same number of bytes each time, is settled as
+# unreadable. By 2026-11-25 the queue was nothing but seven of them: each had
+# answered the same 13,185 or 1,450 bytes 31 times, every round read "5 of 5
+# refused" and backed off up to four hours, and the campaign never reached
+# its finished state, where it watches the feed. Content, not size, says it
+# is the exporter and not a throttle -- a block page carries neither Codal's
+# export template nor its workbook shell -- and days, not attempts, are
+# counted, so a single bad hour at Codal cannot settle anything. Such an
+# answer is asked for once a day (pending() skips it until the next) and is
+# not counted as a refusal: it is the host answering, not declining.
+EMPTY_EXPORT_SETTLE_DAYS = 3
+
+_EMPTY_BYTES = re.compile(r"returned only (\d+) bytes")
+
+
+def empty_export_size(error):
+    """The byte count of an empty-export answer (codal.EXPORTER_EMPTY), or
+    None for any other error -- a throttle page's "too small" included."""
+
+    text = str(error or "")
+    if codal.EXPORTER_EMPTY not in text:
+        return None
+    match = _EMPTY_BYTES.search(text)
+    return int(match.group(1)) if match else None
+
+
+def _today():
+    return _now()[:10]
+
+
+def record_empty_export(tracing_no, ins_code, size):
+    """One more empty answer for a filing; returns the days counted so far.
+
+    The same size on a later day adds a day; the same day adds nothing; a
+    different size starts again at one -- a document that changes is not the
+    constant answer this settles.
+    """
+
+    database.create_database()
+    _ensure_state_table()
+
+    today = _today()
+    conn = database._connect()
+    row = conn.execute(
+        "SELECT bytes, days, last_day FROM codal_backfill_empty "
+        "WHERE tracing_no = ?", (str(tracing_no),)).fetchone()
+    if row and row[0] == size:
+        days = int(row[1] or 0) + (0 if row[2] == today else 1)
+    else:
+        days = 1
+    conn.execute("INSERT OR REPLACE INTO codal_backfill_empty VALUES (?,?,?,?,?)",
+                 (str(tracing_no), str(ins_code), int(size), days, today))
+    conn.commit()
+    conn.close()
+    return days
+
+
+def empty_exports_today():
+    """Tracing numbers already answered empty today: not asked again until
+    tomorrow."""
+
+    database.create_database()
+    _ensure_state_table()
+
+    conn = database._connect()
+    rows = conn.execute(
+        "SELECT tracing_no FROM codal_backfill_empty WHERE last_day = ?",
+        (_today(),)).fetchall()
+    conn.close()
+    return {str(row[0]) for row in rows}
+
+
+SUBSIDIARY_REASON ="subsidiary's statement (not the issuer's own)"
 
 
 def purge_subsidiaries(verbose=True, dry_run=False):
@@ -1280,6 +1366,10 @@ def pending(since, until, per_company=None, priority_date=None):
     # Settled by THIS tool, on evidence, rather than by a legacy flag.
     settled = settled_failures()
 
+    # Answered empty by Codal's exporter today: asked again tomorrow, not
+    # every round (EMPTY_EXPORT_SETTLE_DAYS).
+    settled = settled | empty_exports_today()
+
     covered = companies_covered_before(priority_date) if priority_date else set()
 
     by_company = {}
@@ -1381,7 +1471,7 @@ def fetch(since, until, limit=None, per_company=None, verbose=True,
                  " (%d of them buy a company its first pre-window filing)"
                  % urgent if urgent else ""), flush=True)
 
-    stored = failed = skipped = 0
+    stored = failed = skipped = empties = 0
     consecutive = 0
     throttled = False
     started = time.monotonic()
@@ -1412,6 +1502,23 @@ def fetch(since, until, limit=None, per_company=None, verbose=True,
                 type(exc).__name__, str(exc)[:140]), codal.KIND_BAD
 
         if error:
+
+            size = (empty_export_size(error)
+                    if kind == codal.KIND_TRANSIENT else None)
+
+            if size is not None:
+                # Codal's exporter answered, with nothing in it: counted by
+                # day, and neither a refusal nor a streak (the 2026-11-25
+                # queue of seven, EMPTY_EXPORT_SETTLE_DAYS).
+                consecutive = 0
+                days = record_empty_export(item["tracing_no"], item["ins_code"],
+                                           size)
+                if days < EMPTY_EXPORT_SETTLE_DAYS:
+                    empties += 1
+                    continue
+                error = ("empty statement export: Codal's exporter answered "
+                         "%d bytes, the same on %d days" % (size, days))
+                kind = codal.KIND_BAD
 
             attempts = (record_retry(item["tracing_no"], item["ins_code"], error)
                         if kind == codal.KIND_TRANSIENT else 0)
@@ -1474,13 +1581,16 @@ def fetch(since, until, limit=None, per_company=None, verbose=True,
                      rate * (len(queue) - number) / 60.0), flush=True)
 
     if verbose:
-        print("fetch: %d stored, %d unparseable, %d transient failures"
-              % (stored, skipped, failed), flush=True)
+        print("fetch: %d stored, %d unparseable, %d transient failures%s"
+              % (stored, skipped, failed,
+                 ", %d answered empty by Codal's exporter (asked again "
+                 "tomorrow)" % empties if empties else ""), flush=True)
         for reason, count in sorted(reasons.items(), key=lambda kv: -kv[1]):
             print("    %3d  %s" % (count, reason), flush=True)
 
     return {"pending": len(queue), "stored": stored, "unparseable": skipped,
-            "failed": failed, "throttled": throttled, "reasons": reasons}
+            "failed": failed, "empty_exports": empties,
+            "throttled": throttled, "reasons": reasons}
 
 
 def _reason_key(error):

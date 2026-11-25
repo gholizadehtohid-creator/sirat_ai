@@ -765,6 +765,38 @@ class TestUndersizedFiling(unittest.TestCase):
         self.assertEqual(result.kind, codal.KIND_BAD)
         self.assertIn("empty statement export", result.error)
 
+    def _fixture(self, name):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "fixtures", name)
+        with open(path, "rb") as handle:
+            return handle.read()
+
+    def test_the_exporters_two_empty_answers_are_named_not_settled(self):
+        """The 2026-11-25 queue of seven, with the bodies Codal really sent.
+
+        Named, so codal_backfill can count them by day; still transient,
+        because a new filing's export may not be built yet. The byte count
+        stays where codal_monthly reads it.
+        """
+
+        for name, size, which in (
+                ("codal_empty_template.html", 13185, "an unrendered template"),
+                ("codal_empty_workbook.html", 1450, "an empty workbook")):
+            body = self._fixture(name)
+            self.assertEqual(len(body), size)
+            result = self._client_returning(body).fetch_sheets(self.URL)
+            self.assertEqual(result.kind, codal.KIND_TRANSIENT, name)
+            self.assertIn(codal.EXPORTER_EMPTY + " " + which, result.error)
+            self.assertIn("returned only %d bytes" % size, result.error)
+
+    def test_a_throttle_page_is_not_an_empty_export(self):
+        body = b"<html><body>too many requests</body></html>" * 20
+
+        result = self._client_returning(body).fetch_sheets(self.URL)
+
+        self.assertEqual(result.kind, codal.KIND_TRANSIENT)
+        self.assertNotIn(codal.EXPORTER_EMPTY, result.error)
+
     def test_the_threshold_sits_between_measured_extremes(self):
         """Calibration, not a guess: 3 KB throttle vs 177 KB smallest filing."""
 

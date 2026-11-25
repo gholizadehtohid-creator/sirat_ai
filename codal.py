@@ -101,6 +101,33 @@ MIN_FILING_BYTES = 20_000
 EMPTY_EXPORT_HEADING = re.compile(
     r"<h\d[^>]*>\s*(?:صورت|ترازنامه)", re.UNICODE)
 
+# Codal's exporter answering with nothing in it (2026-11-25). Two shapes,
+# both under MIN_FILING_BYTES and both repeated byte for byte for days:
+#   * the export page's template with nothing rendered into it -- the
+#     statement headings, then "{{table.title}}" and "{{cell.value | ...}}"
+#     where the figures belong (13,185 bytes, four 1398 nine-month filings);
+#   * the Excel-workbook shell with an empty body (1,450 bytes, three filings
+#     of مهرگان and تپکو).
+# Those seven were the whole backfill queue that day. Each had answered the
+# same bytes 31 times; every round took them for a throttle and backed off,
+# and the campaign never reached its finished, watch-the-feed state. No block
+# page carries Codal's export template or its workbook shell, so content
+# tells these apart from a throttle. They stay TRANSIENT here -- a new
+# filing's export may not be built yet -- and the caller decides when a
+# repeat settles one (codal_backfill.EMPTY_EXPORT_SETTLE_DAYS).
+EXPORTER_EMPTY = "Codal's exporter sent"
+
+
+def exporter_empty(text):
+    """Which empty export `text` is ("an unrendered template", "an empty
+    workbook"), or None for anything else -- a block page included."""
+
+    if "{{table." in text or "{{cell.value" in text:
+        return "an unrendered template"
+    if "Excel Workbook Frameset" in text and "<table" not in text.lower():
+        return "an empty workbook"
+    return None
+
 
 class CodalResult:
     """Uniform return type. `ok` means the caller got usable data."""
@@ -625,6 +652,16 @@ class CodalClient:
             # 434 KB, while the observed throttle reply was 3,035 bytes -- a
             # 58x gap. The guard sits between them with room on both sides.
             if len(body) < MIN_FILING_BYTES:
+                # The byte count stays first in both texts: codal_monthly
+                # reads it ("returned only N bytes").
+                empty = exporter_empty(text)
+                if empty:
+                    return CodalResult(
+                        error=(f"filing returned only {len(body)} bytes — "
+                               f"{EXPORTER_EMPTY} {empty}, not a block page; "
+                               f"left pending until it repeats"),
+                        kind=KIND_TRANSIENT,
+                    )
                 return CodalResult(
                     error=(f"filing returned only {len(body)} bytes — too "
                            f"small to be a statement, treating as throttled"),
