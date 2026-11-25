@@ -1202,10 +1202,57 @@ def api_outlook():
             result.update(symbol=match.get("symbol_fa"), name=match.get("name_fa"))
             return jsonify(result)
 
-        key = cache_key("outlook", data_version())
-        return jsonify(memoise(key, fundamental_outlook.screen, force=force))
+        return jsonify(memoise(_outlook_key(), fundamental_outlook.screen,
+                               force=force))
     except Exception as exc:                                    # noqa: BLE001
         return handle_error(exc)
+
+
+def _outlook_key():
+    return cache_key("outlook", data_version())
+
+
+# The ranking took 26 s to compute and the button asked for a fresh one on
+# every click (the owner, 2026-11-25: "it takes very long"). The page now
+# reads the cached answer, and this keeps one ready: computed in the
+# background once a data run has delivered, and again before it would age
+# past CACHE_STALE_GRACE -- where memoise() would recompute while the
+# reader waits. A run in flight is waited out: its steps each move the key.
+OUTLOOK_WARM_DELAY = 120.0          # the page's own first loads go first
+OUTLOOK_WARM_EVERY = 60.0
+OUTLOOK_REWARM_AGE = CACHE_STALE_GRACE - 20 * 60
+
+
+def warm_outlook():
+    """Compute the ranking if its cached answer is missing or nearly too old
+    to serve. Returns True if it computed. Never two at once: a reader who
+    asks meanwhile shares this computation (_compute)."""
+
+    if bootstrap.is_running():
+        return False
+    key = _outlook_key()
+    with _cache_lock:
+        hit = _cache.get(key)
+        busy = key in _inflight
+    if busy or (hit is not None and time.time() - hit["at"] < OUTLOOK_REWARM_AGE):
+        return False
+    import fundamental_outlook
+    _compute(key, fundamental_outlook.screen)
+    return True
+
+
+def start_warmer(delay=OUTLOOK_WARM_DELAY, every=OUTLOOK_WARM_EVERY):
+    def loop():
+        time.sleep(delay)
+        while True:
+            try:
+                warm_outlook()
+            except Exception as exc:                            # noqa: BLE001
+                log.warning("warming the outlook ranking failed: %s: %s",
+                            type(exc).__name__, str(exc)[:160])
+            time.sleep(every)
+
+    threading.Thread(target=loop, name="cache-warmer", daemon=True).start()
 
 
 # One report at a time (the security review, 2026-11-23). A build starts a
@@ -2137,6 +2184,9 @@ def main():
     # (2026-11-24: a deferred index waited from 15:16 to the evening).
     bootstrap.start_keeper()
     print(f"Keeper: checking every {int(bootstrap.KEEPER_INTERVAL // 60)} min")
+
+    # The fundamental outlook's ranking, kept computed (warm_outlook).
+    start_warmer()
 
     # The Bale bot, when /admin/bot has it enabled with a token (2026-11-24).
     # In this process, handed this app: one copy of the panel's caches.

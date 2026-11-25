@@ -646,6 +646,42 @@ def load(ins_code, limit=13):
     return out
 
 
+def load_many(ins_codes=None, limit=13):
+    """{ins_code: load(ins_code, limit)} for many companies, one query.
+
+    The outlook's ranking opened a connection per company for this: 5 of its
+    26 s (2026-11-25). Same order and the same rule as load() -- one report
+    per period, the most recently published -- and only the kept payloads
+    are decoded.
+    """
+
+    _ensure_tables()
+    wanted = None if ins_codes is None else {str(c) for c in ins_codes}
+    conn = fundamental_db._connect()
+    try:
+        rows = conn.execute("""
+            SELECT ins_code, period_end, published_at, title, payload
+            FROM monthly_reports
+            ORDER BY ins_code, period_end DESC, published_at DESC
+        """).fetchall()
+    finally:
+        conn.close()
+
+    out, seen = {}, set()
+    for code, period_end, published, title, payload in rows:
+        code = str(code)
+        if wanted is not None and code not in wanted:
+            continue
+        kept = out.setdefault(code, [])
+        if len(kept) >= limit or (code, period_end) in seen:
+            continue
+        seen.add((code, period_end))
+        record = json.loads(payload)
+        record.update(published_at=published, title=title)
+        kept.append(record)
+    return out
+
+
 def report():
     _ensure_tables()
     conn = fundamental_db._connect()

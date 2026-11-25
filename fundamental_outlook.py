@@ -471,7 +471,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             monthly_rows=None, dividend=_UNSET, shares=_UNSET, sector=_UNSET,
             portfolio=_UNSET, opportunity=None, bars=_UNSET, band=_UNSET,
             published=_UNSET, calibration=_UNSET, fx_record=_UNSET,
-            capital_events=_UNSET, peers=_UNSET, inflation_pct=None):
+            capital_events=_UNSET, peers=_UNSET, inflation_pct=None,
+            preread=None):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
@@ -501,9 +502,17 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     scores past years with the rate they faced, not today's (the review of
     2026-11-23: at today's 76.8% the "year not yet begun" bucket read 12%
     too low).
+
+    `preread` holds what screen() read for every company at once (added
+    2026-11-25: one connection per company per store was most of the
+    ranking's 26 s). Its "metrics", "monthly" and "halted" are exactly what
+    load_metrics, codal_monthly.load and halted_since would return here,
+    so the read is still the store's: unlike `rows`, they change nothing
+    else about how the company is read.
     """
 
     rows_from_store = rows is None
+    preread = preread or {}
     if calibration is _UNSET:
         calibration = None
         if rows_from_store:
@@ -520,7 +529,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if peers is _UNSET:
         peers = valuation_peers() if rows_from_store else None
     if rows is None:
-        rows = fundamental_db.load_metrics(ins_code, limit=periods)
+        rows = (preread["metrics"] if "metrics" in preread
+                else fundamental_db.load_metrics(ins_code, limit=periods))
     if dividend is _UNSET:
         dividend = None
         if rows_from_store:
@@ -555,7 +565,10 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # A halted symbol's last close can be months or years old; a P/E on it
     # is not today's valuation (دتهران read 0.02 on a 2018 price). Report
     # the halt, value nothing.
-    halted = halted_since(ins_code) if price and rows_from_store else None
+    halted = None
+    if price and rows_from_store:
+        halted = (preread["halted"] if "halted" in preread
+                  else halted_since(ins_code))
     if halted:
         price = None
     all_periods = _periods(rows)
@@ -687,6 +700,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     # year, both in the same report, so gross-vs-net differences between the
     # monthly total and the statement's revenue cancel in the ratio). Profit
     # is that revenue at the trailing margin.
+    if monthly_rows is None and "monthly" in preread:
+        monthly_rows = preread["monthly"]
     monthly = monthly_reads(ins_code, latest["fy"][1], monthly_rows)
     if monthly and monthly.get("ytd_growth") is not None and \
             monthly["period_end"] > latest["end"]:
@@ -1732,8 +1747,6 @@ def halted_since(ins_code):
     2026-11-05), and a P/E on it would read as today's.
     """
 
-    from datetime import date
-
     newest = _market_date()
     conn = database._connect()
     last = conn.execute(
@@ -1741,12 +1754,48 @@ def halted_since(ins_code):
         (str(ins_code),)).fetchone()[0]
     conn.close()
 
+    return _halt_from(last, newest)
+
+
+def _halt_from(last, newest):
+    """halted_since()'s rule, given the symbol's last traded date and the
+    market's newest session."""
+
+    from datetime import date
+
     if not newest:
         return None
     if not last:
         return "never"
     gap = (date.fromisoformat(newest[:10]) - date.fromisoformat(last[:10])).days
     return last[:10] if gap > 7 else None
+
+
+def halted_since_all():
+    """{ins_code: halted_since(ins_code)} for every symbol with a bar, read at
+    once -- a code without one is "never", as there. screen() asked this
+    800 times, one query each: 5.7 of the ranking's 26 s (2026-11-25).
+
+    The newest traded bar of each code by a skip-scan over the (ins_code,
+    date) key, as database.halted_codes reads it.
+    """
+
+    newest = _market_date()
+    conn = database._connect()
+    try:
+        rows = conn.execute("""
+            WITH RECURSIVE c(x) AS (
+              SELECT MIN(ins_code) FROM price_history
+              UNION ALL
+              SELECT (SELECT MIN(ins_code) FROM price_history WHERE ins_code > c.x)
+              FROM c WHERE c.x IS NOT NULL)
+            SELECT x, (SELECT date FROM price_history p WHERE p.ins_code = c.x
+                         AND p.volume > 0 ORDER BY date DESC LIMIT 1)
+            FROM c WHERE x IS NOT NULL
+        """).fetchall()
+    finally:
+        conn.close()
+    return {str(code): _halt_from(last, newest) for code, last in rows}
 
 
 _PRICES = {"at": None, "value": None}
@@ -2188,6 +2237,42 @@ def _median(values):
 SECTOR_PEERS_MIN = 3
 
 
+def _preread_all(codes, periods=12):
+    """A function code -> analyse()'s `preread` for that code."""
+
+    import logging
+
+    import codal_monthly
+
+    log = logging.getLogger("sirat.outlook")
+    batches = {}
+    for name, read in (
+            ("metrics", lambda: fundamental_db.load_metrics_many(codes, limit=periods)),
+            ("monthly", lambda: codal_monthly.load_many(
+                codes, limit=codal_monthly.HISTORY_MONTHS)),
+            ("halted", halted_since_all)):
+        try:
+            batches[name] = read()
+        except Exception as exc:                                # noqa: BLE001
+            log.warning("outlook: the batch read of %s failed, read per "
+                        "company instead: %s: %s", name, type(exc).__name__,
+                        str(exc)[:160])
+    never = _halt_from(None, _market_date())
+
+    def one(code):
+        code = str(code)
+        out = {}
+        if "metrics" in batches:
+            out["metrics"] = batches["metrics"].get(code, [])
+        if "monthly" in batches:
+            out["monthly"] = batches["monthly"].get(code, [])
+        if "halted" in batches:
+            out["halted"] = batches["halted"].get(code, never)
+        return out
+
+    return one
+
+
 def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     """Every company with a forward estimate, in two lists.
 
@@ -2229,11 +2314,18 @@ def screen(min_yield_pct=None, max_flags=1, limit=60, today=None):
     import codal_announcements
     dividends = codal_announcements.latest_dividends()
 
+    # Each company's statements, monthly reports and last traded day, read
+    # for all of them at once: per company, through a connection each, they
+    # were 16 of this function's 26 s (2026-11-25). A batch that fails
+    # leaves analyse() to read that store per company, as before.
+    preread = _preread_all(list(instruments))
+
     for code, inst in instruments.items():
         if code in halted:
             excluded["halted"] += 1
             continue
         result = analyse(code, price=prices.get(code), today=today,
+                         preread=preread(code),
                          dividend=dividends.get(code), shares=shares.get(code),
                          sector=inst.get("sector_name"),
                          portfolio=portfolios.get(code), opportunity=opportunity,

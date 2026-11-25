@@ -595,6 +595,48 @@ def load_metrics(ins_code, limit=None, before=None):
     return [_metric_row(row) for row in rows]
 
 
+def load_metrics_many(ins_codes=None, limit=None):
+    """{ins_code: load_metrics(ins_code, limit)} for many companies, one query.
+
+    fundamental_outlook.screen() read each of ~800 companies through its own
+    connection: 6 of the ranking's 26 s (measured 2026-11-25). The rows and
+    their order are load_metrics' own -- newest period first, the primary
+    key (ins_code, period_end, period_months) leaves no tie to order -- and
+    only the first `limit` of each company are decoded.
+    """
+
+    if not exists():
+        return {}
+
+    create_database()
+
+    wanted = None if ins_codes is None else {str(c) for c in ins_codes}
+
+    conn = _connect()
+    try:
+        rows = conn.execute("""
+            SELECT ins_code, period_end, period_months, tracing_no, symbol,
+                   title, published_at, audited, consolidated, items, ratios,
+                   source, updated_at
+            FROM (SELECT *, ROW_NUMBER() OVER (
+                      PARTITION BY ins_code
+                      ORDER BY period_end DESC, period_months DESC) AS rn
+                  FROM metrics)
+            WHERE ? IS NULL OR rn <= ?
+            ORDER BY ins_code, rn
+        """, (limit and int(limit), limit and int(limit))).fetchall()
+    finally:
+        conn.close()
+
+    out = {}
+    for row in rows:
+        code = str(row[0])
+        if wanted is not None and code not in wanted:
+            continue
+        out.setdefault(code, []).append(_metric_row(row))
+    return out
+
+
 def _metric_row(row):
     return {
         "ins_code": row[0],

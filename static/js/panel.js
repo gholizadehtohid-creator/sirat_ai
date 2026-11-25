@@ -5831,7 +5831,17 @@ on("runOpportunitiesBtn", "click", () => loadOpportunities(true));
 on("announcementsKind", "change", () => loadAnnouncements());
 on("marketflowSessions", "change", () => loadMarketflow());
 on("announcementsDays", "change", () => loadAnnouncements());
-on("runOutlookBtn", "click", () => loadOutlook(true));
+// The cached ranking, not a forced recomputation: it took 26 s a click
+// (2026-11-25). The server keeps one computed and moves it with the data.
+on("runOutlookBtn", "click", () => loadOutlook());
+// And it is shown when its section opens, rather than waiting for a click.
+let outlookShown = false;
+on("evidenceCodal", "toggle", () => {
+  if ($("evidenceCodal").open && !outlookShown) {
+    outlookShown = true;
+    loadOutlook();
+  }
+});
 on("outlookLookupBtn", "click", lookupOutlook);
 on("outlookPdfBtn", "click", openOutlookPdf);
 on("quickLookupBtn", "click", quickLookup);
