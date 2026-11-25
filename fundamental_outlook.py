@@ -159,6 +159,14 @@ SHARES_DISAGREE = 6.0
 # difference is named (needs the monthly history, codal_monthly --history).
 RECENT_GAP_PCT = 15.0
 COST_TREND_PTS = 5.0
+# A fiscal year shorter than twelve months is accepted at these lengths
+# (short_years). Shorter than three is more likely two misread dates than a
+# year; a long year (over twelve) is not one Iranian companies file.
+SHORT_YEAR_MONTHS = (3, 11)
+# A trailing year built across a fiscal-year change (_trailing_across_change)
+# is kept only while its revenue is within this ratio of the latest period's
+# annualised: outside it a period from another series was netted in.
+ACROSS_CHANGE_BAND = (0.5, 2.0)
 
 
 def _f(value):
@@ -196,11 +204,83 @@ def _profit(items):
     return owners if owners is not None else _f(items.get("net_profit"))
 
 
+def _month_index(period_end):
+    """year * 12 + month of a period end, or None. Only a month's last days
+    (29, 30, 31) count: a statement ends at a month's end, and a date such as
+    1404/01/01 or 1400/10/10 is a misread one, not a fiscal year's edge."""
+
+    try:
+        y, m, d = (int(p) for p in str(period_end).split("/")[:3])
+    except (TypeError, ValueError):
+        return None
+    if d < 29 or not 1 <= m <= 12:
+        return None
+    return y * 12 + m
+
+
+def short_years(rows):
+    """{period_end: months} of the annual statements that cover less than a
+    year; rows in load_metrics' shape.
+
+    A company that moves its fiscal year-end files one SHORT year between
+    the two: کگل's, کچاد's and دکوثر's ran 1404/01..1404/09 when they moved
+    from Esfand to Azar (found 2026-11-25; about 60 companies moved in
+    1402-1405, most of them to Azar). Codal titles it «سال مالی منتهی به
+    ...» like any year, so it is stored with period_months 12. Read as a
+    year it is a quarter short of one (its EPS 25% low), and the trailing
+    twelve months across it could not be built: the new year's nine months
+    have no "same nine months" a year before.
+
+    An annual statement ending at E is short when the company's own filings
+    put its fiscal year's START inside the twelve months before E: an earlier
+    annual statement ends there, or the interim statements within the year
+    start there. An interim within the year that starts earlier -- a
+    twelve-month year's -- contradicts it, and the statement stays a year: a
+    subsidiary's filings stored under the parent's symbol carry a start of
+    their own, and the parent's interims are what overrule them.
+    """
+
+    spans = set()
+    ends = {}
+    for row in rows:
+        e = _month_index(row.get("period_end"))
+        if e is None:
+            continue
+        months = int(row.get("period_months") or 12)
+        spans.add((e, months))
+        if months == 12:
+            ends.setdefault(e, []).append(row.get("period_end"))
+    annual = sorted(ends)
+    out = {}
+    for e in annual:
+        inside = [(pe, pm) for pe, pm in spans if pm < 12 and e - 12 < pe <= e]
+        bounds = {a for a in annual if e - 12 < a < e}
+        bounds |= {pe - pm for pe, pm in inside if e - 12 < pe - pm < e}
+        if not bounds:
+            continue
+        start = max(bounds)
+        if any(pe - pm < start for pe, pm in inside if pe > start):
+            continue
+        months = e - start
+        if SHORT_YEAR_MONTHS[0] <= months <= SHORT_YEAR_MONTHS[1]:
+            for end in ends[e]:
+                out[end] = months
+    return out
+
+
 def _periods(rows):
+    """The stored periods, newest first. A short fiscal year (short_years)
+    carries its true length in "months", so its fiscal year is read as the
+    one its own interims belong to; "annual" stays True for every statement
+    Codal titles as a year, short or not, and "short_year" marks the short."""
+
+    short = short_years(rows)
     out = []
     for row in rows:
         items = row.get("items") or {}
-        months = row.get("period_months") or 12
+        titled = int(row.get("period_months") or 12)
+        months = short.get(row.get("period_end"), titled) if titled == 12 \
+            else titled
         fy = fiscal_year_end(row.get("period_end"), months)
         if fy is None:
             continue
@@ -208,8 +288,13 @@ def _periods(rows):
                     "fy": fy, "items": items, "ratios": row.get("ratios") or {},
                     "published": row.get("published_at"),
                     "audited": row.get("audited"),
-                    "consolidated": bool(row.get("consolidated"))})
-    out.sort(key=lambda p: (p["end"], p["months"]), reverse=True)
+                    "consolidated": bool(row.get("consolidated")),
+                    "annual": titled == 12,
+                    "short_year": titled == 12 and months != 12})
+    # A short year and an interim of the same months can end on one day (the
+    # year's nine-month statement and the year's own, on the other basis):
+    # the year's statement, the later and audited one, is read first.
+    out.sort(key=lambda p: (p["end"], p["months"], p["annual"]), reverse=True)
     return out
 
 
@@ -291,6 +376,86 @@ def _find(periods, fy, months):
 
 def _prior_fy(fy):
     return (fy[0] - 1, fy[1])
+
+
+def _flow(pool, lo, hi, key):
+    """`key` summed over the months (lo, hi] -- _month_index values -- from
+    the cumulative statements in `pool`, or None when they cannot give it.
+
+    Built for a fiscal-year change, where "last year's annual less last
+    year's same months" has no same months: the window is filled from its
+    end backwards with the longest statement ending where it still needs
+    filling, and one that starts before the window is cut at `lo` by its own
+    year's statement ending there. Across کگل's move (Esfand -> Azar, 1404)
+    the twelve months to 1405/06 are the new year's nine plus the short
+    year (1404/01..09) less its six months to 1404/06. `pool` must be ONE
+    basis: a consolidated year less a separate half is a quarter of
+    neither (کگل's group short year 1,651,000 bn rials less the parent's
+    half 610,000, where the parent's own year is 909,000).
+    """
+
+    by_end = {}
+    for p in pool:
+        e = _month_index(p["end"])
+        if e is not None:
+            by_end.setdefault(e, []).append(p)
+    total, cur = 0.0, hi
+    while cur > lo:
+        here = sorted(by_end.get(cur, ()), reverse=True,
+                      key=lambda p: (p["months"], p.get("annual", False)))
+        if not here:
+            return None
+        value = _f(here[0]["items"].get(key))
+        if value is None:
+            return None
+        start = cur - here[0]["months"]
+        if start >= lo:
+            total, cur = total + value, start
+            continue
+        part = next((q for q in by_end.get(lo, ())
+                     if lo - q["months"] == start), None)
+        cut = _f(part["items"].get(key)) if part else None
+        if cut is None:
+            return None
+        total, cur = total + value - cut, lo
+    return total
+
+
+def _trailing_across_change(pool, latest, key):
+    """The twelve months to `latest`'s end, from `pool` (_flow)."""
+
+    e = _month_index(latest["end"])
+    return None if e is None else _flow(pool, e - 12, e, key)
+
+
+def _basis_pool(periods, latest, versions=None):
+    """The periods on `latest`'s basis, with the store's other releases of
+    that basis filling the periods `periods` holds on the other one.
+
+    `metrics` keeps one release per period, so last year's six months are
+    held as the audited consolidated release while this year's newest is
+    separate (کگل's 1404/06: the separate 610,000 bn is only in
+    metric_versions). `versions` are the company's releases in
+    pit_fundamentals.load_versions' shape."""
+
+    same = [p for p in periods if p["consolidated"] == latest["consolidated"]]
+    if not versions:
+        return same
+    import pit_fundamentals
+    extra = pit_fundamentals.periods_as_of(versions, "9999",
+                                           latest["consolidated"])
+    held = {(_month_index(p["end"]), p["months"]) for p in same}
+    rows = [{"period_end": p["end"], "period_months": 12 if p["annual"]
+             else p["months"], "items": p["items"]} for p in periods]
+    short = short_years(rows + extra)
+    for p in _periods(extra):
+        if short.get(p["end"]) and p["annual"]:
+            p["months"], p["short_year"] = short[p["end"]], True
+        key = (_month_index(p["end"]), p["months"])
+        if key[0] is not None and key not in held and _has_income(p["items"]):
+            same.append(p)
+            held.add(key)
+    return same
 
 
 def _backed_out(latest, key, growth_key):
@@ -472,7 +637,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             portfolio=_UNSET, opportunity=None, bars=_UNSET, band=_UNSET,
             published=_UNSET, calibration=_UNSET, fx_record=_UNSET,
             capital_events=_UNSET, peers=_UNSET, inflation_pct=None,
-            preread=None, holdings=_UNSET, prices_all=_UNSET):
+            preread=None, holdings=_UNSET, prices_all=_UNSET,
+            versions=_UNSET):
     """The full read for one company, or None with nothing stored.
 
     `rows` (newest first, load_metrics' shape) replaces the store read, and
@@ -514,6 +680,11 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     (latest_prices) value an investment company's or a holding's listed
     portfolio at today's prices (portfolio_value.py, 2026-11-25); read from
     the stores when not given, and absent with `rows`.
+
+    `versions` (the company's releases, pit_fundamentals.load_versions'
+    shape) let the trailing year be built across a fiscal-year change on
+    one basis (_basis_pool, 2026-11-25); read from the store only for a
+    company whose year-end moved, and absent with `rows`.
     """
 
     rows_from_store = rows is None
@@ -690,6 +861,61 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                 if net is not None and run_margin is not None:
                     fwd_net = net + remaining * run_margin
                     method = "year_completed"
+
+    # ---- across a fiscal-year change (short_years, 2026-11-25) ------------
+    # The prior fiscal year was short, so it has no "same months" to net:
+    # the twelve months are built from the statements' own spans, on the
+    # latest's basis alone. Only for a company whose year-end moved -- for
+    # any other the formula above already says all the statements can.
+    moved = len({p["fy"][1] for p in all_periods}) > 1
+    across = False
+    across_tried = False
+    if m != 12 and ttm_rev is None and ttm_net is None and moved:
+        across_tried = True
+        if versions is _UNSET:
+            versions = None
+            if rows_from_store:
+                import pit_fundamentals
+                versions = pit_fundamentals.load_versions(ins_code).get(
+                    str(ins_code), [])
+        pool = _basis_pool(all_periods, latest, versions)
+        t_rev = _trailing_across_change(pool, latest, "revenue")
+        t_net = _trailing_across_change(pool, latest, "net_profit")
+        scale = _div(t_rev, rev * 12 / m) if rev and rev > 0 else None
+        if t_net is not None and t_rev and t_rev > 0 and scale is not None \
+                and ACROSS_CHANGE_BAND[0] <= scale <= ACROSS_CHANGE_BAND[1]:
+            ttm_rev, ttm_net, across = t_rev, t_net, True
+            # The months still to come this year are the tail of the twelve
+            # (the twelve less this year's own), grown and at the trailing
+            # margin as above.
+            if growth_rev is not None and net is not None and \
+                    not latest["short_year"]:
+                g = min(max(growth_rev, GROWTH_CAP[0]), GROWTH_CAP[1])
+                remaining = (t_rev - rev) * (1 + g)
+                fwd_rev = rev + remaining
+                fwd_net = net + remaining * (t_net / t_rev)
+                method = "year_completed"
+
+    # A short year is a finished year: what follows it is a whole new one,
+    # estimated as after any year -- on the twelve months to its end, not
+    # on its own few (and never "completed" to a year the company no longer
+    # has).
+    if latest["short_year"]:
+        fwd_rev = fwd_net = method = None
+        trailing_margin = (_div(ttm_net, ttm_rev)
+                           if ttm_net is not None and ttm_rev and ttm_rev > 0
+                           else None)
+        if trailing_margin is not None:
+            last = growth_rev if growth_rev is not None else 0.0
+            g = min(max(0.5 * last + 0.5 * inflation_rate / 100.0,
+                        GROWTH_CAP[0]), GROWTH_CAP[1])
+            fwd_rev = ttm_rev * (1 + g)
+            fwd_net = fwd_rev * trailing_margin
+            method = "next_year_trend"
+    short_seen = next((p for p in all_periods if p["short_year"]), None)
+    short_year_text = (" (سال منتهی به %s فقط %d ماه بود)"
+                       % (short_seen["end"], short_seen["months"])
+                       if short_seen else "")
 
     if fwd_net is None and net is not None and m != 12:
         # No prior year to complete it with: plain annualisation, flagged.
@@ -931,6 +1157,19 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
              "با ارقام گروه قابل مقایسه نیست")
     if net is not None and net < 0:
         flag("زیان‌ده در دوره‌ی اخیر")
+    # A moved year-end, said where it changes what the figures mean.
+    basis_name = "تلفیقی" if latest["consolidated"] else "شرکت اصلی (جداگانه)"
+    if latest["short_year"]:
+        flag("آخرین صورت سالانه یک سال مالی کوتاه %d ماهه است (شرکت پایان سال "
+             "مالی را تغییر داده)؛ با سال ۱۲ ماهه مقایسه نشد و برآورد سال بعد "
+             "بر پایه‌ی ۱۲ ماه منتهی به %s است" % (m, latest["end"]))
+    elif across:
+        flag("شرکت پایان سال مالی را تغییر داده%s؛ سود ۱۲ ماه گذشته از دو طرف "
+             "این تغییر و فقط از صورت‌های %s ساخته شد"
+             % (short_year_text, basis_name))
+    elif across_tried:
+        flag("شرکت پایان سال مالی را تغییر داده%s؛ سود ۱۲ ماه گذشته روی یک "
+             "مبنا ساخته نشد، پس P/E دوازده‌ماهه ندارد" % short_year_text)
 
     # A bank's "revenue" is interest, an investment company's is disposal
     # gains: sales growth, margins, cash conversion, receivables, interest
@@ -1079,7 +1318,7 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
             _f(dividend.get("capital")):
         fy_end = str(dividend.get("fiscal_year_end") or "")[:7]
         year = next((p for p in all_periods
-                     if p["months"] == 12 and str(p["end"])[:7] == fy_end), None)
+                     if p["annual"] and str(p["end"])[:7] == fy_end), None)
         owners_then = _profit(year["items"]) if year else None
         if owners_then and owners_then > 0:
             paid = _f(dividend["dps"]) * _f(dividend["capital"]) * 1_000_000 / PAR_VALUE
@@ -1169,8 +1408,16 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         "latest": {"period_end": latest["end"], "months": m,
                    "audited": latest["audited"], "published": latest["published"],
                    "age_months": age_months,
-                   "consolidated": latest["consolidated"]},
+                   "consolidated": latest["consolidated"],
+                   "short_year": latest["short_year"]},
         "skipped_period": skipped_period,
+        # The short fiscal year the read had to work around (short_years),
+        # and whether the trailing twelve months were built across it.
+        "short_year": ({"period_end": short_seen["end"],
+                        "months": short_seen["months"]}
+                       if short_seen and (latest["short_year"] or across_tried)
+                       else None),
+        "ttm_across_change": across,
         "has_prior_year": bool(annual_prev),
         "has_same_period": bool(same_prev),
         "method": method,

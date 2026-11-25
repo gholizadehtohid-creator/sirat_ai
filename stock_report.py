@@ -327,7 +327,10 @@ def statement_table(code, result):
     if not periods:
         return []
     ps, _basis = fo.choose_basis(periods)
-    annual = [p for p in ps if p["months"] == 12][:STATEMENT_YEARS]
+    # Every statement titled a year, a short one included and labelled: a
+    # company that moved its year-end filed one of fewer months (کگل,
+    # 1404: nine), and that is still the year its AGM paid out of.
+    annual = [p for p in ps if p["annual"]][:STATEMENT_YEARS]
     annual.reverse()
     shares = (result.get("valuation") or {}).get("shares")
     # Every release of these years (pit_fundamentals): where the profit the
@@ -338,7 +341,9 @@ def statement_table(code, result):
     for p in annual:
         it = p["items"]
         owners = fo._profit(it)
-        col = {"title": "سال %s" % p["end"][:7], "sub": "حسابرسی‌شده" if p.get("audited") else "",
+        col = {"title": "سال %s" % p["end"][:7]
+               + (" (%d ماهه)" % p["months"] if p["short_year"] else ""),
+               "sub": "حسابرسی‌شده" if p.get("audited") else "",
                "revenue": _f(it.get("revenue")), "gross": _f(it.get("gross_profit")),
                "operating": _f(it.get("operating_profit")),
                "net": _f(it.get("net_profit")), "owners": owners,

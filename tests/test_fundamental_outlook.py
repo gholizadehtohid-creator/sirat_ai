@@ -590,3 +590,123 @@ class IncomeLessPeriodTests(unittest.TestCase):
                 period("1404/06/31", 6, 100 * B, 1 * B)]
         t = fo.trailing_multiples({"c": rows}, {"c": {"close": 5_000, "total_shares": 1e8}})
         self.assertGreater(t["c"]["pe"], 60)            # 500bn on 2bn
+
+
+class FiscalYearChangeTests(unittest.TestCase):
+    """A company that moves its year-end files one short year (کگل, کچاد and
+    دکوثر went from Esfand to Azar in 1404, 2026-11-25). Codal titles it a
+    year, so it is stored as 12 months: read as one it is a quarter short,
+    and the trailing twelve months across it were never built."""
+
+    # Separate statements throughout. The old year ran to Esfand; the short
+    # year 1404/01..1404/09 (titled a year); the new year from 1404/10.
+    moved = [
+        period("1405/06/31", 9, 900 * B, 90 * B),       # new year, 9 months
+        period("1405/03/31", 6, 600 * B, 60 * B),
+        period("1404/12/29", 3, 300 * B, 30 * B),
+        period("1404/09/30", 12, 720 * B, 72 * B),      # the short year: 9
+        period("1404/06/31", 6, 450 * B, 45 * B),
+        period("1404/03/31", 3, 200 * B, 20 * B),
+        period("1403/12/30", 12, 800 * B, 80 * B),
+        period("1403/09/30", 9, 560 * B, 56 * B),
+    ]
+
+    def analyse(self, rows, **kw):
+        kw.setdefault("today", (1405, 9, 4))
+        return fo.analyse("x", price=5_000, rows=rows, monthly_rows=[],
+                          opportunity=BILLS, **kw)
+
+    def test_the_short_year_is_found_from_the_companys_own_filings(self):
+        self.assertEqual(fo.short_years(self.moved), {"1404/09/30": 9})
+
+    def test_a_short_year_keeps_its_title_and_gets_its_length(self):
+        short = next(p for p in fo._periods(self.moved) if p["end"] == "1404/09/30")
+        self.assertEqual((short["months"], short["annual"], short["short_year"]),
+                         (9, True, True))
+        # Its fiscal year is the one its own interims belong to.
+        six = next(p for p in fo._periods(self.moved) if p["end"] == "1404/06/31")
+        self.assertEqual(short["fy"], six["fy"])
+
+    def test_the_trailing_year_is_built_across_the_change(self):
+        r = self.analyse(self.moved)
+        # the new year's nine months + the short year's last three (720 - 450)
+        self.assertAlmostEqual(r["ttm"]["revenue"], 1170 * B)
+        self.assertAlmostEqual(r["ttm"]["profit"], 117 * B)
+        self.assertTrue(r["ttm_across_change"])
+        self.assertEqual(r["short_year"], {"period_end": "1404/09/30", "months": 9})
+        self.assertTrue(any("پایان سال مالی را تغییر داده" in f for f in r["flags"]))
+
+    def test_the_year_is_completed_from_the_tail_of_the_twelve(self):
+        rows = [dict(r) for r in self.moved]
+        rows[0] = dict(rows[0], ratios={"revenue_growth": 50.0})
+        r = self.analyse(rows)
+        # remaining = the twelve less this year's nine, grown 50%: 270 * 1.5
+        self.assertEqual(r["method"], "year_completed")
+        self.assertAlmostEqual(r["forward"]["revenue"], (900 + 405) * B)
+        self.assertAlmostEqual(r["forward"]["profit"], (90 + 405 * 0.1) * B)
+
+    def test_a_half_year_on_the_other_basis_is_not_netted(self):
+        rows = [dict(r) for r in self.moved]
+        rows[4] = dict(rows[4], consolidated=True)       # 1404/06: group only
+        r = self.analyse(rows)
+        self.assertIsNone(r["ttm"]["profit"])
+        self.assertFalse(r["ttm_across_change"])
+        self.assertTrue(any("روی یک مبنا ساخته نشد" in f for f in r["flags"]))
+
+    def test_the_stores_other_release_fills_the_half_year(self):
+        rows = [dict(r) for r in self.moved]
+        rows[4] = dict(rows[4], consolidated=True)
+        separate_half = {
+            "tracing_no": "1", "ins_code": "x", "period_end": "1404/06/31",
+            "period_months": 6, "consolidated": False, "audited": False,
+            "published_at": "1404/07/30", "published_iso": "2025-10-22T00:00:00",
+            "title": "", "items": {"revenue": 450 * B, "net_profit": 45 * B},
+            "ratios": {}}
+        r = self.analyse(rows, versions=[separate_half])
+        self.assertAlmostEqual(r["ttm"]["revenue"], 1170 * B)
+        self.assertTrue(r["ttm_across_change"])
+
+    def test_a_short_year_as_the_latest_is_not_read_as_a_year(self):
+        rows = self.moved[3:]
+        r = self.analyse(rows, inflation_pct=40)
+        self.assertEqual((r["latest"]["months"], r["latest"]["short_year"]), (9, True))
+        # the short year + the old year's last quarter (800 - 560)
+        self.assertAlmostEqual(r["ttm"]["revenue"], 960 * B)
+        self.assertAlmostEqual(r["ttm"]["profit"], 96 * B)
+        # next year on the twelve months, growth half the short year's own
+        # like-for-like (720 / 560) and half inflation, at the TTM margin
+        g = 0.5 * (720 / 560 - 1) + 0.5 * 0.40
+        self.assertEqual(r["method"], "next_year_trend")
+        self.assertAlmostEqual(r["forward"]["revenue"], 960 * B * (1 + g))
+        self.assertAlmostEqual(r["forward"]["profit"], 96 * B * (1 + g))
+        self.assertTrue(any("سال مالی کوتاه 9 ماهه" in f for f in r["flags"]))
+
+    def test_the_interim_that_ends_the_short_year_serves_as_well(self):
+        # فجهان and حگهر filed their short year as a 9-month interim only.
+        rows = [r for r in self.moved if r["period_end"] != "1404/09/30"]
+        rows.append(period("1404/09/30", 9, 720 * B, 72 * B))
+        self.assertEqual(fo.short_years(rows), {})
+        r = self.analyse(rows)
+        self.assertAlmostEqual(r["ttm"]["revenue"], 1170 * B)
+
+    def test_a_subsidiarys_year_under_the_parents_symbol_changes_nothing(self):
+        rows = [period("1404/12/29", 12, 400 * B, 40 * B),
+                period("1404/09/30", 9, 300 * B, 30 * B),
+                period("1404/06/31", 6, 200 * B, 20 * B),
+                period("1404/03/31", 12, 90 * B, 9 * B),    # another company's
+                period("1403/12/30", 12, 320 * B, 32 * B)]
+        self.assertNotIn("1404/12/29", fo.short_years(rows))
+
+    def test_misread_dates_and_one_month_gaps_are_not_short_years(self):
+        rows = [period("1404/12/29", 12, 400 * B, 40 * B),
+                period("1404/01/01", 12, 300 * B, 30 * B),  # not a month's end
+                period("1403/12/30", 12, 320 * B, 32 * B),
+                period("1403/11/30", 12, 300 * B, 30 * B)]
+        self.assertEqual(fo.short_years(rows), {})
+
+    def test_a_company_that_never_moved_is_read_as_before(self):
+        r = fo.analyse("x", price=5_000, rows=CompletionTests.rows,
+                       today=(1405, 8, 14), monthly_rows=[])
+        self.assertIsNone(r["short_year"])
+        self.assertFalse(r["ttm_across_change"])
+        self.assertAlmostEqual(r["ttm"]["revenue"], 320 * B)
