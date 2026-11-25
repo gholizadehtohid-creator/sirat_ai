@@ -3765,6 +3765,29 @@ function noticeDelivered(p) {
 
 let bootPolling = false;
 
+// The panel's code changed after it started -- some features then run old
+// code and some new, and fail (every PDF, 2026-11-25) -- or this page is
+// older than the files it came from (restart_check.py).
+let assetsAtLoad = null;
+
+function renderRestart(r) {
+  const node = $("restartBanner");
+  if (!node || !r) return;
+  if (assetsAtLoad === null) assetsAtLoad = r.assets || "";
+  let text = "";
+  if (r.restart_needed) {
+    const f = (r.files || [])[0];
+    text = "<strong>پنل باید دوباره راه‌اندازی شود.</strong> کد برنامه بعد از روشن شدن پنل تغییر کرده " +
+      `(${num(r.count, 0)} فایل` + (f ? `، آخرین ${esc(f.path)} ساعت ${tehranClock(f.at)}` : "") + ")؛ " +
+      "تا آن موقع بخشی از امکانات با کد قدیم و بخشی با کد جدید کار می‌کند و ممکن است خطا بدهد. " +
+      "پنجره‌ی پنل را ببندید و دوباره اجرا کنید، بعد این صفحه را تازه کنید.";
+  } else if (r.assets && assetsAtLoad && r.assets !== assetsAtLoad) {
+    text = "<strong>نسخه‌ی تازه‌ی صفحه آماده است.</strong> صفحه را با Ctrl+F5 تازه کنید.";
+  }
+  node.classList.toggle("hidden", !text);
+  if (text) $("restartBannerText").innerHTML = text;
+}
+
 async function pollBootstrap(fast = false) {
   // No panel on the page means nothing to draw, and /api/bootstrap walks the
   // whole price_history table — don't poll into the void.
@@ -3790,6 +3813,7 @@ async function pollBootstrap(fast = false) {
     bootRunning = !!p.running;
     renderBootstrap(p);
     noticeDelivered(p);
+    renderRestart(p.restart);
   } catch (err) {
     $("loadStage").textContent = `وضعیت پیشرفت در دسترس نیست — ${err.message}`;
     console.error(err);

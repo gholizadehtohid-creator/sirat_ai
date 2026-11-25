@@ -1922,9 +1922,19 @@ def api_bot_broadcast():
 
 @app.route("/api/bootstrap")
 def api_bootstrap_status():
-    """What data is present, missing or stale, and any fetch in flight."""
+    """What data is present, missing or stale, and any fetch in flight.
 
-    return jsonify(bootstrap.progress())
+    And whether this panel's own code changed after it started
+    (restart_check.py): the page's status poll is where it is said.
+    """
+
+    report = bootstrap.progress()
+    try:
+        import restart_check
+        report["restart"] = restart_check.state()
+    except Exception:                                           # noqa: BLE001
+        report["restart"] = None
+    return jsonify(report)
 
 
 @app.route("/api/bootstrap", methods=["POST"])
@@ -2130,6 +2140,14 @@ def port_owner(host, port):
 
 def main():
     setup_logging()
+
+    # The code as this panel loads it: the page is told when a file changes
+    # under it (restart_check.py, 2026-11-25).
+    try:
+        import restart_check
+        restart_check.mark_started()
+    except Exception as exc:                                    # noqa: BLE001
+        log.warning("restart check unavailable: %s", exc)
 
     owner = port_owner(SERVER_HOST, SERVER_PORT)
 

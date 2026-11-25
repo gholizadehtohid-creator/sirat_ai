@@ -42,6 +42,13 @@
     <button class="tab" role="tab" data-tab="analysis">تحلیل‌ها</button>
   </nav>
 
+  <!-- Shown when the panel's own code changed after it started, or this
+       page is older than its files (restart_check.py, 2026-11-25): a
+       panel running half old code made every PDF fail that day. -->
+  <div id="restartBanner" class="banner is-error hidden" role="alert">
+    <span class="icon">⟳</span><div id="restartBannerText"></div>
+  </div>
+
   <!-- The provenance line and the loading panel share one row: a quiet line
        each when all is well, the full width when something needs reading. -->
   <div class="status-row">
