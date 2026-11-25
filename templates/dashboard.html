@@ -349,6 +349,27 @@
     </details>
   </div>
 
+  <!-- The dollar and the world prices behind the exporters (commodities.py,
+       2026-11-26, from the owner's walk through BourseView). A description:
+       nothing here has been tested as a signal. -->
+  <div class="card span-half" id="commoditiesCard">
+    <div class="card-head">
+      <h2>دلار، طلا، نفت و فلزات جهانی</h2>
+    </div>
+    <p class="hint">
+      نرخ دلار آزاد و نیما، و قیمت جهانی انس طلا، نفت و فلزات پایه با تغییر یک هفته،
+      یک ماه و یک سال. فروش صادرکننده‌ها (مس، روی و سرب، آلومینیوم، پالایشی و
+      پتروشیمی) همراه این قیمت‌ها حرکت می‌کند؛ برای همین در تحلیل هر سهم مرتبط هم
+      آمده است.
+    </p>
+    <div id="commoditiesStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
+      <span class="icon">…</span><div id="commoditiesStatusText">در حال بارگذاری…</div>
+    </div>
+    <div class="table-wrap" id="commoditiesTable"></div>
+    <p class="hint" style="margin-top:6px">منبع: tgju.org، هر ۱۲ ساعت. توصیف است، نه پیش‌بینی؛
+    بات آزمون نکرده که حرکت این قیمت‌ها بازده سهم را پیش‌بینی کند.</p>
+  </div>
+
   <!-- How to fill each part of the allocation as cheaply as possible today.
        Facts, not forecasts: a fund's price against its own NAV, and a bill's
        fixed yield to maturity. See opportunities.py. -->

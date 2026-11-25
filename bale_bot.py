@@ -105,7 +105,8 @@ class PanelData:
     def market(self):
         return {"indices": self._json("/api/indices")[1],
                 "flow": self._json("/api/marketflow")[1],
-                "valuation": self._json("/api/valuation")[1]}
+                "valuation": self._json("/api/valuation")[1],
+                "commodities": self._json("/api/commodities")[1]}
 
     def allocation(self):
         return self._json("/api/allocation")[1]
@@ -302,7 +303,8 @@ class Bot:
     def show_market(self, chat_id):
         pieces = self.data.market()
         self.send(chat_id, content.market_text(pieces["indices"], pieces["flow"],
-                                               pieces["valuation"]))
+                                               pieces["valuation"],
+                                               commodities=pieces.get("commodities")))
         return "market"
 
     def show_portfolio(self, user):
@@ -397,7 +399,8 @@ class Bot:
                   if i.get("key") == "TEDPIX"]
         if not tedpix or str(tedpix[0].get("last_date"))[:10] != day:
             return 0                       # no session today: nothing new to say
-        text = content.market_text(pieces["indices"], pieces["flow"], pieces["valuation"])
+        text = content.market_text(pieces["indices"], pieces["flow"], pieces["valuation"],
+                                   commodities=pieces.get("commodities"))
         sent = 0
         for user in store.list_users(store.APPROVED, self.path):
             if user.get("summary_on"):

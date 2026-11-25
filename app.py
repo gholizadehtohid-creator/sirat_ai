@@ -1137,6 +1137,24 @@ def api_valuation():
         return handle_error(exc)
 
 
+@app.route("/api/commodities")
+def api_commodities():
+    """The dollar (fx.py) and world commodity prices (commodities.py): the
+    ounce, oil and the base metals, each with its week, month and year.
+
+    A read of the two stored files -- they are refreshed by bootstrap's
+    post-run hook -- so no network and no cache (2026-11-26, from the owner's
+    walk through BourseView).
+    """
+
+    try:
+        import commodities
+        import fx
+        return jsonify({"dollar": fx.summary(), "commodities": commodities.summary()})
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
 @app.route("/api/announcements")
 def api_announcements():
     """Codal's important announcements of the last days. See codal_announcements.py.
@@ -1203,6 +1221,17 @@ def api_outlook():
                 return jsonify({"error": "صورت مالی ثبت‌شده‌ای برای %s نیست"
                                 % symbol}), 404
             result.update(symbol=match.get("symbol_fa"), name=match.get("name_fa"))
+            # The world price the company sells into, where the link is
+            # direct (commodities.py, 2026-11-26): a description, not a
+            # forecast, so a notice and never a flag.
+            try:
+                import commodities
+                lines = commodities.company_lines(match.get("name_fa"),
+                                                  match.get("sector_name"))
+            except Exception:                                   # noqa: BLE001
+                lines = []
+            result["commodities"] = lines
+            result.setdefault("notices", []).extend(lines)
             return jsonify(result)
 
         return jsonify(memoise(_outlook_key(), fundamental_outlook.screen,

@@ -227,6 +227,8 @@ def stock_text(o, events=None):
         parts += ["", "⚠️ هشدارها:"] + ["• " + jdate(x) for x in flags]
     if notes:
         parts += ["", "معامله‌پذیری:"] + ["• " + jdate(x) for x in notes]
+    if o.get("commodities"):
+        parts += ["", "🌍 قیمت جهانی محصول:"] + ["• " + jdate(x) for x in o["commodities"][:2]]
     if events:
         parts += ["", "🗓 رویدادها:"] + ["• " + e for e in events[:4]]
     if latest.get("period_end"):
@@ -272,7 +274,8 @@ def calendar_events_for(calendar, symbol):
 
 # ---- the market ---------------------------------------------------------------
 
-def market_text(indices=None, flow=None, valuation=None, bill_yield=None):
+def market_text(indices=None, flow=None, valuation=None, bill_yield=None,
+                commodities=None):
     parts = ["📊 خلاصه‌ی بازار"]
     tedpix = None
     for item in (indices or {}).get("indices") or []:
@@ -317,8 +320,35 @@ def market_text(indices=None, flow=None, valuation=None, bill_yield=None):
     by = bill_yield if bill_yield is not None else (valuation or {}).get("bill_yield_pct")
     if by:
         parts.append("بازده سالانه‌ی اخزا (بیش از ۹۰ روز تا سررسید): %s" % pct(by, 1))
+    # The dollar and the world prices behind the exporters (2026-11-26).
+    world = commodities_line(commodities)
+    if world:
+        parts.append(world)
     parts.append(DISCLAIMER)
     return _lines(*parts)
+
+
+def commodities_line(rep):
+    """One line: the free dollar, the ounce, Brent and copper, each with its
+    month (GET /api/commodities), or ""."""
+
+    if not rep:
+        return ""
+    bits = []
+    free = (((rep.get("dollar") or {}).get("rates") or {}).get("free")) or {}
+    if free.get("close"):
+        bits.append("دلار آزاد %s ریال" % fa(free["close"]))
+    by = {i.get("name"): i for i in ((rep.get("commodities") or {}).get("items") or [])}
+    for name in ("gold_ounce", "brent", "copper"):
+        item = by.get(name)
+        if not item or item.get("close") is None:
+            continue
+        month = item.get("change_1m")
+        bits.append("%s %s%s" % (item["label"],
+                                 fa(item["close"], 2 if item["close"] < 100 else 0),
+                                 " (یک ماه %s)" % pct(month * 100, 0, True)
+                                 if month is not None else ""))
+    return ("🌍 " + " · ".join(bits)) if bits else ""
 
 
 # ---- allocation ---------------------------------------------------------------

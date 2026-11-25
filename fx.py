@@ -243,8 +243,22 @@ def summary(record=None):
         out["as_of"] = max(out["as_of"] or day, day)
         jy, jm, jd = (int(p) for p in day.split("/"))
         year_ago = rate_on("%04d/%02d/%02d" % (jy - 1, jm, jd), name, record)
+        # The week and the month too (2026-11-26, the panel's commodities
+        # card shows the dollar beside the metals), by Gregorian days back.
+        rows = series(name, record)
+        days = [r[0] for r in rows]
+
+        def back(n):
+            from datetime import date, timedelta
+            y, m, d = (int(p) for p in rows[-1][0].split("-"))
+            i = bisect.bisect_right(days, (date(y, m, d) - timedelta(days=n)).isoformat())
+            return rows[i - 1][2] if i else None
+
+        week, month = back(7), back(30)
         out["rates"][name] = {
             "label": LABELS[name], "date": day, "close": close,
+            "change_1w": close / week - 1 if week else None,
+            "change_1m": close / month - 1 if month else None,
             "change_1y": close / year_ago - 1 if year_ago else None}
     free, nima = (out["rates"].get(k, {}).get("close") for k in ("free", "nima"))
     out["gap"] = free / nima - 1 if free and nima else None

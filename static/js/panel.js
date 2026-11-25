@@ -5031,6 +5031,50 @@ async function loadValuation() {
   }
 }
 
+/* ---------- the dollar and world commodity prices (2026-11-26) ----------
+   fx.py's two dollar rates and commodities.py's ounce, oil and base metals,
+   each with its week, month and year. A description, coloured as one. */
+function renderCommodities(rep) {
+  const rows = [];
+  // signed() colours the move; the dates come Jalali already.
+  const pctCell = v => (v === null || v === undefined) ? "—" : signed(v * 100, 1, "٪");
+  const rates = ((rep.dollar || {}).rates) || {};
+  for (const key of ["free", "nima"]) {
+    const r = rates[key];
+    if (!r) continue;
+    rows.push([esc(r.label || key), `${num(r.close, 0)} ریال`, esc(r.date || ""),
+               pctCell(r.change_1w), pctCell(r.change_1m), pctCell(r.change_1y)]);
+  }
+  const items = ((rep.commodities || {}).items) || [];
+  for (const it of items) {
+    rows.push([esc(it.label) + (it.stale ? ' <span class="hint">(کهنه)</span>' : ""),
+               `${num(it.close, it.close < 100 ? 2 : 0)} ${esc(it.unit)}`,
+               esc(it.date || ""),
+               pctCell(it.change_1w), pctCell(it.change_1m), pctCell(it.change_1y)]);
+  }
+  if (!rows.length) {
+    banner("commoditiesStatus", "commoditiesStatusText", "is-warn",
+      "هنوز قیمتی ذخیره نشده؛ بعد از اجرای بعدی دریافت داده می‌آید.");
+    $("commoditiesTable").innerHTML = "";
+    return;
+  }
+  const asOf = (rep.commodities || {}).as_of || (rep.dollar || {}).as_of;
+  banner("commoditiesStatus", "commoditiesStatusText", "is-live",
+    `آخرین قیمت‌ها تا ${esc(asOf || "")}.`);
+  $("commoditiesTable").innerHTML = table(
+    ["", "آخرین", "تاریخ", "یک هفته", "یک ماه", "یک سال"], rows);
+}
+
+async function loadCommodities() {
+  try {
+    renderCommodities(await getJSON("/api/commodities"));
+  } catch (err) {
+    $("commoditiesTable").innerHTML = "";
+    banner("commoditiesStatus", "commoditiesStatusText", "is-error",
+      `<strong>بارگذاری نشد.</strong> ${esc(err.message)}`);
+  }
+}
+
 /* ---------- tabs ----------
    Four tabs instead of one long page (2026-11-05). Each tab's data is
    requested the first time the tab is opened, so the summary is on screen
@@ -5040,7 +5084,7 @@ const TAB_LOADERS = {
   // Live first in the summary too: the "today" card's market line reads it.
   summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities(),
             () => loadMarketflow(), () => loadAnnouncements(), () => loadCalendar(),
-            () => loadHoldings(), () => loadValuation()],
+            () => loadHoldings(), () => loadValuation(), () => loadCommodities()],
   stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
   live: [() => loadLive()],
   // The guide is static HTML: nothing to fetch.
