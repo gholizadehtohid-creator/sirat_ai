@@ -8,9 +8,15 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import config  # noqa: E402
 import outlook_calibration as oc  # noqa: E402
 
 B = 1e9
+# A steady company grows at the inflation past years are scored with: since
+# 2026-11-25 the months to come are grown toward it (rest_growth), so only
+# such a company is estimated exactly.
+GROWTH = config.BACKTEST_INFLATION_RATE / 100.0
+G = 1 + GROWTH
 
 
 def rec(end, months, revenue, net, gross=None, cons=False):
@@ -20,7 +26,7 @@ def rec(end, months, revenue, net, gross=None, cons=False):
     return {"end": end, "months": months, "cons": cons, "items": items, "ratios": {}}
 
 
-def company(code, years, margin=0.2, growth=0.5):
+def company(code, years, margin=0.2, growth=GROWTH):
     """A Esfand-year company: 6- and 12-month statements for `years`."""
 
     out = {}
@@ -167,7 +173,7 @@ def release(code, tracing, end, months, published, revenue, net, cons=False):
             "ratios": {}}
 
 
-def releases(code, years, margin=0.2, growth=0.5):
+def releases(code, years, margin=0.2, growth=GROWTH):
     """company() as Codal releases: each statement published about a month
     (an annual, about two) after its period."""
 
@@ -201,7 +207,7 @@ class PointInTimeTests(unittest.TestCase):
         rel = releases("1", range(1400, 1405))
         # 1402's annual restated a year later, its profit half as high again
         rel.append(release("1", "late", "1402/12/29", 12, "1404/05/01 10:00:00",
-                           100 * B * 1.5 ** 2, 100 * B * 1.5 ** 2 * 0.2 * 1.5))
+                           100 * B * G ** 2, 100 * B * G ** 2 * 0.2 * 1.5))
         found = oc.measure_pit({"1": rel}, lags=(0,))[0]
         self.assertAlmostEqual(sixes(found["points"], 1402)[0], 1.0, places=6)
         self.assertAlmostEqual(sixes(found["latest"], 1402)[0], 1.5, places=6)
@@ -211,7 +217,7 @@ class PointInTimeTests(unittest.TestCase):
         # last year's annual restated (sales +20%) eighteen days after this
         # year's six months were first published
         rel.append(release("1", "restated", "1401/12/29", 12, "1402/08/15 10:00:00",
-                           100 * B * 1.5 * 1.2, 100 * B * 1.5 * 0.2))
+                           100 * B * G * 1.2, 100 * B * G * 0.2))
         found = oc.measure_pit({"1": rel}, lags=(0, 30))
         self.assertAlmostEqual(sixes(found[0]["points"], 1402)[0], 1.0, places=6)
         self.assertNotAlmostEqual(sixes(found[30]["points"], 1402)[0], 1.0, places=3)

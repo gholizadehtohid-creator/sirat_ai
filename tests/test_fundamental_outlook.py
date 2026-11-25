@@ -38,24 +38,34 @@ class CompletionTests(unittest.TestCase):
 
     def setUp(self):
         self.r = fo.analyse("x", price=5_000, rows=self.rows,
-                            today=(1405, 8, 14))
+                            today=(1405, 8, 14), inflation_pct=40)
 
     def test_ttm_is_this_half_plus_last_years_second_half(self):
         self.assertAlmostEqual(self.r["ttm"]["revenue"], 320 * B)
         self.assertAlmostEqual(self.r["ttm"]["profit"], 64 * B)
 
-    def test_forward_grows_the_remaining_months_at_the_ytd_rate(self):
-        # remaining = (300 - 100) * 1.2 = 240; year = 120 + 240 = 360
-        self.assertAlmostEqual(self.r["forward"]["revenue"], 360 * B)
-        # profit at the 20% YTD margin on the remaining 240
-        self.assertAlmostEqual(self.r["forward"]["profit"], 72 * B)
+    def test_the_remaining_months_grow_toward_inflation(self):
+        # 20% so far; the months to come at 40% + 0.3 x (20% - 40%) = 34%
+        # (REST_GROWTH_WEIGHT, 2026-11-25): remaining = (300 - 100) * 1.34
+        # = 268; year = 120 + 268 = 388
+        self.assertAlmostEqual(fo.rest_growth(0.2, 40), 0.34)
+        self.assertAlmostEqual(self.r["forward"]["revenue"], 388 * B)
+        # profit at the 20% trailing margin on the remaining 268
+        self.assertAlmostEqual(self.r["forward"]["profit"], 77.6 * B)
         self.assertEqual(self.r["method"], "year_completed")
+
+    def test_a_fall_so_far_is_not_carried_into_the_months_to_come(self):
+        # -30% so far: the rest at 40% + 0.3 x (-70%) = 19%, not -30%
+        self.assertAlmostEqual(fo.rest_growth(-0.3, 40), 0.19)
+        # and a tripling at 40% + 0.3 x 160% = 88%, inside the cap
+        self.assertAlmostEqual(fo.rest_growth(2.0, 40), 0.88)
+        self.assertEqual(fo.rest_growth(9.0, 40), fo.GROWTH_CAP[1])
 
     def test_per_share_and_valuation(self):
         # 100bn rials of capital at 1,000 par = 100m shares
-        self.assertAlmostEqual(self.r["forward"]["eps"], 720.0)
-        # market cap 500bn / forward profit 72bn
-        self.assertAlmostEqual(self.r["valuation"]["pe_forward"], 6.94, places=2)
+        self.assertAlmostEqual(self.r["forward"]["eps"], 776.0)
+        # market cap 500bn / forward profit 77.6bn
+        self.assertAlmostEqual(self.r["valuation"]["pe_forward"], 6.44, places=2)
 
 
 class OwnersShareTests(unittest.TestCase):
@@ -114,12 +124,19 @@ class MonthlyTests(unittest.TestCase):
 
     def setUp(self):
         self.r = fo.analyse("x", price=5_000, rows=self.statements,
-                            monthly_rows=self.monthly, today=(1405, 9, 10))
+                            monthly_rows=self.monthly, today=(1405, 9, 10),
+                            inflation_pct=40)
 
-    def test_the_year_grows_at_the_monthly_ytd_rate(self):
-        # 300bn last year x (200/160) = 375bn
+    def test_the_year_grows_from_the_monthly_ytd(self):
+        # Eight months in, +25% so far (200/160). Last year's first six
+        # months were 100 of 300, so eight are read as 1/3 + 2/3 x 2/6 = 5/9
+        # of its year (sold_share); they keep their +25%, the other 4/9 grow
+        # at 40% + 0.3 x (25% - 40%) = 35.5%.
+        share = 5 / 9
         self.assertEqual(self.r["method"], "monthly_sales")
-        self.assertAlmostEqual(self.r["forward"]["revenue"], 375 * B)
+        self.assertAlmostEqual(self.r["monthly"]["year_share"], share)
+        self.assertAlmostEqual(self.r["forward"]["revenue"],
+                               300 * B * (share * 1.25 + (1 - share) * 1.355))
         self.assertEqual(self.r["monthly"]["months_elapsed"], 8)
 
     def test_price_and_volume_are_separated(self):
@@ -196,10 +213,11 @@ class SharesTests(unittest.TestCase):
                 period("1404/12/29", 12, 300 * B, 60 * B),
                 period("1404/06/31", 6, 100 * B, 20 * B)]
         r = fo.analyse("x", price=5_000, rows=rows, today=(1405, 8, 14),
-                       shares=1e9, opportunity=BILLS)    # 10x the capital line
+                       shares=1e9, opportunity=BILLS,    # 10x the capital line
+                       inflation_pct=40)
         self.assertEqual(r["valuation"]["shares_source"], "exchange")
-        self.assertAlmostEqual(r["valuation"]["pe_forward"], 69.44, places=2)
-        self.assertAlmostEqual(r["forward"]["eps"], 72.0)
+        self.assertAlmostEqual(r["valuation"]["pe_forward"], 64.43, places=2)
+        self.assertAlmostEqual(r["forward"]["eps"], 77.6)
         self.assertFalse(any(d["code"] == "shares" for d in r["doubts"]))
 
     rows = [period("1405/06/31", 6, 120 * B, 24 * B),
@@ -264,12 +282,12 @@ class HurdleTests(unittest.TestCase):
 
     def analyse(self, price):
         return fo.analyse("x", price=price, rows=self.rows, today=(1405, 8, 14),
-                          opportunity=BILLS)
+                          opportunity=BILLS, inflation_pct=40)
 
     def test_the_growth_a_price_requires_is_the_bill_yield_less_its_own(self):
-        r = self.analyse(5_000)          # forward yield 14.4%, growth 20%
-        self.assertAlmostEqual(r["hurdle"]["required_growth_pct"], 29.6)
-        self.assertAlmostEqual(r["hurdle"]["cushion_pct"], -9.6)
+        r = self.analyse(5_000)          # forward yield 15.52%, growth 20%
+        self.assertAlmostEqual(r["hurdle"]["required_growth_pct"], 28.5)
+        self.assertAlmostEqual(r["hurdle"]["cushion_pct"], -8.5)
 
     def test_a_price_asking_for_far_more_growth_than_there_is_is_flagged(self):
         r = self.analyse(12_000)         # yield 6%: needs 38%, has 20%
@@ -639,11 +657,12 @@ class FiscalYearChangeTests(unittest.TestCase):
     def test_the_year_is_completed_from_the_tail_of_the_twelve(self):
         rows = [dict(r) for r in self.moved]
         rows[0] = dict(rows[0], ratios={"revenue_growth": 50.0})
-        r = self.analyse(rows)
-        # remaining = the twelve less this year's nine, grown 50%: 270 * 1.5
+        r = self.analyse(rows, inflation_pct=40)
+        # remaining = the twelve less this year's nine (270), grown at
+        # 40% + 0.3 x (50% - 40%) = 43%: 386.1
         self.assertEqual(r["method"], "year_completed")
-        self.assertAlmostEqual(r["forward"]["revenue"], (900 + 405) * B)
-        self.assertAlmostEqual(r["forward"]["profit"], (90 + 405 * 0.1) * B)
+        self.assertAlmostEqual(r["forward"]["revenue"] / B, 900 + 386.1)
+        self.assertAlmostEqual(r["forward"]["profit"] / B, 90 + 386.1 * 0.1)
 
     def test_a_half_year_on_the_other_basis_is_not_netted(self):
         rows = [dict(r) for r in self.moved]
@@ -673,12 +692,13 @@ class FiscalYearChangeTests(unittest.TestCase):
         # the short year + the old year's last quarter (800 - 560)
         self.assertAlmostEqual(r["ttm"]["revenue"], 960 * B)
         self.assertAlmostEqual(r["ttm"]["profit"], 96 * B)
-        # next year on the twelve months, growth half the short year's own
-        # like-for-like (720 / 560) and half inflation, at the TTM margin
-        g = 0.5 * (720 / 560 - 1) + 0.5 * 0.40
+        # next year on the twelve months, at inflation and 0.3 of what the
+        # short year's like-for-like growth (720 / 560) differed from it by,
+        # at the TTM margin
+        g = 0.40 + 0.3 * (720 / 560 - 1 - 0.40)
         self.assertEqual(r["method"], "next_year_trend")
-        self.assertAlmostEqual(r["forward"]["revenue"], 960 * B * (1 + g))
-        self.assertAlmostEqual(r["forward"]["profit"], 96 * B * (1 + g))
+        self.assertAlmostEqual(r["forward"]["revenue"] / B, 960 * (1 + g))
+        self.assertAlmostEqual(r["forward"]["profit"] / B, 96 * (1 + g))
         self.assertTrue(any("سال مالی کوتاه 9 ماهه" in f for f in r["flags"]))
 
     def test_the_interim_that_ends_the_short_year_serves_as_well(self):
@@ -710,3 +730,41 @@ class FiscalYearChangeTests(unittest.TestCase):
         self.assertIsNone(r["short_year"])
         self.assertFalse(r["ttm_across_change"])
         self.assertAlmostEqual(r["ttm"]["revenue"], 320 * B)
+
+
+class OtherBasisSpanTests(unittest.TestCase):
+    """2026-11-25: 95 companies had no trailing year because last year's
+    same months are stored as the group's (consolidated) statement while
+    the parent's (separate) are what the newest one is -- the store keeps
+    one release per period. The store's other releases hold the parent's."""
+
+    rows = [
+        basis_period("1405/06/31", 6, 120 * B, 24 * B, False),    # parent
+        basis_period("1404/12/29", 12, 300 * B, 60 * B, False),
+        basis_period("1404/06/31", 6, 400 * B, 80 * B, True),     # the group's
+    ]
+    parents_half = {
+        "tracing_no": "p6", "ins_code": "x", "period_end": "1404/06/31",
+        "period_months": 6, "consolidated": False, "audited": False,
+        "published_at": "1404/07/28", "published_iso": "2025-10-20T00:00:00",
+        "title": "", "items": {"revenue": 100 * B, "net_profit": 20 * B},
+        "ratios": {}}
+
+    def analyse(self, **kw):
+        return fo.analyse("x", price=5_000, rows=self.rows, today=(1405, 8, 14),
+                          monthly_rows=[], opportunity=BILLS, inflation_pct=40, **kw)
+
+    def test_without_the_parents_half_there_is_no_trailing_year(self):
+        r = self.analyse()
+        self.assertIsNone(r["ttm"]["profit"])
+        self.assertFalse(r["ttm_from_spans"])
+
+    def test_the_parents_own_half_gives_one_basis_throughout(self):
+        r = self.analyse(versions=[self.parents_half])
+        self.assertAlmostEqual(r["ttm"]["revenue"] / B, 320)      # 120 + 300 - 100
+        self.assertAlmostEqual(r["ttm"]["profit"] / B, 64)
+        self.assertTrue(r["ttm_from_spans"])
+        # no year-end moved: nothing said about one
+        self.assertFalse(r["ttm_across_change"])
+        self.assertFalse(any("سال مالی" in f for f in r["flags"]))
+        self.assertEqual(r["method"], "year_completed")

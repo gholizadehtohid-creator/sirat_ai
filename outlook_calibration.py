@@ -284,8 +284,14 @@ def _estimate(code, m, rows, today, bills, inflation):
                 rev + a_rev - s_rev <= 0:
             return out
         run_margin = (net + a_net - s_net) / (rev + a_rev - s_rev)
-        emulated = fo.monthly_year_estimate(a_rev, rev / s_rev - 1, m, rev,
-                                            net, run_margin)
+        # As the live method is run (2026-11-25): the months to come grown
+        # toward the inflation the year faced, and the months gone weighed by
+        # last year's own split -- at a statement's months, what sold_share()
+        # reads is exactly last year's same months over its year.
+        emulated = fo.monthly_year_estimate(
+            a_rev, rev / s_rev - 1, m, rev, net, run_margin,
+            inflation_pct=inflation,
+            done_share=s_rev / a_rev if a_rev > 0 else None)
         owners = fo._profit(it)
         share = owners / net if owners is not None and net and net > 0 and \
             0 < owners / net <= 1.5 else 1.0

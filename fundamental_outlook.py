@@ -26,11 +26,16 @@ THE METHOD, PER COMPANY
               when there is one, otherwise backed out of the latest filing's
               own year-on-year growth (its comparative column)
   annual_prev the prior fiscal year's 12-month statement
-  TTM         latest + annual_prev - same_prev   (latest when it is annual)
-  forward     latest + (annual_prev - same_prev) * (1 + YTD growth), and
-              profit as that revenue at the year-to-date margin. For an
-              annual latest: next year at this year's revenue growth and
-              margin, growth capped to [-50%, +100%].
+  TTM         latest + annual_prev - same_prev   (latest when it is annual);
+              where that cannot be netted, built from the statements' own
+              spans on one basis (_flow)
+  forward     latest + (annual_prev - same_prev) * (1 + g), the remaining
+              revenue at the TTM margin; g = inflation + 0.3 x (YTD growth
+              - inflation) (rest_growth: the months to come grow much less
+              like the months gone than was assumed until 2026-11-25). For
+              an annual latest: next year at this year's revenue grown by
+              the same rule and this year's margin; growth capped to
+              [-50%, +100%].
 
 Owners' profit is used where the filing separates it; shares are capital at
 the 1,000-rial par. Price is the last stored close.
@@ -54,6 +59,37 @@ import jalali
 
 PAR_VALUE = 1_000                       # rials per share
 GROWTH_CAP = (-0.50, 1.00)
+# How much of a company's own sales growth the months NOT YET REPORTED keep;
+# the rest is inflation (rest_growth).
+#
+# Until 2026-11-25 the months to come were grown at the year-to-date rate
+# itself. Measured on 3,975 past estimates whose year then closed (fiscal
+# years 1399-1405, each decided from what was public on its day), the growth
+# of the rest of the year hardly follows the growth so far:
+#
+#     sales so far    -27%   +11%   +31%   +49%   +69%   +89%  +117%  +244%
+#     rest of year    +28%   +31%   +36%   +43%   +49%   +54%   +56%   +44%
+#
+# A year compared with a year whose prices had not yet stepped up shows a
+# growth the later months, compared with months already at the new prices,
+# do not have; and a company that sold early has less left to sell. So a
+# year-to-date fall read 26-59% too low a profit and a doubling 11-23% too
+# high. With the weight at 0.3 the median error of the year's profit, by
+# outlook_calibration's own point-in-time measure, went from 35.6 to 30.6%
+# three months in, 27.4 to 25.4% at six, 21.2 to 19.2% at nine, a year not
+# yet begun 36.4 to 35.4%; lower in every fiscal year 1400-1405 and in both
+# halves of them. In 1405, the devaluation year, the centre mattered as much
+# as the weight: at that year's 77% inflation the six-month error was 30.3%,
+# at the long-run 40% it was 32.7%, as it was 37.6% -- so the centre is
+# config.INFLATION_RATE and has to be kept current.
+#
+# Tried beside it and NOT adopted, each no better on the same points: the
+# last quarter's margin, last year's same-season margin, a build from
+# operating profit, finance cost and tax (a point better nine months in,
+# no better earlier), this year's own monthly pace, and the estimate
+# multiplied by its bucket's past median error (no gain on years it had not
+# seen). The margin stays the trailing twelve months'.
+REST_GROWTH_WEIGHT = 0.3
 STALE_MONTHS = 7                        # a newest period older than this
 INTEREST_COVER_LOW = 2.0
 
@@ -186,6 +222,16 @@ def _div(a, b):
 
 def _pct(x, digits=1):
     return None if x is None else round(x * 100, digits)
+
+
+def rest_growth(growth, inflation_pct):
+    """The sales growth expected of months not yet reported: inflation, and
+    REST_GROWTH_WEIGHT of what the company's own growth differs from it by
+    (`growth` a fraction, `inflation_pct` a percentage), inside GROWTH_CAP."""
+
+    centre = inflation_pct / 100.0
+    pulled = centre + REST_GROWTH_WEIGHT * (growth - centre)
+    return min(max(pulled, GROWTH_CAP[0]), GROWTH_CAP[1])
 
 
 def fiscal_year_end(period_end, months):
@@ -591,13 +637,56 @@ def monthly_reads(ins_code, fy_end_month, rows=None):
 _UNSET = object()
 
 
+def sold_share(periods, fiscal_year, months, base):
+    """The share of fiscal year `fiscal_year`'s sales made by its month
+    `months`, or None with nothing to tell it by.
+
+    From that year's 3, 6 and 9-month statements on the annual statement's
+    (`base`) own basis, a straight line between them. A sugar maker sells
+    most of its year in a few months; "months / 12" put a tenth of the year
+    where a third of it was. On the past estimates (emulated: the statement
+    in the monthly report's place) the year's own split against months / 12
+    was 29.8 against 31.3% three months in, 25.1 against 26.2% at six, 18.7
+    against 20.0% at nine (2026-11-25)."""
+
+    total = _f(base["items"].get("revenue")) if base else None
+    if not total or total <= 0:
+        return None
+    knots = {0: 0.0, 12: 1.0}
+    for p in periods:
+        if p["fy"] != fiscal_year or p["annual"] or p["months"] not in (3, 6, 9) \
+                or p["consolidated"] != base["consolidated"]:
+            continue
+        sold = _f(p["items"].get("revenue"))
+        if sold is not None and 0 < sold < total:
+            knots.setdefault(p["months"], sold / total)
+    at = sorted(knots)
+    if len(at) == 2 or any(knots[a] >= knots[b] for a, b in zip(at, at[1:])):
+        return None
+    k = min(max(int(months or 0), 0), 12)
+    for a, b in zip(at, at[1:]):
+        if a <= k <= b:
+            return knots[a] + (knots[b] - knots[a]) * (k - a) / (b - a)
+    return None
+
+
 def monthly_year_estimate(base_revenue, ytd_growth, months_elapsed,
-                          statement_revenue, statement_profit, run_margin):
+                          statement_revenue, statement_profit, run_margin,
+                          inflation_pct=None, done_share=None):
     """(revenue, profit) of the fiscal year from a monthly report, or None.
 
     `base_revenue` is the prior fiscal year's; `ytd_growth` the report's own
     year-to-date growth; `statement_revenue` / `statement_profit` the newest
-    statement of THIS fiscal year when there is one.
+    statement of THIS fiscal year when there is one. `inflation_pct` is the
+    centre the months to come are grown toward (config.INFLATION_RATE when
+    not given) and `done_share` the share of last year's sales its same
+    months held (sold_share; months / 12 without it).
+
+    Since 2026-11-25 the months to come grow by rest_growth(), not at the
+    year-to-date rate capped (see REST_GROWTH_WEIGHT: emulated on the past
+    estimates, 35.7 to 31.3% three months in, 28.7 to 26.6% at six), and
+    the months gone are weighed by what they were of last year, not by
+    their count (sold_share).
 
     Until the review of 2026-11-23 this was prior year x (1 + growth capped
     at +100%), all of it at the trailing margin. Two things were wrong with
@@ -622,8 +711,11 @@ def monthly_year_estimate(base_revenue, ytd_growth, months_elapsed,
             run_margin is None:
         return None
     done = min(max(int(months_elapsed or 0), 1), 12) / 12.0
+    if done_share is not None and 0 < done_share < 1:
+        done = done_share
     grown = max(ytd_growth, GROWTH_CAP[0])
-    rest = min(grown, GROWTH_CAP[1])
+    rest = rest_growth(ytd_growth, config.INFLATION_RATE
+                       if inflation_pct is None else inflation_pct)
     revenue = base_revenue * (done * (1 + grown) + (1 - done) * (1 + rest))
     if statement_revenue is not None and statement_profit is not None:
         if revenue <= statement_revenue:
@@ -822,14 +914,13 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     if m == 12:
         ttm_rev, ttm_net = rev, net
         if rev is not None and net is not None and margin is not None:
-            # A whole year not yet begun: last year's growth halfway back to
-            # inflation, not carried forward whole. 167% one year is rarely
-            # 167% the next; inflation is what nominal sales drift back to.
-            # (A year under way grows its remaining months at the rate it has
-            # actually run at, below -- that is evidence, this is a forecast.)
-            last = growth_rev if growth_rev is not None else 0.0
-            g = min(max(0.5 * last + 0.5 * inflation_rate / 100.0,
-                        GROWTH_CAP[0]), GROWTH_CAP[1])
+            # A whole year not yet begun: inflation, and a part of what last
+            # year's growth differed from it by (rest_growth). 167% one year
+            # is rarely 167% the next; inflation is what nominal sales drift
+            # back to. Without a year before to measure a growth on, it is
+            # inflation alone.
+            last = growth_rev if growth_rev is not None else inflation_rate / 100.0
+            g = rest_growth(last, inflation_rate)
             fwd_rev = rev * (1 + g)
             fwd_net = fwd_rev * margin
             method = "next_year_trend"
@@ -845,7 +936,9 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         if None not in (rev, a_rev, s_rev):
             ttm_rev = rev + a_rev - s_rev
             if growth_rev is not None:
-                g = min(max(growth_rev, GROWTH_CAP[0]), GROWTH_CAP[1])
+                # The months to come do not grow as the months gone did:
+                # REST_GROWTH_WEIGHT, measured.
+                g = rest_growth(growth_rev, inflation_rate)
                 remaining = (a_rev - s_rev) * (1 + g)
                 fwd_rev = rev + remaining
                 # The remaining months at the TRAILING TWELVE MONTHS' margin,
@@ -862,16 +955,22 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                     fwd_net = net + remaining * run_margin
                     method = "year_completed"
 
-    # ---- across a fiscal-year change (short_years, 2026-11-25) ------------
-    # The prior fiscal year was short, so it has no "same months" to net:
-    # the twelve months are built from the statements' own spans, on the
-    # latest's basis alone. Only for a company whose year-end moved -- for
-    # any other the formula above already says all the statements can.
+    # ---- no "same months" to net: the statements' own spans (2026-11-25) --
+    # Where the formula above cannot be built -- the prior fiscal year was
+    # short (short_years), or the store holds last year's months on the
+    # other basis only -- the twelve months are built from the spans the
+    # statements cover, on the latest's basis alone, the store's other
+    # releases filling what `metrics` holds on the other one. First for the
+    # companies whose year-end moved; then for every company without a
+    # trailing year, once measured: of 180 such on 2026-11-25 it built one
+    # for 19, and 13 of the 17 with a P/E to compare were within 10% of
+    # TSETMC's own, where the annualised figure they had been given was for
+    # one of sixteen.
     moved = len({p["fy"][1] for p in all_periods}) > 1
-    across = False
+    across = spanned = False
     across_tried = False
-    if m != 12 and ttm_rev is None and ttm_net is None and moved:
-        across_tried = True
+    if m != 12 and ttm_rev is None and ttm_net is None:
+        across_tried = moved
         if versions is _UNSET:
             versions = None
             if rows_from_store:
@@ -884,13 +983,20 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         scale = _div(t_rev, rev * 12 / m) if rev and rev > 0 else None
         if t_net is not None and t_rev and t_rev > 0 and scale is not None \
                 and ACROSS_CHANGE_BAND[0] <= scale <= ACROSS_CHANGE_BAND[1]:
-            ttm_rev, ttm_net, across = t_rev, t_net, True
+            ttm_rev, ttm_net, spanned, across = t_rev, t_net, True, moved
+            # Last year's same months, on the same basis, when the pool holds
+            # them and the filing's own comparative did not give a growth.
+            e = _month_index(latest["end"])
+            if growth_rev is None and e is not None:
+                before = _flow(pool, e - 12 - m, e - 12, "revenue")
+                if before and before > 0:
+                    growth_rev = rev / before - 1
             # The months still to come this year are the tail of the twelve
             # (the twelve less this year's own), grown and at the trailing
             # margin as above.
             if growth_rev is not None and net is not None and \
                     not latest["short_year"]:
-                g = min(max(growth_rev, GROWTH_CAP[0]), GROWTH_CAP[1])
+                g = rest_growth(growth_rev, inflation_rate)
                 remaining = (t_rev - rev) * (1 + g)
                 fwd_rev = rev + remaining
                 fwd_net = net + remaining * (t_net / t_rev)
@@ -906,9 +1012,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                            if ttm_net is not None and ttm_rev and ttm_rev > 0
                            else None)
         if trailing_margin is not None:
-            last = growth_rev if growth_rev is not None else 0.0
-            g = min(max(0.5 * last + 0.5 * inflation_rate / 100.0,
-                        GROWTH_CAP[0]), GROWTH_CAP[1])
+            last = growth_rev if growth_rev is not None else inflation_rate / 100.0
+            g = rest_growth(last, inflation_rate)
             fwd_rev = ttm_rev * (1 + g)
             fwd_net = fwd_rev * trailing_margin
             method = "next_year_trend"
@@ -941,13 +1046,19 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         base_rev = _f(base["items"].get("revenue")) if base else None
         run_margin = _div(ttm_net, ttm_rev) if ttm_rev and ttm_net is not None \
             else margin
+        share_sold = sold_share(ps, (fy_m[0] - 1, fy_m[1]),
+                                monthly["months_elapsed"], base)
         estimate = monthly_year_estimate(
             base_rev, monthly["ytd_growth"], monthly["months_elapsed"],
             rev if latest["fy"] == fy_m and m != 12 else None,
-            net if latest["fy"] == fy_m and m != 12 else None, run_margin)
+            net if latest["fy"] == fy_m and m != 12 else None, run_margin,
+            inflation_pct=inflation_rate, done_share=share_sold)
         if estimate:
             fwd_rev, fwd_net = estimate
             method = "monthly_sales"
+            # What the months gone were of last year's sales, when the
+            # statements told it (None: months / 12).
+            monthly = dict(monthly, year_share=share_sold)
 
     # ---- per share and valuation -----------------------------------------
     # The exchange's share count, not the statement's capital line: that is
@@ -1418,6 +1529,9 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                        if short_seen and (latest["short_year"] or across_tried)
                        else None),
         "ttm_across_change": across,
+        # The trailing year was built from the statements' spans on one
+        # basis (_flow), not by the usual formula.
+        "ttm_from_spans": spanned,
         "has_prior_year": bool(annual_prev),
         "has_same_period": bool(same_prev),
         "method": method,

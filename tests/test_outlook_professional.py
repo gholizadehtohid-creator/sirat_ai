@@ -35,9 +35,10 @@ class TrailingMarginTests(unittest.TestCase):
         rows = [period("1405/06/31", 6, 120 * B, 12 * B),     # 10% so far
                 period("1404/12/29", 12, 300 * B, 60 * B),
                 period("1404/06/31", 6, 100 * B, 20 * B)]
-        r = analyse(rows)
-        # TTM 52 / 320 = 16.25%; the remaining 240 at that, not at 10%
-        self.assertAlmostEqual(r["forward"]["profit"], 12 * B + 240 * B * 52 / 320)
+        r = analyse(rows, inflation_pct=40)
+        # TTM 52 / 320 = 16.25%; the remaining 268 (200 grown 34%) at that,
+        # not at 10%
+        self.assertAlmostEqual(r["forward"]["profit"] / B, 12 + 268 * 52 / 320)
         self.assertEqual(r["method"], "year_completed")
 
 
@@ -110,20 +111,46 @@ class MonthlyEstimateTests(unittest.TestCase):
     what the statement has reported stands."""
 
     def test_months_already_sold_keep_the_growth_they_had(self):
-        # +150% to month 6: the sold half keeps it, the rest is capped at +100%
-        revenue, profit = fo.monthly_year_estimate(100 * B, 1.5, 6, None, None, 0.2)
-        self.assertAlmostEqual(revenue, 100 * B * (0.5 * 2.5 + 0.5 * 2.0))
+        # +150% to month 6: the sold half keeps it; the rest grows toward
+        # inflation, 40% + 0.3 x (150% - 40%) = 73% (rest_growth)
+        revenue, profit = fo.monthly_year_estimate(100 * B, 1.5, 6, None, None, 0.2,
+                                                   inflation_pct=40)
+        self.assertAlmostEqual(revenue, 100 * B * (0.5 * 2.5 + 0.5 * 1.73))
         self.assertAlmostEqual(profit, revenue * 0.2)
 
     def test_the_statements_reported_profit_is_kept(self):
         # a first-half LOSS stays a loss; only the revenue beyond it is at
         # the trailing margin
-        revenue, profit = fo.monthly_year_estimate(100 * B, 0.2, 8, 55 * B, -5 * B, 0.1)
-        self.assertAlmostEqual(revenue, 120 * B)
-        self.assertAlmostEqual(profit, -5 * B + (120 - 55) * B * 0.1)
+        revenue, profit = fo.monthly_year_estimate(100 * B, 0.2, 8, 55 * B, -5 * B, 0.1,
+                                                   inflation_pct=40)
+        self.assertAlmostEqual(revenue, 100 * B * (8 / 12 * 1.2 + 4 / 12 * 1.34))
+        self.assertAlmostEqual(profit, -5 * B + (revenue - 55 * B) * 0.1)
+
+    def test_the_months_gone_are_weighed_by_last_years_split(self):
+        # a seasonal seller: by month 6 last year had made 80% of its year
+        revenue, _profit = fo.monthly_year_estimate(100 * B, 0.2, 6, None, None, 0.1,
+                                                    inflation_pct=40, done_share=0.8)
+        self.assertAlmostEqual(revenue, 100 * B * (0.8 * 1.2 + 0.2 * 1.34))
+
+    def test_last_years_split_is_read_from_its_own_statements(self):
+        ps = fo._periods([period("1404/12/29", 12, 300 * B, 30 * B),
+                          period("1404/09/30", 9, 270 * B, 27 * B),
+                          period("1404/06/31", 6, 240 * B, 24 * B),
+                          period("1404/03/31", 3, 60 * B, 6 * B)])
+        base = ps[0]
+        self.assertAlmostEqual(fo.sold_share(ps, (1404, 12), 6, base), 0.8)
+        self.assertAlmostEqual(fo.sold_share(ps, (1404, 12), 4, base), 0.2 + 0.6 / 3)
+        self.assertAlmostEqual(fo.sold_share(ps, (1404, 12), 11, base), 0.9 + 0.1 * 2 / 3)
+        # another basis, or no statements of the year: nothing to tell it by
+        other = dict(base, consolidated=True)
+        self.assertIsNone(fo.sold_share(ps, (1404, 12), 6, other))
+        self.assertIsNone(fo.sold_share(ps, (1403, 12), 6, base))
 
     def test_a_year_below_the_statements_own_revenue_is_no_estimate(self):
-        self.assertIsNone(fo.monthly_year_estimate(100 * B, -0.2, 7, 90 * B, 9 * B, 0.1))
+        # -20% so far, the rest at 22%: 97.5 for the year, below the
+        # statement's 100 already reported
+        self.assertIsNone(fo.monthly_year_estimate(100 * B, -0.2, 7, 100 * B, 9 * B, 0.1,
+                                                   inflation_pct=40))
         self.assertIsNone(fo.monthly_year_estimate(None, 0.2, 7, None, None, 0.1))
 
 
@@ -179,12 +206,13 @@ class DollarYearTests(unittest.TestCase):
 
     def test_each_scenario_carries_the_fully_dollar_reading(self):
         rows = RangeAndDollarTests.rows
-        r = analyse(rows, calibration=CALIBRATION, fx_record=FX, sector="فلزات اساسي")
+        r = analyse(rows, calibration=CALIBRATION, fx_record=FX, sector="فلزات اساسي",
+                    inflation_pct=40)
         by = {s["shock_pct"]: s for s in r["fx"]["scenarios"]}
-        # 240 of the year's 360 are still to come at a 20% margin: +20% on
-        # that profit is 9.6 of 72
-        self.assertAlmostEqual(by[20]["full_change_pct"], 13.3, places=1)
-        self.assertAlmostEqual(by[-20]["full_change_pct"], -13.3, places=1)
+        # 268 of the year's 388 are still to come at a 20% margin: +20% on
+        # that profit is 10.72 of 77.6
+        self.assertAlmostEqual(by[20]["full_change_pct"], 13.8, places=1)
+        self.assertAlmostEqual(by[-20]["full_change_pct"], -13.8, places=1)
 
 
 class CapitalTests(unittest.TestCase):
