@@ -227,6 +227,9 @@ def stock_text(o, events=None):
         parts += ["", "⚠️ هشدارها:"] + ["• " + jdate(x) for x in flags]
     if notes:
         parts += ["", "معامله‌پذیری:"] + ["• " + jdate(x) for x in notes]
+    profile = profile_line(o.get("profile"), v)
+    if profile:
+        parts += ["", profile]
     if o.get("commodities"):
         parts += ["", "🌍 قیمت جهانی محصول:"] + ["• " + jdate(x) for x in o["commodities"][:2]]
     if events:
@@ -236,6 +239,28 @@ def stock_text(o, events=None):
             fa(latest.get("months")), jdate(latest.get("period_end")))]
     parts.append(DISCLAIMER)
     return _lines(*parts)
+
+
+def profile_line(profile, valuation=None):
+    """Growth over years, beta and the year's range, in two short lines
+    (stock_profile.py); "" with nothing to say."""
+
+    profile = profile or {}
+    g, pr = profile.get("growth") or {}, profile.get("price") or {}
+    v = valuation or {}
+    rate = lambda x: "—" if x is None else pct(x * 100, 0, True)
+    bits = []
+    if g.get("revenue_3y") is not None or g.get("profit_3y") is not None:
+        bits.append("رشد سالانه‌ی ۳ ساله: فروش %s، سود %s" % (
+            rate(g.get("revenue_3y")), rate(g.get("profit_3y"))))
+    if v.get("ps") is not None or v.get("ev_ebit") is not None:
+        bits.append("P/S %s · EV/EBIT %s" % (fa(v.get("ps"), 2), fa(v.get("ev_ebit"), 1)))
+    if pr.get("beta") is not None:
+        bits.append("بتا %s · نوسان سالانه %s · %s از سقف ۵۲ هفته" % (
+            fa(pr["beta"], 2),
+            pct((pr.get("volatility") or 0) * 100, 0) if pr.get("volatility") is not None else "—",
+            rate(pr.get("from_high"))))
+    return ("📐 " + "\n".join(bits)) if bits else ""
 
 
 def calendar_events_for(calendar, symbol):

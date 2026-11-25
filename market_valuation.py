@@ -192,6 +192,14 @@ def point(data, decision):
     used = skipped = halted = 0
     by_sector = {}
     by_company = {}
+    # The multiples beside P/E (2026-11-26, from the owner's walk through
+    # BourseView), each over the companies that report its denominator:
+    # [cap, book] for P/B and ROE (with the profit of the same companies),
+    # [cap, revenue] for P/S, [enterprise value, operating profit] for
+    # EV/EBIT -- for the market and per industry.
+    more = {"book": [0.0, 0.0, 0.0, 0], "sales": [0.0, 0.0, 0],
+            "ebit": [0.0, 0.0, 0]}
+    more_sector = {}
     for code, inst in data.instruments().items():
         if inst["sector"] in config.EARNINGS_MULTIPLE_NOT_MEANINGFUL:
             continue
@@ -245,6 +253,11 @@ def point(data, decision):
         sector[0] += value
         sector[1] += ttm
         sector[2] += 1
+        _add_more(more, result, value, ttm)
+        _add_more(more_sector.setdefault(
+            inst["sector"] or "بدون صنعت",
+            {"book": [0.0, 0.0, 0.0, 0], "sales": [0.0, 0.0, 0], "ebit": [0.0, 0.0, 0]}),
+            result, value, ttm)
     if used < MIN_COMPANIES or profit <= 0:
         return None
     return {"date": str(decision.date()), "pe": round(cap / profit, 2),
@@ -257,7 +270,86 @@ def point(data, decision):
                         for name, (c, pr, n) in by_sector.items()},
             # [market value, trailing profit] per company: what links one
             # point to the next on the companies both counted (_linked).
-            "by_company": by_company}
+            "by_company": by_company,
+            "multiples": _multiples(more),
+            "sector_multiples": {name: _multiples(m)
+                                 for name, m in more_sector.items()}}
+
+
+def _add_more(acc, result, value, ttm):
+    """One company into the P/B, P/S and EV/EBIT sums (point)."""
+
+    v, t = result.get("valuation") or {}, result.get("ttm") or {}
+    book = v.get("book_equity")
+    if book and book > 0:
+        acc["book"][0] += value
+        acc["book"][1] += book
+        acc["book"][2] += ttm
+        acc["book"][3] += 1
+    revenue = t.get("revenue")
+    if revenue and revenue > 0:
+        acc["sales"][0] += value
+        acc["sales"][1] += revenue
+        acc["sales"][2] += 1
+    ebit = t.get("operating")
+    if ebit is not None:
+        acc["ebit"][0] += value + (v.get("net_debt") or 0.0)
+        acc["ebit"][1] += ebit
+        acc["ebit"][2] += 1
+
+
+def _multiples(acc):
+    """{"pb", "roe_pct", "ps", "ev_ebit", "companies_*"} from the sums."""
+
+    cap_b, book, profit_b, n_b = acc["book"]
+    cap_s, sales, n_s = acc["sales"]
+    ev, ebit, n_e = acc["ebit"]
+    return {"pb": round(cap_b / book, 2) if book > 0 else None,
+            "roe_pct": round(profit_b / book * 100, 1) if book > 0 else None,
+            "ps": round(cap_s / sales, 2) if sales > 0 else None,
+            "ev_ebit": round(ev / ebit, 2) if ebit > 0 else None,
+            "companies_book": n_b, "companies_sales": n_s, "companies_ebit": n_e}
+
+
+# The dividend yield's own floor: fewer companies carry a recorded AGM than a
+# trailing profit; and an AGM for a fiscal year older than this many years
+# is a company that has stopped paying, not today's dividend.
+DIVIDEND_MIN_COMPANIES = 50
+DIVIDEND_MAX_AGE_YEARS = 1
+
+
+def dividend_yield(point, latest_dividends=None, today=None):
+    """The market's dividend yield at `point`: the last AGM's dividend of
+    each counted company over the market value counted, in percent, or None.
+    Today's only -- the AGM record is the latest, not as of past dates."""
+
+    if latest_dividends is None:
+        import codal_announcements
+        latest_dividends = codal_announcements.latest_dividends()
+    import jalali
+    year_now = (today or jalali.today_jalali())[0]
+    paid = cap = 0.0
+    n = 0
+    for code, (value, _ttm) in (point.get("by_company") or {}).items():
+        d = latest_dividends.get(str(code)) or {}
+        try:
+            fiscal_year = int(str(d.get("fiscal_year_end") or "")[:4])
+        except ValueError:
+            continue
+        if year_now - fiscal_year > DIVIDEND_MAX_AGE_YEARS:
+            continue
+        try:
+            dps, capital = float(d.get("dps")), float(d.get("capital"))
+        except (TypeError, ValueError):
+            continue
+        if dps < 0 or capital <= 0 or value <= 0:
+            continue
+        paid += dps * capital * 1_000_000 / 1000.0      # capital in million rials, par 1,000
+        cap += value
+        n += 1
+    if n < DIVIDEND_MIN_COMPANIES or cap <= 0:
+        return None
+    return {"pct": round(paid / cap * 100, 2), "companies": n}
 
 
 def load():
@@ -361,7 +453,10 @@ def _sectors(points):
         if len(rows) < SECTOR_MIN_POINTS or rows[-1][0] != newest:
             continue
         values = [pe for _d, pe, _n in rows]
+        more = ((points[-1].get("sector_multiples") or {}).get(name)) or {}
         out.append({"sector": name, "pe": round(values[-1], 2),
+                    "pb": more.get("pb"), "ps": more.get("ps"),
+                    "ev_ebit": more.get("ev_ebit"), "roe_pct": more.get("roe_pct"),
                     "median_pe": round(_quantile(values, 0.5), 2),
                     "percentile": _percentile(values, values[-1]),
                     "companies": rows[-1][2], "points": len(rows)})
@@ -399,6 +494,13 @@ def _linked(points):
     return out
 
 
+def _safe_dividend_yield(point):
+    try:
+        return dividend_yield(point)
+    except Exception:                                           # noqa: BLE001
+        return None
+
+
 def summary(opportunity=None):
     """What the panel shows: now, against history, against bills."""
 
@@ -428,7 +530,9 @@ def summary(opportunity=None):
     previous = points[-2] if len(points) > 1 else None
     return {
         "available": True,
-        "now": {k: v for k, v in now.items() if k not in ("sectors", "by_company")},
+        "now": {k: v for k, v in now.items()
+                if k not in ("sectors", "by_company", "sector_multiples")},
+        "dividend_yield": _safe_dividend_yield(now),
         "linked": linked is not None,
         "coverage_change": None if previous is None else {
             "companies_before": previous.get("companies"),

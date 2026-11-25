@@ -4398,6 +4398,27 @@ function navDetailHtml(r) {
     `نقد و بدهی و خرید و فروش شرکت پس از تاریخ گزارش تا گزارش بعدی معلوم نیست.</p>`;
 }
 
+// Growth over 3 and 5 years and the share's movement (stock_profile.py).
+function profileRows(p) {
+  if (!p) return [];
+  const g = p.growth || {}, pr = p.price || {};
+  const rate = x => (x === null || x === undefined) ? "—" : signed(x * 100, 0);
+  const rows = [];
+  if (Object.keys(g).length) {
+    rows.push(["رشد سالانه‌ی فروش / سود: ۳ ساله و ۵ ساله",
+      `فروش ${rate(g.revenue_3y)} و ${rate(g.revenue_5y)}؛ سود ${rate(g.profit_3y)} و ${rate(g.profit_5y)}` +
+      ` <span class="hint">(مرکب، اسمی؛ با تورم ۴۰ تا ۸۰٪ بخوانید)</span>`]);
+  }
+  if (pr.weeks) {
+    rows.push(["بتا و نوسان سالانه (" + num(pr.weeks, 0) + " هفته در برابر شاخص کل)",
+      `${pr.beta == null ? "—" : num(pr.beta, 2)} / ${pr.volatility == null ? "—" : num(pr.volatility * 100, 0) + "٪"}`]);
+    rows.push(["فاصله از سقف و کف ۵۲ هفته / از میانگین ۲۰۰ روزه",
+      `${rate(pr.from_high)} از سقف، ${rate(pr.from_low)} از کف / ${rate(pr.from_sma200)}` +
+      ' <span class="hint">(قیمت تعدیل‌شده)</span>']);
+  }
+  return rows;
+}
+
 function renderOutlookDetail(r) {
   const v = r.valuation || {}, g = r.growth || {}, mg = r.margins || {};
   const c = r.cash || {}, b = r.balance || {}, l = r.latest || {};
@@ -4443,6 +4464,11 @@ function renderOutlookDetail(r) {
     ["سود نقدی آخرین مجمع / بازده نقدی", v.dps == null ? "— (مجمع ثبت‌شده‌ای در دست نیست)" :
       `${num(v.dps, 0)} ریال (سال مالی ${esc(v.dividend_fiscal_year)}) / ${pctCell(v.dividend_yield_pct)}`],
     ["P/B و ROE دوازده‌ماهه", `${num(v.pb, 2)} / ${pctCell(v.roe_ttm_pct)}`],
+    // 2026-11-26, from the owner's walk through BourseView: the multiples
+    // beside P/E, growth over years, and how the share has moved.
+    ["P/S / EV/EBIT / P/FCF (۱۲ ماهه)",
+      `${num(v.ps, 2)} / ${num(v.ev_ebit, 1)} / ${num(v.p_fcf, 1)}`],
+    ...profileRows(r.profile),
     ["تبدیل سود به نقد عملیاتی", c.cash_conversion == null ? "—" :
       `${num(c.cash_conversion, 2)} برابر` + (c.cash_conversion_basis === "ttm" ? " (۱۲ ماه گذشته)" : " (همین دوره)")],
     ["بازده جریان نقد آزاد", pctCell(v.fcf_yield_pct)],
@@ -4950,9 +4976,12 @@ function renderValuationSectors(rows) {
   if (!box) return;
   box.classList.toggle("hidden", !rows.length);
   $("valuationSectors").innerHTML = rows.length
-    ? table(["صنعت", "P/E امروز", "میانه‌ی خودش", "صدک", "در برابر خودش", "شرکت‌ها"],
+    ? table(["صنعت", "P/E امروز", "میانه‌ی خودش", "صدک", "در برابر خودش",
+             "P/B", "P/S", "EV/EBIT", "ROE", "شرکت‌ها"],
         rows.map(s => [esc(s.sector), num(s.pe, 1), num(s.median_pe, 1),
                        num(s.percentile, 0), valuationCell(s.percentile),
+                       num(s.pb, 1), num(s.ps, 2), num(s.ev_ebit, 1),
+                       s.roe_pct == null ? "—" : `${num(s.roe_pct, 0)}٪`,
                        num(s.companies, 0)]))
     : "";
   if (rows.length) capRows("valuationSectors", 8);
@@ -4964,6 +4993,7 @@ function renderValuation(rep) {
   if (!rep.available) {
     banner("valuationStatus", "valuationStatusText", "", esc(rep.reason || "در دسترس نیست"));
     $("valuationKpis").innerHTML = "";
+    if ($("valuationMoreKpis")) $("valuationMoreKpis").innerHTML = "";
     $("valuationChart").innerHTML = "";
     renderValuationSectors([]);
     return;
@@ -4982,6 +5012,16 @@ function renderValuation(rep) {
       sub: `۶۰٪ ماه‌ها بین ${num(rep.p20_pe, 1)} و ${num(rep.p80_pe, 1)}` },
     { k: "بازده سود بازار / اخزا", v: `${num(now.earnings_yield_pct, 1)}٪`,
       sub: `اخزا ${num(rep.bill_yield_pct, 1)}٪ — فاصله ${signed(rep.yield_gap_pct, 1, "")} واحد` },
+  ]);
+  // The multiples beside P/E, today's only (2026-11-26, from the owner's
+  // walk through BourseView): no history behind them yet.
+  const mx = now.multiples || {}, dy = rep.dividend_yield || {};
+  tiles("valuationMoreKpis", (mx.pb == null && mx.ps == null) ? [] : [
+    { k: "P/B بازار", v: num(mx.pb, 2), sub: `ROE ${num(mx.roe_pct, 0)}٪ — ${num(mx.companies_book, 0)} شرکت` },
+    { k: "P/S بازار", v: num(mx.ps, 2), sub: `ارزش ÷ فروش ۱۲ ماهه — ${num(mx.companies_sales, 0)} شرکت` },
+    { k: "EV/EBIT بازار", v: num(mx.ev_ebit, 1), sub: `ارزش بنگاه ÷ سود عملیاتی — ${num(mx.companies_ebit, 0)} شرکت` },
+    { k: "بازده نقدی بازار", v: dy.pct == null ? "—" : `${num(dy.pct, 1)}٪`,
+      sub: dy.pct == null ? "مجمع کافی ثبت نشده" : `سود نقدی آخرین مجمع — ${num(dy.companies, 0)} شرکت` },
   ]);
   const data = (rep.series || []).map(p => ({
     date: p.date, pe: p.pe,
@@ -5024,6 +5064,7 @@ async function loadValuation() {
     renderValuation(await getJSON("/api/valuation"));
   } catch (err) {
     $("valuationKpis").innerHTML = "";
+    if ($("valuationMoreKpis")) $("valuationMoreKpis").innerHTML = "";
     $("valuationChart").innerHTML = "";
     renderValuationSectors([]);
     banner("valuationStatus", "valuationStatusText", "is-error",

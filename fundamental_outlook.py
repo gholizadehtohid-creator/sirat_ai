@@ -1136,6 +1136,16 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
     debt_to_equity = _div(debt, equity) if equity and equity > 0 else None
 
     op = _f(li.get("operating_profit"))
+    # Twelve months of operating profit, as revenue and profit are (for
+    # EV/EBIT; 2026-11-26, from the owner's walk through BourseView).
+    ttm_op = None
+    if m == 12 and not latest["short_year"]:
+        ttm_op = op
+    elif annual_prev and same_prev and op is not None:
+        a_op = _f(annual_prev["items"].get("operating_profit"))
+        s_op = _f(same_prev["items"].get("operating_profit"))
+        if a_op is not None and s_op is not None:
+            ttm_op = op + a_op - s_op
     fin = _f(li.get("finance_cost"))
     interest_cover = _div(op, abs(fin)) if fin else None
 
@@ -1542,7 +1552,8 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
         "margins": {"net_pct": _pct(margin), "net_prev_pct": _pct(margin_prev),
                     "gross_pct": _pct(_div(li.get("gross_profit"), rev)),
                     "operating_pct": _pct(_div(op, rev))},
-        "ttm": {"revenue": ttm_rev, "profit": ttm_net, "eps": eps_ttm},
+        "ttm": {"revenue": ttm_rev, "profit": ttm_net, "eps": eps_ttm,
+                "operating": ttm_op},
         "forward": {"revenue": fwd_rev, "profit": fwd_net, "eps": eps_fwd},
         "valuation": {"price": price, "market_cap": market_cap,
                       "pe_ttm": _round(pe_ttm), "pe_forward": _round(pe_fwd),
@@ -1550,6 +1561,20 @@ def analyse(ins_code, price=None, periods=12, today=None, rows=None,
                       "earnings_yield_forward_pct": _pct(yield_fwd),
                       "pb": _round(pb), "roe_ttm_pct": _pct(roe_ttm),
                       "fcf_yield_pct": _pct(fcf_yield),
+                      # The multiples BourseView shows beside P/E: sales,
+                      # the enterprise (debt less cash added) on operating
+                      # profit, and free cash flow, each over twelve months
+                      # where the statements give twelve.
+                      "ps": _round(_div(market_cap, ttm_rev)
+                                   if ttm_rev and ttm_rev > 0 else None),
+                      "ev_ebit": _round(_div(market_cap + (net_debt or 0.0), ttm_op)
+                                        if market_cap and ttm_op and ttm_op > 0
+                                        else None),
+                      "p_fcf": _round(_div(market_cap, fcf_annual)
+                                      if market_cap and fcf_annual and fcf_annual > 0
+                                      else None),
+                      "book_equity": equity,
+                      "net_debt": net_debt,
                       "dps": dps,
                       "dividend_fiscal_year": (dividend or {}).get("fiscal_year_end"),
                       "dividend_yield_pct": _pct(dividend_yield),

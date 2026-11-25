@@ -1232,6 +1232,13 @@ def api_outlook():
                 lines = []
             result["commodities"] = lines
             result.setdefault("notices", []).extend(lines)
+            # Growth over 3 and 5 years, beta, volatility and the year's high
+            # and low (stock_profile.py, 2026-11-26): descriptions only.
+            try:
+                import stock_profile
+                result["profile"] = stock_profile.profile(code)
+            except Exception:                                   # noqa: BLE001
+                result["profile"] = None
             return jsonify(result)
 
         return jsonify(memoise(_outlook_key(), fundamental_outlook.screen,
