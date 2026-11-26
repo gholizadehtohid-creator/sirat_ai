@@ -1299,10 +1299,13 @@ def _outlook_inputs():
 
     # commodities.py (2026-11-26): the ounce, oil and the base metals, nine
     # paced requests to the same host at most every 12 h.
-    for name in ("fx", "commodities", "outlook_calibration"):
+    # fx_exposure.py (2026-11-26): the currency position in the management
+    # reports of filings archived since the last run -- local, no request.
+    for name in ("fx", "commodities", "fx_exposure", "outlook_calibration"):
         try:
             module = __import__(name)
-            _note(module.ensure() if name == "outlook_calibration" else module.refresh())
+            _note(module.ensure() if name == "outlook_calibration"
+                  else module.update() if name == "fx_exposure" else module.refresh())
         except Exception as exc:                                # noqa: BLE001
             _note("%s failed to run: %s: %s" % (name, type(exc).__name__,
                                                  str(exc)[:160]))

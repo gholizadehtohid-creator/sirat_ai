@@ -230,6 +230,9 @@ def stock_text(o, events=None):
     profile = profile_line(o.get("profile"), v)
     if profile:
         parts += ["", profile]
+    exposure = exposure_line(o.get("fx_exposure"))
+    if exposure:
+        parts.append(exposure)
     if o.get("commodities"):
         parts += ["", "🌍 قیمت جهانی محصول:"] + ["• " + jdate(x) for x in o["commodities"][:2]]
     if events:
@@ -239,6 +242,24 @@ def stock_text(o, events=None):
             fa(latest.get("months")), jdate(latest.get("period_end")))]
     parts.append(DISCLAIMER)
     return _lines(*parts)
+
+
+def exposure_line(e):
+    """The currency position from the management report, in one line
+    (fx_exposure.py), or ""."""
+
+    if not e:
+        return ""
+    bits = []
+    if e.get("receipts_share") is not None:
+        bits.append("دریافت ارزی %s فروش" % pct(e["receipts_share"] * 100, 0))
+    if e.get("imported_share") is not None:
+        bits.append("مواد وارداتی %s" % pct(e["imported_share"] * 100, 0))
+    if e.get("per_share_10pct") is not None:
+        bits.append("با ۱۰٪ دلار، تسعیر %s ریال هر سهم" % fa(e["per_share_10pct"], 0, True))
+    if not bits:
+        return ""
+    return "💱 " + " · ".join(bits) + " (گزارش تفسیری %s)" % jdate(e.get("period_end") or "")
 
 
 def profile_line(profile, valuation=None):

@@ -4398,6 +4398,27 @@ function navDetailHtml(r) {
     `نقد و بدهی و خرید و فروش شرکت پس از تاریخ گزارش تا گزارش بعدی معلوم نیست.</p>`;
 }
 
+// The currency position and imported materials from the board's management
+// report (fx_exposure.py, 2026-11-26).
+function exposureRows(e) {
+  if (!e) return [];
+  const pc = x => (x === null || x === undefined) ? "—" : `${num(x * 100, 0)}٪`;
+  const parts = [];
+  if (e.receipts_share != null || e.payments_share != null)
+    parts.push(`دریافت ارزی ${pc(e.receipts_share)} فروش دوره (تقریباً صادرات)، پرداخت ارزی ${pc(e.payments_share)}`);
+  if (e.imported_share != null)
+    parts.push(`مواد اولیه‌ی وارداتی ${pc(e.imported_share)} مصرف مواد`);
+  if (e.net_position != null)
+    parts.push(`خالص دارایی ارزی ${money(e.net_position)} ریال` +
+      (e.per_share_10pct != null
+        ? `: با ۱۰٪ افزایش دلار حدود ${signed(e.per_share_10pct, 0, "")} ریال سود تسعیر برای هر سهم` : ""));
+  if (!parts.length) return [];
+  return [[`وضعیت ارزی (گزارش تفسیری ${esc(e.period_end || "")} — ${num(e.period_months, 0)} ماهه)`,
+    parts.join("<br>") + '<br><span class="hint">از گزارش تفسیری خود شرکت در کدال؛ دریافت ارزی وام ارزی را هم شامل می‌شود.</span>' +
+      '<br><span class="hint">در ۱۳۹۹ تا ۱۴۰۵ این سهم واکنش فروش به دلار را پیش‌بینی نکرد؛</span>' +
+      '<br><span class="hint">سناریوی دلار بالا همچنان بر فروش گذشته‌ی خود شرکت است.</span>']];
+}
+
 // Growth over 3 and 5 years and the share's movement (stock_profile.py).
 function profileRows(p) {
   if (!p) return [];
@@ -4469,6 +4490,7 @@ function renderOutlookDetail(r) {
     ["P/S / EV/EBIT / P/FCF (۱۲ ماهه)",
       `${num(v.ps, 2)} / ${num(v.ev_ebit, 1)} / ${num(v.p_fcf, 1)}`],
     ...profileRows(r.profile),
+    ...exposureRows(r.fx_exposure),
     ["تبدیل سود به نقد عملیاتی", c.cash_conversion == null ? "—" :
       `${num(c.cash_conversion, 2)} برابر` + (c.cash_conversion_basis === "ttm" ? " (۱۲ ماه گذشته)" : " (همین دوره)")],
     ["بازده جریان نقد آزاد", pctCell(v.fcf_yield_pct)],

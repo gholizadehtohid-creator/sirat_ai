@@ -1252,6 +1252,15 @@ def api_outlook():
                 result["profile"] = stock_profile.profile(code)
             except Exception:                                   # noqa: BLE001
                 result["profile"] = None
+            # The currency position and imported materials the board reports
+            # in its management report (fx_exposure.py, 2026-11-26).
+            try:
+                import fx_exposure
+                result["fx_exposure"] = fx_exposure.exposure(
+                    code, revenue_for=fx_exposure.statement_revenue(code),
+                    shares=(result.get("valuation") or {}).get("shares"))
+            except Exception:                                   # noqa: BLE001
+                result["fx_exposure"] = None
             return jsonify(result)
 
         return jsonify(memoise(_outlook_key(), fundamental_outlook.screen,
