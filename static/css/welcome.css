@@ -15,6 +15,10 @@ body.welcome {
   --w-gold: #fbbf24;
   --w-gold-soft: #fde68a;
   --w-navy: #0b1a44;
+  /* The name is set in Latin (2026-11-26): the system's own display face,
+     so nothing is downloaded; Vazirmatn's Latin is the fallback. */
+  --w-latin: "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", Arial, var(--font);
+  --w-title-ink: linear-gradient(100deg, #f8fafc 0%, #dde6f3 46%, #f6d77e 78%, #c9922a 100%);
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
@@ -73,9 +77,11 @@ body.welcome {
 .w-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; }
 .w-logo { width: 46px; height: 46px; border-radius: 50%;
           box-shadow: 0 8px 22px -8px rgba(201, 146, 42, 0.65); }
-.w-brand-text { display: flex; flex-direction: column; line-height: 1.2; }
-.w-brand-text strong { font-size: 21px; font-weight: 900; }
-.w-brand-text small { font-size: 11px; letter-spacing: 0.22em; color: var(--text-muted); direction: ltr; text-align: right; }
+.w-brand-text { display: flex; flex-direction: column; line-height: 1.25; gap: 2px; }
+.w-brand-text small { font-size: 11.5px; color: var(--text-muted); }
+.w-latin { font-family: var(--w-latin); font-size: 19px; font-weight: 700; letter-spacing: 0.14em;
+           text-align: right; unicode-bidi: isolate; }
+.w-latin span { color: var(--w-gold); font-weight: 600; }
 .w-nav { display: flex; gap: 6px; padding: 5px; border-radius: 12px;
          border: 1px solid var(--w-glass-line); background: var(--w-glass);
          -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
@@ -115,9 +121,36 @@ body.welcome {
 }
 @keyframes w-beat { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--w-up) 8%, transparent); } }
 .w-title {
-  margin: 18px 0 4px; font-size: clamp(72px, 10vw, 132px); font-weight: 900; line-height: 1.05;
-  background: linear-gradient(120deg, var(--text-primary) 25%, #60a5fa 62%, var(--w-gold) 92%);
+  display: flex; align-items: flex-start; justify-content: flex-end; gap: 0.14em;
+  margin: 22px 0 6px; font-family: var(--w-latin); line-height: 0.95; unicode-bidi: isolate;
+}
+.w-word {
+  font-size: clamp(68px, 9.4vw, 124px); font-weight: 700; letter-spacing: 0.06em;
+  background: var(--w-title-ink);
   -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* The AI badge: a gold-rimmed tag beside the name, the medallion's rim. */
+.w-ai {
+  margin-top: 0.5em; padding: 0.28em 0.5em 0.24em; border-radius: 0.45em;
+  font-size: clamp(15px, 1.7vw, 22px); font-weight: 700; letter-spacing: 0.14em; color: var(--w-gold-soft);
+  border: 1.5px solid color-mix(in srgb, var(--w-gold) 70%, transparent);
+  background: color-mix(in srgb, var(--w-gold) 10%, transparent);
+}
+.w-kicker {
+  display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+  margin: 0 0 18px; font-family: var(--w-latin); font-size: 12.5px; font-weight: 600;
+  letter-spacing: 0.32em; text-transform: uppercase; color: var(--text-muted); unicode-bidi: isolate;
+}
+.w-kicker i { width: 5px; height: 5px; border-radius: 50%; background: var(--w-gold); }
+:root[data-theme="light"] body.welcome {
+  --w-title-ink: linear-gradient(100deg, #0b1a44 0%, #1747b8 55%, #c9922a 100%);
+}
+:root[data-theme="light"] .w-ai { color: #a8761c; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) body.welcome {
+    --w-title-ink: linear-gradient(100deg, #0b1a44 0%, #1747b8 55%, #c9922a 100%);
+  }
+  :root:not([data-theme="dark"]) .w-ai { color: #a8761c; }
 }
 .w-tagline { margin: 4px 0 14px; font-size: clamp(20px, 2.4vw, 27px); font-weight: 700; color: var(--text-primary); }
 .w-bright {
@@ -353,6 +386,7 @@ body.welcome {
 }
 @media (max-width: 960px) {
   .w-hero { grid-template-columns: 1fr; text-align: center; padding-top: 40px; }
+  .w-title, .w-kicker { justify-content: center; }
   .w-lead { margin: 0 auto; }
   .w-actions { justify-content: center; }
   .w-hero-art { width: min(86%, 400px); }
@@ -379,3 +413,4 @@ body.welcome {
   .w-stat, .w-card { animation: none; opacity: 1; transform: none; }
   .w-cta, .w-cta svg, .w-card { transition: none; }
 }
+.w-foot-brand .w-latin { font-size: 15px; }
