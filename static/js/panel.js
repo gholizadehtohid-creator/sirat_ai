@@ -5165,42 +5165,44 @@ async function loadValuation() {
 /* ---------- the dollar and world commodity prices (2026-11-26) ----------
    fx.py's two dollar rates and commodities.py's ounce, oil and base metals,
    each with its week, month and year. A description, coloured as one. */
+// One tile per price (the owner, 2026-11-26: "as tiles"): the last price
+// large, its unit beneath, and the week / month / year moves side by side.
+// signed() colours a move and carries its sign; the dates come Jalali already.
 function renderCommodities(rep) {
-  const rows = [];
-  // signed() colours the move; the dates come Jalali already.
-  const pctCell = v => (v === null || v === undefined) ? "—" : signed(v * 100, 1, "٪");
+  const pct = v => (v === null || v === undefined) ? "—" : signed(v * 100, 1, "٪");
+  const asOf = (rep.commodities || {}).as_of || (rep.dollar || {}).as_of;
+  const tile = (label, close, digits, unit, r, stale) => ({
+    k: esc(label) + (stale ? ' <span class="hint">(کهنه)</span>' : ""),
+    v: num(close, digits),
+    sub: esc(unit) + (r.date && r.date !== asOf ? ` — ${esc(r.date)}` : "") +
+      `<span class="moves"><span>هفته<br>${pct(r.change_1w)}</span>` +
+      `<span>ماه<br>${pct(r.change_1m)}</span><span>سال<br>${pct(r.change_1y)}</span></span>`,
+  });
+  const items = [];
   const rates = ((rep.dollar || {}).rates) || {};
   for (const key of ["free", "nima"]) {
     const r = rates[key];
-    if (!r) continue;
-    rows.push([esc(r.label || key), `${num(r.close, 0)} ریال`, esc(r.date || ""),
-               pctCell(r.change_1w), pctCell(r.change_1m), pctCell(r.change_1y)]);
+    if (r) items.push(tile(r.label || key, r.close, 0, "ریال", r, false));
   }
-  const items = ((rep.commodities || {}).items) || [];
-  for (const it of items) {
-    rows.push([esc(it.label) + (it.stale ? ' <span class="hint">(کهنه)</span>' : ""),
-               `${num(it.close, it.close < 100 ? 2 : 0)} ${esc(it.unit)}`,
-               esc(it.date || ""),
-               pctCell(it.change_1w), pctCell(it.change_1m), pctCell(it.change_1y)]);
+  for (const it of ((rep.commodities || {}).items) || []) {
+    items.push(tile(it.label, it.close, it.close < 100 ? 2 : 0, it.unit, it, it.stale));
   }
-  if (!rows.length) {
+  if (!items.length) {
     banner("commoditiesStatus", "commoditiesStatusText", "is-warn",
       "هنوز قیمتی ذخیره نشده؛ بعد از اجرای بعدی دریافت داده می‌آید.");
-    $("commoditiesTable").innerHTML = "";
+    $("commoditiesTiles").innerHTML = "";
     return;
   }
-  const asOf = (rep.commodities || {}).as_of || (rep.dollar || {}).as_of;
   banner("commoditiesStatus", "commoditiesStatusText", "is-live",
     `آخرین قیمت‌ها تا ${esc(asOf || "")}.`);
-  $("commoditiesTable").innerHTML = table(
-    ["", "آخرین", "تاریخ", "یک هفته", "یک ماه", "یک سال"], rows);
+  tiles("commoditiesTiles", items);
 }
 
 async function loadCommodities() {
   try {
     renderCommodities(await getJSON("/api/commodities"));
   } catch (err) {
-    $("commoditiesTable").innerHTML = "";
+    $("commoditiesTiles").innerHTML = "";
     banner("commoditiesStatus", "commoditiesStatusText", "is-error",
       `<strong>بارگذاری نشد.</strong> ${esc(err.message)}`);
   }
