@@ -850,12 +850,8 @@ def api_technical_top():
     params = wanted_params()
     force = request.args.get("refresh") == "1"
 
-    key = cache_key("technical_top", data_version(), top, params_key(params))
-
-    def build():
-        return technical.top_technical(top=top, params=params)
-
-    return jsonify(memoise(key, build, force=force))
+    scan = technical_scan(params, force=force)
+    return jsonify(technical.top_technical(top=top, params=params, scan=scan))
 
 
 @app.route("/api/technical/inflow")
@@ -873,12 +869,22 @@ def api_technical_inflow():
     params = wanted_params()
     force = request.args.get("refresh") == "1"
 
-    key = cache_key("technical_inflow", data_version(), top, params_key(params))
+    scan = technical_scan(params, force=force)
+    return jsonify(technical.best_technical_inflow(top=top, params=params,
+                                                   scan=scan))
 
-    def build():
-        return technical.best_technical_inflow(top=top, params=params)
 
-    return jsonify(memoise(key, build, force=force))
+def technical_scan_key(params):
+    return cache_key("technical_scan", data_version(), params_key(params))
+
+
+def technical_scan(params, force=False):
+    """The whole-market technical scan both cards read (technical.market_scan),
+    memoised on the data version and the indicator windows. Each card used to
+    scan the market itself, about 60 s apiece (2026-11-26)."""
+
+    return memoise(technical_scan_key(params),
+                   lambda: technical.market_scan(params=params), force=force)
 
 
 @app.route("/api/smartmoney")
@@ -1302,15 +1308,35 @@ def warm_outlook():
     return True
 
 
+def warm_technical():
+    """The same for the whole-market technical scan, at the panel's default
+    indicator windows (what its two cards ask for). Returns True if it
+    computed. A reader with other windows computes their own on demand."""
+
+    if bootstrap.is_running():
+        return False
+    params = clean_params(None)
+    key = technical_scan_key(params)
+    with _cache_lock:
+        hit = _cache.get(key)
+        busy = key in _inflight
+    if busy or (hit is not None and time.time() - hit["at"] < OUTLOOK_REWARM_AGE):
+        return False
+    _compute(key, lambda: technical.market_scan(params=params))
+    return True
+
+
 def start_warmer(delay=OUTLOOK_WARM_DELAY, every=OUTLOOK_WARM_EVERY):
     def loop():
         time.sleep(delay)
         while True:
-            try:
-                warm_outlook()
-            except Exception as exc:                            # noqa: BLE001
-                log.warning("warming the outlook ranking failed: %s: %s",
-                            type(exc).__name__, str(exc)[:160])
+            for name, warm in (("outlook ranking", warm_outlook),
+                               ("technical scan", warm_technical)):
+                try:
+                    warm()
+                except Exception as exc:                        # noqa: BLE001
+                    log.warning("warming the %s failed: %s: %s", name,
+                                type(exc).__name__, str(exc)[:160])
             time.sleep(every)
 
     threading.Thread(target=loop, name="cache-warmer", daemon=True).start()

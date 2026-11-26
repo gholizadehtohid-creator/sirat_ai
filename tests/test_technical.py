@@ -17,6 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import moneyflow
 import technical
 
 
@@ -434,8 +435,9 @@ class BestTechnicalInflowTests(unittest.TestCase):
         for r in rep["top"]:
             # strong technical
             self.assertGreaterEqual(r["score"], rep["min_score"])
-            # positive net individual inflow -- the AND half
-            self.assertGreater(r["net_pct"], 0)
+            # inflow as the flow module itself reads it -- the AND half
+            # (net > 0 until 2026-11-26; zero is not retail flow's neutral)
+            self.assertEqual(r["flow_label"], moneyflow.BULLISH)
             # liquid
             self.assertGreaterEqual(r["turnover"], rep["min_turnover"])
 

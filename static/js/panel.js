@@ -1491,10 +1491,22 @@ function renderTopTechnical(rep) {
     return;
   }
 
+  // The score bunches at the top (2026-11-26: six names at 97, half the
+  // liquid market at 70+), so the banner says how wide the tie is and where
+  // the market's median sits; equals are ordered by traded value.
+  const m = rep.market || {};
+  const ties = m.tied_left_out
+    ? ` ${num(m.tied_left_out, 0)} نماد دیگر هم امتیاز ${num(m.cut_score, 0)} دارند و بیرون ماندند؛` +
+      ` ترتیب هم‌امتیازها با ارزش معاملات است.`
+    : " ترتیب هم‌امتیازها با ارزش معاملات است.";
+  const spread = m.median_score != null
+    ? ` امتیاز میانه‌ی بازار ${num(m.median_score, 0)} است و ${num(m.strong, 0)} نماد` +
+      ` (${num(100 * m.strong / Math.max(c.liquid_scored || 1, 1), 0)}٪) امتیاز ${num(m.strong_floor, 0)} یا بیشتر دارند.`
+    : "";
   banner("topTechnicalStatus", "topTechnicalStatusText", "is-live",
     `<strong>${rows.length} نماد برتر</strong> از ${c.liquid_scored} نماد ` +
     `نقدشونده (${c.illiquid_skipped} نماد زیر کف ${money(rep.min_turnover)} ` +
-    `ریال کنار گذاشته شد). ⚠ ${esc(rep.caveat || "")}`);
+    `ریال کنار گذاشته شد).${spread}${ties} ⚠ ${esc(rep.caveat || "")}`);
 
   const callBadge = (call, fa) =>
     `<span class="badge ${CALL_CLASS[call] || "neutral"}">` +
@@ -1506,6 +1518,7 @@ function renderTopTechnical(rep) {
         title="تحلیل تک‌نماد">${esc(r.symbol || "—")}</a>`,
     esc((r.sector || "").slice(0, 22)),
     num(r.score, 0),
+    r.above_pct == null ? "—" : `${num(r.above_pct, 0)}٪`,
     r.status ? badge(r.status) : "—",
     callBadge(r.call, r.call_fa),
     num(r.rsi, 1),
@@ -1514,8 +1527,15 @@ function renderTopTechnical(rep) {
   ]);
 
   $("topTechnicalTable").innerHTML = table(
-    ["#", "نماد", "صنعت", "امتیاز", "وضعیت", "سیگنال", "RSI", "MACD",
+    ["#", "نماد", "صنعت", "امتیاز", "بالاتر از بازار", "وضعیت", "سیگنال", "RSI", "MACD",
      "ارزش معاملات"], body);
+}
+
+// A card whose list is gated (a rejected method, not yet revealed) keeps its
+// run button locked: the scan ran with its banner and table hidden, and the
+// press looked like nothing happening (the owner, 2026-11-26).
+function gateUnlocked(btn) {
+  return !(btn && btn.dataset.gateLocked);
 }
 
 async function loadTopTechnical(force = false) {
@@ -1535,7 +1555,7 @@ async function loadTopTechnical(force = false) {
     $("topTechnicalTable").innerHTML = "";
     console.error(err);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "▶ رتبه‌بندی بازار"; }
+    if (btn) { btn.disabled = !gateUnlocked(btn); btn.textContent = "▶ رتبه‌بندی بازار"; }
   }
 }
 
@@ -1556,10 +1576,17 @@ function renderInflow(rep) {
     return;
   }
 
+  // "Inflow" is the flow module's own label, not net > 0: the median liquid
+  // share runs about +5% net individual inflow (2026-11-26).
+  const positive = c.strong_positive_net != null
+    ? ` ${num(c.strong_positive_net, 0)} نماد قوی خالص حقیقی مثبت داشتند، ولی فقط آن‌هایی آمده‌اند که` +
+      ` ماژول جریان پول «ورود پول حقیقی» می‌خواند (امتیاز جریان ${num(rep.flow_floor, 0)} به بالا)؛` +
+      ` صفر نقطه‌ی خنثی نیست، سهم میانه حدود ۵٪ ورود حقیقی دارد.`
+    : "";
   banner("inflowStatus", "inflowStatusText", "is-live",
     `<strong>${rows.length} سهم</strong> با تکنیکال قوی و ورود پول، از ` +
     `${c.strong_and_inflow} واجد شرط (${c.strong_technical} تکنیکال قوی از ` +
-    `${c.liquid} نقدشونده). ⚠ ${esc(rep.caveat || "")}`);
+    `${c.liquid} نقدشونده).${positive} ⚠ ${esc(rep.caveat || "")}`);
 
   const callBadge = (call, fa) =>
     `<span class="badge ${CALL_CLASS[call] || "neutral"}">` +
@@ -1599,7 +1626,7 @@ async function loadInflow(force = false) {
     $("inflowTable").innerHTML = "";
     console.error(err);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "▶ یافتن سهم‌ها"; }
+    if (btn) { btn.disabled = !gateUnlocked(btn); btn.textContent = "▶ یافتن سهم‌ها"; }
   }
 }
 
@@ -3635,6 +3662,11 @@ function renderTrackRecords(reg) {
   document.querySelectorAll(".track-line, .gate-note").forEach(n => n.remove());
   document.querySelectorAll(".levels-gated").forEach(n => n.classList.remove("levels-gated"));
   document.querySelectorAll(".levels-hidden").forEach(n => n.classList.remove("levels-hidden"));
+  document.querySelectorAll("[data-gate-run][data-gate-locked]").forEach(b => {
+    delete b.dataset.gateLocked;
+    b.disabled = false;
+    b.removeAttribute("title");
+  });
   const lined = new Set();
   for (const c of reg.cards) {
     const revealed = trackRevealed(c.id);
@@ -3664,6 +3696,13 @@ function renderTrackRecords(reg) {
       }
     });
   }
+  // A run button whose output the gate hides stays locked until it is
+  // revealed (gateUnlocked).
+  document.querySelectorAll(".card.levels-gated [data-gate-run]").forEach(b => {
+    b.dataset.gateLocked = "1";
+    b.disabled = true;
+    b.title = "اول تأیید زیر را بزنید: «می‌دانم...» و «نمایش برای پژوهش»";
+  });
 }
 
 async function loadTrackRecords() {
@@ -6113,8 +6152,11 @@ $("quickSymbolInput")?.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") { ev.preventDefault(); quickLookup(); }
 });
 on("runTechnicalBtn", "click", () => loadTechnical(true));
-on("runTopTechnicalBtn", "click", () => loadTopTechnical(true));
-on("runInflowBtn", "click", () => loadInflow(true));
+// The scan behind both cards is kept computed in the background
+// (app.warm_technical) and moves with the data, so a press reads it rather
+// than forcing a fresh minute-long scan.
+on("runTopTechnicalBtn", "click", () => loadTopTechnical());
+on("runInflowBtn", "click", () => loadInflow());
 on("runSmartMoneyBtn", "click", () => loadSmartMoney(true));
 on("runGoldBtn", "click", () => loadGold(true));
 on("importGoldBtn", "click", importGold);

@@ -49,6 +49,7 @@ adjustment anchors at the newest bar, so today's close -- and every distance
 measured from it -- is unchanged.
 """
 
+import bisect
 import math
 
 import config
@@ -1098,15 +1099,22 @@ SCAN_BARS = 300
 MIN_TURNOVER = config.MIN_DAILY_VALUE
 
 
-def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
-    """The strongest names by the platform's own technical score.
+def market_scan(params=None, min_turnover=MIN_TURNOVER):
+    """Every liquid name's technical read and money-flow reading, once.
 
-    Ranks the whole equity universe with `ranking.rank_stocks` -- the same
-    scorer the screener's Stage 3 uses -- after a liquidity floor, and returns
-    the top `top`. This is a convenience ranking for a human, NOT a validated
-    edge: it carries the same caveat as the per-symbol signal, because it is
-    built from the same indicators the research found no tradable edge in.
+    The two whole-market cards (top_technical, best_technical_inflow) read
+    this. Each used to load and score the market on its own -- about 60 s
+    apiece, two to four minutes together -- and the owner read the wait as
+    the cards not working (2026-11-26). The panel keeps one scan computed in
+    the background (app.warm_technical); both cards cut it differently.
+
+        {"rows": [one per liquid, scored name], "min_turnover", "counts"}
+
+    A row's flow fields are None when its flow window is not this week's
+    (moneyflow.is_current): another week's flow is no inflow, not old inflow.
     """
+
+    import moneyflow
 
     params = indicators.clean_params(params)
 
@@ -1119,9 +1127,17 @@ def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
     codes = [c for c in by_code if c not in halted]
 
     frames = database.load_history_tail(codes, SCAN_BARS)
+    # Load the BASELINE window, not the (shorter) flow window: moneyflow.analyse
+    # returns INSUFFICIENT below FLOW_MIN_SESSIONS and also measures a baseline
+    # over FLOW_BASELINE_WINDOW. Loading only FLOW_WINDOW sessions made every
+    # name INSUFFICIENT -- the bug this line's comment exists to prevent
+    # recurring.
+    flow_frames = database.load_client_type_tail(
+        codes, config.FLOW_BASELINE_WINDOW)
+    flow_since = moneyflow.current_from(flow_frames)
 
-    scored = []
-    considered = 0
+    rows = []
+    liquid = 0
     illiquid = 0
     no_data = 0
 
@@ -1132,7 +1148,7 @@ def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
             continue
 
         # Liquidity floor on the most recent traded value -- the same figure
-        # the money-flow ranking gates on, so the two lists agree on what is
+        # the money-flow ranking gates on, so the lists agree on what is
         # tradable.
         last_value = _finite(frame["value"].iloc[-1]) if "value" in frame \
             else None
@@ -1140,7 +1156,7 @@ def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
             illiquid += 1
             continue
 
-        considered += 1
+        liquid += 1
 
         enriched = indicators.calculate_indicators(_adjusted(frame), params)
         if enriched.empty:
@@ -1163,7 +1179,13 @@ def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
         sr = support_resistance(enriched, latest.get("close"))
         signal = technical_signal(latest, sr, frame=enriched)
 
-        scored.append({
+        flow = moneyflow.analyse(flow_frames.get(code))
+        current = moneyflow.is_current(flow, flow_since)
+        reading = (flow.get("reading") or {}) if current else {}
+        net_pct = _finite(reading.get("net_pct"))
+        power = _finite(reading.get("power_ratio"))
+
+        rows.append({
             "ins_code": code,
             "symbol": instrument.get("symbol_fa"),
             "name": instrument.get("name_fa"),
@@ -1178,19 +1200,77 @@ def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER):
             "call": signal["call"],
             "call_fa": signal["call_fa"],
             "net": signal["net"],
+            "flow_score": flow.get("score") if current else None,
+            "flow_label": flow.get("label") if current else None,
+            "net_pct": round(net_pct, 2) if net_pct is not None else None,
+            "power_ratio": round(power, 2) if power is not None else None,
         })
 
-    ranked = sorted(scored, key=lambda r: r["score"], reverse=True)
-
     return {
-        "top": ranked[:top],
+        "rows": rows,
         "min_turnover": min_turnover,
         "counts": {
             "universe": len(codes),
-            "liquid_scored": len(scored),
+            "liquid": liquid,
+            "liquid_scored": len(rows),
             "illiquid_skipped": illiquid,
             "halted_skipped": len(halted),
             "no_data": no_data,
+        },
+    }
+
+
+def _share_below(sorted_scores, score):
+    """Percent of the scored market with a lower score than `score`."""
+
+    if not sorted_scores:
+        return None
+    return round(100.0 * bisect.bisect_left(sorted_scores, score)
+                 / len(sorted_scores))
+
+
+def top_technical(top=10, params=None, min_turnover=MIN_TURNOVER, scan=None):
+    """The strongest names by the platform's own technical score.
+
+    Ranks the whole equity universe with `ranking.rank_stocks` -- the same
+    scorer the screener's Stage 3 uses -- after a liquidity floor, and returns
+    the top `top`. This is a convenience ranking for a human, NOT a validated
+    edge: it carries the same caveat as the per-symbol signal, because it is
+    built from the same indicators the research found no tradable edge in.
+
+    The score is an integer that bunches at the top (2026-11-26: six names
+    at 97, sixteen at 92, half the liquid market at 70 or more), so the
+    order among equals was arbitrary. Equals now go by traded value, the
+    more absorbable name first, and `market` says how many equals were left
+    out and where the market's median sits.
+    """
+
+    scan = scan if scan is not None else market_scan(params, min_turnover)
+    rows = scan["rows"]
+    ranked = sorted(rows, key=lambda r: (r["score"], r["turnover"] or 0.0),
+                    reverse=True)
+    shown = ranked[:top]
+    scores = sorted(r["score"] for r in rows)
+    cut = shown[-1]["score"] if shown else None
+    c = scan["counts"]
+
+    return {
+        "top": [dict(r, above_pct=_share_below(scores, r["score"]))
+                for r in shown],
+        "min_turnover": scan["min_turnover"],
+        "counts": {
+            "universe": c["universe"],
+            "liquid_scored": c["liquid_scored"],
+            "illiquid_skipped": c["illiquid_skipped"],
+            "halted_skipped": c["halted_skipped"],
+            "no_data": c["no_data"],
+        },
+        "market": {
+            "median_score": scores[len(scores) // 2] if scores else None,
+            "strong": sum(1 for s in scores if s >= MIN_TECHNICAL_SCORE),
+            "strong_floor": MIN_TECHNICAL_SCORE,
+            "cut_score": cut,
+            "tied_left_out": sum(1 for r in ranked[top:] if r["score"] == cut),
         },
         "caveat": SIGNAL_CAVEAT,
     }
@@ -1322,127 +1402,47 @@ COMBINED_CAVEAT = (
 
 
 def best_technical_inflow(top=15, params=None, min_turnover=MIN_TURNOVER,
-                          min_score=MIN_TECHNICAL_SCORE):
+                          min_score=MIN_TECHNICAL_SCORE, scan=None):
     """Names that are BOTH technically strong AND taking money in.
 
-    One pass over the liquid universe: technical score from rank_stocks (the
-    screener's own scorer) and money flow from moneyflow.analyse (net حقیقی
-    inflow). A name qualifies only when its technical score clears the strong
-    band AND its net individual flow is positive -- the intersection the user
-    asked for. Ranked by technical score, flow shown alongside so the reader
-    sees both reasons, never a blended single number that hides a disagreement.
+    Over the liquid universe (market_scan): technical score from rank_stocks
+    (the screener's own scorer) and money flow from moneyflow.analyse. A name
+    qualifies only when its technical score clears the strong band AND the
+    flow module itself reads it as inflow (its own label, score >=
+    FLOW_BULLISH_SCORE). Ranked by technical score, flow shown alongside so
+    the reader sees both reasons, never a blended single number that hides a
+    disagreement.
+
+    The flow half was "net individual flow above zero" until 2026-11-26. Zero
+    is not the neutral point of Iranian retail flow -- the median liquid share
+    runs about +4.8% net individual inflow, institutions selling to retail in
+    most weeks -- so that rule passed 257 of 370 strong names, and listed
+    some the flow column beside them called «خروج پول حقیقی». The old count
+    stays in `counts` as strong_positive_net, so the narrowing shows.
     """
 
     import moneyflow
 
-    params = indicators.clean_params(params)
-
-    instruments = database.load_instruments(equities_only=True)
-    by_code = {str(r["ins_code"]): r for r in instruments}
-    # Halted longer than config.HALT_EXCLUDE_DAYS: its bars are a frozen
-    # close, and a last bar that traded heavily months ago would pass the
-    # turnover floor on stale data (user request, 2026-11-05).
-    halted = database.halted_codes()
-    codes = [c for c in by_code if c not in halted]
-
-    frames = database.load_history_tail(codes, SCAN_BARS)
-    # Load the BASELINE window, not the (shorter) flow window: moneyflow.analyse
-    # returns INSUFFICIENT below FLOW_MIN_SESSIONS and also measures a baseline
-    # over FLOW_BASELINE_WINDOW. Loading only FLOW_WINDOW sessions made every
-    # name INSUFFICIENT -- the bug this line's comment exists to prevent
-    # recurring.
-    flow_frames = database.load_client_type_tail(
-        codes, config.FLOW_BASELINE_WINDOW)
-    flow_since = moneyflow.current_from(flow_frames)
-
-    qualified = []
-    liquid = 0
-    strong = 0
-    strong_and_inflow = 0
-
-    for code in codes:
-        frame = frames.get(code)
-        if frame is None or frame.empty:
-            continue
-
-        last_value = _finite(frame["value"].iloc[-1]) if "value" in frame \
-            else None
-        if last_value is None or last_value < min_turnover:
-            continue
-
-        liquid += 1
-
-        enriched = indicators.calculate_indicators(_adjusted(frame), params)
-        if enriched.empty:
-            continue
-
-        tech = ranking.rank_stocks(enriched)
-        if not tech.get("scored", False):
-            continue
-
-        if tech["score"] < min_score:
-            continue
-
-        strong += 1
-
-        # Money flow. A name with no flow data, or with outflow, does not
-        # qualify -- the question was "AND money inflow", so absence is a no,
-        # not a maybe.
-        flow = moneyflow.analyse(flow_frames.get(code))
-        # A window that ends before this week's is another week's flow (the
-        # rule the money-flow card applies): no inflow, not old inflow.
-        if not moneyflow.is_current(flow, flow_since):
-            continue
-        reading = flow.get("reading") or {}
-        net_pct = reading.get("net_pct")
-
-        if net_pct is None or net_pct <= 0:
-            continue
-
-        strong_and_inflow += 1
-
-        instrument = by_code.get(code, {})
-
-        last = enriched.iloc[-1]
-        latest = {}
-        for out_name, column in LATEST_FIELDS:
-            latest[out_name] = _finite(last[column]) \
-                if column in enriched.columns else None
-        sr = support_resistance(enriched, latest.get("close"))
-        signal = technical_signal(latest, sr, frame=enriched)
-
-        qualified.append({
-            "ins_code": code,
-            "symbol": instrument.get("symbol_fa"),
-            "name": instrument.get("name_fa"),
-            "sector": instrument.get("sector_name"),
-            "score": tech["score"],
-            "status": tech["status"],
-            "trend": tech.get("trend"),
-            "rsi": tech.get("rsi"),
-            "macd": tech.get("macd"),
-            "turnover": last_value,
-            "flow_score": flow.get("score"),
-            "flow_label": flow.get("label"),
-            "net_pct": round(net_pct, 2),
-            "power_ratio": (round(reading["power_ratio"], 2)
-                            if reading.get("power_ratio") is not None else None),
-            "call": signal["call"],
-            "call_fa": signal["call_fa"],
-        })
-
-    ranked = sorted(qualified, key=lambda r: (r["score"], r["net_pct"]),
-                    reverse=True)
+    scan = scan if scan is not None else market_scan(params, min_turnover)
+    strong = [r for r in scan["rows"] if r["score"] >= min_score]
+    qualified = [r for r in strong if r["flow_label"] == moneyflow.BULLISH]
+    ranked = sorted(qualified,
+                    key=lambda r: (r["score"], r["net_pct"] or 0.0), reverse=True)
+    fields = ("ins_code", "symbol", "name", "sector", "score", "status", "trend",
+              "rsi", "macd", "turnover", "flow_score", "flow_label", "net_pct",
+              "power_ratio", "call", "call_fa")
 
     return {
-        "top": ranked[:top],
-        "min_turnover": min_turnover,
+        "top": [{k: r.get(k) for k in fields} for r in ranked[:top]],
+        "min_turnover": scan["min_turnover"],
         "min_score": min_score,
+        "flow_floor": config.FLOW_BULLISH_SCORE,
         "counts": {
-            "universe": len(codes),
-            "liquid": liquid,
-            "strong_technical": strong,
-            "strong_and_inflow": strong_and_inflow,
+            "universe": scan["counts"]["universe"],
+            "liquid": scan["counts"]["liquid"],
+            "strong_technical": len(strong),
+            "strong_positive_net": sum(1 for r in strong if (r["net_pct"] or 0) > 0),
+            "strong_and_inflow": len(qualified),
         },
         "caveat": COMBINED_CAVEAT,
     }
