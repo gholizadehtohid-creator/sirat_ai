@@ -86,7 +86,11 @@ PROFILES = (
     },
     {
         "key": "growth",
-        "label": "رشد — تمام سهام",
+        # Was «رشد — تمام سهام». "Growth" promised more return; on the record
+        # it gave less than the 70/30 gold mix (62.8% vs 68.0% a year,
+        # 2017-26; 40.4% vs 44.2% over E36's fifteen years) with the deepest
+        # fall. What it reliably has is the most swing (the owner, 2026-11-26).
+        "label": "تمام سهام — پرنوسان‌ترین",
         "weights": {"equity": 100, "gold": 0, "fixed": 0},
         "evidence": "tested",
         # p=0.007 assumed independent 20-session blocks; their excess
@@ -162,6 +166,14 @@ def _mix(legs, weights):
     return pd.Series(out, index=frame.index)
 
 
+def _cagr(daily):
+    """The yearly rate of `daily` compounded, in percent (no 12-month window
+    needed, so a span under a year still answers)."""
+
+    years = len(daily) / SESSIONS_PER_YEAR
+    return round((float((1 + daily).prod()) ** (1 / years) - 1) * 100, 1)
+
+
 def _stats(daily):
     wealth = (1 + daily).cumprod()
     years = len(daily) / SESSIONS_PER_YEAR
@@ -181,8 +193,30 @@ def _stats(daily):
     }
 
 
+# The record cut into three spans on Jalali year boundaries, so the card shows
+# that which mix came first depended on the years: all equity led 1396-99,
+# gold led after (the owner read 63% against 68% as an expectation that
+# disagreed with the names, 2026-11-26).
+PERIODS = (("از آغاز سابقه تا ۱۳۹۹", None, (1399, 12)),
+           ("۱۴۰۰ تا ۱۴۰۲", (1400, 1), (1402, 12)),
+           ("۱۴۰۳ تا امروز", (1403, 1), None))
+
+
+def _period_bounds(start_jm, end_jm):
+    import jalali
+
+    lo = hi = None
+    if start_jm:
+        lo = pd.Timestamp("%04d-%02d-%02d" % jalali.to_gregorian(start_jm[0], start_jm[1], 1))
+    if end_jm:
+        ny, nm = jalali.add_months(end_jm[0], end_jm[1], 1)
+        hi = pd.Timestamp("%04d-%02d-%02d" % jalali.to_gregorian(ny, nm, 1))
+    return lo, hi
+
+
 def history():
-    """Each profile's record over the window all three sleeves exist."""
+    """Each profile's record over the window all three sleeves exist, the
+    equity and gold legs' own records, and the same cut into PERIODS."""
 
     index = _index_returns()
     if index is None:
@@ -205,13 +239,38 @@ def history():
     out = {"from": str(dates[0].date()), "to": str(dates[-1].date()),
            "profiles": {}}
 
-    for profile in PROFILES:
+    def mixed(profile, mask=None):
         w = profile["weights"]
         names = [k for k in ("equity", "gold", "fixed") if w[k]]
-        daily = _mix({k: legs[k] for k in names}, [w[k] / 100 for k in names])
-        out["profiles"][profile["key"]] = _stats(daily)
+        parts = {k: (legs[k] if mask is None else legs[k][mask]) for k in names}
+        return _mix(parts, [w[k] / 100 for k in names])
+
+    for profile in PROFILES:
+        out["profiles"][profile["key"]] = _stats(mixed(profile))
 
     out["fixed_income"] = _stats(legs["fixed"])
+    # Why one mix beat another: the legs' own returns, and how little they
+    # moved together (the rebalance adds return only when they do not).
+    out["legs"] = {"equity": _stats(legs["equity"]), "gold": _stats(legs["gold"]),
+                   "correlation": round(float(legs["equity"].corr(legs["gold"])), 2)}
+
+    out["periods"] = []
+    for label, start_jm, end_jm in PERIODS:
+        lo, hi = _period_bounds(start_jm, end_jm)
+        mask = pd.Series(True, index=dates)
+        if lo is not None:
+            mask &= dates >= lo
+        if hi is not None:
+            mask &= dates < hi
+        span = dates[mask.to_numpy()]
+        if len(span) < SESSIONS_PER_YEAR // 2:
+            continue
+        m = mask.to_numpy()
+        out["periods"].append({
+            "label": label, "from": str(span[0].date()), "to": str(span[-1].date()),
+            "profiles": {p["key"]: _cagr(mixed(p, m)) for p in PROFILES},
+            "gold_cagr_pct": _cagr(legs["gold"][m]),
+        })
 
     return out
 

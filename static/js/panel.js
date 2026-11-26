@@ -3932,9 +3932,28 @@ function renderAllocation(rep) {
     ];
   });
 
+  // Past returns, said so in the header: "بازده سالانه" alone read as an
+  // expectation, and 63% for all equity against 68% for 70/30 gold looked
+  // like a contradiction (the owner, 2026-11-26).
   $("allocationTable").innerHTML = table(
-    ["ترکیب", "وزن‌ها", "مبلغ (ریال)", "بازده سالانه",
+    ["ترکیب", "وزن‌ها", "مبلغ (ریال)",
+     `بازده سالانه‌ی گذشته${h ? ` (از ${esc(h.from)})` : ""}`,
      "بیشترین افت", "بدترین ۱۲ ماه", "شواهد"], rows);
+
+  // The same record in three spans: which mix came first depended on the years.
+  const periods = (h && h.periods) || [];
+  const order = rep.profiles.map(p => p.key);
+  const shortName = {balanced: "متعادل", defensive: "کم‌نوسان", growth: "تمام سهام"};
+  $("allocationPeriods").innerHTML = periods.length
+    ? table(["دوره", ...order.map(k => shortName[k] || k), "طلا به‌تنهایی"],
+        periods.map(p => {
+          const best = Math.max(...order.map(k => p.profiles[k] ?? -Infinity));
+          return [`${esc(p.label)}<br><span class="hint">${esc(p.from)} تا ${esc(p.to)}</span>`,
+            ...order.map(k => p.profiles[k] == null ? "—"
+              : (p.profiles[k] === best ? `<strong>${num(p.profiles[k], 1)}٪</strong>` : `${num(p.profiles[k], 1)}٪`)),
+            p.gold_cagr_pct == null ? "—" : `${num(p.gold_cagr_pct, 1)}٪`];
+        }))
+    : "";
 
   const c = rep.candidates || {};
   const fundRows = [];
@@ -3959,9 +3978,16 @@ function renderAllocation(rep) {
   // own sentence, built from its result file, replaces the old caveat.
   const bill = state.valuation && state.valuation.bill_yield_pct;
   const rt = rep.retest;
+  const legs = h && h.legs;
+  const why = legs
+    ? `در این سابقه صندوق‌های طلا سالانه ${num(legs.gold.cagr_pct, 1)}٪ و شاخص (پس از هزینه‌ی صندوق) ` +
+      `${num(legs.equity.cagr_pct, 1)}٪ دادند و تقریباً مستقل از هم حرکت کردند (همبستگی ${num(legs.correlation, 2)})؛ ` +
+      `برای همین ترکیب متعادل هم بازده بیشتری داشت و هم افت کمتری. این‌ها بازده گذشته‌اند، نه پیش‌بینی: ` +
+      `برنده به دوره بستگی داشت (جدول دوره‌ها، زیر جدول اصلی). `
+    : "";
   banner("allocationStatus", "allocationStatusText", h ? "" : "",
     h ? `سابقه‌ی ${esc(h.from)} تا ${esc(h.to)} — صندوق درآمد ثابت در جدول ` +
-        `${num(h.fixed_income.cagr_pct, 0)}٪ در سال فرض شده است. ` +
+        `${num(h.fixed_income.cagr_pct, 0)}٪ در سال فرض شده است. ${why}` +
         (rt ? `<strong>${esc(rt.text)}</strong>` +
               (bill ? ` اخزا امروز حدود ${num(bill, 0)}٪ می‌دهد.` : "")
             : `<strong>برتری سهام و طلا در آزمون‌ها نسبت به همین ۲۰٪ سنجیده شده؛ ` +

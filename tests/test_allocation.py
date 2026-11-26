@@ -3,6 +3,7 @@
 import os
 import sys
 import unittest
+import unittest.mock
 
 import numpy as np
 import pandas as pd
@@ -68,6 +69,48 @@ class MixTests(unittest.TestCase):
                           index=pd.date_range("2020-01-01", periods=303))
         stats = allocation._stats(daily)
         self.assertAlmostEqual(stats["max_drawdown_pct"], -50.0, places=1)
+
+    def test_a_span_under_a_year_still_has_a_yearly_rate(self):
+        daily = pd.Series(allocation._per_session(0.44), index=range(130))
+        self.assertAlmostEqual(allocation._cagr(daily), 44.0, places=1)
+
+
+class HistoryExplainsItselfTests(unittest.TestCase):
+    """The card says why one mix beat another, and that it depended on the
+    years (the owner read 63% for all equity against 68% for 70/30 gold as
+    a contradiction, 2026-11-26)."""
+
+    def setUp(self):
+        days = pd.bdate_range("2017-09-04", "2026-11-25")
+        n = len(days)
+        index = pd.Series(0.001, index=days)
+        index.iloc[: n // 3] = 0.003                # equity first ...
+        gold = pd.Series(0.002, index=days)          # ... gold after
+        self.patches = [
+            unittest.mock.patch.object(allocation, "_index_returns", return_value=index),
+            unittest.mock.patch.object(allocation, "_gold_returns", return_value=gold)]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def test_the_legs_and_three_jalali_periods_are_reported(self):
+        h = allocation.history()
+        self.assertEqual(set(h["legs"]), {"equity", "gold", "correlation"})
+        self.assertEqual([p["label"] for p in h["periods"]],
+                         [label for label, _, _ in allocation.PERIODS])
+        first, last = h["periods"][0], h["periods"][-1]
+        self.assertGreater(first["profiles"]["growth"], first["profiles"]["balanced"])
+        self.assertLess(last["profiles"]["growth"], last["profiles"]["balanced"])
+        # 1400/01/01 is 2021-03-21: the second period starts on or after it
+        self.assertGreaterEqual(h["periods"][1]["from"], "2021-03-21")
+        self.assertLess(h["periods"][0]["to"], "2021-03-21")
+
+    def test_all_equity_is_not_called_growth(self):
+        growth = next(p for p in allocation.PROFILES if p["key"] == "growth")
+        self.assertNotIn("رشد", growth["label"])
 
 
 
