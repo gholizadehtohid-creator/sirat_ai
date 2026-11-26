@@ -3771,10 +3771,8 @@ function refreshAfter(steps) {
     if (has("sectors") || has("history") || has("universe")) loadSectors();
     if (has("flow")) loadMoneyflow();
   }
-  if (loadedTabs.has("summary")) {
-    if (has("flow")) loadMarketflow();
-    if (has("snapshot") || has("history")) loadHoldings();
-  }
+  if (loadedTabs.has("market") && has("flow")) loadMarketflow();
+  if (loadedTabs.has("summary") && (has("snapshot") || has("history"))) loadHoldings();
   if (loadedTabs.has("stocks") && ["universe", "snapshot", "history"].some(has)) {
     loadScreen().then(() => loadPortfolio());
   }
@@ -3800,7 +3798,8 @@ function noticeDelivered(p) {
   state.provisional = pr;
   const key = pr ? `${pr.session}|${pr.fetched_at}|${!!pr.indices}|${!!pr.flow}` : "";
   if (provKey !== null && key !== provKey) {
-    if (loadedTabs.has("summary")) { loadMarketflow(); renderToday(); }
+    if (loadedTabs.has("market")) loadMarketflow();
+    if (loadedTabs.has("summary")) renderToday();
     if (loadedTabs.has("analysis")) loadIndices();
   }
   provKey = key;
@@ -5266,12 +5265,20 @@ async function loadFundFlows() {
    requested the first time the tab is opened, so the summary is on screen
    in seconds instead of waiting behind the whole-market scan. */
 
+// The summary tab held ten cards; the owner had them split into four tabs
+// (2026-11-26). "summary" keeps its key (links, a stored last tab) and is
+// now «امروز». A card a tab reads from another is loaded by both: the
+// server answers the second from its cache.
 const TAB_LOADERS = {
-  // Live first in the summary too: the "today" card's market line reads it.
+  // Live first: the "today" card's market line reads it; the card's
+  // amounts come from the allocation and the cheapest instruments.
   summary: [() => loadLive(), () => loadAllocation(), () => loadOpportunities(),
-            () => loadMarketflow(), () => loadAnnouncements(), () => loadCalendar(),
-            () => loadHoldings(), () => loadValuation(), () => loadCommodities(),
-            () => loadFundFlows()],
+            () => loadHoldings()],
+  // The allocation banner names today's bill yield, from the valuation.
+  assets: [() => loadValuation(), () => loadAllocation(), () => loadOpportunities()],
+  market: [() => loadValuation(), () => loadCommodities(), () => loadMarketflow(),
+           () => loadFundFlows()],
+  codal: [() => loadAnnouncements(), () => loadCalendar()],
   stocks: [async () => { await loadScreen(); await loadPortfolio(); }],
   live: [() => loadLive()],
   // The guide is static HTML: nothing to fetch.
@@ -5293,7 +5300,7 @@ function loadTab(name, force = false) {
 // opening them later is instant. The page requests exactly what opening
 // the tab would, with the same settings, so it lands in the same server
 // cache entry. A tab opened mid-prefetch is not requested twice.
-const PREFETCH_ORDER = ["summary", "stocks", "analysis", "live"];
+const PREFETCH_ORDER = ["summary", "assets", "market", "codal", "stocks", "analysis", "live"];
 
 async function prefetchTabs(first) {
   await loadTab(first);

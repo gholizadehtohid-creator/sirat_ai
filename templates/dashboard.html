@@ -36,7 +36,10 @@
        its data the first time it is opened. -->
   <nav class="tabs" id="tabs" role="tablist">
     <button class="tab tab-guide" role="tab" data-tab="guide">راهنما</button>
-    <button class="tab" role="tab" data-tab="summary">خلاصه و اقدام امروز</button>
+    <button class="tab" role="tab" data-tab="summary">امروز</button>
+    <button class="tab" role="tab" data-tab="assets">دارایی و صندوق‌ها</button>
+    <button class="tab" role="tab" data-tab="market">بازار و پول</button>
+    <button class="tab" role="tab" data-tab="codal">کدال و رویدادها</button>
     <button class="tab" role="tab" data-tab="stocks">سهام و سبد</button>
     <button class="tab" role="tab" data-tab="live">بازار زنده</button>
     <button class="tab" role="tab" data-tab="analysis">تحلیل‌ها</button>
@@ -219,67 +222,10 @@
     </details>
   </div>
 
-  <!-- Net individual money into the whole equity market, one bar per
-       session, from the daily حقیقی/حقوقی data. See moneyflow.market_daily. -->
-  <div class="card span-half" id="marketFlowCard">
-    <div class="card-head">
-      <h2>ورود و خروج پول حقیقی به بازار</h2>
-      <div class="top-actions">
-        <select id="marketflowSessions" aria-label="بازه">
-          <option value="20">۲۰ جلسه</option>
-          <option value="60" selected>۶۰ جلسه</option>
-          <option value="120">۱۲۰ جلسه</option>
-        </select>
-      </div>
-    </div>
-    <details class="help">
-      <summary>راهنما: این کارت چه می‌گوید؟</summary>
-      <div class="help-body">
-        <p>هر ستون یک روز معاملاتی است: خرید سهامداران حقیقی (اشخاص) منهای فروش آن‌ها،
-        جمع روی همه‌ی سهام بازار، به میلیارد تومان. سبز یعنی پول حقیقی وارد شد، قرمز
-        یعنی خارج شد. چون هر سهمی که حقیقی خریده حقوقی فروخته، خروج پول حقیقی همان
-        خرید حقوقی‌هاست — یک واقعیت، نه دو نشانه.</p>
-        <table class="help-table">
-          <tr><th>عدد</th><th>چطور بخوانید</th></tr>
-          <tr><td>آخرین جلسه</td><td>خالص پول حقیقی روز آخرِ ثبت‌شده و درصدش از ارزش معاملات</td></tr>
-          <tr><td>۵ و ۲۰ جلسه</td><td>جمع خالص؛ جهت چند روز اخیر مهم‌تر از یک روز است</td></tr>
-          <tr><td>روند</td><td>چند روز پشت‌سرهم پول در یک جهت حرکت کرده</td></tr>
-          <tr><td>نمادهای با ورود پول</td><td>پول در چند درصد سهم‌ها وارد شده — ورود پول در یکی دو سهم بزرگ با ورود پول در کل بازار فرق دارد</td></tr>
-          <tr><td>روز عادی</td><td>محدوده‌ی معمول یک سال اخیر؛ عدد امروز را با این بسنجید، نه با صفر</td></tr>
-        </table>
-        <p class="help-warn">داده بعد از پایان هر جلسه کامل می‌شود (کار خودکار عصر)، و فقط سهام را
-        می‌شمارد، نه صندوق‌ها. این گزارش است، نه سیگنال خرید یا فروش.</p>
-      </div>
-    </details>
-    <div id="marketflowStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
-      <span class="icon">…</span><div id="marketflowStatusText">در حال بارگذاری…</div>
-    </div>
-    <div class="kpi-row" id="marketflowKpis"></div>
-    <div class="chart" id="marketflowChart" style="margin-top:12px"></div>
-  </div>
+  </section>
 
-  <!-- Where the public's money is going among the funds (fund_flows.py,
-       2026-11-26, from the owner's walk through BourseView): individuals'
-       net buying of fixed-income, equity, gold and other funds. -->
-  <div class="card span-half" id="fundFlowCard">
-    <div class="card-head">
-      <h2>پول حقیقی به کدام صندوق‌ها می‌رود؟</h2>
-    </div>
-    <p class="hint">
-      خالص خرید حقیقی (خرید منهای فروش اشخاص) در صندوق‌های قابل معامله، به تفکیک نوع:
-      درآمد ثابت، سهامی، طلا، مختلط، اهرمی، املاک. نشان می‌دهد پول مردم از سهام به
-      اوراق یا طلا می‌رود یا برعکس. جدول به میلیارد ریال؛ نمودار جمع آن از ۶۰ جلسه پیش،
-      به هزار میلیارد ریال.
-    </p>
-    <div id="fundFlowStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
-      <span class="icon">…</span><div id="fundFlowStatusText">در حال بارگذاری…</div>
-    </div>
-    <div class="table-wrap" id="fundFlowTable"></div>
-    <div class="chart" id="fundFlowChart"></div>
-    <p class="hint" style="margin-top:6px">توصیف است، نه سیگنال: آزمون‌های خود بات
-    (E21، E22) جریان پول حقیقی را پیش‌بینی‌کننده‌ی قابل معامله نیافتند. فقط صندوق‌هایی که
-    نوعشان از نامشان معلوم است حساب شده‌اند.</p>
-  </div>
+  <!-- Allocation and the cheapest way to fill it (split out of the summary tab, 2026-11-26). -->
+  <section class="tab-panel" role="tabpanel" data-tab="assets">
 
   <!-- ================= SUGGESTED PORTFOLIO =================
        The answer comes first. Everything below it is the evidence that
@@ -290,7 +236,6 @@
   <!-- The allocation comes first because it is the only advice on this page
        that passed a preregistered test (E27, E28). The stock basket below it
        did not, and is labelled paper-only. See allocation.py. -->
-  <div class="section-title">تخصیص دارایی</div>
 
   <div class="card" id="allocationCard">
     <div class="card-head">
@@ -320,6 +265,43 @@
       <ul class="evidence" id="allocationNotes" style="margin-top:12px"></ul>
     </details>
   </div>
+
+  <!-- How to fill each part of the allocation as cheaply as possible today.
+       Facts, not forecasts: a fund's price against its own NAV, and a bill's
+       fixed yield to maturity. See opportunities.py. -->
+  <div class="card" id="cheapestCard">
+    <div class="card-head">
+      <h2>ارزان‌ترین راه پر کردن هر بخش</h2>
+      <div class="top-actions">
+        <button id="runOpportunitiesBtn">↻ به‌روزرسانی</button>
+      </div>
+    </div>
+    <p class="hint">
+      بدون پیش‌بینی: کدام صندوق امروز زیر ارزش دارایی‌اش (NAV) معامله
+      می‌شود، و اوراق خزانه (اخزا) اگر تا سررسید نگه داشته شود چند درصدِ ثابت به ریال
+      می‌دهد (ثابت به ریال، نه واقعی: با تورم بالاتر از این نرخ، قدرت خرید کم می‌شود).
+    </p>
+
+    <div id="opportunitiesStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
+      <span class="icon">…</span><div id="opportunitiesStatusText">در حال بارگذاری… (حدود یک دقیقه)</div>
+    </div>
+
+    <ul class="evidence" id="opportunitiesSummary" style="margin-top:12px"></ul>
+
+    <div class="table-wrap" id="opportunitiesFunds" style="margin-top:16px"></div>
+
+    <div class="table-wrap" id="opportunitiesBills" style="margin-top:16px"></div>
+
+    <details class="fold">
+      <summary>این اعداد چه چیزی را نمی‌گویند</summary>
+      <ul class="evidence" id="opportunitiesNotes" style="margin-top:12px"></ul>
+    </details>
+  </div>
+
+  </section>
+
+  <!-- The market's price, world prices and where the money goes (split out of the summary tab, 2026-11-26). -->
+  <section class="tab-panel" role="tabpanel" data-tab="market">
 
   <!-- The market's aggregate P/E against its own history and bills
        (market_valuation.py, 2026-11-10). Context for the allocation above,
@@ -396,42 +378,77 @@
     بات آزمون نکرده که حرکت این قیمت‌ها بازده سهم را پیش‌بینی کند.</p>
   </div>
 
-  <!-- How to fill each part of the allocation as cheaply as possible today.
-       Facts, not forecasts: a fund's price against its own NAV, and a bill's
-       fixed yield to maturity. See opportunities.py. -->
-  <div class="card span-half" id="cheapestCard">
+  <!-- Net individual money into the whole equity market, one bar per
+       session, from the daily حقیقی/حقوقی data. See moneyflow.market_daily. -->
+  <div class="card span-half" id="marketFlowCard">
     <div class="card-head">
-      <h2>ارزان‌ترین راه پر کردن هر بخش</h2>
+      <h2>ورود و خروج پول حقیقی به بازار</h2>
       <div class="top-actions">
-        <button id="runOpportunitiesBtn">↻ به‌روزرسانی</button>
+        <select id="marketflowSessions" aria-label="بازه">
+          <option value="20">۲۰ جلسه</option>
+          <option value="60" selected>۶۰ جلسه</option>
+          <option value="120">۱۲۰ جلسه</option>
+        </select>
       </div>
     </div>
-    <p class="hint">
-      بدون پیش‌بینی: کدام صندوق امروز زیر ارزش دارایی‌اش (NAV) معامله
-      می‌شود، و اوراق خزانه (اخزا) اگر تا سررسید نگه داشته شود چند درصدِ ثابت به ریال
-      می‌دهد (ثابت به ریال، نه واقعی: با تورم بالاتر از این نرخ، قدرت خرید کم می‌شود).
-    </p>
-
-    <div id="opportunitiesStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
-      <span class="icon">…</span><div id="opportunitiesStatusText">در حال بارگذاری… (حدود یک دقیقه)</div>
-    </div>
-
-    <ul class="evidence" id="opportunitiesSummary" style="margin-top:12px"></ul>
-
-    <div class="table-wrap" id="opportunitiesFunds" style="margin-top:16px"></div>
-
-    <div class="table-wrap" id="opportunitiesBills" style="margin-top:16px"></div>
-
-    <details class="fold">
-      <summary>این اعداد چه چیزی را نمی‌گویند</summary>
-      <ul class="evidence" id="opportunitiesNotes" style="margin-top:12px"></ul>
+    <details class="help">
+      <summary>راهنما: این کارت چه می‌گوید؟</summary>
+      <div class="help-body">
+        <p>هر ستون یک روز معاملاتی است: خرید سهامداران حقیقی (اشخاص) منهای فروش آن‌ها،
+        جمع روی همه‌ی سهام بازار، به میلیارد تومان. سبز یعنی پول حقیقی وارد شد، قرمز
+        یعنی خارج شد. چون هر سهمی که حقیقی خریده حقوقی فروخته، خروج پول حقیقی همان
+        خرید حقوقی‌هاست — یک واقعیت، نه دو نشانه.</p>
+        <table class="help-table">
+          <tr><th>عدد</th><th>چطور بخوانید</th></tr>
+          <tr><td>آخرین جلسه</td><td>خالص پول حقیقی روز آخرِ ثبت‌شده و درصدش از ارزش معاملات</td></tr>
+          <tr><td>۵ و ۲۰ جلسه</td><td>جمع خالص؛ جهت چند روز اخیر مهم‌تر از یک روز است</td></tr>
+          <tr><td>روند</td><td>چند روز پشت‌سرهم پول در یک جهت حرکت کرده</td></tr>
+          <tr><td>نمادهای با ورود پول</td><td>پول در چند درصد سهم‌ها وارد شده — ورود پول در یکی دو سهم بزرگ با ورود پول در کل بازار فرق دارد</td></tr>
+          <tr><td>روز عادی</td><td>محدوده‌ی معمول یک سال اخیر؛ عدد امروز را با این بسنجید، نه با صفر</td></tr>
+        </table>
+        <p class="help-warn">داده بعد از پایان هر جلسه کامل می‌شود (کار خودکار عصر)، و فقط سهام را
+        می‌شمارد، نه صندوق‌ها. این گزارش است، نه سیگنال خرید یا فروش.</p>
+      </div>
     </details>
+    <div id="marketflowStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
+      <span class="icon">…</span><div id="marketflowStatusText">در حال بارگذاری…</div>
+    </div>
+    <div class="kpi-row" id="marketflowKpis"></div>
+    <div class="chart" id="marketflowChart" style="margin-top:12px"></div>
   </div>
+
+  <!-- Where the public's money is going among the funds (fund_flows.py,
+       2026-11-26, from the owner's walk through BourseView): individuals'
+       net buying of fixed-income, equity, gold and other funds. -->
+  <div class="card span-half" id="fundFlowCard">
+    <div class="card-head">
+      <h2>پول حقیقی به کدام صندوق‌ها می‌رود؟</h2>
+    </div>
+    <p class="hint">
+      خالص خرید حقیقی (خرید منهای فروش اشخاص) در صندوق‌های قابل معامله، به تفکیک نوع:
+      درآمد ثابت، سهامی، طلا، مختلط، اهرمی، املاک. نشان می‌دهد پول مردم از سهام به
+      اوراق یا طلا می‌رود یا برعکس. جدول به میلیارد ریال؛ نمودار جمع آن از ۶۰ جلسه پیش،
+      به هزار میلیارد ریال.
+    </p>
+    <div id="fundFlowStatus" class="banner is-idle" aria-live="polite" style="margin-top:4px">
+      <span class="icon">…</span><div id="fundFlowStatusText">در حال بارگذاری…</div>
+    </div>
+    <div class="table-wrap" id="fundFlowTable"></div>
+    <div class="chart" id="fundFlowChart"></div>
+    <p class="hint" style="margin-top:6px">توصیف است، نه سیگنال: آزمون‌های خود بات
+    (E21، E22) جریان پول حقیقی را پیش‌بینی‌کننده‌ی قابل معامله نیافتند. فقط صندوق‌هایی که
+    نوعشان از نامشان معلوم است حساب شده‌اند.</p>
+  </div>
+
+  </section>
+
+  <!-- Codal notices and the AGM / dividend calendar (split out of the summary tab, 2026-11-26). -->
+  <section class="tab-panel" role="tabpanel" data-tab="codal">
 
   <!-- Codal letters that move a price on the day: AGMs and dividends,
        capital increases, material disclosures, halts, management changes.
        Filled by the feed watch every two hours. See codal_announcements.py. -->
-  <div class="card span-half" id="announcementsCard">
+  <div class="card" id="announcementsCard">
     <div class="card-head">
       <h2>اطلاعیه‌های مهم کدال</h2>
       <div class="top-actions">
@@ -505,6 +522,7 @@
   </div>
 
   </section>
+
 
   <section class="tab-panel" role="tabpanel" data-tab="stocks">
 
@@ -1799,14 +1817,14 @@
         <div class="guide-icon" aria-hidden="true">🧭</div>
         <h4>تقسیم درست سرمایه <span class="guide-badge">موقت — بازآزموده در ۱۵ سال</span></h4>
         <p>چند درصد در سهام، چند درصد طلا، چند درصد درآمد ثابت. در آزمون ۱۵ ساله (۱۳۹۰ تا ۱۴۰۵) ترکیب ۷۰٪ شاخص با ۳۰٪ طلا سالانه حدود <b>۴۴٪</b> داد و درآمد ثابت واقعی حدود <b>۲۴٪</b>؛ برتری معنادار نشد، پس این ترکیب‌ها «موقت»اند. بیشترین افت آن ترکیب حدود ۴۰٪ بود.</p>
-        <button type="button" class="link" data-goto="summary:allocationTable">کارت تخصیص دارایی ←</button>
+        <button type="button" class="link" data-goto="assets:allocationTable">کارت تخصیص دارایی ←</button>
       </article>
       <article class="guide-card">
         <div class="guide-icon" aria-hidden="true">💰</div>
         <h4>ارزان‌ترین راه خرید</h4>
         <p>کدام صندوق طلا یا شاخصی امروز <b>زیر ارزش خالص دارایی‌اش</b> است (همان
         دارایی، قیمت کمتر)، و کدام اوراق خزانه (اخزا) پرمعامله‌ترین بازده ثابتِ ریالی را می‌دهد.</p>
-        <button type="button" class="link" data-goto="summary:opportunitiesFunds">کارت ارزان‌ترین راه ←</button>
+        <button type="button" class="link" data-goto="assets:opportunitiesFunds">کارت ارزان‌ترین راه ←</button>
       </article>
       <article class="guide-card">
         <div class="guide-icon" aria-hidden="true">🔍</div>
@@ -1822,7 +1840,7 @@
         <p>مجمع و سود نقدی، افزایش سرمایه، افشای بااهمیت و توقف نماد از کدال؛ ورود و
         خروج پول حقیقی به بازار؛ و خبرهای طلا، نفت، دلار و بورس، بی‌آنکه سایت‌ها را
         یکی‌یکی بگردید.</p>
-        <button type="button" class="link" data-goto="summary:announcementsTable">اطلاعیه‌های کدال ←</button>
+        <button type="button" class="link" data-goto="codal:announcementsTable">اطلاعیه‌های کدال ←</button>
       </article>
     </div>
 
@@ -1835,8 +1853,8 @@
           از هدف دور شده، با یکی دو معامله برگردانید. برای اجرا، ارزان‌ترین صندوق‌ها و
           اخزا را از کارت <em>ارزان‌ترین راه</em> بردارید.</p>
           <div class="guide-links">
-            <button type="button" class="link" data-goto="summary:allocationTable">تخصیص ←</button>
-            <button type="button" class="link" data-goto="summary:opportunitiesBills">اخزا ←</button>
+            <button type="button" class="link" data-goto="assets:allocationTable">تخصیص ←</button>
+            <button type="button" class="link" data-goto="assets:opportunitiesBills">اخزا ←</button>
           </div>
         </div>
       </li>
@@ -1846,7 +1864,7 @@
           <p>اطلاعیه‌های مهم کدال ۷ روز اخیر را برای سهم‌هایی که دارید مرور کنید
           (مجمع، افزایش سرمایه، افشای بااهمیت) و نگاهی به <em>هوش بازار</em> بیندازید.</p>
           <div class="guide-links">
-            <button type="button" class="link" data-goto="summary:announcementsTable">اطلاعیه‌ها ←</button>
+            <button type="button" class="link" data-goto="codal:announcementsTable">اطلاعیه‌ها ←</button>
             <button type="button" class="link" data-goto="analysis:intelStatus">هوش بازار ←</button>
           </div>
         </div>
@@ -1858,7 +1876,7 @@
           است؛ <b>دلیل معامله‌ی روزانه نیست</b>.</p>
           <div class="guide-links">
             <button type="button" class="link" data-goto="summary:todayPlan">امروز چه کنم؟ ←</button>
-            <button type="button" class="link" data-goto="summary:marketflowChart">پول حقیقی ←</button>
+            <button type="button" class="link" data-goto="market:marketflowChart">پول حقیقی ←</button>
           </div>
         </div>
       </li>
