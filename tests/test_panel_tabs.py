@@ -48,6 +48,17 @@ class TabTests(unittest.TestCase):
             self.assertIn(tab, self.panels, (tab, element))
             self.assertIn('id="%s"' % element, self.panels[tab], (tab, element))
 
+    def test_every_tab_and_the_welcome_page_end_with_a_way_back_up(self):
+        """The owner, 2026-11-26: a button at the foot of each page instead
+        of scrolling to the top. Every .tab-panel gets one from panel.js."""
+
+        self.assertIn('document.querySelectorAll(".tab-panel").forEach', self.js)
+        self.assertIn("data-to-top", self.js)
+        self.assertIn("window.scrollTo({ top: 0", self.js)
+        self.assertIn(".to-top", read("static", "css", "panel.css"))
+        self.assertIn("data-to-top", read("templates", "welcome.html"))
+        self.assertIn("data-to-top", read("static", "js", "welcome.js"))
+
     def test_every_tab_has_loaders_and_is_prefetched(self):
         loaders = self.js.split("const TAB_LOADERS = {")[1].split("\n};")[0]
         prefetch = re.search(r"const PREFETCH_ORDER = \[(.*?)\];", self.js).group(1)

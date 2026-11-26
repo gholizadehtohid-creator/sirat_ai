@@ -6630,6 +6630,25 @@ on("guideNudgeClose", "click", markGuideSeen);
 document.querySelector('.tab[data-tab="guide"]')?.addEventListener("click", markGuideSeen);
 if (!guideSeen()) $("guideNudge")?.classList.remove("hidden");
 
+// A way back up at the foot of every tab (the owner, 2026-11-26: "no more
+// scrolling to the top"). Added here so a tab added later gets one too.
+document.querySelectorAll(".tab-panel").forEach(panel => {
+  if (panel.querySelector(":scope > .to-top")) return;
+  const foot = document.createElement("div");
+  foot.className = "to-top";
+  foot.innerHTML = '<button type="button" data-to-top>' +
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>' +
+    '<span>بازگشت به بالای صفحه</span></button>';
+  panel.appendChild(foot);
+});
+document.addEventListener("click", ev => {
+  if (!(ev.target.closest && ev.target.closest("[data-to-top]"))) return;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: still ? "auto" : "smooth" });
+  // Keyboard readers land on the tab bar, not wherever focus was.
+  document.querySelector(".tab.is-active")?.focus({ preventScroll: true });
+});
+
 {
   const params = new URLSearchParams(location.search);
   let first = location.hash.slice(1);

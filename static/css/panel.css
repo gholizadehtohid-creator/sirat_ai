@@ -2847,3 +2847,27 @@ a.button {
 @media (forced-colors: active) {
   .seg .seg-btn.is-on, .launcher .launch-tile.is-on { border: 2px solid Highlight; }
 }
+
+/* The way back up at the foot of every tab (panel.js, 2026-11-26). */
+.to-top {
+  display: flex;
+  justify-content: center;
+  margin: 28px 0 8px;
+  grid-column: 1 / -1;
+}
+.to-top button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+}
+.to-top button:hover { color: var(--text-primary); border-color: var(--accent-line); background: var(--surface-2); }
+.to-top svg {
+  width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2;
+  stroke-linecap: round; stroke-linejoin: round;
+}

@@ -158,3 +158,11 @@ fetch("/api/welcome").then(r => r.json()).then(d => {
 }).catch(() => {
   $("wAsOf").textContent = "ارقام امروز خوانده نشد؛ پنل را باز کنید.";
 });
+
+// Back to the top, as at the foot of every panel tab (2026-11-26).
+document.addEventListener("click", ev => {
+  if (!(ev.target.closest && ev.target.closest("[data-to-top]"))) return;
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: still ? "auto" : "smooth" });
+  $("wEnter").focus({ preventScroll: true });
+});
