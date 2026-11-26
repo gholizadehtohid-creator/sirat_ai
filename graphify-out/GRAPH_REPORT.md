@@ -1,17 +1,17 @@
 # Graph Report - SIRAT-AI  (2026-11-26)
 
 ## Corpus Check
-- 384 files · ~771,116 words
+- 384 files · ~771,162 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 9 file(s) not represented in the graph (top: .bat 5, (none) 3, .css 1)
 
 ## Summary
-- 11511 nodes · 26198 edges · 491 communities (356 shown, 135 thin omitted)
+- 11511 nodes · 26197 edges · 491 communities (356 shown, 135 thin omitted)
 - Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 764 edges (avg confidence: 0.88)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `9af8ee0d`
+- Built from commit: `71c59b95`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -403,7 +403,7 @@
 - json
 - MoveFixture
 - _band
-- rerender
+- renderMarketflow
 - 3. Exact Changes
 - regime_score
 - window_rule
@@ -518,19 +518,19 @@
 ## Surprising Connections (you probably didn't know these)
 - `A governance finding this audit turned up` --references--> `data_integrity()`  [INFERRED]
   E21_REPORT.md → sirat/experiments/gates.py
+- `3.5 Attribution already computed, now surfaced` --references--> `_cash_analysis()`  [INFERRED]
+  implementation_fix_spec.md → backtesting/engine.py
 - `The last hole: a relative gate cannot see a market-wide run` --references--> `market_state()`  [INFERRED]
   E25_STAGE1_REPORT.md → smart_money/microstructure.py
 - `Stage 6 — Statistical Validation *(mandatory)*` --references--> `overfitting_risk()`  [INFERRED]
   SIRAT_AI_RESEARCH_PLATFORM_V2_IMPLEMENTATION_PLAN.md → backtesting/validation.py
 - `D. Alpha Validation Engine — `sirat/validation/`` --references--> `overfitting_risk()`  [INFERRED]
   SIRAT_AI_RESEARCH_PLATFORM_V2_PLAN.md → backtesting/validation.py
-- `The form ML is allowed to take when it opens` --references--> `walk_forward()`  [INFERRED]
-  RESEARCH_ROADMAP.md → backtesting/validation.py
 
 ## Import Cycles
 - 2-file cycle: `backtesting/__init__.py -> backtesting/engine.py -> backtesting/__init__.py`
-- 2-file cycle: `sirat/experiments/__init__.py -> sirat/experiments/gates.py -> sirat/experiments/__init__.py`
 - 2-file cycle: `sirat/experiments/__init__.py -> sirat/experiments/universe.py -> sirat/experiments/__init__.py`
+- 2-file cycle: `sirat/experiments/__init__.py -> sirat/experiments/gates.py -> sirat/experiments/__init__.py`
 - 3-file cycle: `backtesting/__init__.py -> backtesting/engine.py -> backtesting/strategy.py -> backtesting/__init__.py`
 
 ## Communities (491 total, 135 thin omitted)
@@ -597,7 +597,7 @@ Nodes (18): _actions(), _Closes, closes_on(), gregorian(), _instrument_index(), 
 
 ### Community 15 - "panel.js"
 Cohesion: 0.03
-Nodes (95): adxNote(), billQuote(), BINDING_LABELS, bindingLabel(), bootHandled, bootStep(), buildLauncher(), calendarHeld() (+87 more)
+Nodes (94): adxNote(), billQuote(), BINDING_LABELS, bindingLabel(), bootHandled, bootStep(), buildLauncher(), calendarLink() (+86 more)
 
 ### Community 16 - "json"
 Cohesion: 0.07
@@ -692,8 +692,8 @@ Cohesion: 0.15
 Nodes (11): age_hours(), _close_on_or_before(), _days_before(), fetch(), load(), main(), refresh(), summary() (+3 more)
 
 ### Community 39 - "esc"
-Cohesion: 0.12
-Nodes (51): banner(), calendarDate(), calendarLink(), calendarSort(), calendarSymbol(), esc(), fetchIntelligence(), gateUnlocked() (+43 more)
+Cohesion: 0.09
+Nodes (63): badge(), banner(), calendarDate(), calendarHeld(), calendarSort(), calendarSymbol(), esc(), faTime() (+55 more)
 
 ### Community 40 - "SIRAT-AI — EXPERIMENT MANAGER"
 Cohesion: 0.10
@@ -792,8 +792,8 @@ Cohesion: 0.05
 Nodes (38): 1. Complete Experiment Post-Mortem, 2. Root Cause Analysis, 3. Alpha Decay Analysis, 4. Execution Feasibility — Half-Life vs Trading Cost, 5. New Research Directions, 6. Machine Learning Evaluation, 7. Capital Preservation Review, 8. Final Recommendation (+30 more)
 
 ### Community 64 - "num"
-Cohesion: 0.15
-Nodes (46): bulletList(), clearPortfolio(), dollarCell(), exposureRows(), faDay(), fairCell(), flowRows(), forwardCell() (+38 more)
+Cohesion: 0.14
+Nodes (49): bulletList(), clearPortfolio(), dollarCell(), exposureRows(), faDay(), fairCell(), forwardCell(), fundRows() (+41 more)
 
 ### Community 65 - "codal_portfolio.py"
 Cohesion: 0.09
@@ -1799,9 +1799,9 @@ Nodes (5): superseded_listings(), MoveFixture, PairingTests, ParticipationTests,
 Cohesion: 0.33
 Nodes (4): _band(), _score_persistence(), note(), _score_power()
 
-### Community 388 - "rerender"
-Cohesion: 0.16
-Nodes (16): badge(), faTime(), hemat(), renderBanner(), renderMarketflow(), renderRegime(), renderScreen(), renderSmartMoney() (+8 more)
+### Community 388 - "renderMarketflow"
+Cohesion: 1.00
+Nodes (3): renderMarketflow(), toBillionToman(), tomanCell()
 
 ### Community 389 - "3. Exact Changes"
 Cohesion: 0.33
@@ -1869,7 +1869,7 @@ Nodes (6): LiveCostTests, HoldingPeriodTest, describe(), _finite(), holding_peri
 
 ### Community 428 - "loadLive"
 Cohesion: 0.24
-Nodes (13): ageTag(), capRows(), loadLive(), loadValuation(), renderLiveEvents(), renderLiveFlow(), renderQueueSide(), renderValuation() (+5 more)
+Nodes (12): ageTag(), capRows(), loadLive(), loadValuation(), renderLiveEvents(), renderLiveFlow(), renderQueueSide(), renderValuationSectors() (+4 more)
 
 ### Community 431 - "normalize"
 Cohesion: 0.09
@@ -1969,12 +1969,12 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **Should `numpy` be split into smaller, more focused modules?**
   _Cohesion score 0.05441400304414003 - nodes in this community are weakly interconnected._
-- **Why does `TaskItemTests` connect `TaskItemTests` to `os`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+- **Why does `load_instruments()` connect `load_instruments` to `holdings.py`, `app.py`, `technical.py`, `seed_import.py`, `bootstrap.py`, `codal_backfill.py`, `analyse`, `gold.py`, `regime.py`, `codal_sync.py`, `corporate_actions.py`, `codal_watch.py`, `backtest_combined.py`, `codal_portfolio.py`, `codal_monthly.py`, `smart_money/scanner.py`, `calendar`, `fund_flows.py`, `back_adjust`, `SectorIndexTests`, `reconcile_universe`, `argparse`, `smart_money_validation.py`, `swing_advisor.py`, `backtest.py`, `codal_backfill.py`, `instrument_counts`, `stock_report.py`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
 - **Should `os` be split into smaller, more focused modules?**
   _Cohesion score 0.02166436194731057 - nodes in this community are weakly interconnected._
-- **Why does `Portfolio` connect `Portfolio` to `RISK REGISTER — SIRAT-AI v2.1`, `os`, `codal_backfill.py`, `._book_with_position`, `Position`, `OrderBook`, `run`, `math`, `AccrualTest`, `make_cfg`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+- **Why does `_connect()` connect `codal_backfill.py` to `MoveFixture`, `IncrementalHistoryTests`, `smart_money/store.py`, `holdings.py`, `portfolio_value.py`, `app.py`, `technical.py`, `test_trader_review.py`, `.held`, `seed_import.py`, `MissingSectorTests`, `corporate_calendar.py`, `run_scan`, `bootstrap.py`, `analyse`, `.test_round_trip_and_dividend_history_with_codal`, `corporate_actions.py`, `codal_watch.py`, `purge_subsidiaries`, `_preread_all`, `codal_portfolio.py`, `opportunities.py`, `codal_monthly.py`, `authenticity.py`, `MarketDailyTests`, `load_instruments`, `calendar`, `fund_flows.py`, `pit_fundamentals.py`, `reconcile_universe`, `allocation.py`, `argparse`, `smart_money_validation.py`, `PreOpenSnapshotTests`, `TsetmcCdnProvider`, `market_turnover`, `intelligence.py`, `swing_advisor.py`, `backtest.py`, `history_coverage`, `codal_backfill.py`, `instrument_counts`?**
+  _High betweenness centrality (0.016) - this node is a cross-community bridge._
 - **Should `performance.py` be split into smaller, more focused modules?**
   _Cohesion score 0.0873015873015873 - nodes in this community are weakly interconnected._
 - **Should `backtesting/report.py` be split into smaller, more focused modules?**
