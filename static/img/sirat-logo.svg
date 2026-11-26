@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="صراط">
+  <!-- The SIRAT mark (2026-11-26): three candlesticks rising along a path
+       (صراط, "the path") toward a sun coming up; the market's own marks,
+       read as a way forward. No double hyphen in here: XML forbids it. -->
+  <defs>
+    <linearGradient id="sl-tile" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#0b1a44"/>
+      <stop offset="0.55" stop-color="#1747b8"/>
+      <stop offset="1" stop-color="#1f8fd6"/>
+    </linearGradient>
+    <radialGradient id="sl-shine" cx="0.78" cy="0.22" r="0.75">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sl-sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fffbe8"/>
+      <stop offset="0.55" stop-color="#fcd34d"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </radialGradient>
+    <radialGradient id="sl-halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fde68a" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#fde68a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sl-path" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#fde68a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="120" height="120" rx="30" fill="url(#sl-tile)"/>
+  <rect width="120" height="120" rx="30" fill="url(#sl-shine)"/>
+
+  <!-- the sun, with its halo and rays -->
+  <circle cx="86" cy="34" r="26" fill="url(#sl-halo)"/>
+  <g stroke="#fde68a" stroke-width="3" stroke-linecap="round" opacity="0.95">
+    <line x1="86" y1="12" x2="86" y2="17"/>
+    <line x1="101.6" y1="18.4" x2="98" y2="22"/>
+    <line x1="108" y1="34" x2="103" y2="34"/>
+    <line x1="70.4" y1="18.4" x2="74" y2="22"/>
+  </g>
+  <circle cx="86" cy="34" r="11" fill="url(#sl-sun)"/>
+
+  <!-- the ground line -->
+  <line x1="18" y1="98" x2="102" y2="98" stroke="#ffffff" stroke-opacity="0.32" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- three candlesticks, each higher than the last -->
+  <g fill="#ffffff">
+    <rect x="23" y="74" width="11" height="18" rx="2.5"/>
+    <rect x="27.5" y="68" width="2" height="28" rx="1"/>
+    <rect x="42" y="62" width="11" height="28" rx="2.5" fill-opacity="0.95"/>
+    <rect x="46.5" y="55" width="2" height="40" rx="1"/>
+    <rect x="61" y="48" width="11" height="38" rx="2.5" fill-opacity="0.9"/>
+    <rect x="65.5" y="41" width="2" height="51" rx="1"/>
+  </g>
+
+  <!-- the path up, ending toward the sun -->
+  <path d="M16 84 L32 70 L44 74 L74 46" fill="none" stroke="url(#sl-path)" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M64 44 L76 44 L76 56" fill="none" stroke="#fde68a" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round" transform="rotate(0)"/>
+</svg>

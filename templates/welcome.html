@@ -3,85 +3,177 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>صراط — دستیار تصمیم بورس تهران</title>
+<title>صراط — مسیری روشن برای تصمیم‌های سرمایه‌گذاری</title>
+<meta name="description" content="صراط: دستیار تصمیم برای سرمایه‌گذار بورس تهران">
 <meta name="theme-color" content="#0a0f1c">
 <link rel="preload" href="{{ url_for('static', filename='fonts/VazirmatnFD-wght.woff') }}" as="font" type="font/woff" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232563d6'/><path d='M7 21l6-6 4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/sirat-logo.svg') }}">
 </head>
 <!-- The page the panel opens on (2026-11-26, the owner: first this page,
-     then the rest). Its own script (CSP: no inline script) reads
-     /api/welcome for today's figures and sends the reader into /panel. -->
+     then the rest; then "more professional, with a logo from the capital
+     market's own marks, and a bright, forward-looking feel"). Its own
+     script (CSP: no inline script) reads /api/welcome and sends the reader
+     into /panel. -->
 <body class="welcome">
 
 <div class="w-backdrop" aria-hidden="true">
   <div class="w-grid"></div>
   <div class="w-glow w-glow-a"></div>
   <div class="w-glow w-glow-b"></div>
+  <svg class="w-bgchart" viewBox="0 0 1440 600" preserveAspectRatio="none">
+    <defs>
+      <linearGradient id="wBgLine" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0" stop-color="#2dd4bf" stop-opacity="0"/>
+        <stop offset="0.4" stop-color="#3b82f6" stop-opacity="0.55"/>
+        <stop offset="1" stop-color="#fbbf24" stop-opacity="0.8"/>
+      </linearGradient>
+    </defs>
+    <path class="w-bgline" d="M0 540 L120 520 L210 528 L300 486 L390 498 L480 452 L560 466 L650 410 L740 424 L830 372 L910 386 L1000 320 L1090 336 L1180 262 L1270 276 L1360 196 L1440 150"/>
+  </svg>
 </div>
 
 <header class="w-top">
-  <div class="w-brand">
-    <span class="w-mark">ص</span>
+  <a class="w-brand" href="/" aria-label="صراط">
+    <img class="w-logo" src="{{ url_for('static', filename='img/sirat-logo.svg') }}" alt="" width="46" height="46">
     <span class="w-brand-text">
-      <strong>SIRAT AI</strong>
-      <small>مدیریت هوشمند سبد سهام بورس تهران</small>
+      <strong>صراط</strong>
+      <small>SIRAT AI</small>
     </span>
-  </div>
+  </a>
+  <nav class="w-nav" aria-label="بخش‌های این صفحه">
+    <a href="#pulse">نبض بازار</a>
+    <a href="#inside">در پنل</a>
+    <a href="#why">چرا صراط</a>
+  </nav>
   <div class="w-top-side">
     <span class="w-today" id="wToday"></span>
     <button type="button" class="w-ghost" id="wTheme" aria-label="تغییر حالت روشن / تیره">◐</button>
+    <a class="w-top-enter" href="/panel">ورود</a>
   </div>
 </header>
 
 <main class="w-main">
 
   <section class="w-hero">
-    <span class="w-eyebrow"><span class="w-dot"></span>دستیار تصمیم برای سرمایه‌گذارِ بورس تهران</span>
-    <h1 class="w-title">صراط</h1>
-    <p class="w-lead">داده‌ی بورس، صورت‌های مالی کدال، دلار و طلا در یک جا،
-      برای تصمیمی که خودتان می‌گیرید.</p>
-    <div class="w-actions">
-      <a class="w-cta" id="wEnter" href="/panel">
-        <span>ورود به پنل</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-      </a>
-      <a class="w-link" href="/panel#guide">راهنمای سه‌دقیقه‌ای</a>
+    <div class="w-hero-copy">
+      <span class="w-eyebrow"><span class="w-dot"></span>دستیار تصمیم برای سرمایه‌گذارِ بورس تهران</span>
+      <h1 class="w-title">صراط</h1>
+      <p class="w-tagline">مسیری <span class="w-bright">روشن</span> برای تصمیم‌های سرمایه‌گذاری</p>
+      <p class="w-lead">داده‌ی رسمی بورس، صورت‌های مالی کدال، دلار و طلا در یک نگاه؛
+        تا تصمیم را خودتان، آگاه‌تر و آسوده‌تر بگیرید.</p>
+      <div class="w-actions">
+        <a class="w-cta" id="wEnter" href="/panel">
+          <span>ورود به پنل</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </a>
+        <a class="w-link" href="/panel#guide">راهنمای سه‌دقیقه‌ای</a>
+      </div>
+      <p class="w-key">یا کلید <kbd>Enter</kbd> را بزنید</p>
     </div>
-    <p class="w-key">یا کلید <kbd>Enter</kbd> را بزنید</p>
+
+    <div class="w-hero-art" aria-hidden="true">
+      <div class="w-sunrise"></div>
+      <div class="w-orbit w-orbit-1"></div>
+      <div class="w-orbit w-orbit-2"></div>
+      <!-- The logo again (static/img/sirat-logo.svg), inline so its parts
+           can move: the candles rise, the path draws, the sun breathes. -->
+      <svg class="w-emblem" viewBox="0 0 120 120">
+        <defs>
+          <linearGradient id="we-tile" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stop-color="#0b1a44"/>
+            <stop offset="0.55" stop-color="#1747b8"/>
+            <stop offset="1" stop-color="#1f8fd6"/>
+          </linearGradient>
+          <radialGradient id="we-shine" cx="0.78" cy="0.22" r="0.75">
+            <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+            <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="we-sun" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stop-color="#fffbe8"/>
+            <stop offset="0.55" stop-color="#fcd34d"/>
+            <stop offset="1" stop-color="#f59e0b"/>
+          </radialGradient>
+          <radialGradient id="we-halo" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stop-color="#fde68a" stop-opacity="0.75"/>
+            <stop offset="1" stop-color="#fde68a" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="we-path" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stop-color="#5eead4"/>
+            <stop offset="1" stop-color="#fde68a"/>
+          </linearGradient>
+        </defs>
+        <rect width="120" height="120" rx="30" fill="url(#we-tile)"/>
+        <rect width="120" height="120" rx="30" fill="url(#we-shine)"/>
+        <circle class="we-halo" cx="86" cy="34" r="26" fill="url(#we-halo)"/>
+        <g class="we-rays" stroke="#fde68a" stroke-width="3" stroke-linecap="round">
+          <line x1="86" y1="12" x2="86" y2="17"/>
+          <line x1="101.6" y1="18.4" x2="98" y2="22"/>
+          <line x1="108" y1="34" x2="103" y2="34"/>
+          <line x1="70.4" y1="18.4" x2="74" y2="22"/>
+        </g>
+        <circle class="we-sun" cx="86" cy="34" r="11" fill="url(#we-sun)"/>
+        <line x1="18" y1="98" x2="102" y2="98" stroke="#ffffff" stroke-opacity="0.32" stroke-width="2.5" stroke-linecap="round"/>
+        <g class="we-candle" style="--d:0.15s" fill="#ffffff">
+          <rect x="23" y="74" width="11" height="18" rx="2.5"/>
+          <rect x="27.5" y="68" width="2" height="28" rx="1"/>
+        </g>
+        <g class="we-candle" style="--d:0.3s" fill="#ffffff">
+          <rect x="42" y="62" width="11" height="28" rx="2.5" fill-opacity="0.95"/>
+          <rect x="46.5" y="55" width="2" height="40" rx="1"/>
+        </g>
+        <g class="we-candle" style="--d:0.45s" fill="#ffffff">
+          <rect x="61" y="48" width="11" height="38" rx="2.5" fill-opacity="0.9"/>
+          <rect x="65.5" y="41" width="2" height="51" rx="1"/>
+        </g>
+        <path class="we-path" d="M16 84 L32 70 L44 74 L74 46" fill="none" stroke="url(#we-path)" stroke-width="5.5"
+              stroke-linecap="round" stroke-linejoin="round" pathLength="100"/>
+        <path class="we-head" d="M64 44 L76 44 L76 56" fill="none" stroke="#fde68a" stroke-width="5.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="w-chip w-chip-a"><span>شاخص کل</span><b id="wChipIndex">…</b></div>
+      <div class="w-chip w-chip-b"><span>P/E بازار</span><b id="wChipPe">…</b></div>
+      <div class="w-chip w-chip-c"><span>دلار آزاد</span><b id="wChipDollar">…</b></div>
+    </div>
   </section>
 
-  <section class="w-stats" aria-label="امروز در یک نگاه">
-    <article class="w-stat w-stat-wide" id="wIndex">
-      <header><span class="w-k">شاخص کل</span><span class="w-when" id="wIndexDate"></span></header>
-      <div class="w-v" id="wIndexValue">—</div>
-      <div class="w-sub" id="wIndexChange">&nbsp;</div>
-      <div class="w-spark" id="wSpark"></div>
-      <div class="w-spark-read" id="wSparkRead">&nbsp;</div>
-    </article>
-    <article class="w-stat">
-      <header><span class="w-k">دلار آزاد</span><span class="w-when" id="wDollarDate"></span></header>
-      <div class="w-v" id="wDollarValue">—</div>
-      <div class="w-sub" id="wDollarChange">&nbsp;</div>
-      <div class="w-more" id="wDollarMore"></div>
-    </article>
-    <article class="w-stat">
-      <header><span class="w-k">P/E کل بازار</span><span class="w-when" id="wPeDate"></span></header>
-      <div class="w-v" id="wPeValue">—</div>
-      <div class="w-sub" id="wPeSub">&nbsp;</div>
-      <div class="w-more" id="wPeMore"></div>
-    </article>
-    <article class="w-stat">
-      <header><span class="w-k">بازده اخزا</span></header>
-      <div class="w-v" id="wBillValue">—</div>
-      <div class="w-sub" id="wBillSub">&nbsp;</div>
-      <div class="w-more" id="wBillMore"></div>
-    </article>
+  <section class="w-block" id="pulse" aria-labelledby="pulseTitle">
+    <div class="w-block-head">
+      <h2 class="w-h2" id="pulseTitle">نبض امروز بازار</h2>
+      <span class="w-asof" id="wAsOf"></span>
+    </div>
+    <div class="w-stats">
+      <article class="w-stat w-stat-wide" id="wIndex">
+        <header><span class="w-k">شاخص کل</span><span class="w-when" id="wIndexDate"></span></header>
+        <div class="w-v" id="wIndexValue">—</div>
+        <div class="w-sub" id="wIndexChange">&nbsp;</div>
+        <div class="w-spark" id="wSpark"></div>
+        <div class="w-spark-read" id="wSparkRead">&nbsp;</div>
+      </article>
+      <article class="w-stat">
+        <header><span class="w-k">دلار آزاد</span><span class="w-when" id="wDollarDate"></span></header>
+        <div class="w-v" id="wDollarValue">—</div>
+        <div class="w-sub" id="wDollarChange">&nbsp;</div>
+        <div class="w-more" id="wDollarMore"></div>
+      </article>
+      <article class="w-stat">
+        <header><span class="w-k">P/E کل بازار</span><span class="w-when" id="wPeDate"></span></header>
+        <div class="w-v" id="wPeValue">—</div>
+        <div class="w-sub" id="wPeSub">&nbsp;</div>
+        <div class="w-more" id="wPeMore"></div>
+      </article>
+      <article class="w-stat">
+        <header><span class="w-k">بازده اخزا</span></header>
+        <div class="w-v" id="wBillValue">—</div>
+        <div class="w-sub" id="wBillSub">&nbsp;</div>
+        <div class="w-more" id="wBillMore"></div>
+      </article>
+    </div>
   </section>
 
-  <section class="w-sections" aria-label="در پنل چه هست">
-    <h2 class="w-h2">در پنل چه هست</h2>
+  <section class="w-block" id="inside" aria-labelledby="insideTitle">
+    <div class="w-block-head"><h2 class="w-h2" id="insideTitle">در پنل چه هست</h2></div>
     <div class="w-cards">
       <a class="w-card" href="/panel#summary" style="--i:0">
         <span class="w-ic" data-ic="summary"></span>
@@ -118,14 +210,64 @@
         <strong>تحلیل‌ها</strong>
         <span>بنیادی کدال و چشم‌انداز سود، تکنیکال، صنایع و پایش بازار</span>
       </a>
+      <a class="w-card w-card-guide" href="/panel#guide" style="--i:7">
+        <span class="w-ic" data-ic="guide"></span>
+        <strong>راهنما</strong>
+        <span>در سه دقیقه: هر بخش به چه کار می‌آید و کِی سراغش بروید</span>
+      </a>
     </div>
   </section>
 
+  <section class="w-block" id="why" aria-labelledby="whyTitle">
+    <div class="w-block-head"><h2 class="w-h2" id="whyTitle">چرا صراط</h2></div>
+    <div class="w-pillars">
+      <article class="w-pillar">
+        <span class="w-pillar-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v6.5c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V5.5"/><path d="M4.5 12v6.5c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V12"/></svg>
+        </span>
+        <h3>داده‌ی رسمی، هر روز</h3>
+        <p>قیمت و جریان پول از بورس تهران، صورت‌های مالی و اطلاعیه‌ها از کدال، و دلار و
+          طلا از بازار؛ خودکار و روزانه، بی‌آنکه دنبالشان بگردید.</p>
+      </article>
+      <article class="w-pillar">
+        <span class="w-pillar-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.5L5 18a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-8.5V3"/><path d="M8 14h8"/></svg>
+        </span>
+        <h3>آزمون پیش از نمایش</h3>
+        <p>هر روش پیش از آنکه به شما نشان داده شود با داده‌ی سال‌های گذشته آزموده می‌شود و
+          کارنامه‌اش کنار خودش است؛ روشی که در آزمون رد شده، پنهان می‌ماند.</p>
+      </article>
+      <article class="w-pillar">
+        <span class="w-pillar-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/><path d="M16.5 3.5l1.5 1.5 3-3"/></svg>
+        </span>
+        <h3>تصمیم با شما</h3>
+        <p>صراط می‌سنجد، توضیح می‌دهد و هشدار می‌دهد؛ خرید و فروش را خودتان انجام می‌دهید،
+          با دیدی روشن‌تر از ریسک و فرصت.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="w-final">
+    <div class="w-final-sun" aria-hidden="true"></div>
+    <div class="w-final-copy">
+      <h2>هر روز را با یک نگاه روشن شروع کنید</h2>
+      <p>وضع بازار، سبد شما و کارِ امروز، همه در پنل.</p>
+    </div>
+    <a class="w-cta w-cta-light" href="/panel">
+      <span>ورود به پنل</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </a>
+  </section>
+
   <footer class="w-foot">
+    <div class="w-foot-brand">
+      <img src="{{ url_for('static', filename='img/sirat-logo.svg') }}" alt="" width="28" height="28">
+      <strong>صراط</strong>
+    </div>
     <p>صراط ابزار تصمیم‌یار است، نه توصیه‌ی خرید و فروش. هر روش پیش از نمایش با
       داده‌ی گذشته آزموده می‌شود و کارنامه‌اش کنار خودش است؛ روشی که در آزمون رد
       شده، فقط برای پژوهش و پس از تأیید شما نشان داده می‌شود.</p>
-    <p class="w-asof" id="wAsOf"></p>
   </footer>
 
   <div class="to-top">

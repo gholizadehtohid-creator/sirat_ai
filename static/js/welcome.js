@@ -4,8 +4,10 @@
 const PANEL = "/panel";
 
 // A link meant for the panel itself (a #tab, ?engine=, ?tech=...) goes
-// straight on: the welcome page is the front door, not a wall.
-if (location.hash.length > 1 || location.search.length > 1) {
+// straight on: the welcome page is the front door, not a wall. Only the
+// panel's tabs: this page's own anchors (#pulse, #why) stay here.
+const PANEL_TABS = ["summary", "assets", "market", "codal", "stocks", "live", "analysis", "guide"];
+if (PANEL_TABS.includes(location.hash.slice(1)) || location.search.length > 1) {
   location.replace(PANEL + location.search + location.hash);
 }
 
@@ -116,6 +118,12 @@ addEventListener("resize", () => { if (lastSeries) drawSpark(lastSeries); });
 
 // ---- today's figures ----
 fetch("/api/welcome").then(r => r.json()).then(d => {
+  // The chips that float around the emblem.
+  const chip = (id, html) => { if ($(id)) $(id).innerHTML = html; };
+  if (d.index) chip("wChipIndex", `${faNum(d.index.close)} ${move(d.index.change_pct)}`);
+  if (d.valuation && d.valuation.pe != null) chip("wChipPe", faNum(d.valuation.pe, 1));
+  if (d.dollar) chip("wChipDollar", `${faNum(d.dollar.close)} <small>ریال</small>`);
+
   const ix = d.index;
   if (ix) {
     $("wIndexValue").textContent = faNum(ix.close);
