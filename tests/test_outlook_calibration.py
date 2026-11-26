@@ -135,14 +135,54 @@ class SensitivityTests(unittest.TestCase):
         self.assertAlmostEqual(companies["a"]["revenue"], 0.8, places=6)
 
     def test_a_weak_cost_fit_moves_costs_with_sales(self):
-        record = {"fx": {"sectors": {"پالایش": {"revenue": 0.25, "revenue_raw": 0.25,
-                                                 "r2": 0.02, "n": 100, "cost": 0.0,
-                                                 "cost_r2": 0.0}},
-                         "companies": {}}}
+        record = {"fx": {"market": {"revenue": 0.39, "revenue_raw": 0.39, "r2": 0.02,
+                                    "n": 5926, "cost": 0.17, "cost_r2": 0.005}}}
         s = oc.sensitivity_for(record, "x", "پالایش")
         self.assertEqual(s["cost_basis"], "same_as_sales")
-        self.assertEqual(s["cost"], 0.25)
-        self.assertEqual(s["source"], "industry")
+        self.assertEqual(s["cost"], 0.39)
+        self.assertEqual(s["source"], "market")
+
+    def test_every_company_gets_the_markets_slope(self):
+        """2026-11-26: per-company and per-industry slopes ranked companies'
+        dollar response no better than chance on unseen years; one slope
+        for all did better than every one of them."""
+
+        record = {"fx": {"market": {"revenue": 0.39, "r2": 0.02, "n": 5926,
+                                    "cost": None, "cost_r2": None},
+                         "sectors": {"پالایش": {"revenue": 0.25, "r2": 0.1, "n": 100}},
+                         "companies": {"x": {"revenue": 1.2, "cost": 1.2, "n": 20, "r2": 0.4}}}}
+        for code, sector in (("x", "پالایش"), ("y", "دارویی"), ("z", None)):
+            s = oc.sensitivity_for(record, code, sector)
+            self.assertEqual((s["revenue"], s["source"]), (0.39, "market"))
+
+    def test_a_record_without_the_market_slope_gives_no_scenario(self):
+        record = {"fx": {"sectors": {"پالایش": {"revenue": 0.25, "r2": 0.1, "n": 100}},
+                         "companies": {}}}
+        self.assertIsNone(oc.sensitivity_for(record, "x", "پالایش"))
+
+    def test_a_fresh_file_without_the_market_slope_is_rebuilt(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "cal.json")
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump({"fx": {"sectors": {}, "companies": {}}}, fh)
+            built = {"points": 1, "fx": {"market": {}, "sectors": {}}}
+            with unittest.mock.patch.object(oc, "PATH", path), \
+                    unittest.mock.patch.object(oc, "build", return_value=built) as b, \
+                    unittest.mock.patch.object(oc, "write") as w:
+                oc._CACHE.update(mtime=None, data=None)
+                oc.ensure()
+            oc._CACHE.update(mtime=None, data=None)
+        self.assertEqual((b.call_count, w.call_count), (1, 1))
+
+    def test_the_market_slope_pools_every_company(self):
+        obs = {"a": [(x, 0.3 + 0.2 * x, None) for x in (0.1, 0.2, 0.3, 0.4)],
+               "b": [(x, 0.3 + 0.6 * x, None) for x in (0.1, 0.2, 0.3, 0.4)]}
+        m = oc.market_sensitivity(obs)
+        self.assertAlmostEqual(m["revenue"], 0.4, places=6)
+        self.assertEqual(m["n"], 8)
+        self.assertIsNone(m["cost"])
 
     def test_quarters_are_differenced_on_one_basis(self):
         record = {"series": {"nima": [("2020-%02d-01" % m, "x", 100.0 * (1.05 ** m))

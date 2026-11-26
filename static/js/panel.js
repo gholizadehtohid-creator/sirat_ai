@@ -4338,13 +4338,16 @@ function fairCell(fv) {
 // What-ifs on the exchange-centre rate; the fit is weak and says so.
 function dollarCell(d) {
   if (!d || !(d.scenarios || []).length) return "—";
-  // Two readings per scenario: the measured (weak) slope, and a business
-  // priced wholly in dollars.
+  // Two readings per scenario: the market's (weak) slope, one for every
+  // company since 2026-11-26, and a business priced wholly in dollars.
+  const sens = d.sensitivity || {};
   const parts = d.scenarios.map(s => `نیما ${signed(s.shock_pct, 0)}: سود سال ${signed(s.change_pct, 1)}` +
     (s.full_change_pct == null ? "" : ` تا ${signed(s.full_change_pct, 1)}`));
   return parts.join(" · ") +
-    ` <span class="hint">(عدد اول با رابطه‌ی گذشته، R² ${num((d.sensitivity || {}).r2, 2)}` +
-    `${d.weak ? " — ضعیف" : ""}؛ عدد دوم اگر شرکت کاملاً دلاری باشد. برآورد پایه فرضی درباره‌ی دلار ندارد)</span>`;
+    `<br><span class="hint">عدد اول با شیب ${num(sens.revenue, 2)} که برای همه‌ی شرکت‌ها یکی است` +
+    ` (از کل بازار، R² ${num(sens.r2, 2)}${d.weak ? "، ضعیف" : ""})؛` +
+    ` شیب جداگانه‌ی هر شرکت یا صنعت در آزمون روی سال‌های دیده‌نشده قدرت پیش‌بینی نداشت.</span>` +
+    `<br><span class="hint">عدد دوم اگر شرکت کاملاً دلاری باشد (فلزات، پتروشیمی، پالایش). برآورد پایه فرضی درباره‌ی دلار ندارد.</span>`;
 }
 
 // The report takes 3 to 11 seconds to build, and a new tab that stays
@@ -4455,7 +4458,7 @@ function exposureRows(e) {
   return [[`وضعیت ارزی (گزارش تفسیری ${esc(e.period_end || "")} — ${num(e.period_months, 0)} ماهه)`,
     parts.join("<br>") + '<br><span class="hint">از گزارش تفسیری خود شرکت در کدال؛ دریافت ارزی وام ارزی را هم شامل می‌شود.</span>' +
       '<br><span class="hint">در ۱۳۹۹ تا ۱۴۰۵ این سهم واکنش فروش به دلار را پیش‌بینی نکرد؛</span>' +
-      '<br><span class="hint">سناریوی دلار بالا همچنان بر فروش گذشته‌ی خود شرکت است.</span>']];
+      '<br><span class="hint">سناریوی دلار بالا با یک شیب برای همه‌ی شرکت‌هاست.</span>']];
 }
 
 // Growth over 3 and 5 years and the share's movement (stock_profile.py).

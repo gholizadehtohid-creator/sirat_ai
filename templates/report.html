@@ -264,7 +264,7 @@ td.est { background: var(--accent-soft); font-weight: 700; }
     <tr><td>{{ s.shock_pct|signed }}٪</td><td class="n">{{ s.nima|num }}</td><td class="n">{{ s.change_pct|pct(1, true) }}</td><td class="n">{{ s.full_change_pct|pct(1, true) }}</td>
       <td class="n">{% if s.full_eps is not none %}{{ [s.eps, s.full_eps]|min|num }} تا {{ [s.eps, s.full_eps]|max|num }}{% else %}{{ s.eps|num }}{% endif %}</td></tr>{% endfor %}
   </table>
-  <p class="note"><b>دو ستون، دو خوانش.</b> «با رابطه‌ی گذشته»: حساسیت فروش به نیما {{ d.sensitivity.revenue|num(2) }}{% if d.sensitivity.cost_basis == "measured" %} و بهای تمام‌شده {{ d.sensitivity.cost|num(2) }}{% else %} (بهای تمام‌شده هم‌پای فروش فرض شد){% endif %}، از مقایسه‌ی فروش هر فصل با همان فصل سال قبل ({{ "خود شرکت، به سوی صنعت کشیده‌شده" if d.sensitivity.source == "company" else "صنعت" }}؛ R² = {{ d.sensitivity.r2|num(2) }}).
+  <p class="note"><b>دو ستون، دو خوانش.</b> «با رابطه‌ی گذشته»: حساسیت فروش به نیما {{ d.sensitivity.revenue|num(2) }}{% if d.sensitivity.cost_basis == "measured" %} و بهای تمام‌شده {{ d.sensitivity.cost|num(2) }}{% else %} (بهای تمام‌شده هم‌پای فروش فرض شد){% endif %}، از مقایسه‌ی فروش هر فصل با همان فصل سال قبل در کل بازار (R² = {{ d.sensitivity.r2|num(2) }})، و برای همه‌ی شرکت‌ها یکی است: شیب جداگانه‌ی هر شرکت یا صنعت در آزمون روی سال‌های دیده‌نشده (۱۴۰۲ تا ۱۴۰۵) قدرت پیش‌بینی نداشت.
     {% if d.weak %}این رابطه <b>ضعیف</b> است: در گذشته قیمت جهانی، مقدار فروش و قیمت‌گذاری دستوری هم‌زمان با دلار عوض شده‌اند. {% endif %}
     «اگر کاملاً دلاری»: برای صنعتی که قیمت محصول و مواد اولیه‌اش هر دو دلاری است (فلزات، پتروشیمی، پالایش) سود ماه‌های باقی‌مانده یک‌به‌یک با دلار جابه‌جا می‌شود؛ برای چنین شرکتی این ستون را بخوانید. هیچ‌کدام پیش‌بینی نرخ نیست.</p>
   {% elif d %}

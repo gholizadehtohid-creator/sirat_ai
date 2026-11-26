@@ -63,9 +63,8 @@ class QuarterTests(unittest.TestCase):
 CALIBRATION = {
     "buckets": {"6": {"n": 400, "q10": 0.5, "q25": 0.8, "q50": 1.0, "q75": 1.25,
                       "q90": 1.6, "median_abs_error": 0.25}},
-    "fx": {"sectors": {"فلزات اساسي": {"revenue": 1.0, "revenue_raw": 1.0, "r2": 0.3,
-                                         "n": 100, "cost": 0.5, "cost_r2": 0.3}},
-           "companies": {"x": {"revenue": 1.0, "cost": 0.5, "n": 12, "r2": 0.3}}},
+    "fx": {"market": {"revenue": 1.0, "revenue_raw": 1.0, "r2": 0.3,
+                      "n": 100, "cost": 0.5, "cost_r2": 0.3}},
 }
 FX = {"fetched_at": "2026-11-23T00:00:00+00:00",
       "series": {"nima": [("2026-03-21", "1405/01/01", 1_500_000.0),

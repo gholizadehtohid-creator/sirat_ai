@@ -1845,15 +1845,17 @@ def dollar_scenarios(ins_code, sector, calibration, fx_record, remaining_rev,
                      price, fiscal_year_end, net_margin=None):
     """The year's profit if the exchange-centre dollar moves, or None.
 
-    For the months still to come, sales move by the company's measured
+    For the months still to come, sales move by the market's measured
     slope against the NIMA rate and the cost of sales by its own:
         sales    x ((1 + s) ** slope_sales - 1)
         cost     x ((1 + s) ** slope_cost  - 1)
-    the difference taxed at the filing's own net/pre-tax ratio. The slopes
-    come from outlook_calibration (quarter on same quarter a year before,
-    shrunk toward the industry's) and the fit is weak in every industry, so
-    this is a what-if with its R² beside it -- the base estimate is not
-    moved by it.
+    the difference taxed at the filing's own net/pre-tax ratio. The slope
+    comes from outlook_calibration (quarter on same quarter a year before,
+    pooled over every company) and is ONE for all companies since
+    2026-11-26: per-company and per-industry slopes carried no information
+    on years they had not seen (outlook_calibration.market_sensitivity).
+    The fit is weak, so this is a what-if with its R² beside it -- the base
+    estimate is not moved by it.
     """
 
     import fx
@@ -1886,13 +1888,13 @@ def dollar_scenarios(ins_code, sector, calibration, fx_record, remaining_rev,
         d_cost = remaining_rev * cost_ratio * ((1 + s) ** sens["cost"] - 1)
         return (d_sales - d_cost) * keep * owners_share
 
-    # Beside the measured slope, the reading for a business whose every
+    # Beside the market's slope, the reading for a business whose every
     # price and cost is struck in dollars: the remaining months' profit moves
-    # one for one. The measured slopes rank refiners (0.25) below pharma
-    # (0.86) -- world prices moved against the rate in the sample -- so for a
-    # dollar-priced industry this second column is the one to read, and the
-    # table shows both rather than one EPS to a decimal. Not a ceiling: a
-    # company whose costs move less than its sales can exceed it.
+    # one for one. The market slope is an average over every kind of
+    # business, so for a dollar-priced industry (metals, petrochemicals,
+    # refining) this second column is the one to read, and the table shows
+    # both rather than one EPS to a decimal. Not a ceiling: a company whose
+    # costs move less than its sales can exceed it.
     remaining_profit = (remaining_rev * net_margin * owners_share
                         if net_margin is not None else None)
     for s in FX_SCENARIOS:

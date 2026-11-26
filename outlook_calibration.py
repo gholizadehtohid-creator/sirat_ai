@@ -703,8 +703,36 @@ def _clip(value):
     return min(max(value, SENSITIVITY_CLIP[0]), SENSITIVITY_CLIP[1])
 
 
+def market_sensitivity(observations):
+    """One dollar slope for every company: sales (and cost) on the NIMA move,
+    pooled over all companies' quarters, or None.
+
+    What the scenarios use since 2026-11-26. Fitted only on the years before
+    each test year (1402-1405, 4,321 company-quarters), the per-company and
+    per-industry slopes ranked how companies' sales answered the dollar no
+    better than chance (correlation -0.05 to +0.04), and every variant --
+    shrunk toward the industry 12, 48 or 200 quarters, the industry alone,
+    the industry toward the market -- did worse than one slope for all. The
+    same on large moves only and on whole years. The differences between
+    companies were the sample's noise.
+    """
+
+    rev = fit([(x, y) for pts in observations.values() for x, y, _ in pts])
+    if not rev:
+        return None
+    cost = fit([(x, yc) for pts in observations.values() for x, _, yc in pts])
+    return {"revenue": round(_clip(rev[0]), 3), "revenue_raw": round(rev[0], 3),
+            "r2": round(rev[1], 3), "n": rev[2],
+            "cost": round(_clip(cost[0]), 3) if cost else None,
+            "cost_r2": round(cost[1], 3) if cost else None}
+
+
 def sensitivities(observations, sector_of):
-    """Industry fits, and each company's slope shrunk toward its industry's."""
+    """Industry fits, and each company's slope shrunk toward its industry's.
+
+    Kept in the record for research; the scenarios read only the market
+    slope (market_sensitivity): these carried no information out of sample.
+    """
 
     by_sector = defaultdict(list)
     for code, pts in observations.items():
@@ -870,8 +898,9 @@ def build(statements=None, fx_record=None, sector_of=None, versions=None):
     if fx_record:
         observations = quarter_observations(statements, fx_record)
         sectors, companies = sensitivities(observations, sector_of)
-        record["fx"] = {"rate": "nima", "sectors": sectors,
-                        "companies": companies}
+        record["fx"] = {"rate": "nima",
+                        "market": market_sensitivity(observations),
+                        "sectors": sectors, "companies": companies}
     return record
 
 
@@ -911,7 +940,11 @@ def ensure(max_age_days=MAX_AGE_DAYS):
         age = (time.time() - os.path.getmtime(PATH)) / 86400
     except OSError:
         age = None
-    if age is not None and age < max_age_days:
+    # A record from before the market slope existed (2026-11-26) would leave
+    # every stock without dollar scenarios until it aged out.
+    fxcal = (load() or {}).get("fx") if age is not None else None
+    outdated = fxcal is not None and "market" not in fxcal
+    if age is not None and age < max_age_days and not outdated:
         return "outlook calibration: fresh (%.1f days old)" % age
     started = time.monotonic()
     try:
@@ -988,33 +1021,28 @@ def range_for(calibration, months_known, margin, method=None):
     return None
 
 
-def sensitivity_for(calibration, ins_code, sector):
+def sensitivity_for(calibration, ins_code=None, sector=None):
     """{revenue, cost, cost_basis, source, r2, n} of the dollar slopes, or None.
 
-    The cost slope is the measured one only where the industry's cost fit
-    reaches COST_FIT_R2; otherwise costs are taken to move with the dollar
-    as sales do (the margin kept). A refiner's feed is priced in dollars,
-    yet its cost slope fitted at about zero (R² 0.00): world prices moved
-    against the rate in the sample, and a cost that "ignores the dollar"
-    would have read every devaluation as pure profit.
+    The market's slope, the same for every company (market_sensitivity says
+    why); `ins_code` and `sector` are no longer read. A company's scenario
+    differs from another's only by its margin and the share of its year
+    still to come.
+
+    The cost slope is the measured one only where the cost fit reaches
+    COST_FIT_R2; otherwise costs are taken to move with the dollar as sales
+    do (the margin kept). A refiner's feed is priced in dollars, yet its
+    cost slope fitted at about zero (R² 0.00): world prices moved against
+    the rate in the sample, and a cost that "ignores the dollar" would have
+    read every devaluation as pure profit.
     """
 
-    fxcal = (calibration or {}).get("fx") or {}
-    own = (fxcal.get("companies") or {}).get(str(ins_code))
-    industry = (fxcal.get("sectors") or {}).get((sector or "").strip())
-    if not own and not industry:
+    market = ((calibration or {}).get("fx") or {}).get("market")
+    if not market:
         return None
-    if own:
-        out = {"revenue": own["revenue"], "cost": own["cost"],
-               "source": "company" if own.get("n") else "industry",
-               "n": own["n"] or (industry or {}).get("n", 0),
-               "r2": own["r2"] if own.get("r2") is not None
-               else (industry or {}).get("r2")}
-    else:
-        out = {"revenue": industry["revenue"], "cost": industry.get("cost"),
-               "source": "industry", "n": industry["n"], "r2": industry["r2"]}
-    out["industry_r2"] = (industry or {}).get("r2")
-    cost_r2 = (industry or {}).get("cost_r2")
+    out = {"revenue": market["revenue"], "cost": market.get("cost"),
+           "source": "market", "n": market["n"], "r2": market["r2"]}
+    cost_r2 = market.get("cost_r2")
     if out["cost"] is None or cost_r2 is None or cost_r2 < COST_FIT_R2:
         out["cost"], out["cost_basis"] = out["revenue"], "same_as_sales"
     else:
