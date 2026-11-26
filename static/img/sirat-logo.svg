@@ -1,61 +1,85 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="صراط">
-  <!-- The SIRAT mark (2026-11-26): three candlesticks rising along a path
-       (صراط, "the path") toward a sun coming up; the market's own marks,
-       read as a way forward. No double hyphen in here: XML forbids it. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="صراط">
+  <!-- The SIRAT mark, «طلوع» (the owner's choice of three, 2026-11-26):
+       an art-deco sun rising over the sea in a gold-rimmed medallion, three
+       market candlesticks climbing into it, its light laid on the water. A
+       gradient on a perfectly straight line has no box to map onto and is
+       not drawn, so the rims use user-space gradients and the wicks and the
+       reflections plain colours. XML forbids a double hyphen in here. -->
   <defs>
-    <linearGradient id="sl-tile" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#0b1a44"/>
-      <stop offset="0.55" stop-color="#1747b8"/>
-      <stop offset="1" stop-color="#1f8fd6"/>
+    <radialGradient id="sl-bg" cx="50%" cy="38%" r="72%">
+      <stop offset="0" stop-color="#1c3f86"/>
+      <stop offset="0.62" stop-color="#0e1f4a"/>
+      <stop offset="1" stop-color="#060d22"/>
+    </radialGradient>
+    <linearGradient id="sl-sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff4cc"/>
+      <stop offset="0.5" stop-color="#f7c948"/>
+      <stop offset="1" stop-color="#e08e0b"/>
     </linearGradient>
-    <radialGradient id="sl-shine" cx="0.78" cy="0.22" r="0.75">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="sl-sun" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#fffbe8"/>
-      <stop offset="0.55" stop-color="#fcd34d"/>
-      <stop offset="1" stop-color="#f59e0b"/>
-    </radialGradient>
-    <radialGradient id="sl-halo" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#fde68a" stop-opacity="0.75"/>
-      <stop offset="1" stop-color="#fde68a" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="sl-path" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#5eead4"/>
-      <stop offset="1" stop-color="#fde68a"/>
+    <linearGradient id="sl-rim" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="200" y2="200">
+      <stop offset="0" stop-color="#fdeab0"/>
+      <stop offset="0.35" stop-color="#c9922a"/>
+      <stop offset="0.65" stop-color="#f6d77e"/>
+      <stop offset="1" stop-color="#a8761c"/>
     </linearGradient>
+    <linearGradient id="sl-plat" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfd8e6"/>
+    </linearGradient>
+    <clipPath id="sl-sky"><rect x="0" y="0" width="200" height="126"/></clipPath>
+    <clipPath id="sl-disc"><circle cx="100" cy="100" r="87"/></clipPath>
   </defs>
 
-  <rect width="120" height="120" rx="30" fill="url(#sl-tile)"/>
-  <rect width="120" height="120" rx="30" fill="url(#sl-shine)"/>
+  <!-- the medallion and its gold rims -->
+  <circle cx="100" cy="100" r="97" fill="url(#sl-bg)"/>
+  <circle cx="100" cy="100" r="95.5" fill="none" stroke="url(#sl-rim)" stroke-width="3.4"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="url(#sl-rim)" stroke-width="0.9" opacity="0.6"/>
 
-  <!-- the sun, with its halo and rays -->
-  <circle cx="86" cy="34" r="26" fill="url(#sl-halo)"/>
-  <g stroke="#fde68a" stroke-width="3" stroke-linecap="round" opacity="0.95">
-    <line x1="86" y1="12" x2="86" y2="17"/>
-    <line x1="101.6" y1="18.4" x2="98" y2="22"/>
-    <line x1="108" y1="34" x2="103" y2="34"/>
-    <line x1="70.4" y1="18.4" x2="74" y2="22"/>
+  <g clip-path="url(#sl-disc)">
+    <!-- the sun above the horizon: rays, disc, art-deco bands -->
+    <g clip-path="url(#sl-sky)">
+      <g stroke="#f7c948" stroke-width="2.2" stroke-linecap="round" opacity="0.75">
+        <line x1="42.7" y1="105.1" x2="24.8" y2="98.6"/>
+        <line x1="53.3" y1="86.8" x2="38.7" y2="74.6"/>
+        <line x1="69.5" y1="73.2" x2="60.0" y2="56.7"/>
+        <line x1="89.4" y1="65.9" x2="86.1" y2="47.2"/>
+        <line x1="110.6" y1="65.9" x2="113.9" y2="47.2"/>
+        <line x1="130.5" y1="73.2" x2="140.0" y2="56.7"/>
+        <line x1="146.7" y1="86.8" x2="161.3" y2="74.6"/>
+        <line x1="157.3" y1="105.1" x2="175.2" y2="98.6"/>
+      </g>
+      <circle cx="100" cy="126" r="54" fill="url(#sl-sun)"/>
+      <circle cx="100" cy="126" r="44" fill="none" stroke="#0e1f4a" stroke-width="2.6"/>
+      <circle cx="100" cy="126" r="34" fill="none" stroke="#0e1f4a" stroke-width="2.6"/>
+    </g>
+
+    <!-- the horizon and the light on the water -->
+    <line x1="10" y1="126" x2="190" y2="126" stroke="url(#sl-rim)" stroke-width="2.4"/>
+    <g stroke="#f7c948" stroke-linecap="round">
+      <line x1="60" y1="139" x2="140" y2="139" stroke-width="3.2" opacity="0.85"/>
+      <line x1="72" y1="150" x2="128" y2="150" stroke-width="2.8" opacity="0.6"/>
+      <line x1="84" y1="161" x2="116" y2="161" stroke-width="2.4" opacity="0.42"/>
+      <line x1="94" y1="171" x2="106" y2="171" stroke-width="2" opacity="0.28"/>
+    </g>
+
+    <!-- three candlesticks, each higher, outlined in the night's navy -->
+    <g>
+      <line x1="76" y1="96" x2="76" y2="124" stroke="#0e1f4a" stroke-width="6.5" stroke-linecap="round"/>
+      <line x1="76" y1="96" x2="76" y2="124" stroke="#eef2f7" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="68.5" y="104" width="15" height="16" rx="2.5" fill="url(#sl-plat)" stroke="#0e1f4a" stroke-width="3" paint-order="stroke"/>
+    </g>
+    <g>
+      <line x1="100" y1="74" x2="100" y2="122" stroke="#0e1f4a" stroke-width="6.5" stroke-linecap="round"/>
+      <line x1="100" y1="74" x2="100" y2="122" stroke="#eef2f7" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="92.5" y="84" width="15" height="30" rx="2.5" fill="url(#sl-plat)" stroke="#0e1f4a" stroke-width="3" paint-order="stroke"/>
+    </g>
+    <g>
+      <line x1="124" y1="48" x2="124" y2="118" stroke="#0e1f4a" stroke-width="6.5" stroke-linecap="round"/>
+      <line x1="124" y1="48" x2="124" y2="118" stroke="#eef2f7" stroke-width="2.4" stroke-linecap="round"/>
+      <rect x="116.5" y="58" width="15" height="50" rx="2.5" fill="url(#sl-plat)" stroke="#0e1f4a" stroke-width="3" paint-order="stroke"/>
+    </g>
+
+    <!-- a star of the morning -->
+    <path d="M152 44 l3.2 8.8 8.8 3.2 -8.8 3.2 -3.2 8.8 -3.2 -8.8 -8.8 -3.2 8.8 -3.2z" fill="#fde68a"/>
   </g>
-  <circle cx="86" cy="34" r="11" fill="url(#sl-sun)"/>
-
-  <!-- the ground line -->
-  <line x1="18" y1="98" x2="102" y2="98" stroke="#ffffff" stroke-opacity="0.32" stroke-width="2.5" stroke-linecap="round"/>
-
-  <!-- three candlesticks, each higher than the last -->
-  <g fill="#ffffff">
-    <rect x="23" y="74" width="11" height="18" rx="2.5"/>
-    <rect x="27.5" y="68" width="2" height="28" rx="1"/>
-    <rect x="42" y="62" width="11" height="28" rx="2.5" fill-opacity="0.95"/>
-    <rect x="46.5" y="55" width="2" height="40" rx="1"/>
-    <rect x="61" y="48" width="11" height="38" rx="2.5" fill-opacity="0.9"/>
-    <rect x="65.5" y="41" width="2" height="51" rx="1"/>
-  </g>
-
-  <!-- the path up, ending toward the sun -->
-  <path d="M16 84 L32 70 L44 74 L74 46" fill="none" stroke="url(#sl-path)" stroke-width="5.5"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M64 44 L76 44 L76 56" fill="none" stroke="#fde68a" stroke-width="5.5"
-        stroke-linecap="round" stroke-linejoin="round" transform="rotate(0)"/>
 </svg>

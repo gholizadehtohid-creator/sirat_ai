@@ -78,59 +78,78 @@
       <div class="w-orbit w-orbit-1"></div>
       <div class="w-orbit w-orbit-2"></div>
       <!-- The logo again (static/img/sirat-logo.svg), inline so its parts
-           can move: the candles rise, the path draws, the sun breathes. -->
-      <svg class="w-emblem" viewBox="0 0 120 120">
+           can move: the sun rises behind the horizon, the candles climb,
+           the light shimmers on the water, the morning star twinkles. -->
+      <svg class="w-emblem" viewBox="0 0 200 200">
         <defs>
-          <linearGradient id="we-tile" x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0" stop-color="#0b1a44"/>
-            <stop offset="0.55" stop-color="#1747b8"/>
-            <stop offset="1" stop-color="#1f8fd6"/>
+          <radialGradient id="we-bg" cx="50%" cy="38%" r="72%">
+            <stop offset="0" stop-color="#1c3f86"/>
+            <stop offset="0.62" stop-color="#0e1f4a"/>
+            <stop offset="1" stop-color="#060d22"/>
+          </radialGradient>
+          <linearGradient id="we-sun" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#fff4cc"/>
+            <stop offset="0.5" stop-color="#f7c948"/>
+            <stop offset="1" stop-color="#e08e0b"/>
           </linearGradient>
-          <radialGradient id="we-shine" cx="0.78" cy="0.22" r="0.75">
-            <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
-            <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-          </radialGradient>
-          <radialGradient id="we-sun" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0" stop-color="#fffbe8"/>
-            <stop offset="0.55" stop-color="#fcd34d"/>
-            <stop offset="1" stop-color="#f59e0b"/>
-          </radialGradient>
-          <radialGradient id="we-halo" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0" stop-color="#fde68a" stop-opacity="0.75"/>
-            <stop offset="1" stop-color="#fde68a" stop-opacity="0"/>
-          </radialGradient>
-          <linearGradient id="we-path" x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0" stop-color="#5eead4"/>
-            <stop offset="1" stop-color="#fde68a"/>
+          <linearGradient id="we-rim" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="200" y2="200">
+            <stop offset="0" stop-color="#fdeab0"/>
+            <stop offset="0.35" stop-color="#c9922a"/>
+            <stop offset="0.65" stop-color="#f6d77e"/>
+            <stop offset="1" stop-color="#a8761c"/>
           </linearGradient>
+          <linearGradient id="we-plat" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffffff"/>
+            <stop offset="1" stop-color="#cfd8e6"/>
+          </linearGradient>
+          <clipPath id="we-sky"><rect x="0" y="0" width="200" height="126"/></clipPath>
+          <clipPath id="we-disc"><circle cx="100" cy="100" r="87"/></clipPath>
         </defs>
-        <rect width="120" height="120" rx="30" fill="url(#we-tile)"/>
-        <rect width="120" height="120" rx="30" fill="url(#we-shine)"/>
-        <circle class="we-halo" cx="86" cy="34" r="26" fill="url(#we-halo)"/>
-        <g class="we-rays" stroke="#fde68a" stroke-width="3" stroke-linecap="round">
-          <line x1="86" y1="12" x2="86" y2="17"/>
-          <line x1="101.6" y1="18.4" x2="98" y2="22"/>
-          <line x1="108" y1="34" x2="103" y2="34"/>
-          <line x1="70.4" y1="18.4" x2="74" y2="22"/>
+        <circle cx="100" cy="100" r="97" fill="url(#we-bg)"/>
+        <circle cx="100" cy="100" r="95.5" fill="none" stroke="url(#we-rim)" stroke-width="3.4"/>
+        <circle cx="100" cy="100" r="88" fill="none" stroke="url(#we-rim)" stroke-width="0.9" opacity="0.6"/>
+        <g clip-path="url(#we-disc)">
+          <g clip-path="url(#we-sky)">
+            <g class="we-rise">
+              <g class="we-rays" stroke="#f7c948" stroke-width="2.2" stroke-linecap="round">
+                <line x1="42.7" y1="105.1" x2="24.8" y2="98.6"/>
+                <line x1="53.3" y1="86.8" x2="38.7" y2="74.6"/>
+                <line x1="69.5" y1="73.2" x2="60.0" y2="56.7"/>
+                <line x1="89.4" y1="65.9" x2="86.1" y2="47.2"/>
+                <line x1="110.6" y1="65.9" x2="113.9" y2="47.2"/>
+                <line x1="130.5" y1="73.2" x2="140.0" y2="56.7"/>
+                <line x1="146.7" y1="86.8" x2="161.3" y2="74.6"/>
+                <line x1="157.3" y1="105.1" x2="175.2" y2="98.6"/>
+              </g>
+              <circle cx="100" cy="126" r="54" fill="url(#we-sun)"/>
+              <circle cx="100" cy="126" r="44" fill="none" stroke="#0e1f4a" stroke-width="2.6"/>
+              <circle cx="100" cy="126" r="34" fill="none" stroke="#0e1f4a" stroke-width="2.6"/>
+            </g>
+          </g>
+          <line x1="10" y1="126" x2="190" y2="126" stroke="url(#we-rim)" stroke-width="2.4"/>
+          <g stroke="#f7c948" stroke-linecap="round">
+            <line class="we-wave" style="--d:0s" x1="60" y1="139" x2="140" y2="139" stroke-width="3.2" opacity="0.85"/>
+            <line class="we-wave" style="--d:0.5s" x1="72" y1="150" x2="128" y2="150" stroke-width="2.8" opacity="0.6"/>
+            <line class="we-wave" style="--d:1s" x1="84" y1="161" x2="116" y2="161" stroke-width="2.4" opacity="0.42"/>
+            <line class="we-wave" style="--d:1.5s" x1="94" y1="171" x2="106" y2="171" stroke-width="2" opacity="0.28"/>
+          </g>
+          <g class="we-candle" style="--d:0.9s">
+            <line x1="76" y1="96" x2="76" y2="124" stroke="#0e1f4a" stroke-width="6.5" stroke-linecap="round"/>
+            <line x1="76" y1="96" x2="76" y2="124" stroke="#eef2f7" stroke-width="2.4" stroke-linecap="round"/>
+            <rect x="68.5" y="104" width="15" height="16" rx="2.5" fill="url(#we-plat)" stroke="#0e1f4a" stroke-width="3" paint-order="stroke"/>
+          </g>
+          <g class="we-candle" style="--d:1.05s">
+            <line x1="100" y1="74" x2="100" y2="122" stroke="#0e1f4a" stroke-width="6.5" stroke-linecap="round"/>
+            <line x1="100" y1="74" x2="100" y2="122" stroke="#eef2f7" stroke-width="2.4" stroke-linecap="round"/>
+            <rect x="92.5" y="84" width="15" height="30" rx="2.5" fill="url(#we-plat)" stroke="#0e1f4a" stroke-width="3" paint-order="stroke"/>
+          </g>
+          <g class="we-candle" style="--d:1.2s">
+            <line x1="124" y1="48" x2="124" y2="118" stroke="#0e1f4a" stroke-width="6.5" stroke-linecap="round"/>
+            <line x1="124" y1="48" x2="124" y2="118" stroke="#eef2f7" stroke-width="2.4" stroke-linecap="round"/>
+            <rect x="116.5" y="58" width="15" height="50" rx="2.5" fill="url(#we-plat)" stroke="#0e1f4a" stroke-width="3" paint-order="stroke"/>
+          </g>
+          <path class="we-star" d="M152 44 l3.2 8.8 8.8 3.2 -8.8 3.2 -3.2 8.8 -3.2 -8.8 -8.8 -3.2 8.8 -3.2z" fill="#fde68a"/>
         </g>
-        <circle class="we-sun" cx="86" cy="34" r="11" fill="url(#we-sun)"/>
-        <line x1="18" y1="98" x2="102" y2="98" stroke="#ffffff" stroke-opacity="0.32" stroke-width="2.5" stroke-linecap="round"/>
-        <g class="we-candle" style="--d:0.15s" fill="#ffffff">
-          <rect x="23" y="74" width="11" height="18" rx="2.5"/>
-          <rect x="27.5" y="68" width="2" height="28" rx="1"/>
-        </g>
-        <g class="we-candle" style="--d:0.3s" fill="#ffffff">
-          <rect x="42" y="62" width="11" height="28" rx="2.5" fill-opacity="0.95"/>
-          <rect x="46.5" y="55" width="2" height="40" rx="1"/>
-        </g>
-        <g class="we-candle" style="--d:0.45s" fill="#ffffff">
-          <rect x="61" y="48" width="11" height="38" rx="2.5" fill-opacity="0.9"/>
-          <rect x="65.5" y="41" width="2" height="51" rx="1"/>
-        </g>
-        <path class="we-path" d="M16 84 L32 70 L44 74 L74 46" fill="none" stroke="url(#we-path)" stroke-width="5.5"
-              stroke-linecap="round" stroke-linejoin="round" pathLength="100"/>
-        <path class="we-head" d="M64 44 L76 44 L76 56" fill="none" stroke="#fde68a" stroke-width="5.5"
-              stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       <div class="w-chip w-chip-a"><span>شاخص کل</span><b id="wChipIndex">…</b></div>
       <div class="w-chip w-chip-b"><span>P/E بازار</span><b id="wChipPe">…</b></div>
