@@ -2871,3 +2871,30 @@ a.button {
   width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2;
   stroke-linecap: round; stroke-linejoin: round;
 }
+
+/* ---- Stronger frames (the owner, 2026-11-26) ------------------------------
+   Every box's edge in a colour that stands off its ground: darker than the
+   page in light, lighter than it in dark, each about 3:1 against the card
+   it bounds, so a card, a tile or a group reads as a box at a glance. Edges
+   only -- table rows keep their own faint lines (--grid), and a banner keeps
+   its status colour, mixed into the stronger edge. */
+:root {
+  --frame: #8792a6;
+  --frame-w: 1.5px;
+}
+:root[data-theme="dark"] { --frame: #55698f; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --frame: #55698f; }
+}
+
+.card, .tile, .card .tile, .evidence-group, .tabs, .today-item,
+.filters, .load-panel, .to-top button {
+  border: var(--frame-w) solid var(--frame);
+}
+.banner { border-width: var(--frame-w); }
+.banner:not(.is-live):not(.is-error) {
+  border-color: color-mix(in srgb, var(--status-warning) 50%, var(--frame));
+}
+.banner.is-live { border-color: color-mix(in srgb, var(--status-good) 45%, var(--frame)); }
+.banner.is-error { border-color: color-mix(in srgb, var(--status-critical) 55%, var(--frame)); }
+.banner.is-idle { border-color: var(--frame); }

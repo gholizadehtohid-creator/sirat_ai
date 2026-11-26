@@ -10,7 +10,10 @@ body.welcome {
   --w-up: var(--status-good);
   --w-down: var(--status-critical);
   --w-glass: color-mix(in srgb, var(--surface-1) 70%, transparent);
-  --w-glass-line: color-mix(in srgb, var(--text-primary) 9%, transparent);
+  /* Box edges take the panel's stronger frame (panel.css --frame, 2026-11-26);
+     lines inside a box stay soft. */
+  --w-glass-line: var(--frame);
+  --w-divider: color-mix(in srgb, var(--text-primary) 12%, transparent);
   --w-teal: #2dd4bf;
   --w-gold: #fbbf24;
   --w-gold-soft: #fde68a;
@@ -83,7 +86,7 @@ body.welcome {
            text-align: right; unicode-bidi: isolate; }
 .w-latin span { color: var(--w-gold); font-weight: 600; }
 .w-nav { display: flex; gap: 6px; padding: 5px; border-radius: 12px;
-         border: 1px solid var(--w-glass-line); background: var(--w-glass);
+         border: var(--frame-w) solid var(--w-glass-line); background: var(--w-glass);
          -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .w-nav a { padding: 7px 14px; border-radius: 8px; font-size: 13.5px; text-decoration: none; color: var(--text-secondary); }
 .w-nav a:hover { color: var(--text-primary); background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -91,13 +94,13 @@ body.welcome {
 .w-today { font-size: 13px; color: var(--text-secondary); }
 .w-ghost {
   width: 38px; height: 38px; border-radius: 10px; cursor: pointer; padding: 0;
-  border: 1px solid var(--w-glass-line); background: var(--w-glass); color: var(--text-secondary);
+  border: var(--frame-w) solid var(--w-glass-line); background: var(--w-glass); color: var(--text-secondary);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 .w-ghost:hover { color: var(--text-primary); }
 .w-top-enter {
   padding: 9px 18px; border-radius: 10px; font-size: 14px; font-weight: 700; text-decoration: none;
-  color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--w-glass-line));
+  color: var(--text-primary); border: var(--frame-w) solid color-mix(in srgb, var(--accent) 45%, var(--w-glass-line));
   background: color-mix(in srgb, var(--accent) 12%, var(--w-glass));
 }
 .w-top-enter:hover { background: color-mix(in srgb, var(--accent) 22%, var(--w-glass)); }
@@ -111,7 +114,7 @@ body.welcome {
 .w-eyebrow {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 14px; border-radius: 999px; font-size: 13px; color: var(--text-secondary);
-  border: 1px solid var(--w-glass-line); background: var(--w-glass);
+  border: var(--frame-w) solid var(--w-glass-line); background: var(--w-glass);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 .w-dot {
@@ -238,7 +241,7 @@ body.welcome {
 .w-chip {
   position: absolute; display: flex; flex-direction: column; gap: 2px;
   padding: 10px 14px; border-radius: 14px; min-width: 120px;
-  border: 1px solid var(--w-glass-line); background: var(--w-glass);
+  border: var(--frame-w) solid var(--w-glass-line); background: var(--w-glass);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.7);
   animation: w-float 7s ease-in-out infinite;
@@ -264,7 +267,7 @@ body.welcome {
 .w-stat {
   position: relative; display: flex; flex-direction: column;
   padding: 18px 20px 16px; border-radius: 18px;
-  border: 1px solid var(--w-glass-line); background: var(--w-glass);
+  border: var(--frame-w) solid var(--w-glass-line); background: var(--w-glass);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 18px 40px -28px rgba(0, 0, 0, 0.6);
   opacity: 0; transform: translateY(10px); animation: w-rise 0.6s ease forwards;
@@ -283,7 +286,7 @@ body.welcome {
 .w-v { margin-top: 10px; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; }
 .w-sub { margin-top: 4px; font-size: 13px; color: var(--text-muted); }
 .w-more {
-  margin-top: auto; padding-top: 12px; border-top: 1px solid var(--w-glass-line);
+  margin-top: auto; padding-top: 12px; border-top: 1px solid var(--w-divider);
   font-size: 12.5px; line-height: 1.8; color: var(--text-secondary);
 }
 .w-more:empty { display: none; }
@@ -304,7 +307,7 @@ body.welcome {
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto;
   column-gap: 14px; row-gap: 4px; align-items: center;
   padding: 18px; border-radius: 16px; text-decoration: none; color: inherit;
-  border: 1px solid var(--w-glass-line); background: var(--w-glass);
+  border: var(--frame-w) solid var(--w-glass-line); background: var(--w-glass);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
   opacity: 0; animation: w-rise 0.5s ease forwards; animation-delay: calc(0.25s + var(--i) * 0.05s);
@@ -342,7 +345,7 @@ body.welcome {
 .w-pillars { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .w-pillar {
   padding: 22px 22px 20px; border-radius: 18px;
-  border: 1px solid var(--w-glass-line); background: var(--w-glass);
+  border: var(--frame-w) solid var(--w-glass-line); background: var(--w-glass);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
 .w-pillar h3 { margin: 14px 0 6px; font-size: 16.5px; font-weight: 800; }
@@ -376,7 +379,7 @@ body.welcome {
                box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.6); }
 
 /* ---- footer ---- */
-.w-foot { margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--w-glass-line); text-align: center; }
+.w-foot { margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--w-divider); text-align: center; }
 .w-foot-brand { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 15px; }
 .w-foot-brand img { border-radius: 50%; }
 .w-foot p { margin: 0 auto; max-width: 820px; font-size: 12.5px; line-height: 1.9; color: var(--text-muted); }
