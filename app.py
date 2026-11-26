@@ -26,7 +26,7 @@ import time
 from datetime import datetime, timezone
 
 from flask import (Flask, copy_current_request_context, has_request_context,
-                   jsonify, render_template, request)
+                   jsonify, redirect, render_template, request)
 
 import advisor
 import bootstrap
@@ -483,6 +483,20 @@ def handle_error(exc):
 # ==============================
 
 @app.route("/")
+def welcome():
+    """The welcome page the panel opens on (the owner, 2026-11-26: first
+    this page, then the rest). A few of today's figures and the tabs; its
+    button opens /panel, and a link with a #tab or a query goes straight on
+    (static/js/welcome.js)."""
+
+    # A query (?engine=, ?tech=, ?theme=) was meant for the panel: on at once.
+    # A #tab never reaches the server; the page's script forwards that one.
+    if request.query_string:
+        return redirect("/panel?" + request.query_string.decode("latin-1"), code=302)
+    return render_template("welcome.html")
+
+
+@app.route("/panel")
 def dashboard():
     return render_template(
         "dashboard.html",
@@ -1157,6 +1171,58 @@ def api_commodities():
         import commodities
         import fx
         return jsonify({"dollar": fx.summary(), "commodities": commodities.summary()})
+    except Exception as exc:                                    # noqa: BLE001
+        return handle_error(exc)
+
+
+WELCOME_INDEX_SESSIONS = 120
+
+
+@app.route("/api/welcome")
+def api_welcome():
+    """The figures the welcome page shows: the index with its last sessions,
+    the free dollar, the market's P/E and the bill yield. Stored data only
+    -- one short read of the index series and three stored files -- so the
+    page answers at once; never a scan, never the network."""
+
+    def build():
+        out = {}
+        try:
+            frame = database.load_index_history(config.INDICES["TEDPIX"]["insCode"],
+                                                limit=WELCOME_INDEX_SESSIONS)
+            rows = [(str(d)[:10], float(c)) for d, c in zip(frame["date"], frame["close"])
+                    if c == c and c]
+            if len(rows) >= 2:
+                out["index"] = {"date": rows[-1][0], "close": rows[-1][1],
+                                "change_pct": (rows[-1][1] / rows[-2][1] - 1) * 100,
+                                "series": rows}
+        except Exception:                                       # noqa: BLE001
+            pass
+        try:
+            import fx
+            rates = fx.summary().get("rates") or {}
+            free = rates.get("free")
+            if free:
+                out["dollar"] = {k: free.get(k) for k in ("close", "date", "change_1w")}
+                out["dollar"]["nima"] = (rates.get("nima") or {}).get("close")
+        except Exception:                                       # noqa: BLE001
+            pass
+        try:
+            import market_valuation
+            v = market_valuation.summary() or {}
+            now = v.get("now") or {}
+            out["valuation"] = {"pe": now.get("pe"), "date": now.get("date"),
+                                "percentile": v.get("percentile"),
+                                "median_pe": v.get("median_pe"),
+                                "earnings_yield_pct": now.get("earnings_yield_pct"),
+                                "bill_yield_pct": v.get("bill_yield_pct"),
+                                "yield_gap_pct": v.get("yield_gap_pct")}
+        except Exception:                                       # noqa: BLE001
+            pass
+        return out
+
+    try:
+        return jsonify(memoise(cache_key("welcome", data_version()), build))
     except Exception as exc:                                    # noqa: BLE001
         return handle_error(exc)
 

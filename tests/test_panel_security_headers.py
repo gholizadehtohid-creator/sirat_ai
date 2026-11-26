@@ -85,10 +85,12 @@ class SecurityHeaderTests(Policy):
         self.assertNotIn("*", panel.CONTENT_SECURITY_POLICY)
 
     def test_the_dashboard_carries_it(self):
-        response = self.client.get("/")
+        # "/" is the welcome page since 2026-11-26; the panel is /panel.
+        for path in ("/", "/panel"):
+            response = self.client.get(path)
 
-        self.assertEqual(response.status_code, 200)
-        self.assert_policy(response)
+            self.assertEqual(response.status_code, 200, path)
+            self.assert_policy(response)
 
     def test_an_api_answer_carries_it(self):
         import codal_announcements

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>صراط — دستیار تصمیم بورس تهران</title>
+<meta name="theme-color" content="#0a0f1c">
+<link rel="preload" href="{{ url_for('static', filename='fonts/VazirmatnFD-wght.woff') }}" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232563d6'/><path d='M7 21l6-6 4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+</head>
+<!-- The page the panel opens on (2026-11-26, the owner: first this page,
+     then the rest). Its own script (CSP: no inline script) reads
+     /api/welcome for today's figures and sends the reader into /panel. -->
+<body class="welcome">
+
+<div class="w-backdrop" aria-hidden="true">
+  <div class="w-grid"></div>
+  <div class="w-glow w-glow-a"></div>
+  <div class="w-glow w-glow-b"></div>
+</div>
+
+<header class="w-top">
+  <div class="w-brand">
+    <span class="w-mark">ص</span>
+    <span class="w-brand-text">
+      <strong>SIRAT AI</strong>
+      <small>مدیریت هوشمند سبد سهام بورس تهران</small>
+    </span>
+  </div>
+  <div class="w-top-side">
+    <span class="w-today" id="wToday"></span>
+    <button type="button" class="w-ghost" id="wTheme" aria-label="تغییر حالت روشن / تیره">◐</button>
+  </div>
+</header>
+
+<main class="w-main">
+
+  <section class="w-hero">
+    <span class="w-eyebrow"><span class="w-dot"></span>دستیار تصمیم برای سرمایه‌گذارِ بورس تهران</span>
+    <h1 class="w-title">صراط</h1>
+    <p class="w-lead">داده‌ی بورس، صورت‌های مالی کدال، دلار و طلا در یک جا،
+      برای تصمیمی که خودتان می‌گیرید.</p>
+    <div class="w-actions">
+      <a class="w-cta" id="wEnter" href="/panel">
+        <span>ورود به پنل</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </a>
+      <a class="w-link" href="/panel#guide">راهنمای سه‌دقیقه‌ای</a>
+    </div>
+    <p class="w-key">یا کلید <kbd>Enter</kbd> را بزنید</p>
+  </section>
+
+  <section class="w-stats" aria-label="امروز در یک نگاه">
+    <article class="w-stat w-stat-wide" id="wIndex">
+      <header><span class="w-k">شاخص کل</span><span class="w-when" id="wIndexDate"></span></header>
+      <div class="w-v" id="wIndexValue">—</div>
+      <div class="w-sub" id="wIndexChange">&nbsp;</div>
+      <div class="w-spark" id="wSpark"></div>
+      <div class="w-spark-read" id="wSparkRead">&nbsp;</div>
+    </article>
+    <article class="w-stat">
+      <header><span class="w-k">دلار آزاد</span><span class="w-when" id="wDollarDate"></span></header>
+      <div class="w-v" id="wDollarValue">—</div>
+      <div class="w-sub" id="wDollarChange">&nbsp;</div>
+      <div class="w-more" id="wDollarMore"></div>
+    </article>
+    <article class="w-stat">
+      <header><span class="w-k">P/E کل بازار</span><span class="w-when" id="wPeDate"></span></header>
+      <div class="w-v" id="wPeValue">—</div>
+      <div class="w-sub" id="wPeSub">&nbsp;</div>
+      <div class="w-more" id="wPeMore"></div>
+    </article>
+    <article class="w-stat">
+      <header><span class="w-k">بازده اخزا</span></header>
+      <div class="w-v" id="wBillValue">—</div>
+      <div class="w-sub" id="wBillSub">&nbsp;</div>
+      <div class="w-more" id="wBillMore"></div>
+    </article>
+  </section>
+
+  <section class="w-sections" aria-label="در پنل چه هست">
+    <h2 class="w-h2">در پنل چه هست</h2>
+    <div class="w-cards">
+      <a class="w-card" href="/panel#summary" style="--i:0">
+        <span class="w-ic" data-ic="summary"></span>
+        <strong>امروز</strong>
+        <span>چه بخرید و چقدر، به ریال؛ و دیده‌بان سبد خودتان</span>
+      </a>
+      <a class="w-card" href="/panel#assets" style="--i:1">
+        <span class="w-ic" data-ic="assets"></span>
+        <strong>دارایی و صندوق‌ها</strong>
+        <span>چقدر سهام، طلا و درآمد ثابت؛ ارزان‌ترین صندوق هر بخش</span>
+      </a>
+      <a class="w-card" href="/panel#market" style="--i:2">
+        <span class="w-ic" data-ic="market"></span>
+        <strong>بازار و پول</strong>
+        <span>بازار ارزان است یا گران، دلار و فلزات، و مسیر پول حقیقی</span>
+      </a>
+      <a class="w-card" href="/panel#codal" style="--i:3">
+        <span class="w-ic" data-ic="codal"></span>
+        <strong>کدال و رویدادها</strong>
+        <span>اطلاعیه‌های مهم و تقویم مجمع، سود و افزایش سرمایه</span>
+      </a>
+      <a class="w-card" href="/panel#stocks" style="--i:4">
+        <span class="w-ic" data-ic="stocks"></span>
+        <strong>سهام و سبد</strong>
+        <span>سبد پیشنهادی بات و ریسک آن، برای معامله‌ی کاغذی</span>
+      </a>
+      <a class="w-card" href="/panel#live" style="--i:5">
+        <span class="w-ic" data-ic="live"></span>
+        <strong>بازار زنده</strong>
+        <span>صف‌های خرید و فروش و تغییرات لحظه‌ای در ساعت معامله</span>
+      </a>
+      <a class="w-card" href="/panel#analysis" style="--i:6">
+        <span class="w-ic" data-ic="analysis"></span>
+        <strong>تحلیل‌ها</strong>
+        <span>بنیادی کدال و چشم‌انداز سود، تکنیکال، صنایع و پایش بازار</span>
+      </a>
+    </div>
+  </section>
+
+  <footer class="w-foot">
+    <p>صراط ابزار تصمیم‌یار است، نه توصیه‌ی خرید و فروش. هر روش پیش از نمایش با
+      داده‌ی گذشته آزموده می‌شود و کارنامه‌اش کنار خودش است؛ روشی که در آزمون رد
+      شده، فقط برای پژوهش و پس از تأیید شما نشان داده می‌شود.</p>
+    <p class="w-asof" id="wAsOf"></p>
+  </footer>
+
+</main>
+
+<script type="module" src="{{ url_for('static', filename='js/welcome.js') }}"></script>
+</body>
+</html>
